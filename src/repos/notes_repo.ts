@@ -220,21 +220,81 @@ export function findLatestNoteForDay(
   return row ?? null;
 }
 
+export function findRecentDuplicateNote(
+  db: Db,
+  data: {
+    experiment_id: number;
+    author_id: number | null;
+    entity_type: NoteEntityType;
+    entity_id: number;
+    body_md: string;
+    created_at_gte_iso: string;
+  }
+): NoteRow | null {
+  const row = db
+    .prepare(
+      `
+      SELECT
+        n.id,
+        n.experiment_id,
+        n.author_id,
+        n.title,
+        n.body_md,
+        n.pinned,
+        n.created_at,
+        n.updated_at,
+        n.archived_at,
+        nl.entity_type,
+        nl.entity_id,
+        u.name AS author_name,
+        u.email AS author_email
+      FROM notes n
+      LEFT JOIN note_links nl ON nl.note_id = n.id
+      LEFT JOIN users u ON u.id = n.author_id
+      WHERE
+        n.experiment_id = ?
+        AND n.archived_at IS NULL
+        AND nl.entity_type = ?
+        AND nl.entity_id = ?
+        AND n.body_md = ?
+        AND n.created_at >= ?
+        AND ((? IS NULL AND n.author_id IS NULL) OR n.author_id = ?)
+      ORDER BY n.created_at DESC, n.id DESC
+      LIMIT 1
+      `
+    )
+    .get(
+      data.experiment_id,
+      data.entity_type,
+      data.entity_id,
+      data.body_md,
+      data.created_at_gte_iso,
+      data.author_id,
+      data.author_id
+    ) as NoteRow | undefined;
+  return row ?? null;
+}
+
 export function appendToNote(db: Db, noteId: number, bodyMd: string, editedByUserId: number | null = null): void {
   const existing = db
     .prepare("SELECT body_md FROM notes WHERE id = ? LIMIT 1")
     .get(noteId) as { body_md: string } | undefined;
   if (!existing) return;
+  const prev = String(existing.body_md || "");
+  const nextChunk = String(bodyMd || "").trim();
+  if (!nextChunk) return;
+  // Idempotency guard: if the latest chunk is identical, skip duplicate append.
+  if (prev.trimEnd().endsWith(nextChunk)) return;
   const now = new Date().toISOString();
-  const prefix = existing.body_md?.trim() ? "\n\n" : "";
-  snapshotNoteVersion(db, noteId, existing.body_md || "", editedByUserId, "append");
+  const prefix = prev.trim() ? "\n\n" : "";
+  snapshotNoteVersion(db, noteId, prev, editedByUserId, "append");
   db.prepare(
     `
     UPDATE notes
     SET body_md = ?, updated_at = ?
     WHERE id = ?
     `
-  ).run(`${existing.body_md || ""}${prefix}${bodyMd}`, now, noteId);
+  ).run(`${prev}${prefix}${nextChunk}`, now, noteId);
 }
 
 export function updateNoteBody(

@@ -91,18 +91,16 @@ export function buildReport(db: Db, experimentId: number, options: ReportOptions
   const machine = experiment.machine_id ? getMachine(db, experiment.machine_id) : null;
 
   const recipeIds = getExperimentRecipes(db, experimentId);
-  const recipes: ReportRecipe[] = recipeIds
-    .map((id) => {
+  const recipes: ReportRecipe[] = recipeIds.flatMap((id) => {
       const recipe = getRecipe(db, id);
-      if (!recipe) return null;
-      return {
+      if (!recipe) return [];
+      return [{
         id: recipe.id,
         name: recipe.name,
         description: recipe.description,
         components: getRecipeComponents(db, recipe.id)
-      };
-    })
-    .filter((val): val is ReportRecipe => Boolean(val));
+      }];
+    });
 
   const data: ReportData = {
     experiment: {
@@ -311,7 +309,7 @@ export function buildQualificationCsv(data: ReportData) {
 
 export function buildDoeCsv(data: ReportData) {
   const doe = data.doe ?? [];
-  const rows = [["doe_id", "name", "design_type", "run_count", "factors"]];
+  const rows: Array<Array<string | number>> = [["doe_id", "name", "design_type", "run_count", "factors"]];
   doe.forEach((study) => {
     const factorText = study.factors
       .map((f) => `${f.code}:${f.mode}:${f.values}`)

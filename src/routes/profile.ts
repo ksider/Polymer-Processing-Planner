@@ -4,7 +4,7 @@ import type { Db } from "../db.js";
 import { getUserPasswordHash, updateUserName, updateUserPassword } from "../repos/users_repo.js";
 import { listExperimentsForOwnerWithMeta, type ExperimentListRow } from "../repos/experiments_repo.js";
 import { listTasksForUser } from "../repos/tasks_read_repo.js";
-import { listTaskEntities } from "../repos/tasks_repo.js";
+import { listTaskEntities, type TaskEntityRow } from "../repos/tasks_repo.js";
 import { computeTaskProgress } from "../services/tasks_service.js";
 import { listQualSummarySteps } from "../repos/qual_repo.js";
 import { listAssignedEntitiesForUser } from "../repos/entity_assignments_repo.js";
@@ -45,10 +45,10 @@ export function createProfileRouter(db: Db) {
         );
       }
       const summarySteps = summaryByExperiment.get(task.experiment_id) ?? new Set<number>();
-      const entities = listTaskEntities(db, task.task_id).map((entity) => {
+      const entities: TaskEntityRow[] = listTaskEntities(db, task.task_id).map((entity) => {
         if (entity.entity_type === "qualification_step") {
           if (summarySteps.has(entity.entity_id)) {
-            return { ...entity, status: "done" };
+            return { ...entity, status: "done" as const };
           }
         }
         return entity;

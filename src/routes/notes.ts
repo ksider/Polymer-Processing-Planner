@@ -10,6 +10,7 @@ import {
   appendToNote,
   createNote,
   findLatestNoteForDay,
+  findRecentDuplicateNote,
   getNoteById,
   listNotesByExperiment,
   softDeleteNote,
@@ -52,7 +53,8 @@ function toEntityType(raw: unknown): NoteEntityType {
 
 function toEntityId(raw: unknown, fallback: number): number {
   const parsed = Number(raw);
-  return Number.isFinite(parsed) ? parsed : fallback;
+  if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
+  return parsed;
 }
 
 function entityHref(
@@ -189,9 +191,22 @@ export function createNotesRouter(db: Db) {
     const forceNew = String(req.body?.force_new || "0") === "1";
     const authorId = req.user?.id ?? null;
     const today = new Date().toISOString().slice(0, 10);
+    const dedupeSince = new Date(Date.now() - 5000).toISOString();
     let noteId: number | null = null;
 
-    if (!forceNew && authorId) {
+    const duplicate = findRecentDuplicateNote(db, {
+      experiment_id: experimentId,
+      author_id: authorId,
+      entity_type,
+      entity_id,
+      body_md: bodyMd,
+      created_at_gte_iso: dedupeSince
+    });
+    if (duplicate) {
+      noteId = duplicate.id;
+    }
+
+    if (!noteId && !forceNew && authorId) {
       const existing = findLatestNoteForDay(db, {
         experiment_id: experimentId,
         author_id: authorId,

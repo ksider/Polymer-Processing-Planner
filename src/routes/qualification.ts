@@ -95,7 +95,17 @@ export function createQualificationRouter(db: Db) {
       try {
         settings = { ...settings, ...(JSON.parse(settingsJson) as typeof settings) };
       } catch {
-        settings = { intensification_coeff: 1, melt_temp_c: null, recommended_inj_speed: null, custom_fields: [] };
+        settings = {
+          intensification_coeff: 1,
+          melt_temp_c: null,
+          recommended_inj_speed: null,
+          inj_speed: null,
+          target_weight_g: null,
+          machine_max_pressure_bar: null,
+          hold_pressure_bar: null,
+          gate_seal_time_s: null,
+          custom_fields: []
+        };
       }
     }
     const summaryRow = listQualSummaries(db, experimentId).find(

@@ -172,6 +172,35 @@
     return String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   }
 
+  function toTimestamp(raw) {
+    const value = String(raw || '').trim();
+    if (!value) return 0;
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function toLocalDateValue(raw) {
+    const value = String(raw || '').trim();
+    if (!value) return '';
+    const inlineIso = value.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (inlineIso) return inlineIso[1];
+    const parsed = Date.parse(value);
+    if (!Number.isFinite(parsed)) return '';
+    const date = new Date(parsed);
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  function preserveRawBodyHtml(root) {
+    root?.querySelectorAll?.('.journal-item').forEach((item) => {
+      if (Object.prototype.hasOwnProperty.call(item.dataset, 'rawBodyHtml')) return;
+      const body = item.querySelector('.journal-item-body');
+      item.dataset.rawBodyHtml = body?.innerHTML || '';
+    });
+  }
+
   function renderNote(note) {
     const entity = String(note.entity_type || 'experiment');
     const article = document.createElement('article');
@@ -181,6 +210,7 @@
     article.dataset.createdAt = String(note.activity_at || note.updated_at || note.created_at || '');
     article.dataset.entityLabel = String(note.entity_label || '');
     article.dataset.entityHref = String(note.entity_href || `/experiments/${experimentId}`);
+    article.dataset.rawBodyHtml = String(note.body_html || '');
     article.innerHTML = `
       <header class="journal-item-head">
         <a class="journal-item-title-link" href="${escapeHtml(note.entity_href || `/experiments/${experimentId}`)}">${escapeHtml(note.display_title || note.title)}</a>
@@ -259,7 +289,7 @@
   function buildRail() {
     if (!rail || !feed) return;
     rail.innerHTML = '';
-    const notes = feed.querySelectorAll('.journal-item:not([style*="display: none"])');
+    const notes = Array.from(feed.querySelectorAll('.journal-item')).filter((item) => item.style.display !== 'none');
     notes.forEach((item, index) => {
       const dot = document.createElement('button');
       dot.type = 'button';
@@ -320,7 +350,7 @@
       const text = item.textContent?.toLowerCase() || '';
       const createdAt = item.dataset.createdAt || '';
       const entityType = String(item.dataset.entityType || 'experiment');
-      const itemDate = createdAt ? new Date(createdAt).toISOString().slice(0, 10) : '';
+      const itemDate = toLocalDateValue(createdAt);
       const byText = !q || text.includes(q);
       const byDate = !date || date === itemDate;
       const byEntity = selectedEntityTypes.has(entityType);
@@ -333,8 +363,8 @@
     if (!feed) return;
     const cards = Array.from(feed.querySelectorAll('.journal-item'));
     cards.sort((a, b) => {
-      const at = new Date(a.dataset.createdAt || 0).getTime();
-      const bt = new Date(b.dataset.createdAt || 0).getTime();
+      const at = toTimestamp(a.dataset.createdAt);
+      const bt = toTimestamp(b.dataset.createdAt);
       return bt - at;
     });
     cards.forEach((card) => feed.appendChild(card));
@@ -374,8 +404,11 @@
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: payload
       });
-      const data = await resp.json();
-      if (!resp.ok || !data?.note) return;
+      const data = await resp.json().catch(() => null);
+      if (!resp.ok || !data?.note) {
+        window.alert(data?.message || 'Failed to save note');
+        return;
+      }
       upsertNoteInFeed(data.note);
       if (empty) empty.remove();
       bodyInput.innerHTML = '';
@@ -384,6 +417,9 @@
       if (cancelEditBtn) cancelEditBtn.style.display = 'none';
       applyFilters(searchInput?.value || '', dateInput?.value || '');
       buildRail();
+    } catch (error) {
+      console.error('Failed to save note', error);
+      window.alert('Failed to save note. Check connection and try again.');
     } finally {
       sendBtn.disabled = false;
     }
@@ -439,8 +475,8 @@
       const card = editButton.closest('.journal-item');
       const noteId = card?.dataset?.noteId;
       if (!noteId || !bodyInput) return;
-      const body = card.querySelector('.journal-item-body');
-      bodyInput.innerHTML = body?.innerHTML || '';
+      const rawBodyHtml = card.dataset.rawBodyHtml || card.querySelector('.journal-item-body')?.innerHTML || '';
+      bodyInput.innerHTML = rawBodyHtml;
       editingNoteId = noteId;
       if (sendBtn) sendBtn.textContent = 'Update note';
       if (cancelEditBtn) cancelEditBtn.style.display = '';
@@ -454,9 +490,25 @@
     const noteId = card?.dataset?.noteId;
     if (!noteId) return;
     if (!window.confirm('Delete this note?')) return;
-    const resp = await fetch(`/experiments/${experimentId}/notes/${noteId}/delete`, { method: 'POST' });
-    if (!resp.ok) return;
+    let resp = null;
+    try {
+      resp = await fetch(`/experiments/${experimentId}/notes/${noteId}/delete`, { method: 'POST' });
+    } catch (error) {
+      console.error('Failed to delete note', error);
+      window.alert('Failed to delete note. Check connection and try again.');
+      return;
+    }
+    if (!resp.ok) {
+      window.alert('Failed to delete note');
+      return;
+    }
     card.remove();
+    if (editingNoteId && editingNoteId === noteId) {
+      editingNoteId = null;
+      if (bodyInput) bodyInput.innerHTML = '';
+      if (sendBtn) sendBtn.textContent = 'Add note';
+      if (cancelEditBtn) cancelEditBtn.style.display = 'none';
+    }
     if (!feed.querySelector('.journal-item')) {
       feed.innerHTML = '<div class="small-note notes-empty" id="journalEmpty">No notes yet.</div>';
     }
@@ -476,11 +528,18 @@
     const payload = new URLSearchParams();
     payload.set('item_index', String(itemIndex));
     payload.set('checked', target.checked ? '1' : '0');
-    const resp = await fetch(`/experiments/${experimentId}/notes/${noteId}/checklist`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: payload
-    });
+    let resp = null;
+    try {
+      resp = await fetch(`/experiments/${experimentId}/notes/${noteId}/checklist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: payload
+      });
+    } catch (error) {
+      console.error('Failed to toggle checklist item', error);
+      target.checked = !target.checked;
+      return;
+    }
     const data = await resp.json().catch(() => null);
     if (!resp.ok || !data?.note) {
       target.checked = !target.checked;
@@ -497,6 +556,7 @@
 
   sortFeedByActivityDesc();
   buildEntityFilters();
+  preserveRawBodyHtml(feed);
   feed?.querySelectorAll('.journal-item-body').forEach((el) => renderMathInElement(el));
   buildRail();
   updateActiveRailDot();

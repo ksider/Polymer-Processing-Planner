@@ -14,7 +14,7 @@ import {
   updateMachineParam
 } from "../repos/machine_params_repo.js";
 
-type MachineSettings = Record<string, string | number>;
+type MachineSettings = Record<string, unknown>;
 
 function parseNumber(value: unknown) {
   if (value == null) return NaN;
@@ -40,7 +40,7 @@ const baseMachineParamDefs = [
   { code: "screw_speed_rpm", label: "Screw speed", unit: "rpm" },
   { code: "plasticizing_rate_g_s", label: "Plasticizing rate", unit: "g/s" }
 ] as const;
-const baseMachineCodes = new Set(baseMachineParamDefs.map((def) => def.code));
+const baseMachineCodes = new Set<string>(baseMachineParamDefs.map((def) => def.code));
 
 function slugify(input: string) {
   return input
@@ -85,16 +85,14 @@ function buildSettings(body: Record<string, unknown>): MachineSettings {
         value?: string | number | null;
       }>;
       if (Array.isArray(parsed)) {
-        const customFields = parsed
-          .map((item, idx) => {
+        const customFields = parsed.flatMap((item, idx) => {
             const label = item.label ? String(item.label).trim() : "";
-            if (!label) return null;
+            if (!label) return [];
             const code = item.code ? String(item.code).trim() : slugify(label) || `field_${idx + 1}`;
             const unit = item.unit ? String(item.unit).trim() : "";
             const value = item.value != null ? item.value : "";
-            return { id: item.id || "", code, label, unit, value };
-          })
-          .filter((item): item is { id: string; code: string; label: string; unit: string; value: string | number | null } => Boolean(item));
+            return [{ id: item.id || "", code, label, unit, value }];
+          });
         if (customFields.length) {
           settings.custom_fields = customFields;
         }
@@ -110,7 +108,7 @@ type MachineParamInput = {
   id?: string;
   code?: string;
   label?: string;
-  unit?: string;
+  unit?: string | null;
   value?: string | number | null;
 };
 
@@ -119,19 +117,14 @@ function parseCustomParamInputs(raw: string): MachineParamInput[] {
   try {
     const parsed = JSON.parse(raw) as MachineParamInput[];
     if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((item, idx) => {
+    return parsed.flatMap((item, idx) => {
         const label = item.label ? String(item.label).trim() : "";
-        if (!label) return null;
+        if (!label) return [];
         const code = item.code ? String(item.code).trim() : slugify(label) || `field_${idx + 1}`;
-        const unit = item.unit ? String(item.unit).trim() : "";
+        const unit = item.unit ? String(item.unit).trim() : null;
         const value = item.value != null ? item.value : "";
-        return { id: item.id || "", code, label, unit, value };
-      })
-      .filter(
-        (item): item is { id: string; code: string; label: string; unit: string; value: string | number | null } =>
-          Boolean(item)
-      );
+        return [{ id: item.id || "", code, label, unit, value }];
+      });
   } catch {
     return [];
   }
@@ -247,7 +240,7 @@ export function createMachinesRouter(db: Db) {
           id: String(param.id),
           code: param.code || undefined,
           label: param.label || "",
-          unit: param.unit || undefined,
+          unit: param.unit || null,
           value: param.value_text ?? ""
         }));
       const mergedParams = buildMachineParamsFromSettings(settings, customParams);

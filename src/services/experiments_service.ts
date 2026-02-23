@@ -243,23 +243,15 @@ export function generateRuns(db: Db, experimentId: number, doeId: number) {
       ? [recipeIds[0]]
       : [null];
 
-  const runsToInsert: Array<
-    Omit<
-      {
-        id: number;
-        experiment_id: number;
-        run_order: number;
-        run_code: string;
-        recipe_id: number | null;
-        replicate_key: string | null;
-        replicate_index: number | null;
-        done: number;
-        exclude_from_analysis: number;
-        created_at: string;
-      },
-      "id" | "created_at" | "experiment_id"
-    >
-  > = [];
+  const runsToInsert: Array<{
+    run_order: number;
+    run_code: string;
+    recipe_id: number | null;
+    replicate_key: string | null;
+    replicate_index: number | null;
+    done: number;
+    exclude_from_analysis: number;
+  }> = [];
   const valuesToInsert: Array<{
     run_id: number;
     param_def_id: number;
@@ -278,8 +270,6 @@ export function generateRuns(db: Db, experimentId: number, doeId: number) {
         const runCode = `E${experimentId}-R${String(runOrder).padStart(3, "0")}`;
         const replicateKey = buildReplicateKey(baseRun.values, recipeId, recipeBlock);
         runsToInsert.push({
-          experiment_id: experimentId,
-          doe_id: doeId,
           run_order: runOrder,
           run_code: runCode,
           recipe_id: recipeId,

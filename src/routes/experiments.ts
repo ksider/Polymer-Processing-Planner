@@ -36,6 +36,7 @@ import {
   updateAllowedValues
 } from "../repos/params_repo.js";
 import {
+  type AnalysisField,
   findExperimentAnalysisFieldByCode,
   insertAnalysisField,
   listActiveAnalysisFields,
@@ -289,12 +290,12 @@ export function createExperimentsRouter(db: Db) {
     const nameRaw = String(req.body.name || "").trim();
     const executors = String(req.body.executors || "").trim() || null;
     const include = Array.isArray(req.body.include)
-      ? req.body.include.map((val: string) => String(val))
+      ? req.body.include.map((val: unknown) => String(val))
       : req.body.include
         ? [String(req.body.include)]
         : [];
     const doeIds = Array.isArray(req.body.doe_ids)
-      ? req.body.doe_ids.map((val: string) => Number(val)).filter((val) => Number.isFinite(val))
+      ? req.body.doe_ids.map((val: unknown) => Number(val)).filter((val: number) => Number.isFinite(val))
       : req.body.doe_ids
         ? [Number(req.body.doe_ids)].filter((val) => Number.isFinite(val))
         : [];
@@ -326,12 +327,12 @@ export function createExperimentsRouter(db: Db) {
     const nameRaw = String(req.body.name || "").trim();
     const executors = String(req.body.executors || "").trim() || null;
     const include = Array.isArray(req.body.include)
-      ? req.body.include.map((val: string) => String(val))
+      ? req.body.include.map((val: unknown) => String(val))
       : req.body.include
         ? [String(req.body.include)]
         : [];
     const doeIds = Array.isArray(req.body.doe_ids)
-      ? req.body.doe_ids.map((val: string) => Number(val)).filter((val) => Number.isFinite(val))
+      ? req.body.doe_ids.map((val: unknown) => Number(val)).filter((val: number) => Number.isFinite(val))
       : req.body.doe_ids
         ? [Number(req.body.doe_ids)].filter((val) => Number.isFinite(val))
         : [];
@@ -520,7 +521,7 @@ export function createExperimentsRouter(db: Db) {
     const outputNumericParams = activeAnalysisFields.filter((field) => field.field_type === "number");
     const tagOutputFields = activeAnalysisFields.filter((field) => field.field_type === "tag");
     const booleanOutputFields = activeAnalysisFields.filter((field) => field.field_type === "boolean");
-    const parseAllowed = (field: { allowed_values_json: string | null }) => {
+    const parseAllowed = (field: AnalysisField) => {
       let allowedValues: string[] = [];
       if (field.allowed_values_json) {
         try {
@@ -816,6 +817,7 @@ export function createExperimentsRouter(db: Db) {
     const labelMap = new Map(inputParams.map((param) => [param.id, param.label]));
     const updates: Array<{
       experiment_id: number;
+      doe_id: number;
       param_def_id: number;
       active: number;
       mode: "FIXED" | "RANGE" | "LIST";
@@ -1042,7 +1044,7 @@ export function createExperimentsRouter(db: Db) {
           : null;
       const rawActive = raw.is_active;
       const isActive = Array.isArray(rawActive)
-        ? rawActive.map(String).some((v) => v === "1" || v === "on" || v === "true")
+        ? rawActive.map(String).some((v) => v === "1" || v === "on" || v === "true") ? 1 : 0
         : rawActive === "1" || rawActive === "on" || rawActive === true || rawActive === "true"
           ? 1
           : 0;

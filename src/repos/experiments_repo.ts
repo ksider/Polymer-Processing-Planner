@@ -199,7 +199,19 @@ export function updateExperimentManualDone(db: Db, id: number, done: number) {
 
 export function createExperiment(
   db: Db,
-  data: Omit<Experiment, "id" | "created_at">
+  data: Pick<
+    Experiment,
+    | "name"
+    | "design_type"
+    | "seed"
+    | "notes"
+    | "machine_id"
+    | "owner_user_id"
+    | "center_points"
+    | "max_runs"
+    | "replicate_count"
+    | "recipe_as_block"
+  >
 ): number {
   const createdAt = new Date().toISOString();
   const result = db

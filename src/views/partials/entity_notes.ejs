@@ -200,6 +200,7 @@
     let pickerRows = 3;
     let pickerCols = 3;
     let editingNoteId = null;
+    let submitInFlight = false;
 
     const ensureRailTooltip = () => {
       if (railTooltipEl && document.body.contains(railTooltipEl)) return railTooltipEl;
@@ -236,6 +237,35 @@
 
     const esc = (value) =>
       String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+
+    const toTimestamp = (raw) => {
+      const value = String(raw || '').trim();
+      if (!value) return 0;
+      const parsed = Date.parse(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const toLocalDateValue = (raw) => {
+      const value = String(raw || '').trim();
+      if (!value) return '';
+      const inlineIso = value.match(/^(\d{4}-\d{2}-\d{2})/);
+      if (inlineIso) return inlineIso[1];
+      const parsed = Date.parse(value);
+      if (!Number.isFinite(parsed)) return '';
+      const date = new Date(parsed);
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+
+    const preserveRawBodyHtml = (root) => {
+      root?.querySelectorAll?.('.journal-item').forEach((item) => {
+        if (Object.prototype.hasOwnProperty.call(item.dataset, 'rawBodyHtml')) return;
+        const body = item.querySelector('.journal-item-body');
+        item.dataset.rawBodyHtml = body?.innerHTML || '';
+      });
+    };
 
     const setSelectValueSafe = (selectEl, value) => {
       if (!selectEl) return;
@@ -404,7 +434,9 @@
         syncContextToolsVisibility();
         notesEditor.view.dom.addEventListener('keydown', (event) => {
           if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+            if (event.repeat) return;
             event.preventDefault();
+            event.stopPropagation();
             submit(Boolean(event.shiftKey));
           }
         }, true);
@@ -539,6 +571,7 @@
       article.dataset.entityType = entity;
       article.dataset.createdAt = String(note.activity_at || note.updated_at || note.created_at || '');
       article.dataset.entityHref = String(note.entity_href || `/experiments/${experimentId}`);
+      article.dataset.rawBodyHtml = String(note.body_html || '');
       article.innerHTML = `
         <header class="journal-item-head">
           <a class="journal-item-title-link" href="${esc(note.entity_href || `/experiments/${experimentId}`)}">${esc(note.display_title || note.title || '')}</a>
@@ -560,7 +593,7 @@
     const rebuildRail = () => {
       if (!rail || !feed) return;
       rail.innerHTML = '';
-      const items = feed.querySelectorAll('.journal-item:not([style*="display: none"])');
+      const items = Array.from(feed.querySelectorAll('.journal-item')).filter((item) => item.style.display !== 'none');
       items.forEach((item, index) => {
         const entity = item.dataset.entityType || 'experiment';
         const dot = document.createElement('button');
@@ -619,9 +652,22 @@
     const loadNotes = async () => {
       if (!feed) return;
       const byEntity = onlyCurrent && onlyCurrent.checked ? '1' : '0';
-      const resp = await fetch(`/experiments/${experimentId}/notes.json?only_current=${byEntity}&entity_type=${encodeURIComponent(entityType)}&entity_id=${encodeURIComponent(entityId)}`);
+      let resp = null;
+      try {
+        resp = await fetch(`/experiments/${experimentId}/notes.json?only_current=${byEntity}&entity_type=${encodeURIComponent(entityType)}&entity_id=${encodeURIComponent(entityId)}`);
+      } catch (error) {
+        console.error('Failed to load notes', error);
+        feed.innerHTML = '<div class="small-note notes-empty">Failed to load notes.</div>';
+        rebuildRail();
+        return;
+      }
       if (!resp.ok) return;
-      const data = await resp.json();
+      const data = await resp.json().catch(() => null);
+      if (!data) {
+        feed.innerHTML = '<div class="small-note notes-empty">Failed to load notes.</div>';
+        rebuildRail();
+        return;
+      }
       const notes = Array.isArray(data.notes) ? data.notes : [];
       feed.innerHTML = '';
       if (!notes.length) {
@@ -631,8 +677,9 @@
       }
       notes
         .slice()
-        .sort((a, b) => new Date(b.activity_at || b.updated_at || b.created_at || 0).getTime() - new Date(a.activity_at || a.updated_at || a.created_at || 0).getTime())
+        .sort((a, b) => toTimestamp(b.activity_at || b.updated_at || b.created_at) - toTimestamp(a.activity_at || a.updated_at || a.created_at))
         .forEach((note) => feed.appendChild(renderNote(note)));
+      preserveRawBodyHtml(feed);
       applyFilters(searchInput?.value || '', dateInput?.value || '');
       rebuildRail();
       if (feedScroll) {
@@ -647,7 +694,7 @@
       feed.querySelectorAll('.journal-item').forEach((item) => {
         const text = item.textContent?.toLowerCase() || '';
         const createdAt = item.dataset.createdAt || '';
-        const itemDate = createdAt ? new Date(createdAt).toISOString().slice(0, 10) : '';
+        const itemDate = toLocalDateValue(createdAt);
         const byText = !q || text.includes(q);
         const byDate = !date || date === itemDate;
         item.style.display = byText && byDate ? '' : 'none';
@@ -659,8 +706,8 @@
       if (!feed) return;
       const cards = Array.from(feed.querySelectorAll('.journal-item'));
       cards.sort((a, b) => {
-        const at = new Date(a.dataset.createdAt || 0).getTime();
-        const bt = new Date(b.dataset.createdAt || 0).getTime();
+        const at = toTimestamp(a.dataset.createdAt);
+        const bt = toTimestamp(b.dataset.createdAt);
         return bt - at;
       });
       cards.forEach((card) => feed.appendChild(card));
@@ -678,10 +725,12 @@
 
     const submit = async (forceNew = false) => {
       if (!input || !sendBtn) return;
+      if (submitInFlight || sendBtn.disabled) return;
       const editor = notesEditor;
       const bodyHtml = editor ? editor.getHTML().trim() : input.innerHTML.trim();
       const bodyText = editor ? editor.getText().trim() : (input.textContent || '').trim();
       if (!bodyHtml || !bodyText) return;
+      submitInFlight = true;
       sendBtn.disabled = true;
       const payload = new URLSearchParams();
       payload.set('entity_type', entityType);
@@ -698,8 +747,11 @@
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: payload
         });
-        const data = await resp.json();
-        if (!resp.ok || !data?.note) return;
+        const data = await resp.json().catch(() => null);
+        if (!resp.ok || !data?.note) {
+          window.alert(data?.message || 'Failed to save note');
+          return;
+        }
         upsertNote(data.note);
         if (editor) editor.commands.clearContent(true);
         else input.innerHTML = '';
@@ -710,7 +762,11 @@
         if (feedScroll) {
           feedScroll.scrollTop = 0;
         }
+      } catch (error) {
+        console.error('Failed to save note', error);
+        window.alert('Failed to save note. Check connection and try again.');
       } finally {
+        submitInFlight = false;
         sendBtn.disabled = false;
       }
     };
@@ -751,12 +807,12 @@
         const noteId = card?.dataset?.noteId;
         if (!noteId) return;
         const editor = notesEditor;
-        const body = card.querySelector('.journal-item-body');
+        const rawBodyHtml = card.dataset.rawBodyHtml || card.querySelector('.journal-item-body')?.innerHTML || '';
         if (editor) {
-          editor.commands.setContent(body?.innerHTML || '<p></p>', { emitUpdate: true });
+          editor.commands.setContent(rawBodyHtml || '<p></p>', { emitUpdate: true });
           editor.commands.focus('end');
         } else {
-          input.innerHTML = body?.innerHTML || '';
+          input.innerHTML = rawBodyHtml;
           input.focus();
         }
         editingNoteId = noteId;
@@ -769,9 +825,25 @@
       const noteId = card?.dataset?.noteId;
       if (!noteId) return;
       if (!window.confirm('Delete this note?')) return;
-      const resp = await fetch(`/experiments/${experimentId}/notes/${noteId}/delete`, { method: 'POST' });
-      if (!resp.ok) return;
+      let resp = null;
+      try {
+        resp = await fetch(`/experiments/${experimentId}/notes/${noteId}/delete`, { method: 'POST' });
+      } catch (error) {
+        console.error('Failed to delete note', error);
+        window.alert('Failed to delete note. Check connection and try again.');
+        return;
+      }
+      if (!resp.ok) {
+        window.alert('Failed to delete note');
+        return;
+      }
       card.remove();
+      if (editingNoteId && editingNoteId === noteId) {
+        editingNoteId = null;
+        if (notesEditor) notesEditor.commands.clearContent(true);
+        else if (input) input.innerHTML = '';
+        if (sendBtn) sendBtn.textContent = 'Add note';
+      }
       if (!feed.querySelector('.journal-item')) {
         feed.innerHTML = '<div class="small-note notes-empty">No notes yet.</div>';
       }
@@ -790,11 +862,18 @@
       const payload = new URLSearchParams();
       payload.set('item_index', String(itemIndex));
       payload.set('checked', target.checked ? '1' : '0');
-      const resp = await fetch(`/experiments/${experimentId}/notes/${noteId}/checklist`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: payload
-      });
+      let resp = null;
+      try {
+        resp = await fetch(`/experiments/${experimentId}/notes/${noteId}/checklist`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: payload
+        });
+      } catch (error) {
+        console.error('Failed to toggle checklist item', error);
+        target.checked = !target.checked;
+        return;
+      }
       const data = await resp.json().catch(() => null);
       if (!resp.ok || !data?.note) {
         target.checked = !target.checked;
@@ -845,12 +924,16 @@
     });
     document.addEventListener('keydown', (event) => {
       if (!(event.ctrlKey || event.metaKey) || event.key !== 'Enter') return;
+      if (event.repeat) return;
       const target = event.target;
       if (!(target instanceof Element)) return;
       if (!input) return;
       const active = document.activeElement;
       const insideEditor = input.contains(target) || (active instanceof Element && input.contains(active));
       if (!insideEditor) return;
+      if (notesEditor?.view?.dom && (notesEditor.view.dom.contains(target) || (active instanceof Element && notesEditor.view.dom.contains(active)))) {
+        return;
+      }
       event.preventDefault();
       submit(Boolean(event.shiftKey));
     }, true);

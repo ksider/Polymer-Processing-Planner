@@ -503,7 +503,7 @@ export function recomputeDerivedAndSummary(
         setDerived("shear_rate_proxy", shearRate);
       }
       if (peak != null) {
-        if (shearRate != null) {
+        if (shearRate != null && fill != null) {
           setDerived("rel_viscosity", peak * fill * intensificationCoeff);
         }
       }

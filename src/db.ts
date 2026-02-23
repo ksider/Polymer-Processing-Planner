@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import path from "path";
 
-export type Db = Database.Database;
+export type Db = any;
 
 export function openDb(): Db {
   const dbPath = path.resolve(process.cwd(), process.env.DB_PATH || "im_doe.sqlite");

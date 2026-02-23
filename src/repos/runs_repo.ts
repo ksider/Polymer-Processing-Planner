@@ -44,7 +44,7 @@ export function insertRuns(
   db: Db,
   experimentId: number,
   doeId: number,
-  runs: Array<Omit<Run, "id" | "created_at">>,
+  runs: Array<Omit<Run, "id" | "created_at" | "experiment_id" | "doe_id">>,
   values: Array<RunValue>
 ) {
   const insertRun = db.prepare(

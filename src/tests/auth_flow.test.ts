@@ -72,6 +72,7 @@ test("temp password flow and owner access", async () => {
 
   const userId = createUser(db, {
     email: "user1@example.com",
+    name: null,
     passwordHash: bcrypt.hashSync("UserPass123!", 12),
     role: null,
     status: "ACTIVE",

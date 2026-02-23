@@ -10,6 +10,8 @@ import {
   deleteTaskAssignment,
   deleteTaskEntity,
   getTaskEntity,
+  type TaskEntityRow,
+  type TaskStatus,
   getTask,
   listTaskAssignments,
   listTaskEntities,
@@ -35,10 +37,10 @@ export function createTasksRouter(db: Db) {
     const summarySteps = new Set(listQualSummarySteps(db, experimentId));
     const tasks = listTasksByExperiment(db, experimentId).map((task) => {
       const entities = listTaskEntities(db, task.id);
-      const hydrated = entities.map((entity) => {
+      const hydrated: TaskEntityRow[] = entities.map((entity) => {
         if (entity.entity_type === "qualification_step") {
           if (summarySteps.has(entity.entity_id)) {
-            return { ...entity, status: "done" };
+            return { ...entity, status: "done" as const };
           }
         }
         return entity;
@@ -66,10 +68,10 @@ export function createTasksRouter(db: Db) {
       display_label: getEntityLabel(db, entity.entity_type, entity.entity_id)
     }));
     const summarySteps = new Set(listQualSummarySteps(db, task.experiment_id));
-    const hydrated = entities.map((entity) => {
+    const hydrated: TaskEntityRow[] = entities.map((entity) => {
       if (entity.entity_type === "qualification_step") {
         if (summarySteps.has(entity.entity_id)) {
-          return { ...entity, status: "done" };
+          return { ...entity, status: "done" as const };
         }
       }
       return entity;
@@ -125,7 +127,9 @@ export function createTasksRouter(db: Db) {
       updates.description = rawDesc.trim() ? rawDesc : null;
     }
     if (req.body?.status !== undefined) {
-      updates.status = String(req.body.status);
+      const status = toTaskStatus(req.body.status);
+      if (!status) return res.status(400).json({ error: "Invalid status" });
+      updates.status = status;
     }
     if (Object.prototype.hasOwnProperty.call(req.body, "owner_user_id")) {
       const rawOwner = req.body?.owner_user_id;
@@ -144,7 +148,7 @@ export function createTasksRouter(db: Db) {
   router.post("/tasks/:id/status", requireTaskManager, (req, res) => {
     const taskId = Number(req.params.id);
     if (!Number.isFinite(taskId)) return res.status(400).json({ error: "Invalid task" });
-    const status = String(req.body?.status ?? "init");
+    const status = toTaskStatus(req.body?.status) ?? "init";
     updateTask(db, taskId, { status });
     res.json({ ok: true });
   });
@@ -179,7 +183,9 @@ export function createTasksRouter(db: Db) {
     if (!Number.isFinite(entityId)) return res.status(400).json({ error: "Invalid entity" });
     const updates: Record<string, unknown> = {};
     if (req.body?.status !== undefined) {
-      updates.status = String(req.body.status);
+      const status = toTaskStatus(req.body.status);
+      if (!status) return res.status(400).json({ error: "Invalid status" });
+      updates.status = status;
     }
     if (Object.prototype.hasOwnProperty.call(req.body, "weight")) {
       const rawWeight = String(req.body?.weight ?? "").trim();
@@ -333,6 +339,14 @@ export function createTasksRouter(db: Db) {
 const qualificationStepLabels = new Map(
   getQualificationSteps().map((step) => [step.step_number, step.name])
 );
+
+function toTaskStatus(raw: unknown): TaskStatus | null {
+  const value = String(raw ?? "").trim();
+  if (value === "init" || value === "in_progress" || value === "done" || value === "failed") {
+    return value;
+  }
+  return null;
+}
 
 function getEntityLabel(db: Db, type: string, id: number): string {
   if (type === "qualification_step") {

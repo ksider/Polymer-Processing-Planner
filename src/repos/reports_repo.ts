@@ -25,7 +25,7 @@ export function getReportConfig(db: Db, reportId: number): ReportConfigRow | nul
 
 export function createReportConfig(
   db: Db,
-  data: Omit<ReportConfigRow, "id" | "created_at">
+  data: Pick<ReportConfigRow, "experiment_id" | "name" | "executors" | "include_json" | "doe_ids_json">
 ): number {
   const result = db
     .prepare(

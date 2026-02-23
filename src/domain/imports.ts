@@ -16,7 +16,7 @@ export function parseRecipeMatrix(text: string): ImportedRecipe[] {
     delimiter,
     skipEmptyLines: true
   });
-  const rows = parsed.data.map((row) => row.map((cell) => normalizeCell(cell)));
+  const rows = parsed.data.map((row: string[]) => row.map((cell: string) => normalizeCell(cell)));
   if (rows.length === 0) return [];
 
   const headerRow = rows[0];
@@ -26,7 +26,7 @@ export function parseRecipeMatrix(text: string): ImportedRecipe[] {
 
   const hasPhrRow = secondRow.some((cell) => cell.toLowerCase() === "phr");
   if (hasPhrRow) {
-    secondRow.forEach((cell, idx) => {
+    secondRow.forEach((cell: string, idx: number) => {
       if (cell.toLowerCase() === "phr") {
         const name = normalizeCell(headerRow[idx]);
         if (name) {
@@ -40,7 +40,7 @@ export function parseRecipeMatrix(text: string): ImportedRecipe[] {
 
   const componentHeader = normalizeCell(headerRow[0]).toLowerCase();
   if (componentHeader.includes("component")) {
-    headerRow.slice(1).forEach((cell, idx) => {
+    headerRow.slice(1).forEach((cell: string, idx: number) => {
       const name = normalizeCell(cell);
       if (name) {
         phrColumns.push(idx + 1);
