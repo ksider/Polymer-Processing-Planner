@@ -67,14 +67,7 @@
         <div>
           <strong>Qualification</strong>
           <div class="small-note">
-            <%
-              const processTypeCode = (experiment.process_type_code || '').toLowerCase();
-            %>
-            <%= processTypeCode === 'compounding'
-              ? 'Six-step compounding qualification pack.'
-              : processTypeCode === 'coating'
-                ? 'Six-step coating qualification pack.'
-                : 'Six-step Scientific Molding sequence.' %>
+            Qualification sequence for this process.
           </div>
         </div>
       </div>
@@ -452,7 +445,7 @@
           <label class="toggle">
             <input type="checkbox" name="include" value="qualification" checked>
             <span class="track"></span>
-            <span>Qualification (6 steps)</span>
+            <span>Qualification (<%= (qualificationCards || []).length %> steps)</span>
           </label>
           <label class="toggle">
             <input type="checkbox" name="include" value="doe" id="includeDoeToggle">
@@ -636,27 +629,19 @@
       <div class="collapsible is-open" id="taskCreateEntitiesPanel">
         <div class="task-entity-picker">
           <div class="task-entity-card">
-            <div class="task-entity-title">Qualification (6 steps)</div>
+            <div class="task-entity-title">Qualification (<%= (qualificationCards || []).length %> steps)</div>
             <div class="small-note">Select steps to include in task.</div>
             <div class="task-entity-steps">
-              <label class="pure-checkbox">
-                <input type="checkbox" name="qual_steps" value="1" checked> Step 1
-              </label>
-              <label class="pure-checkbox">
-                <input type="checkbox" name="qual_steps" value="2"> Step 2
-              </label>
-              <label class="pure-checkbox">
-                <input type="checkbox" name="qual_steps" value="3"> Step 3
-              </label>
-              <label class="pure-checkbox">
-                <input type="checkbox" name="qual_steps" value="4" checked> Step 4
-              </label>
-              <label class="pure-checkbox">
-                <input type="checkbox" name="qual_steps" value="5" checked> Step 5
-              </label>
-              <label class="pure-checkbox">
-                <input type="checkbox" name="qual_steps" value="6" checked> Step 6
-              </label>
+              <% if (!qualificationCards || qualificationCards.length === 0) { %>
+                <div class="small-note">No qualification steps configured.</div>
+              <% } else { %>
+                <% qualificationCards.forEach((card, idx) => { %>
+                  <label class="pure-checkbox">
+                    <input type="checkbox" name="qual_steps" value="<%= card.stepNumber %>" <%= idx === 0 ? 'checked' : '' %>>
+                    Step <%= card.stepNumber %>
+                  </label>
+                <% }); %>
+              <% } %>
             </div>
           </div>
           <div class="task-entity-card">
@@ -750,27 +735,18 @@
           <form class="pure-form" id="taskEditEntityForm">
             <div class="task-entity-picker">
               <div class="task-entity-card">
-                <div class="task-entity-title">Qualification (6 steps)</div>
+                <div class="task-entity-title">Qualification (<%= (qualificationCards || []).length %> steps)</div>
                 <div class="small-note">Pick steps to add.</div>
                 <div class="task-entity-steps">
-                  <label class="pure-checkbox">
-                    <input type="checkbox" name="qual_steps_edit" value="1"> Step 1
-                  </label>
-                  <label class="pure-checkbox">
-                    <input type="checkbox" name="qual_steps_edit" value="2"> Step 2
-                  </label>
-                  <label class="pure-checkbox">
-                    <input type="checkbox" name="qual_steps_edit" value="3"> Step 3
-                  </label>
-                  <label class="pure-checkbox">
-                    <input type="checkbox" name="qual_steps_edit" value="4"> Step 4
-                  </label>
-                  <label class="pure-checkbox">
-                    <input type="checkbox" name="qual_steps_edit" value="5"> Step 5
-                  </label>
-                  <label class="pure-checkbox">
-                    <input type="checkbox" name="qual_steps_edit" value="6"> Step 6
-                  </label>
+                  <% if (!qualificationCards || qualificationCards.length === 0) { %>
+                    <div class="small-note">No qualification steps configured.</div>
+                  <% } else { %>
+                    <% qualificationCards.forEach((card) => { %>
+                      <label class="pure-checkbox">
+                        <input type="checkbox" name="qual_steps_edit" value="<%= card.stepNumber %>"> Step <%= card.stepNumber %>
+                      </label>
+                    <% }); %>
+                  <% } %>
                 </div>
               </div>
               <div class="task-entity-card">

@@ -16,14 +16,21 @@ export type Breadcrumb = {
 
 export function buildBreadcrumbs(db: Db, req: Request): Breadcrumb[] {
   const path = req.path;
-  if (!path || path.startsWith("/auth")) return [];
+  if (!path) return [];
   const segments = path.split("/").filter(Boolean);
   const crumbs: Breadcrumb[] = [];
-  if (segments.length === 0) return crumbs;
+  if (segments.length === 0) {
+    crumbs.push({ label: "Processes", href: "/" });
+    return crumbs;
+  }
 
   const push = (label: string, href?: string) => {
     crumbs.push(href ? { label, href } : { label });
   };
+  const isAuthRoute = segments[0] === "auth";
+  if (!isAuthRoute && segments.length > 0) {
+    push("Processes", "/");
+  }
   const experimentHref = (experiment: { id: number; process_id?: number | null } | null | undefined) => {
     if (!experiment?.id) return "/experiments/new";
     const process = experiment.process_id ? getProcessById(db, experiment.process_id) : null;
@@ -31,7 +38,6 @@ export function buildBreadcrumbs(db: Db, req: Request): Breadcrumb[] {
     return processCode ? `/${processCode}/${experiment.id}` : `/experiments/${experiment.id}`;
   };
   const pushProcessPath = (processId: number | null | undefined) => {
-    push("Processes", "/");
     if (!processId || !Number.isFinite(processId)) return;
     const process = getProcessById(db, processId);
     const processCode = getProcessRouteCode(process);
@@ -94,7 +100,6 @@ export function buildBreadcrumbs(db: Db, req: Request): Breadcrumb[] {
   if (segments.length === 1) {
     const process = getProcessByRouteCode(db, first);
     if (process) {
-      push("Processes", "/");
       const processCode = getProcessRouteCode(process);
       push(process.name, processCode ? `/${processCode}` : "/");
       return crumbs;
@@ -120,7 +125,6 @@ export function buildBreadcrumbs(db: Db, req: Request): Breadcrumb[] {
     return crumbs;
   }
   if (first === "processes") {
-    push("Processes", "/");
     const processId = Number(segments[1]);
     if (Number.isFinite(processId)) {
       const process = getProcessById(db, processId);
@@ -211,6 +215,22 @@ export function buildBreadcrumbs(db: Db, req: Request): Breadcrumb[] {
     if (!Number.isFinite(experimentId)) return crumbs;
     pushExperimentTrail(experimentId, segments.slice(2));
     return crumbs;
+  }
+
+  if (first === "auth") {
+    if (segments[1] === "login") push("Sign in", "/auth/login");
+    else if (segments[1] === "change-password") push("Change password", "/auth/change-password");
+    else if (segments[1] === "request-reset") push("Reset password", "/auth/request-reset");
+    else push("Auth");
+    return crumbs;
+  }
+
+  // Fallback: show a readable crumb for unhandled pages.
+  if ((crumbs.length === 0) || (crumbs.length === 1 && crumbs[0]?.label === "Processes")) {
+    const label = first
+      .replace(/[-_]+/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+    push(label, `/${first}`);
   }
 
   return crumbs;
