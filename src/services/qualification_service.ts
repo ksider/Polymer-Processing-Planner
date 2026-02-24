@@ -1,4 +1,6 @@
 import type { Db } from "../db.js";
+import { getExperiment } from "../repos/experiments_repo.js";
+import { getProcessById } from "../repos/processes_repo.js";
 import {
   ensureQualSteps,
   listQualSteps,
@@ -55,7 +57,7 @@ function parseCavityIndex(code: string) {
   return Number.isFinite(num) ? num : null;
 }
 
-const stepDefinitions: StepDefinition[] = [
+const injectionStepDefinitions: StepDefinition[] = [
   {
     step_number: 1,
     name: "Rheology / Viscosity Curve",
@@ -133,10 +135,209 @@ const stepDefinitions: StepDefinition[] = [
 ];
 
 export function getQualificationSteps() {
-  return stepDefinitions.map(({ step_number, name }) => ({ step_number, name }));
+  return injectionStepDefinitions.map(({ step_number, name }) => ({ step_number, name }));
+}
+
+const compoundingDefectTags = JSON.stringify([
+  "surging",
+  "die_drool",
+  "strand_break",
+  "agglomerates",
+  "foaming",
+  "odor"
+]);
+
+const compoundingStepDefinitions: StepDefinition[] = [
+  {
+    step_number: 1,
+    name: "RTD / Residence Time Stability",
+    default_runs: 6,
+    fields: [
+      { code: "tracer_peak_time_s", label: "Tracer peak time", field_type: "number", unit: "s", group_label: "Measurements", required: 1 },
+      { code: "tracer_tail_time_s", label: "Tracer tail time", field_type: "number", unit: "s", group_label: "Measurements", required: 1 },
+      { code: "torque_stability_pct", label: "Torque stability", field_type: "number", unit: "%", group_label: "Measurements" },
+      { code: "pressure_stability_pct", label: "Pressure stability", field_type: "number", unit: "%", group_label: "Measurements" },
+      { code: "MFR_g_10min", label: "MFR", field_type: "number", unit: "g/10min", group_label: "Measurements" },
+      { code: "stabilization_time_min", label: "Stabilization time", field_type: "number", unit: "min", group_label: "Summary" }
+    ]
+  },
+  {
+    step_number: 2,
+    name: "SME Map / Energy Window",
+    default_runs: 6,
+    fields: [
+      { code: "screw_rpm", label: "Screw RPM", field_type: "number", unit: "rpm", group_label: "Inputs", required: 1 },
+      { code: "throughput_kg_h", label: "Throughput", field_type: "number", unit: "kg/h", group_label: "Inputs", required: 1 },
+      { code: "torque_pct", label: "Torque", field_type: "number", unit: "%", group_label: "Measurements", required: 1 },
+      { code: "melt_temp_c", label: "Melt temp", field_type: "number", unit: "°C", group_label: "Measurements" },
+      { code: "die_pressure_bar", label: "Die pressure", field_type: "number", unit: "bar", group_label: "Measurements" },
+      { code: "SME_kJ_kg", label: "SME", field_type: "number", unit: "kJ/kg", group_label: "Derived" }
+    ]
+  },
+  {
+    step_number: 3,
+    name: "Melt Temperature / Thermal History Map",
+    default_runs: 6,
+    fields: [
+      { code: "mid_temp_c", label: "Mid barrel temp", field_type: "number", unit: "°C", group_label: "Inputs", required: 1 },
+      { code: "head_temp_c", label: "Head temp", field_type: "number", unit: "°C", group_label: "Inputs", required: 1 },
+      { code: "screw_rpm", label: "Screw RPM", field_type: "number", unit: "rpm", group_label: "Inputs" },
+      { code: "throughput_kg_h", label: "Throughput", field_type: "number", unit: "kg/h", group_label: "Inputs" },
+      { code: "melt_temp_c", label: "Melt temp", field_type: "number", unit: "°C", group_label: "Measurements", required: 1 },
+      { code: "die_pressure_bar", label: "Die pressure", field_type: "number", unit: "bar", group_label: "Measurements" }
+    ]
+  },
+  {
+    step_number: 4,
+    name: "Feeding / Side-Feeder Qualification",
+    default_runs: 6,
+    fields: [
+      { code: "feed_ratio_filler_pct", label: "Feed ratio filler", field_type: "number", unit: "%", group_label: "Inputs", required: 1 },
+      { code: "side_feeder_rpm", label: "Side feeder RPM", field_type: "number", unit: "rpm", group_label: "Inputs" },
+      { code: "filler_pct_measured", label: "Measured filler fraction", field_type: "number", unit: "%", group_label: "Measurements" },
+      { code: "filler_variation_pct", label: "Filler variation", field_type: "number", unit: "%", group_label: "Measurements" },
+      { code: "agglomerates_count", label: "Agglomerates count", field_type: "number", unit: null, group_label: "Measurements" }
+    ]
+  },
+  {
+    step_number: 5,
+    name: "Degassing / Moisture Control",
+    default_runs: 6,
+    fields: [
+      { code: "vacuum_mbar", label: "Vacuum level", field_type: "number", unit: "mbar", group_label: "Inputs", required: 1 },
+      { code: "throughput_kg_h", label: "Throughput", field_type: "number", unit: "kg/h", group_label: "Inputs" },
+      { code: "moisture_target_pct", label: "Moisture target", field_type: "number", unit: "%", group_label: "Inputs" },
+      { code: "pellet_moisture_pct", label: "Pellet moisture", field_type: "number", unit: "%", group_label: "Measurements", required: 1 },
+      { code: "porosity_score", label: "Porosity score", field_type: "number", unit: "1-5", group_label: "Measurements" },
+      { code: "volatiles_odor_score", label: "Odor / volatiles score", field_type: "number", unit: "1-5", group_label: "Measurements" }
+    ]
+  },
+  {
+    step_number: 6,
+    name: "Dispersion / Mixing Quality Check",
+    default_runs: 4,
+    fields: [
+      { code: "dispersion_ok", label: "Dispersion OK", field_type: "boolean", unit: null, group_label: "Measurements" },
+      { code: "strand_stability_score", label: "Strand stability", field_type: "number", unit: "1-5", group_label: "Measurements" },
+      { code: "defect_tags", label: "Defects", field_type: "tag", unit: null, group_label: "Measurements", allowed_values_json: compoundingDefectTags },
+      { code: "MFR_g_10min", label: "MFR", field_type: "number", unit: "g/10min", group_label: "Measurements" },
+      { code: "bulk_density_g_cm3", label: "Bulk density", field_type: "number", unit: "g/cm3", group_label: "Measurements" }
+    ]
+  }
+];
+
+const coatingDefectTags = JSON.stringify([
+  "streaks",
+  "pinholes",
+  "orange_peel",
+  "cracking",
+  "blocking",
+  "delamination"
+]);
+
+const surfaceTreatmentTags = JSON.stringify(["none", "corona", "plasma"]);
+
+const coatingStepDefinitions: StepDefinition[] = [
+  {
+    step_number: 1,
+    name: "Rheology Window",
+    default_runs: 6,
+    fields: [
+      { code: "solids_pct", label: "Solids", field_type: "number", unit: "%", group_label: "Inputs", required: 1 },
+      { code: "coating_temp_c", label: "Coating temp", field_type: "number", unit: "°C", group_label: "Inputs" },
+      { code: "additive_pct", label: "Additive", field_type: "number", unit: "%", group_label: "Inputs" },
+      { code: "viscosity_1s", label: "Viscosity @1 s⁻¹", field_type: "number", unit: "mPa·s", group_label: "Measurements", required: 1 },
+      { code: "viscosity_10s", label: "Viscosity @10 s⁻¹", field_type: "number", unit: "mPa·s", group_label: "Measurements", required: 1 },
+      { code: "viscosity_100s", label: "Viscosity @100 s⁻¹", field_type: "number", unit: "mPa·s", group_label: "Measurements", required: 1 }
+    ]
+  },
+  {
+    step_number: 2,
+    name: "Wetting / Surface Energy Check",
+    default_runs: 4,
+    fields: [
+      { code: "water_contact_angle_deg", label: "Contact angle", field_type: "number", unit: "°", group_label: "Measurements", required: 1 },
+      { code: "surface_energy_dyn_cm", label: "Surface energy", field_type: "number", unit: "dyn/cm", group_label: "Measurements" },
+      { code: "substrate_surface_treatment", label: "Surface treatment", field_type: "tag", unit: null, group_label: "Inputs", allowed_values_json: surfaceTreatmentTags },
+      { code: "needs_primer", label: "Needs primer", field_type: "boolean", unit: null, group_label: "Summary" }
+    ]
+  },
+  {
+    step_number: 3,
+    name: "Coat Weight Calibration",
+    default_runs: 6,
+    fields: [
+      { code: "coating_speed_m_min", label: "Coating speed", field_type: "number", unit: "m/min", group_label: "Inputs", required: 1 },
+      { code: "wet_film_thickness_um", label: "Wet film thickness", field_type: "number", unit: "µm", group_label: "Inputs" },
+      { code: "flow_rate_ml_min", label: "Flow rate", field_type: "number", unit: "ml/min", group_label: "Inputs" },
+      { code: "coat_weight_g_m2", label: "Coat weight", field_type: "number", unit: "g/m²", group_label: "Measurements", required: 1 },
+      { code: "dry_thickness_um", label: "Dry thickness", field_type: "number", unit: "µm", group_label: "Measurements", required: 1 }
+    ]
+  },
+  {
+    step_number: 4,
+    name: "Drying / Curing Window",
+    default_runs: 6,
+    fields: [
+      { code: "drying_temp_C", label: "Drying temp", field_type: "number", unit: "°C", group_label: "Inputs", required: 1 },
+      { code: "air_flow_m_s", label: "Air flow", field_type: "number", unit: "m/s", group_label: "Inputs" },
+      { code: "drying_time_s", label: "Drying time", field_type: "number", unit: "s", group_label: "Inputs", required: 1 },
+      { code: "residual_moisture_pct", label: "Residual moisture/solvent", field_type: "number", unit: "%", group_label: "Measurements" },
+      { code: "tack_free_time_s", label: "Tack-free time", field_type: "number", unit: "s", group_label: "Measurements" },
+      { code: "defect_tags", label: "Defects", field_type: "tag", unit: null, group_label: "Measurements", allowed_values_json: coatingDefectTags }
+    ]
+  },
+  {
+    step_number: 5,
+    name: "Adhesion Qualification",
+    default_runs: 4,
+    fields: [
+      { code: "adhesion_pass", label: "Adhesion pass", field_type: "boolean", unit: null, group_label: "Measurements" },
+      { code: "adhesion_score", label: "Adhesion score", field_type: "number", unit: "N/25mm", group_label: "Measurements" }
+    ]
+  },
+  {
+    step_number: 6,
+    name: "Barrier / Functional Check",
+    default_runs: 4,
+    fields: [
+      { code: "WVTR_g_m2_day", label: "WVTR", field_type: "number", unit: "g/m²/day", group_label: "Measurements" },
+      { code: "OTR_cc_m2_day", label: "OTR", field_type: "number", unit: "cc/m²/day", group_label: "Measurements" },
+      { code: "barrier_pass", label: "Barrier pass", field_type: "boolean", unit: null, group_label: "Summary" }
+    ]
+  }
+];
+
+function getProcessTypeCodeForExperiment(db: Db, experimentId: number): string {
+  const experiment = getExperiment(db, experimentId);
+  if (!experiment || !experiment.process_id) return "injection";
+  const process = getProcessById(db, experiment.process_id);
+  return String(process?.process_type_code || "injection").toLowerCase();
+}
+
+function getStepDefinitionsForProcessType(processTypeCode: string): StepDefinition[] {
+  if (processTypeCode === "compounding") return compoundingStepDefinitions;
+  if (processTypeCode === "coating") return coatingStepDefinitions;
+  return injectionStepDefinitions;
+}
+
+export function getQualificationStepsForExperiment(db: Db, experimentId: number) {
+  const processTypeCode = getProcessTypeCodeForExperiment(db, experimentId);
+  return getStepDefinitionsForProcessType(processTypeCode).map(({ step_number, name }) => ({ step_number, name }));
+}
+
+export function getStepDefinitionForExperiment(db: Db, experimentId: number, stepNumber: number) {
+  const processTypeCode = getProcessTypeCodeForExperiment(db, experimentId);
+  return getStepDefinitionsForProcessType(processTypeCode).find((step) => step.step_number === stepNumber) ?? null;
+}
+
+export function getQualificationStepName(db: Db, experimentId: number, stepNumber: number): string {
+  return getStepDefinitionForExperiment(db, experimentId, stepNumber)?.name ?? `Step ${stepNumber}`;
 }
 
 export function ensureQualificationDefaults(db: Db, experimentId: number) {
+  const processTypeCode = getProcessTypeCodeForExperiment(db, experimentId);
+  const stepDefinitions = getStepDefinitionsForProcessType(processTypeCode);
   ensureQualSteps(db, experimentId);
   const steps = listQualSteps(db, experimentId);
   for (const step of steps) {
@@ -170,7 +371,7 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
         derived_formula_code: field.derived_formula_code ?? null
       });
     }
-    if (step.step_number === 1) {
+    if (processTypeCode === "injection" && step.step_number === 1) {
       const existingSettings = getQualStepSettings(db, experimentId, step.step_number);
       if (!existingSettings) {
         upsertQualStepSettings(
@@ -186,7 +387,7 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
         );
       }
     }
-    if (step.step_number === 2) {
+    if (processTypeCode === "injection" && step.step_number === 2) {
       const existingSettings = getQualStepSettings(db, experimentId, step.step_number);
       if (!existingSettings) {
         upsertQualStepSettings(
@@ -200,7 +401,7 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
         );
       }
     }
-    if (step.step_number === 3) {
+    if (processTypeCode === "injection" && step.step_number === 3) {
       const existingSettings = getQualStepSettings(db, experimentId, step.step_number);
       if (!existingSettings) {
         upsertQualStepSettings(
@@ -215,7 +416,7 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
         );
       }
     }
-    if (step.step_number === 4) {
+    if (processTypeCode === "injection" && step.step_number === 4) {
       const existingSettings = getQualStepSettings(db, experimentId, step.step_number);
       if (!existingSettings) {
         upsertQualStepSettings(
@@ -228,7 +429,7 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
         );
       }
     }
-    if (step.step_number === 5) {
+    if (processTypeCode === "injection" && step.step_number === 5) {
       const existingSettings = getQualStepSettings(db, experimentId, step.step_number);
       if (!existingSettings) {
         upsertQualStepSettings(
@@ -243,7 +444,7 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
         );
       }
     }
-    if (step.step_number === 6) {
+    if (processTypeCode === "injection" && step.step_number === 6) {
       const existingSettings = getQualStepSettings(db, experimentId, step.step_number);
       if (!existingSettings) {
         upsertQualStepSettings(
@@ -259,7 +460,7 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
         );
       }
     }
-    if (step.step_number === 6) {
+    if (processTypeCode === "injection" && step.step_number === 6) {
       const warpageField = fields.find((field) => field.code === "warpage_mm");
       if (warpageField && warpageField.is_enabled !== 0) {
         updateQualField(db, warpageField.id, { is_enabled: 0 });
@@ -758,5 +959,5 @@ function buildStepSummary(
 }
 
 export function getStepDefinition(stepNumber: number) {
-  return stepDefinitions.find((step) => step.step_number === stepNumber) ?? null;
+  return injectionStepDefinitions.find((step) => step.step_number === stepNumber) ?? null;
 }

@@ -1,21 +1,54 @@
-<%- include('partials/head', { title: 'IM Planner | Experiments' }) %>
+<%- include('partials/head', { title: 'IM Planner | Processes' }) %>
 <%- include('partials/nav') %>
 <div class="container">
   <div class="card">
-    <h1 class="card-title">Experiments</h1>
-    <p class="small-note">Design, run, and analyze injection molding detailed optimization plans.</p>
-    <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
-      <a class="pure-button pure-button-primary" href="/experiments/new">Create Experiment</a>
-    <% } %>
+    <h1 class="card-title">Processes</h1>
+    <p class="small-note">Choose a process card to enter the workspace. Injection is active now.</p>
   </div>
 
   <div class="card">
-    <h2 class="card-title">Recent</h2>
+    <h2 class="card-title">Available Processes</h2>
+    <% if (!processCards || processCards.length === 0) { %>
+      <div class="small-note">No visible processes yet.</div>
+    <% } %>
+    <div class="card-grid">
+      <% (processCards || []).forEach((process) => { %>
+        <div class="card card-link process-card" style="display:block; cursor:pointer;" data-href="<%= process.route_code ? `/${process.route_code}` : `/?process_id=${process.id}` %>">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title"><%- formatInline(process.name) %></h3>
+              <% if (process.route_code) { %>
+                <div class="small-note">Route: /<%= process.route_code %></div>
+              <% } %>
+              <div class="small-note">Owner: <%- formatInline(process.owner_label || 'Unassigned') %></div>
+            </div>
+            <div class="section-actions">
+              <span class="status-pill status-in_progress"><%- formatInline(process.process_type_name || 'Process') %></span>
+            </div>
+          </div>
+          <div class="small-note">Filter experiments on this page</div>
+          <div class="small-note">Experiments: <%= Number(process.experiment_count || 0) %></div>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Recent Experiments</h2>
+      <% if (selectedProcess) { %>
+        <div class="section-actions">
+          <span class="small-note">Process: <%- formatInline(selectedProcess.name) %></span>
+          <a class="pure-button" href="/">Show all</a>
+        </div>
+      <% } %>
+    </div>
     <table class="pure-table table-compact">
       <thead>
         <tr>
           <th>ID</th>
           <th>Name</th>
+          <th>Process</th>
           <th>Owner</th>
           <th>Status</th>
           <th>Created</th>
@@ -25,13 +58,17 @@
       <tbody>
         <% if (experiments.length === 0) { %>
           <tr>
-            <td colspan="6">No experiments yet.</td>
+            <td colspan="7">No experiments yet.</td>
           </tr>
         <% } %>
         <% experiments.forEach((exp) => { %>
           <tr>
             <td><%= exp.id %></td>
-            <td><a href="/experiments/<%= exp.id %>"><%- formatInline(exp.name) %></a></td>
+            <td><a href="<%= experimentPath(exp) %>"><%- formatInline(exp.name) %></a></td>
+            <td>
+              <div><%- formatInline(exp.process_label) %></div>
+              <div class="small-note"><%- formatInline(exp.process_type_label) %></div>
+            </td>
             <td>
               <% if (exp.owner_user_id) { %>
                 <a href="/users/<%= exp.owner_user_id %>"><%= exp.owner_label %></a>
@@ -55,4 +92,16 @@
   </div>
 
 </div>
+<script>
+  (() => {
+    const processCards = Array.from(document.querySelectorAll('.process-card'));
+    processCards.forEach((card) => {
+      card.addEventListener('click', (event) => {
+        if (event.target && event.target.closest && event.target.closest('.process-settings-open')) return;
+        const href = card.getAttribute('data-href');
+        if (href) window.location.href = href;
+      });
+    });
+  })();
+</script>
 <%- include('partials/foot') %>

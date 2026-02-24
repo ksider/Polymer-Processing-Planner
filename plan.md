@@ -21,10 +21,26 @@
 5. Report Editor на Tiptap (WYSIWYG), `content_md/html/json`, автосейв, PDF-экспорт (печать).
 6. Notes/Journal: drawer + отдельная страница, фильтры, rail, версионирование заметок, чеклисты.
 7. Run-роуты вложены под эксперимент + legacy-redirect.
+8. Новый доменный уровень `Process Type + Process`:
+1. таблицы `process_types`, `processes`,
+2. привязка `experiments.process_id`,
+3. fallback-миграция на `Injection Default Process`.
+9. ACL процесса:
+1. `Process Owner` видит/управляет экспериментами процесса,
+2. `Experiment Owner` сохраняет роль владельца и подписи отчетов.
+10. Канонический роутинг:
+1. список процессов: `/`,
+2. страница процесса: `/<process_route_code>`,
+3. эксперимент: `/<process_route_code>/<experiment_id>`,
+4. совместимость со старыми `/experiments/:id` через redirect/rewrite.
+11. Настройки процесса (admin-only) перенесены на страницу процесса (popup):
+1. `route_code`,
+2. `owner_user_id`.
 
 ### Что дожать в текущем контуре
 1. Полная стабилизация popup notes-редактора (одинаковое поведение с report editor).
 2. Финальный проход по UX журнала/заметок (плотность, мобилка, фильтры).
+3. Финальный проход по ссылкам/навигации (убрать остатки legacy href в шаблонах, где уместно).
 
 ---
 
@@ -37,7 +53,7 @@
 4. `Experiment` (как сейчас).
 5. Сущности эксперимента (`Qualification`, `DOE`, `Run`, `Task`, `Report`, `Notes`).
 
-Минимум для первого этапа: ввести `Process Type + Process` и привязать к ним эксперименты.
+Минимум для первого этапа: ввести `Process Type + Process` и привязать к ним эксперименты. Статус: выполнено.
 
 ## 3.2 Роли и ответственность (расширение)
 1. `Process Owner` — новый уровень ответственности.
@@ -116,13 +132,16 @@
 
 ## 7) Что делаем следующим спринтом (конкретно)
 1. Завершить стабилизацию notes popup editor до полной паритетности с report editor.
-2. Подготовить и применить миграцию БД для `process_types/processes/experiments.process_id`.
-3. Добавить `Process Owner` в модель ролей и ACL.
-4. Сделать первый UI процесса:
-1. создание процесса,
-2. выбор типа процесса,
-3. список экспериментов внутри процесса.
-5. Обновить README и архитектурный раздел по новой иерархии.
+2. Довести process UI до production-режима:
+1. CRUD процессов (минимум create/archive),
+2. защита от конфликтов `route_code` в UI с понятной ошибкой,
+3. фильтры/поиск по процессам на главной.
+3. Унифицировать все внутренние ссылки на канонические `/<process>/<experiment_id>` без лишних редиректов.
+4. Добавить тесты роутинга:
+1. `/<process_code>` -> process page,
+2. `/<process_code>/<id>` -> experiment page,
+3. legacy `/experiments/:id` -> canonical redirect.
+5. Завершить стабилизацию report/notes editor (toolbar parity + data sidebar в report editor).
 
 ---
 
@@ -131,3 +150,102 @@
 2. Для нового типа процесса переиспользуются те же report editing функции.
 3. Есть явный `Process Owner` и прозрачная матрица прав.
 4. Старые эксперименты продолжают работать без ручного вмешательства.
+
+---
+
+## 9) План внедрения модуля `Compounding (Twin-Screw Extrusion)`
+
+### 9.1 Stage A — Qualification pack (6 исследований)
+1. `RTD / Residence Time Stability`
+1. входы: базовый профиль `T`, `rpm`, `throughput`;
+1. измерения: RTD/tracer, стабилизация torque/pressure, `MFR_g_10min`;
+1. выход: минимальный purge/стабилизация и стабильный режим.
+2. `SME Map / Energy Window`
+1. факторы: `rpm × throughput`;
+1. измерения: torque, rpm, throughput, melt temp, die pressure;
+1. выход: окно SME без деградации и с достаточной дисперсией.
+3. `Melt Temperature / Thermal History Map`
+1. факторы: barrel profile (реперные зоны), rpm, throughput;
+1. измерения: melt temp (у головы), die pressure;
+1. выход: границы перегрева/недоплава.
+4. `Feeding / Side-Feeder Qualification`
+1. факторы: feed rate ratio, feeder speed;
+1. измерения: массовая доля наполнителя, вариация во времени, агломераты;
+1. выход: стабильная подача без пульсаций/забивов.
+5. `Degassing / Moisture Control`
+1. факторы: vacuum, barrel temps, throughput;
+1. измерения: влажность гранулы, пористость, вспенивание, летучие/запах;
+1. выход: режим с управляемой влагой без пузырей.
+6. `Dispersion / Mixing Quality Check`
+1. быстрые метрики QC (микроскопия/прочность/цвет/FTIR proxy);
+1. выход: критерий `ok dispersion` как gate для DOE.
+
+### 9.2 Stage B — DOE baseline (минимальный шум)
+1. Core-факторы:
+1. `throughput_kg_h`,
+1. `screw_rpm`,
+1. `head_temp_c`,
+1. `mid_temp_c`,
+1. `feed_ratio_filler_pct` (если наполнитель в дизайне).
+2. Дополнительные факторы (по необходимости):
+1. `vacuum_mbar` или `vent_on`,
+1. `die_temp_c`,
+1. `side_feeder_rpm`,
+1. `water_injection_g_min` или `moisture_target_pct`.
+3. Стандартные outputs:
+1. `torque_pct`,
+1. `melt_temp_c`,
+1. `die_pressure_bar`,
+1. `SME_kJ_kg` (derived/reporting),
+1. `strand_stability_score` и/или `defect_tags`,
+1. `pellet_moisture_pct`,
+1. `MFR_g_10min` (или `viscosity_proxy`, при необходимости),
+1. `bulk_density_g_cm3`.
+
+### 9.3 Ограничения и правила
+1. Не использовать 8 отдельных зон цилиндра как отдельные DOE-факторы.
+2. Использовать 1-2 реперные зоны (`mid/head`) или сдвиг профиля.
+3. Qualification формирует базовую точку + ограничения (`max pressure`, `max melt temp`, `min degassing`) перед DOE.
+
+### 9.4 Внедрение в системе (порядок)
+1. Домен/seed:
+1. `process_type = compounding`,
+1. default process `route_code = compounding`,
+1. общий seed параметров input/output для compounding.
+2. Qualification:
+1. process-specific 6-step definitions для `compounding`,
+1. автоматическое применение pack по `process_type_code`,
+1. process-specific UI шага квалификации:
+1. для `Injection` — специализированные экраны Scientific Molding,
+1. для `Compounding` — независимый универсальный редактор шага (runs + fields) без injection-специфики.
+3. DOE:
+1. process-specific default active factors для `compounding`,
+1. единый engine генерации дизайнов без форка ядра,
+1. process-specific default active outputs (измеряемые поля),
+1. fallback анализа: если `analysis_run_values` пусты, читать из `run_values` по `code`.
+4. Тесты:
+1. smoke на process routing (`/<route_code>` + `/<route_code>/<id>`),
+1. интеграционный тест `compounding`: qualification pack + default DOE factors,
+1. проверка DOE analysis на тестовых данных compounding.
+
+### 9.5 Критерий завершения Stage A/B
+1. Новый experiment в процессе `compounding` получает свой qualification pack автоматически.
+2. Новый DOE в `compounding` получает корректный baseline факторов без ручной настройки.
+3. DOE analysis работает на едином модуле для всех процессов и не зависит от ручного переноса тестовых значений между таблицами.
+4. Все legacy/injection сценарии и текущие тесты проходят без регрессии.
+
+### 9.6 Добавление процесса `Coating`
+1. Добавлен `process_type = coating` и default process `route_code = coating`.
+2. Добавлен process-specific Qualification pack (6 шагов):
+1. Rheology Window,
+1. Wetting / Surface Energy Check,
+1. Coat Weight Calibration,
+1. Drying / Curing Window,
+1. Adhesion Qualification,
+1. Barrier / Functional Check.
+3. Qualification для `coating` изолирована от injection UI и использует независимый generic step editor.
+4. DOE engine остается общий:
+1. process-specific default factors для `coating`,
+1. process-specific default active outputs для `coating`,
+1. общий модуль анализа + fallback `analysis_run_values -> run_values`.
+5. Создан demo experiment `Coating` с заполненными Qualification/DOE данными.

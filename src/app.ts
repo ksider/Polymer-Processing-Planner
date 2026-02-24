@@ -25,6 +25,8 @@ import { createUsersRouter } from "./routes/users.js";
 import { createNotesRouter } from "./routes/notes.js";
 import { buildBreadcrumbs } from "./services/breadcrumbs.js";
 import { countUnreadNotifications } from "./repos/notifications_repo.js";
+import { getProcessById, getProcessRouteCode } from "./repos/processes_repo.js";
+import { getExperiment } from "./repos/experiments_repo.js";
 
 export function createApp() {
   const app = express();
@@ -78,6 +80,43 @@ app.locals.formatInline = (value: unknown) => {
     .replace(/\s+(?=<(sup|sub)>)/gi, "")
     .replace(/<(sup|sub)>\s+/gi, "<$1>")
     .replace(/\s+<\/(sup|sub)>/gi, "</$1>");
+};
+
+app.locals.experimentPath = (value: unknown) => {
+  if (typeof value === "number" || typeof value === "string") {
+    const experimentId = Number(value);
+    if (!Number.isFinite(experimentId)) return "/experiments/new";
+    const experiment = getExperiment(db, experimentId);
+    if (!experiment) return `/experiments/${experimentId}`;
+    const process = experiment.process_id ? getProcessById(db, Number(experiment.process_id)) : null;
+    const processCode = getProcessRouteCode(process);
+    return processCode ? `/${processCode}/${experimentId}` : `/experiments/${experimentId}`;
+  }
+  const row = value as {
+    id?: number | string;
+    process_route_code?: string | null;
+    process_type_code?: string | null;
+    process_id?: number | null;
+  } | null;
+  const experimentId = Number(row?.id);
+  if (!Number.isFinite(experimentId)) return "/experiments/new";
+  let processCode = getProcessRouteCode({
+    route_code: row?.process_route_code ?? null,
+    process_type_code: row?.process_type_code ?? null
+  } as { route_code: string | null; process_type_code?: string });
+  if (!processCode && Number.isFinite(Number(row?.process_id || 0))) {
+    const process = getProcessById(db, Number(row?.process_id));
+    processCode = getProcessRouteCode(process);
+  }
+  return processCode ? `/${processCode}/${experimentId}` : `/experiments/${experimentId}`;
+};
+
+app.locals.processPath = (value: unknown) => {
+  const processId = Number(value);
+  if (!Number.isFinite(processId)) return "/";
+  const process = getProcessById(db, processId);
+  const processCode = getProcessRouteCode(process);
+  return processCode ? `/${processCode}` : `/?process_id=${processId}`;
 };
 
 const viewsPath = path.resolve(process.cwd(), "src", "views");

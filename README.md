@@ -68,18 +68,31 @@ Create a `.env` file based on `.env.example` and set:
 - After first login with the temp password, the admin must set a new password.
 - Passwords are stored as bcrypt hashes (not in plain text).
 - Roles: `admin`, `manager`, `engineer`, `operator`, `viewer`.
-- Access: admins see all experiments; others see only experiments they own.
+- Access:
+  - `admin` / `manager` see all experiments and processes.
+  - `Process Owner` can access and manage experiments in their process.
+  - `Experiment Owner` can manage their experiment and sign/unsign report.
+  - entity assignees get access to assigned experiment entities.
 
 ## Core Flows
-1) Create an experiment with recipes and machine assignment.
-2) Run the 6‑step Scientific Molding qualification (each step has its own setup + runs).
-3) Create multiple Detailed Optimization (DOE) studies under the same experiment.
-4) Configure factors, generate runlists, and enter run data.
-5) Review analysis (charts + heatmap + 3D when possible).
-6) Generate and edit reports (multiple reports per experiment).
-7) Track Tasks on a kanban board inside each experiment.
+1) Open process list on `/`.
+2) Open a specific process at `/<process_route_code>` (e.g. `/injection`).
+3) Create an experiment in this process with recipes and machine assignment.
+4) Run the 6‑step Scientific Molding qualification (each step has its own setup + runs).
+5) Create multiple Detailed Optimization (DOE) studies under the same experiment.
+6) Configure factors, generate runlists, and enter run data.
+7) Review analysis (charts + heatmap + 3D when possible).
+8) Generate and edit reports (multiple reports per experiment).
+9) Track Tasks on a kanban board inside each experiment.
 
 Planned: export data to CSV.
+
+## Routing Model
+- Process list: `/`
+- Process page: `/<process_route_code>` (configured in Process settings, admin-only)
+- Experiment canonical URL: `/<process_route_code>/<experiment_id>`
+- Legacy routes like `/experiments/:id` are still accepted and redirected/rewritten for compatibility.
+- Process settings are available on the process page (`Process settings` dialog), not on the process cards.
 
 ## Task Manager
 - Tasks live inside each experiment and are shown as a 4-column kanban (Init / In progress / Done / Failed).
@@ -103,6 +116,20 @@ Planned: export data to CSV.
   - notifications feed with mark-read actions
 - Report signature is restricted to the experiment owner.
 
+## Process Model (Current)
+- New DB entities:
+  - `process_types`
+  - `processes` (with `owner_user_id`, `route_code`, `status`)
+  - `experiments.process_id`
+- Startup migration ensures:
+  - default type `Injection`
+  - default type `Compounding (Twin-Screw Extrusion)`
+  - default type `Coating`
+  - default process `Injection Default Process`
+  - default process `Compounding Default Process`
+  - default process `Coating Default Process`
+  - existing experiments are attached to default process
+
 ## Notes & Lab Journal
 - Notes are available in a bottom drawer on:
   - Experiment page
@@ -121,14 +148,45 @@ Planned: export data to CSV.
   - entity-only toggle (in entity drawers)
 - Soft-delete is enabled for `admin` / `manager`.
 
-## Qualification (Scientific Molding)
-The qualification flow includes 6 steps based on scientific molding methodology:
+## Qualification Packs (by Process Type)
+Qualification is process-specific (6-step pack is selected by `process_type`):
+
+- `Injection` (Scientific Molding):
 1) Rheology / Viscosity curve  
 2) Cavity balance  
 3) Pressure drop  
 4) Cosmetic process window  
 5) Gate seal study  
-6) Cooling time optimization  
+6) Cooling time optimization
+
+- `Compounding` (Twin-Screw Extrusion):
+1) RTD / Residence Time Stability  
+2) SME Map / Energy Window  
+3) Melt Temperature / Thermal History Map  
+4) Feeding / Side-Feeder Qualification  
+5) Degassing / Moisture Control  
+6) Dispersion / Mixing Quality Check
+
+- `Coating` (Water/Solvent/Extrusion Coatings):
+1) Rheology Window  
+2) Wetting / Surface Energy Check  
+3) Coat Weight Calibration  
+4) Drying / Curing Window  
+5) Adhesion Qualification  
+6) Barrier / Functional Check
+
+Implementation notes:
+- Qualification step UI is process-specific:
+  - `Injection` keeps Scientific Molding step-specific screens.
+  - `Compounding` and `Coating` use an independent generic step editor (runs + fields), without cavity/rheology/gate-seal injection UI.
+- Each qualification step is edited independently (`/experiments/:id/qualification/:step`): runs, values, assignee, and step fields are isolated per step.
+
+## DOE (Shared Engine, Process-Specific Defaults)
+- DOE generation/analysis uses one shared module across process types.
+- Defaults are process-specific:
+  - active factors by `process_type`,
+  - active measured outputs by `process_type`.
+- Analysis reads `analysis_run_values` first, and falls back to `run_values` by field code when needed (useful for migration/demo data).
 
 Reference book (Amazon search):
 - Robust Process Development and Scientific Molding (Suhas Kulkarni): https://a.co/d/aDv52KL

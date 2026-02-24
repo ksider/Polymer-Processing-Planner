@@ -5,6 +5,7 @@ import {
   getExperimentRecipes,
   getDesignMetadata,
   setExperimentRecipes,
+  updateExperimentName,
   upsertDesignMetadata
 } from "../repos/experiments_repo.js";
 import { createDoeStudy, getDoeStudy } from "../repos/doe_repo.js";
@@ -16,6 +17,7 @@ import {
 } from "../repos/params_repo.js";
 import { insertAnalysisField } from "../repos/analysis_repo.js";
 import { deleteRunsForExperiment, insertRuns } from "../repos/runs_repo.js";
+import { getDefaultProcessId, getProcessById } from "../repos/processes_repo.js";
 import type { ParamDefinition, ParamConfig } from "../repos/params_repo.js";
 import { buildBbdDesign, buildFfaDesign, buildScreenDesign, buildSimDesign } from "../domain/designs.js";
 import { stableHash } from "../lib/hash.js";
@@ -25,8 +27,16 @@ export type ExperimentCreateInput = {
   notes?: string | null;
   recipe_ids?: number[];
   machine_id?: number | null;
+  process_id?: number | null;
   owner_user_id?: number | null;
 };
+
+function getProcessTypeCodeForExperiment(db: Db, experimentId: number): string {
+  const experiment = getExperiment(db, experimentId);
+  if (!experiment || !experiment.process_id) return "injection";
+  const process = getProcessById(db, experiment.process_id);
+  return String(process?.process_type_code || "injection").toLowerCase();
+}
 
 type DefaultFactorConfig = {
   code: string;
@@ -37,7 +47,138 @@ type DefaultFactorConfig = {
   levelCount?: number | null;
 };
 
-export function getDefaultActiveFactors(designType: string): DefaultFactorConfig[] {
+function scoreParamForProcess(
+  processTypeCode: string,
+  param: Pick<ParamDefinition, "group_label">
+): number {
+  const group = String(param.group_label || "").toLowerCase();
+  if (!group) return 0;
+  if (processTypeCode === "compounding") return group.includes("compounding") ? 3 : 0;
+  if (processTypeCode === "coating") return group.includes("coating") ? 3 : 0;
+  if (processTypeCode === "injection") {
+    return /(mold|barrel|fill|pack|hold|screw|outputs|defects|machine)/.test(group) ? 1 : 0;
+  }
+  return 0;
+}
+
+function selectParamByCode(
+  params: ParamDefinition[],
+  code: string,
+  processTypeCode: string
+): ParamDefinition | undefined {
+  const candidates = params.filter((param) => param.code === code);
+  if (!candidates.length) return undefined;
+  candidates.sort((a, b) => scoreParamForProcess(processTypeCode, b) - scoreParamForProcess(processTypeCode, a));
+  return candidates[0];
+}
+
+function selectUniqueParamsByCode(
+  params: ParamDefinition[],
+  processTypeCode: string
+): ParamDefinition[] {
+  const uniqueCodes = Array.from(new Set(params.map((param) => param.code)));
+  return uniqueCodes
+    .map((code) => selectParamByCode(params, code, processTypeCode))
+    .filter((param): param is ParamDefinition => Boolean(param));
+}
+
+function getDefaultActiveOutputCodes(processTypeCode = "injection"): Set<string> {
+  if (processTypeCode === "compounding") {
+    return new Set([
+      "torque_pct",
+      "melt_temp_c",
+      "die_pressure_bar",
+      "SME_kJ_kg",
+      "strand_stability_score",
+      "defect_tags",
+      "pellet_moisture_pct",
+      "MFR_g_10min",
+      "viscosity_proxy",
+      "bulk_density_g_cm3"
+    ]);
+  }
+  if (processTypeCode === "coating") {
+    return new Set([
+      "coat_weight_g_m2",
+      "dry_thickness_um",
+      "adhesion_score",
+      "defect_tags",
+      "water_contact_angle_deg",
+      "WVTR_g_m2_day",
+      "OTR_cc_m2_day"
+    ]);
+  }
+  return new Set([
+    "melt_temp",
+    "fill_time",
+    "peak_inj_pressure",
+    "part_weight",
+    "cycle_time",
+    "defects"
+  ]);
+}
+
+export function getDefaultActiveFactors(designType: string, processTypeCode = "injection"): DefaultFactorConfig[] {
+  if (processTypeCode === "compounding") {
+    if (designType === "BBD") {
+      return [
+        { code: "screw_rpm", mode: "RANGE", rangeMin: 250, rangeMax: 450, levelCount: 3 },
+        { code: "throughput_kg_h", mode: "RANGE", rangeMin: 20, rangeMax: 55, levelCount: 3 },
+        { code: "head_temp_c", mode: "RANGE", rangeMin: 170, rangeMax: 210, levelCount: 3 }
+      ];
+    }
+    if (designType === "FFA") {
+      return [
+        { code: "screw_rpm", mode: "LIST", list: [250, 350, 450], levelCount: 3 },
+        { code: "throughput_kg_h", mode: "LIST", list: [20, 35, 50], levelCount: 3 },
+        { code: "feed_ratio_filler_pct", mode: "LIST", list: [10, 20, 30], levelCount: 3 }
+      ];
+    }
+    if (designType === "SIM") {
+      return [
+        { code: "screw_rpm", mode: "RANGE", rangeMin: 250, rangeMax: 450, levelCount: 2 },
+        { code: "throughput_kg_h", mode: "LIST", list: [20, 35, 50], levelCount: 3 },
+        { code: "head_temp_c", mode: "RANGE", rangeMin: 170, rangeMax: 210, levelCount: 2 }
+      ];
+    }
+    return [
+      { code: "throughput_kg_h", mode: "RANGE", rangeMin: 20, rangeMax: 55, levelCount: 2 },
+      { code: "screw_rpm", mode: "RANGE", rangeMin: 250, rangeMax: 450, levelCount: 2 },
+      { code: "head_temp_c", mode: "RANGE", rangeMin: 170, rangeMax: 210, levelCount: 2 },
+      { code: "mid_temp_c", mode: "RANGE", rangeMin: 150, rangeMax: 195, levelCount: 2 },
+      { code: "feed_ratio_filler_pct", mode: "RANGE", rangeMin: 10, rangeMax: 30, levelCount: 2 }
+    ];
+  }
+  if (processTypeCode === "coating") {
+    if (designType === "BBD") {
+      return [
+        { code: "solids_pct", mode: "RANGE", rangeMin: 30, rangeMax: 55, levelCount: 3 },
+        { code: "coating_speed_m_min", mode: "RANGE", rangeMin: 20, rangeMax: 80, levelCount: 3 },
+        { code: "drying_temp_C", mode: "RANGE", rangeMin: 60, rangeMax: 110, levelCount: 3 }
+      ];
+    }
+    if (designType === "FFA") {
+      return [
+        { code: "solids_pct", mode: "LIST", list: [35, 45, 55], levelCount: 3 },
+        { code: "coating_speed_m_min", mode: "LIST", list: [25, 50, 75], levelCount: 3 },
+        { code: "wet_film_thickness_um", mode: "LIST", list: [20, 35, 50], levelCount: 3 }
+      ];
+    }
+    if (designType === "SIM") {
+      return [
+        { code: "solids_pct", mode: "RANGE", rangeMin: 30, rangeMax: 55, levelCount: 2 },
+        { code: "coating_speed_m_min", mode: "LIST", list: [25, 50, 75], levelCount: 3 },
+        { code: "drying_temp_C", mode: "RANGE", rangeMin: 60, rangeMax: 110, levelCount: 2 }
+      ];
+    }
+    return [
+      { code: "solids_pct", mode: "RANGE", rangeMin: 30, rangeMax: 55, levelCount: 2 },
+      { code: "coating_speed_m_min", mode: "RANGE", rangeMin: 20, rangeMax: 80, levelCount: 2 },
+      { code: "wet_film_thickness_um", mode: "RANGE", rangeMin: 20, rangeMax: 50, levelCount: 2 },
+      { code: "drying_temp_C", mode: "RANGE", rangeMin: 60, rangeMax: 110, levelCount: 2 },
+      { code: "drying_time_s", mode: "RANGE", rangeMin: 30, rangeMax: 180, levelCount: 2 }
+    ];
+  }
   if (designType === "BBD") {
     return [
       { code: "barrel_zone5", mode: "RANGE", rangeMin: 80, rangeMax: 120, levelCount: 3 },
@@ -71,18 +212,27 @@ export function getDefaultActiveFactors(designType: string): DefaultFactorConfig
 }
 
 export function createExperimentWithDefaults(db: Db, input: ExperimentCreateInput): number {
+  const resolvedProcessId = input.process_id ?? getDefaultProcessId(db);
+  const userTitle = String(input.name ?? "").trim();
   const experimentId = createExperiment(db, {
-    name: input.name,
+    name: userTitle || "draft",
     design_type: "SIM",
     seed: 42,
     notes: input.notes ?? null,
     machine_id: input.machine_id ?? null,
+    process_id: resolvedProcessId ?? null,
     owner_user_id: input.owner_user_id ?? null,
     center_points: 3,
     max_runs: 200,
     replicate_count: 1,
     recipe_as_block: 0
   });
+  const process = resolvedProcessId ? getProcessById(db, resolvedProcessId) : null;
+  const rawCode = String(process?.process_type_code || "experiment").trim().toLowerCase();
+  const processCode = rawCode.replace(/[^a-z0-9_-]+/g, "") || "experiment";
+  const baseName = `${processCode}/${experimentId}`;
+  const canonicalName = userTitle ? `${baseName} ${userTitle}` : baseName;
+  updateExperimentName(db, experimentId, canonicalName);
   setExperimentRecipes(db, experimentId, input.recipe_ids ?? []);
   return experimentId;
 }
@@ -112,9 +262,10 @@ export function createDoeWithDefaults(
   });
 
   const inputParams = listParamDefinitionsByKind(db, input.experimentId, "INPUT");
-  const defaultFactors = getDefaultActiveFactors(input.design_type);
+  const processTypeCode = getProcessTypeCodeForExperiment(db, input.experimentId);
+  const defaultFactors = getDefaultActiveFactors(input.design_type, processTypeCode);
   for (const factor of defaultFactors) {
-    const param = inputParams.find((p) => p.code === factor.code);
+    const param = selectParamByCode(inputParams, factor.code, processTypeCode);
     if (!param) continue;
     upsertParamConfig(db, {
       experiment_id: input.experimentId,
@@ -129,7 +280,11 @@ export function createDoeWithDefaults(
       level_count: factor.levelCount ?? null
     });
   }
-  const outputParams = listParamDefinitionsByKind(db, input.experimentId, "OUTPUT");
+  const outputParams = selectUniqueParamsByCode(
+    listParamDefinitionsByKind(db, input.experimentId, "OUTPUT"),
+    processTypeCode
+  );
+  const defaultActiveOutputCodes = getDefaultActiveOutputCodes(processTypeCode);
   for (const output of outputParams) {
     insertAnalysisField(db, {
       scope_type: "DOE",
@@ -141,7 +296,7 @@ export function createDoeWithDefaults(
       group_label: output.group_label,
       allowed_values_json: output.allowed_values_json,
       is_standard: 0,
-      is_active: 1
+      is_active: defaultActiveOutputCodes.has(output.code) ? 1 : 0
     });
   }
   return doeId;

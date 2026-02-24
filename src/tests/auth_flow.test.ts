@@ -87,10 +87,11 @@ test("temp password flow and owner access", async () => {
     .expect(302);
 
   const experimentRow = db
-    .prepare("SELECT id, owner_user_id FROM experiments ORDER BY id DESC LIMIT 1")
-    .get() as { id: number; owner_user_id: number | null };
+    .prepare("SELECT id, owner_user_id, name FROM experiments ORDER BY id DESC LIMIT 1")
+    .get() as { id: number; owner_user_id: number | null; name: string };
   assert.ok(experimentRow.id > 0);
   assert.ok(experimentRow.owner_user_id);
+  assert.match(experimentRow.name, /^injection\/\d+\b/i);
 
   const userAgent = request.agent(app);
   await userAgent

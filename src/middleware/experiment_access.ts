@@ -4,6 +4,7 @@ import { getExperiment } from "../repos/experiments_repo.js";
 import { getReportConfig } from "../repos/reports_repo.js";
 import { getRun } from "../repos/runs_repo.js";
 import { hasActiveAssignmentForExperiment } from "../repos/entity_assignments_repo.js";
+import { isProcessOwner } from "../repos/processes_repo.js";
 
 export function ensureExperimentAccess(db: Db) {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -49,12 +50,15 @@ function canAccessExperiment(
   db: Db,
   user: Express.User | undefined,
   experimentId: number,
-  experiment: { owner_user_id: number | null }
+  experiment: { owner_user_id: number | null; process_id?: number | null }
 ) {
   if (user?.role === "admin") return true;
   if (user?.role === "manager") return true;
   if (experiment.owner_user_id == null) return true;
   if (user?.id === experiment.owner_user_id) return true;
+  if (user?.id && Number.isFinite(Number(experiment.process_id || 0))) {
+    if (isProcessOwner(db, Number(experiment.process_id), user.id)) return true;
+  }
   if (!user?.id) return false;
   return hasActiveAssignmentForExperiment(db, experimentId, user.id);
 }

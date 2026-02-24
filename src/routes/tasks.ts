@@ -23,7 +23,7 @@ import { computeTaskProgress, suggestTaskStatusWithRules, getDefaultEntityWeight
 import { listTasksForUser } from "../repos/tasks_read_repo.js";
 import { findUserById } from "../repos/users_repo.js";
 import { listQualSummarySteps } from "../repos/qual_repo.js";
-import { getQualificationSteps } from "../services/qualification_service.js";
+import { getQualificationStepName } from "../services/qualification_service.js";
 import { getExperiment } from "../repos/experiments_repo.js";
 import { getDoeStudy } from "../repos/doe_repo.js";
 import { getReportConfig } from "../repos/reports_repo.js";
@@ -65,7 +65,7 @@ export function createTasksRouter(db: Db) {
     if (!task) return res.status(404).json({ error: "Task not found" });
     const entities = listTaskEntities(db, taskId).map((entity) => ({
       ...entity,
-      display_label: getEntityLabel(db, entity.entity_type, entity.entity_id)
+      display_label: getEntityLabel(db, task.experiment_id, entity.entity_type, entity.entity_id)
     }));
     const summarySteps = new Set(listQualSummarySteps(db, task.experiment_id));
     const hydrated: TaskEntityRow[] = entities.map((entity) => {
@@ -336,10 +336,6 @@ export function createTasksRouter(db: Db) {
   return router;
 }
 
-const qualificationStepLabels = new Map(
-  getQualificationSteps().map((step) => [step.step_number, step.name])
-);
-
 function toTaskStatus(raw: unknown): TaskStatus | null {
   const value = String(raw ?? "").trim();
   if (value === "init" || value === "in_progress" || value === "done" || value === "failed") {
@@ -348,10 +344,10 @@ function toTaskStatus(raw: unknown): TaskStatus | null {
   return null;
 }
 
-function getEntityLabel(db: Db, type: string, id: number): string {
+function getEntityLabel(db: Db, experimentId: number, type: string, id: number): string {
   if (type === "qualification_step") {
-    const name = qualificationStepLabels.get(id);
-    return name ? `Step ${id}: ${name}` : `Step ${id}`;
+    const name = getQualificationStepName(db, experimentId, id);
+    return `Step ${id}: ${name}`;
   }
   if (type === "doe") {
     const doe = getDoeStudy(db, id);

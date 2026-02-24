@@ -3,7 +3,7 @@
 <div class="container">
   <div class="card">
     <div class="card-header">
-      <a class="back-link" href="/experiments/<%= experimentId %>#qualification" aria-label="Back to experiment qualification">
+      <a class="back-link" href="<%= `${experimentPath(experimentId)}#qualification` %>" aria-label="Back to experiment qualification">
         <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
       </a>
       <h1 class="card-title">Step <%= step.step_number %>: <%= stepDef?.name || 'Qualification Step' %></h1>

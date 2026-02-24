@@ -8,6 +8,7 @@ export type Experiment = {
   created_at: string;
   notes: string | null;
   machine_id: number | null;
+  process_id: number | null;
   owner_user_id: number | null;
   archived_at: string | null;
   center_points: number;
@@ -20,6 +21,10 @@ export type Experiment = {
 export type ExperimentListRow = Experiment & {
   owner_name: string | null;
   owner_email: string | null;
+  process_name: string | null;
+  process_route_code: string | null;
+  process_type_code: string | null;
+  process_type_name: string | null;
   qual_summary_count: number;
   qual_run_value_count: number;
 };
@@ -39,6 +44,10 @@ export function listExperimentsWithMeta(db: Db, includeArchived = false): Experi
       experiments.*,
       users.name as owner_name,
       users.email as owner_email,
+      processes.name as process_name,
+      processes.route_code as process_route_code,
+      process_types.code as process_type_code,
+      process_types.name as process_type_name,
       (
         SELECT COUNT(DISTINCT step_number)
         FROM qual_step_summary
@@ -52,6 +61,8 @@ export function listExperimentsWithMeta(db: Db, includeArchived = false): Experi
       ) as qual_run_value_count
     FROM experiments
     LEFT JOIN users ON users.id = experiments.owner_user_id
+    LEFT JOIN processes ON processes.id = experiments.process_id
+    LEFT JOIN process_types ON process_types.id = processes.process_type_id
   `;
   const sql = includeArchived
     ? `${baseSql} ORDER BY experiments.id DESC`
@@ -84,6 +95,10 @@ export function listExperimentsForOwnerWithMeta(
       experiments.*,
       users.name as owner_name,
       users.email as owner_email,
+      processes.name as process_name,
+      processes.route_code as process_route_code,
+      process_types.code as process_type_code,
+      process_types.name as process_type_name,
       (
         SELECT COUNT(DISTINCT step_number)
         FROM qual_step_summary
@@ -97,6 +112,8 @@ export function listExperimentsForOwnerWithMeta(
       ) as qual_run_value_count
     FROM experiments
     LEFT JOIN users ON users.id = experiments.owner_user_id
+    LEFT JOIN processes ON processes.id = experiments.process_id
+    LEFT JOIN process_types ON process_types.id = processes.process_type_id
     WHERE experiments.owner_user_id = ?
   `;
   const sql = includeArchived
@@ -116,6 +133,10 @@ export function listExperimentsForUserWithMeta(
       experiments.*,
       users.name as owner_name,
       users.email as owner_email,
+      processes.name as process_name,
+      processes.route_code as process_route_code,
+      process_types.code as process_type_code,
+      process_types.name as process_type_name,
       (
         SELECT COUNT(DISTINCT step_number)
         FROM qual_step_summary
@@ -129,8 +150,13 @@ export function listExperimentsForUserWithMeta(
       ) as qual_run_value_count
     FROM experiments
     LEFT JOIN users ON users.id = experiments.owner_user_id
+    LEFT JOIN processes ON processes.id = experiments.process_id
+    LEFT JOIN process_types ON process_types.id = processes.process_type_id
     WHERE (
       experiments.owner_user_id = ?
+      OR experiments.process_id IN (
+        SELECT p.id FROM processes p WHERE p.owner_user_id = ? AND p.status = 'active'
+      )
       OR EXISTS (
         SELECT 1 FROM entity_assignments ea
         WHERE ea.experiment_id = experiments.id
@@ -141,7 +167,94 @@ export function listExperimentsForUserWithMeta(
     ${archivedSql}
     ORDER BY experiments.id DESC
   `;
-  return db.prepare(sql).all(userId, userId) as ExperimentListRow[];
+  return db.prepare(sql).all(userId, userId, userId) as ExperimentListRow[];
+}
+
+export function listExperimentsByProcessWithMeta(
+  db: Db,
+  processId: number,
+  includeArchived = false
+): ExperimentListRow[] {
+  const archivedSql = includeArchived ? "" : "AND experiments.archived_at IS NULL";
+  const sql = `
+    SELECT
+      experiments.*,
+      users.name as owner_name,
+      users.email as owner_email,
+      processes.name as process_name,
+      processes.route_code as process_route_code,
+      process_types.code as process_type_code,
+      process_types.name as process_type_name,
+      (
+        SELECT COUNT(DISTINCT step_number)
+        FROM qual_step_summary
+        WHERE qual_step_summary.experiment_id = experiments.id
+      ) as qual_summary_count,
+      (
+        SELECT COUNT(*)
+        FROM qual_run_values
+        JOIN qual_runs ON qual_runs.id = qual_run_values.run_id
+        WHERE qual_runs.experiment_id = experiments.id
+      ) as qual_run_value_count
+    FROM experiments
+    LEFT JOIN users ON users.id = experiments.owner_user_id
+    LEFT JOIN processes ON processes.id = experiments.process_id
+    LEFT JOIN process_types ON process_types.id = processes.process_type_id
+    WHERE experiments.process_id = ?
+    ${archivedSql}
+    ORDER BY experiments.id DESC
+  `;
+  return db.prepare(sql).all(processId) as ExperimentListRow[];
+}
+
+export function listExperimentsByProcessForUserWithMeta(
+  db: Db,
+  processId: number,
+  userId: number,
+  includeArchived = false
+): ExperimentListRow[] {
+  const archivedSql = includeArchived ? "" : "AND experiments.archived_at IS NULL";
+  const sql = `
+    SELECT
+      experiments.*,
+      users.name as owner_name,
+      users.email as owner_email,
+      processes.name as process_name,
+      processes.route_code as process_route_code,
+      process_types.code as process_type_code,
+      process_types.name as process_type_name,
+      (
+        SELECT COUNT(DISTINCT step_number)
+        FROM qual_step_summary
+        WHERE qual_step_summary.experiment_id = experiments.id
+      ) as qual_summary_count,
+      (
+        SELECT COUNT(*)
+        FROM qual_run_values
+        JOIN qual_runs ON qual_runs.id = qual_run_values.run_id
+        WHERE qual_runs.experiment_id = experiments.id
+      ) as qual_run_value_count
+    FROM experiments
+    LEFT JOIN users ON users.id = experiments.owner_user_id
+    LEFT JOIN processes ON processes.id = experiments.process_id
+    LEFT JOIN process_types ON process_types.id = processes.process_type_id
+    WHERE experiments.process_id = ?
+      AND (
+        experiments.owner_user_id = ?
+        OR experiments.process_id IN (
+          SELECT p.id FROM processes p WHERE p.owner_user_id = ? AND p.status = 'active'
+        )
+        OR EXISTS (
+          SELECT 1 FROM entity_assignments ea
+          WHERE ea.experiment_id = experiments.id
+            AND ea.assignee_user_id = ?
+            AND ea.status = 'active'
+        )
+      )
+      ${archivedSql}
+    ORDER BY experiments.id DESC
+  `;
+  return db.prepare(sql).all(processId, userId, userId, userId) as ExperimentListRow[];
 }
 
 export function getExperiment(db: Db, id: number): Experiment | undefined {
@@ -172,7 +285,7 @@ export function updateExperiment(
   const next = { ...current, ...updates };
   db.prepare(
     `UPDATE experiments
-     SET name = ?, design_type = ?, seed = ?, notes = ?, machine_id = ?, owner_user_id = ?, center_points = ?, max_runs = ?, replicate_count = ?, recipe_as_block = ?
+     SET name = ?, design_type = ?, seed = ?, notes = ?, machine_id = ?, process_id = ?, owner_user_id = ?, center_points = ?, max_runs = ?, replicate_count = ?, recipe_as_block = ?
      WHERE id = ?`
   ).run(
     next.name,
@@ -180,6 +293,7 @@ export function updateExperiment(
     next.seed,
     next.notes ?? null,
     next.machine_id ?? null,
+    next.process_id ?? null,
     next.owner_user_id ?? null,
     next.center_points ?? 3,
     next.max_runs ?? 200,
@@ -191,6 +305,10 @@ export function updateExperiment(
 
 export function updateExperimentOwner(db: Db, id: number, ownerUserId: number | null) {
   db.prepare("UPDATE experiments SET owner_user_id = ? WHERE id = ?").run(ownerUserId, id);
+}
+
+export function updateExperimentName(db: Db, id: number, name: string) {
+  db.prepare("UPDATE experiments SET name = ? WHERE id = ?").run(name, id);
 }
 
 export function updateExperimentManualDone(db: Db, id: number, done: number) {
@@ -206,6 +324,7 @@ export function createExperiment(
     | "seed"
     | "notes"
     | "machine_id"
+    | "process_id"
     | "owner_user_id"
     | "center_points"
     | "max_runs"
@@ -217,8 +336,8 @@ export function createExperiment(
   const result = db
     .prepare(
       `INSERT INTO experiments
-        (name, design_type, seed, created_at, notes, machine_id, owner_user_id, center_points, max_runs, replicate_count, recipe_as_block)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        (name, design_type, seed, created_at, notes, machine_id, process_id, owner_user_id, center_points, max_runs, replicate_count, recipe_as_block)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       data.name,
@@ -227,6 +346,7 @@ export function createExperiment(
       createdAt,
       data.notes ?? null,
       data.machine_id ?? null,
+      data.process_id ?? null,
       data.owner_user_id ?? null,
       data.center_points ?? 3,
       data.max_runs ?? 200,

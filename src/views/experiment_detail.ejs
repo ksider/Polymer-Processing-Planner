@@ -3,7 +3,7 @@
 <div class="container">
   <div class="card">
     <div class="card-header card-header-main">
-      <a class="back-link" href="/" aria-label="Back to experiments">
+      <a class="back-link" href="<%= processPath(experiment.process_id) %>" aria-label="Back to process">
         <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
       </a>
       <div>
@@ -66,7 +66,16 @@
       <div class="section-row">
         <div>
           <strong>Qualification</strong>
-          <div class="small-note">Six-step Scientific Molding sequence.</div>
+          <div class="small-note">
+            <%
+              const processTypeCode = (experiment.process_type_code || '').toLowerCase();
+            %>
+            <%= processTypeCode === 'compounding'
+              ? 'Six-step compounding qualification pack.'
+              : processTypeCode === 'coating'
+                ? 'Six-step coating qualification pack.'
+                : 'Six-step Scientific Molding sequence.' %>
+          </div>
         </div>
       </div>
       <div class="qualification-compact-grid">

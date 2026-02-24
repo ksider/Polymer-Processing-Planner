@@ -1,0 +1,367 @@
+<%- include('partials/head', { title: 'IM Planner | Qualification Step' }) %>
+<%- include('partials/nav') %>
+<div class="container">
+  <div class="card">
+    <div class="card-header">
+      <a class="back-link" href="<%= `${experimentPath(experimentId)}#qualification` %>" aria-label="Back to experiment qualification">
+        <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
+      </a>
+      <h1 class="card-title">Step <%= step.step_number %>: <%= stepDef?.name || 'Qualification Step' %></h1>
+      <div class="section-actions">
+        <div class="small-note">
+          Responsible:
+          <% if (stepAssigneeId) { %>
+            <a href="/users/<%= stepAssigneeId %>"><%- formatInline(stepAssigneeLabel || `User #${stepAssigneeId}`) %></a>
+          <% } else { %>
+            <span>-</span>
+          <% } %>
+        </div>
+        <% if (canAssignEntities) { %>
+          <form class="pure-form assignment-form" action="/experiments/<%= experimentId %>/qualification/<%= step.step_number %>/assignee" method="post">
+            <select name="assignee_user_id" onchange="this.form.submit()">
+              <option value="">Unassigned</option>
+              <% assignableUsers.forEach((user) => { %>
+                <option value="<%= user.id %>" <%= stepAssigneeId === user.id ? 'selected' : '' %>>
+                  <%= user.name || user.email %> (<%= user.role || 'user' %>)
+                </option>
+              <% }); %>
+            </select>
+          </form>
+        <% } %>
+      </div>
+    </div>
+    <div class="run-controls">
+      <button class="pure-button pure-button-secondary" type="button" id="openQualFields">Manage fields</button>
+      <button class="pure-button pure-button-primary" type="button" id="addRunBtn">Add run</button>
+    </div>
+    <% if (summaryJson) { %>
+      <pre class="qual-summary"><%= summaryJson %></pre>
+    <% } %>
+  </div>
+
+  <%- include('partials/entity_notes', {
+    experimentId: experimentId,
+    entityType: 'qualification_step',
+    entityId: step.step_number,
+    title: `Step ${step.step_number} Notes`,
+    canWrite: currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')
+  }) %>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Runs</h2>
+    </div>
+    <% const activeFields = fields.filter((field) => field.is_enabled === 1); %>
+    <div class="table-scroll">
+      <table class="pure-table table-compact" id="compoundingRunsTable">
+        <thead>
+          <tr>
+            <th>Run</th>
+            <% activeFields.forEach((field) => { %>
+              <th>
+                <%- formatInline(field.label) %>
+                <% if (field.unit) { %><span class="small-note"> <%= field.unit %></span><% } %>
+              </th>
+            <% }); %>
+            <th>Done</th>
+            <th>Exclude</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (runs.length === 0) { %>
+            <tr><td colspan="<%= activeFields.length + 4 %>">No runs yet.</td></tr>
+          <% } %>
+          <% runs.forEach((run) => { %>
+            <% const values = runValueMap[String(run.id)] || {}; %>
+            <tr data-run-row data-run-id="<%= run.id %>">
+              <td><strong><%= run.run_code %></strong></td>
+              <% activeFields.forEach((field) => { %>
+                <% const value = values[String(field.id)]; %>
+                <td>
+                  <% if (field.is_derived) { %>
+                    <span class="small-note">
+                      <% if (field.field_type === 'number') { %>
+                        <%= formatNumber(value?.value_real) %>
+                      <% } else if (field.field_type === 'tag') { %>
+                        <%= value?.value_tags_json || '-' %>
+                      <% } else { %>
+                        <%= value?.value_text || '-' %>
+                      <% } %>
+                    </span>
+                  <% } else if (field.field_type === 'boolean') { %>
+                    <input type="checkbox" data-field-id="<%= field.id %>" data-field-type="boolean" <%= value?.value_real === 1 ? 'checked' : '' %>>
+                  <% } else if (field.field_type === 'number') { %>
+                    <input type="number" step="any" data-field-id="<%= field.id %>" data-field-type="number" value="<%= value?.value_real ?? '' %>">
+                  <% } else if (field.field_type === 'tag') { %>
+                    <% let selected = []; %>
+                    <% if (value?.value_tags_json) { try { const parsed = JSON.parse(value.value_tags_json); if (Array.isArray(parsed)) selected = parsed.map(String); } catch {} } %>
+                    <input type="text" data-field-id="<%= field.id %>" data-field-type="tag" placeholder="a,b,c" value="<%- formatInline(selected.join(', ')) %>">
+                  <% } else { %>
+                    <input type="text" data-field-id="<%= field.id %>" data-field-type="text" value="<%- formatInline(value?.value_text || '') %>">
+                  <% } %>
+                </td>
+              <% }); %>
+              <td><input type="checkbox" data-flag="done" <%= run.done === 1 ? 'checked' : '' %>></td>
+              <td><input type="checkbox" data-flag="exclude" <%= run.exclude_from_analysis === 1 ? 'checked' : '' %>></td>
+              <td>
+                <button class="icon-button danger" type="button" data-run-delete title="Delete row">
+                  <span class="material-symbols-rounded" aria-hidden="true">delete</span>
+                </button>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<dialog class="modal-frame" id="qualFieldDialog">
+  <div class="modal-header">
+    <strong>Qualification fields</strong>
+    <button class="pure-button" type="button" data-close>Close</button>
+  </div>
+  <div class="modal-body">
+    <div class="field-toolbar">
+      <label>
+        Library
+        <select id="qualLibrarySelect">
+          <option value="">Select parameter…</option>
+          <% globalParams.forEach((param) => { %>
+            <option value="<%= param.id %>">
+              <%- formatInline(param.label) %> (<%= param.code %>)
+            </option>
+          <% }); %>
+        </select>
+      </label>
+      <button class="pure-button" type="button" id="qualImportField">Add from library</button>
+      <a class="pure-button pure-button-secondary" href="/param-library">Open library</a>
+    </div>
+    <table class="pure-table table-compact qual-field-table">
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Label</th>
+          <th>Type</th>
+          <th>Unit</th>
+          <th>Required</th>
+          <th>Enabled</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% fields.forEach((field) => { %>
+          <tr data-field-row data-field-id="<%= field.id %>">
+            <td><input data-field-code value="<%= field.code %>" <%= field.is_derived ? 'readonly' : '' %>></td>
+            <td><input data-field-label value="<%- formatInline(field.label) %>" <%= field.is_derived ? 'readonly' : '' %>></td>
+            <td>
+              <select data-field-type <%= field.is_derived ? 'disabled' : '' %>>
+                <option value="number" <%= field.field_type === 'number' ? 'selected' : '' %>>number</option>
+                <option value="text" <%= field.field_type === 'text' ? 'selected' : '' %>>text</option>
+                <option value="tag" <%= field.field_type === 'tag' ? 'selected' : '' %>>tag</option>
+                <option value="boolean" <%= field.field_type === 'boolean' ? 'selected' : '' %>>boolean</option>
+              </select>
+            </td>
+            <td><input data-field-unit value="<%= field.unit || '' %>" <%= field.is_derived ? 'readonly' : '' %>></td>
+            <td><input type="checkbox" data-field-required <%= field.required === 1 ? 'checked' : '' %> <%= field.is_derived ? 'disabled' : '' %>></td>
+            <td><input type="checkbox" data-field-enabled <%= field.is_enabled === 1 ? 'checked' : '' %> <%= field.is_derived ? 'disabled' : '' %>></td>
+            <td>
+              <% if (!field.is_derived) { %>
+                <button class="icon-button danger" type="button" data-field-delete title="Delete field">
+                  <span class="material-symbols-rounded" aria-hidden="true">delete</span>
+                </button>
+              <% } %>
+            </td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+
+    <div class="card" style="margin-top: 1rem;">
+      <h3 class="card-title">Custom Field</h3>
+      <form class="pure-form pure-form-stacked" id="qualCustomFieldForm">
+        <div class="field-grid">
+          <div>
+            <label>Code</label>
+            <input type="text" name="code" placeholder="custom_param" required>
+          </div>
+          <div>
+            <label>Label</label>
+            <input type="text" name="label" placeholder="Custom Parameter" required>
+          </div>
+          <div>
+            <label>Unit</label>
+            <input type="text" name="unit" placeholder="">
+          </div>
+          <div>
+            <label>Type</label>
+            <select name="field_type">
+              <option value="number" selected>Number</option>
+              <option value="text">Text</option>
+              <option value="tag">Tag</option>
+              <option value="boolean">Boolean</option>
+            </select>
+          </div>
+        </div>
+        <button class="pure-button pure-button-primary" type="submit">Add Field</button>
+      </form>
+    </div>
+  </div>
+</dialog>
+
+<script>
+  (function () {
+    const experimentId = <%= experimentId %>;
+    const stepNumber = <%= step.step_number %>;
+    const table = document.getElementById('compoundingRunsTable');
+
+    const post = async (url, body) => {
+      const response = await fetch(url, { method: 'POST', body });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `Request failed (${response.status})`);
+      }
+      const contentType = response.headers.get('content-type') || '';
+      return contentType.includes('application/json') ? response.json() : null;
+    };
+
+    const saveTimers = new Map();
+    const queueSave = (key, fn) => {
+      if (saveTimers.has(key)) clearTimeout(saveTimers.get(key));
+      const timer = setTimeout(async () => {
+        try { await fn(); } catch {}
+      }, 180);
+      saveTimers.set(key, timer);
+    };
+
+    table?.addEventListener('input', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) return;
+      const row = target.closest('tr[data-run-row]');
+      const runId = row?.getAttribute('data-run-id');
+      const fieldId = target.getAttribute('data-field-id');
+      const fieldType = target.getAttribute('data-field-type');
+      if (!runId || !fieldId || !fieldType) return;
+      const key = `${runId}:${fieldId}`;
+      queueSave(key, async () => {
+        let value = target.value;
+        if (fieldType === 'tag') {
+          value = target.value
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean);
+        }
+        const form = new FormData();
+        form.append('field_id', fieldId);
+        form.append('value', fieldType === 'tag' ? JSON.stringify(value) : String(value));
+        await post(`/qual-runs/${runId}/value`, form);
+      });
+    });
+
+    table?.addEventListener('change', async (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) return;
+      const row = target.closest('tr[data-run-row]');
+      const runId = row?.getAttribute('data-run-id');
+      if (!runId) return;
+
+      if (target.hasAttribute('data-field-id') && target.getAttribute('data-field-type') === 'boolean') {
+        const form = new FormData();
+        form.append('field_id', target.getAttribute('data-field-id') || '');
+        form.append('value', target.checked ? '1' : '0');
+        try { await post(`/qual-runs/${runId}/value`, form); } catch {}
+        return;
+      }
+
+      const flag = target.getAttribute('data-flag');
+      if (flag === 'done' || flag === 'exclude') {
+        const done = row.querySelector('input[data-flag="done"]')?.checked ? '1' : '';
+        const exclude = row.querySelector('input[data-flag="exclude"]')?.checked ? '1' : '';
+        const form = new FormData();
+        form.append('done', done);
+        form.append('exclude', exclude);
+        try { await post(`/qual-runs/${runId}/flags`, form); } catch {}
+      }
+    });
+
+    table?.addEventListener('click', async (event) => {
+      const button = event.target.closest('[data-run-delete]');
+      if (!button) return;
+      const row = button.closest('tr[data-run-row]');
+      const runId = row?.getAttribute('data-run-id');
+      if (!runId) return;
+      if (!confirm('Delete this run?')) return;
+      try {
+        await post(`/experiments/${experimentId}/qualification/${stepNumber}/runs/${runId}/delete`, new FormData());
+        location.reload();
+      } catch {}
+    });
+
+    document.getElementById('addRunBtn')?.addEventListener('click', async () => {
+      try {
+        await post(`/experiments/${experimentId}/qualification/${stepNumber}/runs`, new FormData());
+        location.reload();
+      } catch {}
+    });
+
+    const fieldDialog = document.getElementById('qualFieldDialog');
+    document.getElementById('openQualFields')?.addEventListener('click', () => fieldDialog?.showModal());
+    fieldDialog?.querySelectorAll('[data-close]').forEach((button) => {
+      button.addEventListener('click', () => fieldDialog.close());
+    });
+
+    fieldDialog?.addEventListener('change', async (event) => {
+      const target = event.target;
+      const row = target?.closest?.('tr[data-field-row]');
+      if (!row) return;
+      const fieldId = row.getAttribute('data-field-id');
+      if (!fieldId) return;
+      const form = new FormData();
+      form.append('code', row.querySelector('[data-field-code]')?.value || '');
+      form.append('label', row.querySelector('[data-field-label]')?.value || '');
+      form.append('field_type', row.querySelector('[data-field-type]')?.value || 'number');
+      form.append('unit', row.querySelector('[data-field-unit]')?.value || '');
+      form.append('required', row.querySelector('[data-field-required]')?.checked ? '1' : '');
+      form.append('is_enabled', row.querySelector('[data-field-enabled]')?.checked ? '1' : '');
+      try { await post(`/experiments/${experimentId}/qualification/fields/${fieldId}`, form); } catch {}
+    });
+
+    fieldDialog?.addEventListener('click', async (event) => {
+      const button = event.target.closest('[data-field-delete]');
+      if (!button) return;
+      const row = button.closest('tr[data-field-row]');
+      const fieldId = row?.getAttribute('data-field-id');
+      if (!fieldId) return;
+      if (!confirm('Delete this field?')) return;
+      try {
+        await post(`/experiments/${experimentId}/qualification/fields/${fieldId}/delete`, new FormData());
+        location.reload();
+      } catch {}
+    });
+
+    document.getElementById('qualImportField')?.addEventListener('click', async () => {
+      const select = document.getElementById('qualLibrarySelect');
+      const paramId = select?.value;
+      if (!paramId) return;
+      const form = new FormData();
+      form.append('param_id', paramId);
+      try {
+        await post(`/experiments/${experimentId}/qualification/${stepNumber}/fields/import`, form);
+        location.reload();
+      } catch {}
+    });
+
+    document.getElementById('qualCustomFieldForm')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formEl = event.target;
+      const body = new FormData(formEl);
+      try {
+        await post(`/experiments/${experimentId}/qualification/${stepNumber}/fields`, body);
+        location.reload();
+      } catch {}
+    });
+  })();
+</script>
+
+<%- include('partials/foot') %>

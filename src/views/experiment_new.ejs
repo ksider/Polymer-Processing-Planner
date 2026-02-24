@@ -3,7 +3,7 @@
 <div class="container">
   <div class="card">
     <div class="card-header">
-      <a class="back-link" href="/" aria-label="Back to experiments">
+      <a class="back-link" href="<%= processPath(defaultProcessId) %>" aria-label="Back to process">
         <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
       </a>
       <h1 class="card-title">Create Experiment</h1>
@@ -13,6 +13,18 @@
         <div>
           <label for="name">Name</label>
           <input type="text" id="name" name="name" required>
+        </div>
+        <div>
+          <label for="process_id">Process</label>
+          <select id="process_id" name="process_id" required>
+            <option value="">Select process...</option>
+            <% (processes || []).forEach((process) => { %>
+              <option value="<%= process.id %>" <%= Number(defaultProcessId || 0) === process.id ? 'selected' : '' %>>
+                <%- formatInline(process.name) %> (<%- formatInline(process.process_type_name || 'Unknown') %>)
+              </option>
+            <% }); %>
+          </select>
+          <div class="small-note">Process Type + Process define the outer context for this experiment.</div>
         </div>
         <div>
           <label for="machine_id">Machine</label>

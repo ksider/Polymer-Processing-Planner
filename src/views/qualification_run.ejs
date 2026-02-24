@@ -3,7 +3,7 @@
 <div class="container">
   <div class="card">
     <div class="card-header">
-      <a class="back-link" href="/experiments/<%= run.experiment_id %>/qualification/<%= step.step_number %>" aria-label="Back to step">
+      <a class="back-link" href="<%= `${experimentPath(run.experiment_id)}/qualification/${step.step_number}` %>" aria-label="Back to step">
         <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
       </a>
       <div>

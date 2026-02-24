@@ -31,7 +31,7 @@
         <% experiments.forEach((exp) => { %>
           <tr>
             <td><%= exp.id %></td>
-            <td><a href="/experiments/<%= exp.id %>"><%- formatInline(exp.name) %></a></td>
+            <td><a href="<%= experimentPath(exp) %>"><%- formatInline(exp.name) %></a></td>
             <td><span class="status-pill status-<%= exp.status %>"><%= exp.statusLabel %></span></td>
             <td><%= new Date(exp.created_at).toLocaleDateString() %></td>
           </tr>

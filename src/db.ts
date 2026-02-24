@@ -184,6 +184,24 @@ function initDb(db: Db) {
       read_at TEXT,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+    CREATE TABLE IF NOT EXISTS process_types (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS processes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      process_type_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      route_code TEXT,
+      owner_user_id INTEGER,
+      status TEXT NOT NULL DEFAULT 'active',
+      meta_json TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (process_type_id) REFERENCES process_types(id) ON DELETE RESTRICT,
+      FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
     CREATE TABLE IF NOT EXISTS recipes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -226,6 +244,7 @@ function initDb(db: Db) {
       created_at TEXT NOT NULL,
       notes TEXT,
       machine_id INTEGER,
+      process_id INTEGER,
       owner_user_id INTEGER,
       archived_at TEXT,
       center_points INTEGER DEFAULT 3,
@@ -233,6 +252,7 @@ function initDb(db: Db) {
       replicate_count INTEGER DEFAULT 1,
       recipe_as_block INTEGER DEFAULT 0,
       FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE SET NULL,
+      FOREIGN KEY (process_id) REFERENCES processes(id) ON DELETE SET NULL,
       FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE SET NULL
     );
     CREATE TABLE IF NOT EXISTS experiment_recipes (
@@ -437,6 +457,7 @@ function initDb(db: Db) {
     CREATE INDEX IF NOT EXISTS idx_entity_assignments_exp_assignee_status ON entity_assignments(experiment_id, assignee_user_id, status);
     CREATE INDEX IF NOT EXISTS idx_notifications_user_status ON notifications(user_id, status, created_at);
     CREATE INDEX IF NOT EXISTS idx_experiments_owner_archived ON experiments(owner_user_id, archived_at);
+    CREATE INDEX IF NOT EXISTS idx_processes_type_status ON processes(process_type_id, status);
     CREATE INDEX IF NOT EXISTS idx_qual_step_summary_experiment_step ON qual_step_summary(experiment_id, step_number);
     CREATE INDEX IF NOT EXISTS idx_qual_runs_experiment_id ON qual_runs(experiment_id);
     CREATE INDEX IF NOT EXISTS idx_qual_run_values_run_id ON qual_run_values(run_id);
@@ -459,12 +480,16 @@ function initDb(db: Db) {
     ["replicate_count", "ALTER TABLE experiments ADD COLUMN replicate_count INTEGER DEFAULT 1"],
     ["recipe_as_block", "ALTER TABLE experiments ADD COLUMN recipe_as_block INTEGER DEFAULT 0"],
     ["machine_id", "ALTER TABLE experiments ADD COLUMN machine_id INTEGER"],
+    ["process_id", "ALTER TABLE experiments ADD COLUMN process_id INTEGER"],
     ["status_done_manual", "ALTER TABLE experiments ADD COLUMN status_done_manual INTEGER NOT NULL DEFAULT 0"]
   ] as const;
   for (const [column, sql] of experimentColumns) {
     if (!hasColumn(db, "experiments", column)) {
       db.exec(sql);
     }
+  }
+  if (hasColumn(db, "experiments", "process_id")) {
+    db.exec("CREATE INDEX IF NOT EXISTS idx_experiments_process_id ON experiments(process_id)");
   }
   if (!hasColumn(db, "experiments", "owner_user_id")) {
     db.exec("ALTER TABLE experiments ADD COLUMN owner_user_id INTEGER");
@@ -475,12 +500,99 @@ function initDb(db: Db) {
   if (!hasColumn(db, "recipes", "archived_at")) {
     db.exec("ALTER TABLE recipes ADD COLUMN archived_at TEXT");
   }
+  if (!hasColumn(db, "processes", "route_code")) {
+    db.exec("ALTER TABLE processes ADD COLUMN route_code TEXT");
+  }
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_processes_route_code_unique
+      ON processes(route_code)
+      WHERE route_code IS NOT NULL AND route_code <> '';
+  `);
+  db.exec(`
+    UPDATE processes
+    SET route_code = (
+      SELECT lower(code) FROM process_types WHERE process_types.id = processes.process_type_id
+    )
+    WHERE route_code IS NULL OR trim(route_code) = '';
+  `);
+  const duplicateRouteCodes = db.prepare(`
+    SELECT route_code
+    FROM processes
+    WHERE route_code IS NOT NULL AND trim(route_code) <> ''
+    GROUP BY route_code
+    HAVING COUNT(*) > 1
+  `).all() as Array<{ route_code: string }>;
+  const fixDuplicateRouteStmt = db.prepare("UPDATE processes SET route_code = ? WHERE id = ?");
+  duplicateRouteCodes.forEach((dup) => {
+    const rows = db
+      .prepare("SELECT id FROM processes WHERE route_code = ? ORDER BY id")
+      .all(dup.route_code) as Array<{ id: number }>;
+    rows.slice(1).forEach((row) => {
+      fixDuplicateRouteStmt.run(`${dup.route_code}-${row.id}`, row.id);
+    });
+  });
 
   const adminRow = db
     .prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1")
     .get() as { id: number } | undefined;
   if (adminRow) {
     db.prepare("UPDATE experiments SET owner_user_id = ? WHERE owner_user_id IS NULL").run(adminRow.id);
+  }
+
+  const processNow = new Date().toISOString();
+  const processType = db
+    .prepare("SELECT id FROM process_types WHERE code = ? LIMIT 1")
+    .get("injection") as { id: number } | undefined;
+  const injectionTypeId = processType?.id ?? Number(
+    db.prepare(
+      "INSERT INTO process_types (code, name, created_at) VALUES (?, ?, ?)"
+    ).run("injection", "Injection", processNow).lastInsertRowid
+  );
+  const defaultProcess = db
+    .prepare("SELECT id FROM processes WHERE process_type_id = ? AND name = ? LIMIT 1")
+    .get(injectionTypeId, "Injection Default Process") as { id: number } | undefined;
+  const defaultProcessId = defaultProcess?.id ?? Number(
+    db.prepare(
+      `INSERT INTO processes (process_type_id, name, route_code, owner_user_id, status, meta_json, created_at)
+       VALUES (?, ?, ?, ?, 'active', NULL, ?)`
+    ).run(injectionTypeId, "Injection Default Process", "injection", adminRow?.id ?? null, processNow).lastInsertRowid
+  );
+  db.prepare("UPDATE experiments SET process_id = ? WHERE process_id IS NULL").run(defaultProcessId);
+
+  const compoundingType = db
+    .prepare("SELECT id FROM process_types WHERE code = ? LIMIT 1")
+    .get("compounding") as { id: number } | undefined;
+  const compoundingTypeId = compoundingType?.id ?? Number(
+    db.prepare(
+      "INSERT INTO process_types (code, name, created_at) VALUES (?, ?, ?)"
+    ).run("compounding", "Compounding (Twin-Screw Extrusion)", processNow).lastInsertRowid
+  );
+  const compoundingProcess = db
+    .prepare("SELECT id FROM processes WHERE process_type_id = ? AND name = ? LIMIT 1")
+    .get(compoundingTypeId, "Compounding Default Process") as { id: number } | undefined;
+  if (!compoundingProcess) {
+    db.prepare(
+      `INSERT INTO processes (process_type_id, name, route_code, owner_user_id, status, meta_json, created_at)
+       VALUES (?, ?, ?, ?, 'active', NULL, ?)`
+    ).run(compoundingTypeId, "Compounding Default Process", "compounding", adminRow?.id ?? null, processNow);
+  }
+
+  const coatingType = db
+    .prepare("SELECT id FROM process_types WHERE code = ? LIMIT 1")
+    .get("coating") as { id: number } | undefined;
+  const coatingTypeId = coatingType?.id ?? Number(
+    db.prepare(
+      "INSERT INTO process_types (code, name, created_at) VALUES (?, ?, ?)"
+    ).run("coating", "Coating", processNow).lastInsertRowid
+  );
+  const coatingProcess = db
+    .prepare("SELECT id FROM processes WHERE process_type_id = ? AND name = ? LIMIT 1")
+    .get(coatingTypeId, "Coating Default Process") as { id: number } | undefined;
+  if (!coatingProcess) {
+    db.prepare(
+      `INSERT INTO processes (process_type_id, name, route_code, owner_user_id, status, meta_json, created_at)
+       VALUES (?, ?, ?, ?, 'active', NULL, ?)`
+    ).run(coatingTypeId, "Coating Default Process", "coating", adminRow?.id ?? null, processNow);
   }
 
   if (!hasColumn(db, "analysis_fields", "is_standard")) {

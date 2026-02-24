@@ -9,17 +9,13 @@ import {
 import { createTask, createTaskEntity, getTask, updateTask } from "../repos/tasks_repo.js";
 import { getAssignmentTaskByAssignmentId, upsertAssignmentTask } from "../repos/assignment_tasks_repo.js";
 import { createNotification } from "../repos/notifications_repo.js";
-import { getQualificationSteps } from "./qualification_service.js";
+import { getQualificationStepName } from "./qualification_service.js";
 
-const qualificationNameByStep = new Map(
-  getQualificationSteps().map((step) => [step.step_number, step.name])
-);
-
-function getEntityLabel(db: Db, entityType: EntityAssignmentType, entityId: number) {
+function getEntityLabel(db: Db, experimentId: number, entityType: EntityAssignmentType, entityId: number) {
   if (entityType === "qualification_step") {
     const step = getQualStepById(db, entityId);
     const stepNumber = step?.step_number ?? entityId;
-    const stepLabel = qualificationNameByStep.get(stepNumber) ?? `Step ${stepNumber}`;
+    const stepLabel = getQualificationStepName(db, experimentId, stepNumber);
     return `Qualification Step ${stepNumber}: ${stepLabel}`;
   }
   const doe = getDoeStudy(db, entityId);
@@ -66,7 +62,7 @@ export function assignEntityResponsibility(
     assigned_by_user_id: data.assignedByUserId
   });
 
-  const entityLabel = getEntityLabel(db, data.entityType, data.entityId);
+  const entityLabel = getEntityLabel(db, data.experimentId, data.entityType, data.entityId);
   const entityPath = getEntityPath(db, data.experimentId, data.entityType, data.entityId);
   const stepNumberForTask =
     data.entityType === "qualification_step" ? getQualStepById(db, data.entityId)?.step_number : null;

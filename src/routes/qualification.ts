@@ -2,7 +2,7 @@ import express from "express";
 import type { Db } from "../db.js";
 import {
   ensureQualificationDefaults,
-  getStepDefinition,
+  getStepDefinitionForExperiment,
   recomputeDerivedAndSummary,
   saveQualRunValue,
   addCavityFields,
@@ -24,6 +24,7 @@ import {
   updateQualRunFlags
 } from "../repos/qual_repo.js";
 import { getExperiment } from "../repos/experiments_repo.js";
+import { getProcessById } from "../repos/processes_repo.js";
 import {
   createParamDefinition,
   deleteParamDefinition,
@@ -80,6 +81,39 @@ export function createQualificationRouter(db: Db) {
       runValueMap[String(run.id)] = row;
     }
     const settingsJson = getQualStepSettings(db, experimentId, stepNumber);
+    const processTypeCode = (() => {
+      if (!experiment.process_id) return "injection";
+      const process = getProcessById(db, experiment.process_id);
+      return String(process?.process_type_code || "injection").toLowerCase();
+    })();
+    const canAssignEntities = canAssignEntityResponsibility(req.user, experiment);
+    const assignableUsers = canAssignEntities
+      ? listUsers(db).filter((user) => user.status === "ACTIVE")
+      : [];
+    const assignment = getEntityAssignment(db, "qualification_step", step.id);
+    const stepAssigneeId = assignment?.assignee_user_id ?? null;
+    const stepAssignee = stepAssigneeId ? findUserById(db, stepAssigneeId) : null;
+    const stepAssigneeLabel = stepAssignee?.name?.trim() || stepAssignee?.email?.trim() || null;
+    const summaryRow = listQualSummaries(db, experimentId).find(
+      (row) => row.step_number === stepNumber
+    );
+    if (processTypeCode === "compounding" || processTypeCode === "coating") {
+      return res.render("qualification_step_compounding", {
+        experimentId,
+        step,
+        stepDef: getStepDefinitionForExperiment(db, experimentId, stepNumber),
+        fields,
+        runs,
+        globalParams,
+        runValueMap,
+        summaryJson: summaryRow?.summary_json ?? null,
+        canAssignEntities,
+        assignableUsers,
+        stepAssigneeId,
+        stepAssigneeLabel
+      });
+    }
+
     let settings = {
       intensification_coeff: 1 as number | string,
       melt_temp_c: null as number | string | null,
@@ -108,9 +142,6 @@ export function createQualificationRouter(db: Db) {
         };
       }
     }
-    const summaryRow = listQualSummaries(db, experimentId).find(
-      (row) => row.step_number === stepNumber
-    );
     let step1Recommended = null as number | null;
     if (stepNumber >= 2) {
       const step1SettingsRaw = getQualStepSettings(db, experimentId, 1);
@@ -181,19 +212,10 @@ export function createQualificationRouter(db: Db) {
       );
     }
 
-    const canAssignEntities = canAssignEntityResponsibility(req.user, experiment);
-    const assignableUsers = canAssignEntities
-      ? listUsers(db).filter((user) => user.status === "ACTIVE")
-      : [];
-    const assignment = getEntityAssignment(db, "qualification_step", step.id);
-    const stepAssigneeId = assignment?.assignee_user_id ?? null;
-    const stepAssignee = stepAssigneeId ? findUserById(db, stepAssigneeId) : null;
-    const stepAssigneeLabel = stepAssignee?.name?.trim() || stepAssignee?.email?.trim() || null;
-
     res.render("qualification_step", {
       experimentId,
       step,
-      stepDef: getStepDefinition(stepNumber),
+      stepDef: getStepDefinitionForExperiment(db, experimentId, stepNumber),
       fields,
       runs,
       globalParams,

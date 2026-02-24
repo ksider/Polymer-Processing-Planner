@@ -6,7 +6,7 @@ import {
   createCustomParam,
   generateRuns
 } from "../services/experiments_service.js";
-import { ensureQualificationDefaults, getQualificationSteps } from "../services/qualification_service.js";
+import { ensureQualificationDefaults, getQualificationStepsForExperiment } from "../services/qualification_service.js";
 import { listRecipes, getRecipeComponents } from "../repos/recipes_repo.js";
 import {
   getExperiment,
@@ -17,6 +17,16 @@ import {
 } from "../repos/experiments_repo.js";
 import { ensureExperimentAccess } from "../middleware/experiment_access.js";
 import { getMachine, listMachines } from "../repos/machines_repo.js";
+import {
+  getDefaultProcessId,
+  getProcessById,
+  getProcessByRouteCode,
+  getProcessRouteCode,
+  isProcessOwner,
+  listProcesses,
+  listProcessesForOwner,
+  normalizeRouteCode
+} from "../repos/processes_repo.js";
 import {
   createDoeStudy,
   deleteDoeStudy,
@@ -86,9 +96,67 @@ function formatSummaryNumber(value: number): string {
 
 export function createExperimentsRouter(db: Db) {
   const router = express.Router();
+  const reservedRootRoutes = new Set([
+    "admin",
+    "audit",
+    "auth",
+    "me",
+    "users",
+    "recipes",
+    "machines",
+    "runs",
+    "reports",
+    "tasks",
+    "notes",
+    "experiments",
+    "processes",
+    "my-experiments",
+    "param-library",
+    "qualification"
+  ]);
+  const canonicalExperimentPath = (experimentId: number, processId?: number | null) => {
+    const process = processId ? getProcessById(db, processId) : null;
+    const processCode = getProcessRouteCode(process);
+    return processCode ? `/${processCode}/${experimentId}` : `/experiments/${experimentId}`;
+  };
 
-  router.get("/experiments/new", (_req, res) => {
-    if (!hasRole(_req, ["admin", "manager", "engineer"])) {
+  router.use((req, _res, next) => {
+    if (req.path.startsWith("/experiments/")) return next();
+    const match = req.path.match(/^\/([a-z0-9][a-z0-9_-]*)\/(\d+)(\/.*)?$/i);
+    if (!match) return next();
+    const processCode = normalizeRouteCode(match[1]);
+    const experimentId = Number(match[2]);
+    if (!processCode || !Number.isFinite(experimentId) || reservedRootRoutes.has(processCode)) return next();
+    const process = getProcessByRouteCode(db, processCode);
+    if (!process) return next();
+    const experiment = getExperiment(db, experimentId);
+    if (!experiment || Number(experiment.process_id || 0) !== process.id) return next();
+    const suffix = match[3] || "";
+    const queryStart = req.url.indexOf("?");
+    const query = queryStart >= 0 ? req.url.slice(queryStart) : "";
+    req.url = `/experiments/${experimentId}${suffix}${query}`;
+    return next();
+  });
+
+  const hasCoreManageRole = (req: express.Request) => hasRole(req, ["admin", "manager", "engineer"]);
+  const canManageExperimentById = (req: express.Request, experimentId: number) => {
+    if (hasCoreManageRole(req)) return true;
+    const experiment = getExperiment(db, experimentId);
+    if (!experiment || !req.user?.id) return false;
+    if (experiment.owner_user_id === req.user.id) return true;
+    if (experiment.process_id && isProcessOwner(db, experiment.process_id, req.user.id)) return true;
+    return false;
+  };
+  const canManageProcessById = (req: express.Request, processId: number | null) => {
+    if (!processId) return hasCoreManageRole(req);
+    if (hasCoreManageRole(req)) return true;
+    if (!req.user?.id) return false;
+    return isProcessOwner(db, processId, req.user.id);
+  };
+
+  router.get("/experiments/new", (req, res) => {
+    const ownerProcesses = req.user?.id ? listProcessesForOwner(db, req.user.id) : [];
+    if (!hasCoreManageRole(req) && ownerProcesses.length === 0) {
       return res.status(403).send("Forbidden");
     }
     const recipes = listRecipes(db).map((recipe) => ({
@@ -96,29 +164,40 @@ export function createExperimentsRouter(db: Db) {
       components: getRecipeComponents(db, recipe.id)
     }));
     const machines = listMachines(db);
-    res.render("experiment_new", { recipes, machines });
+    const allProcesses = listProcesses(db);
+    const processes = hasCoreManageRole(req)
+      ? allProcesses
+      : allProcesses.filter((process) => process.owner_user_id === req.user?.id);
+    const requestedProcessId = Number(req.query.process_id || 0);
+    const defaultProcessId = Number.isFinite(requestedProcessId) && requestedProcessId > 0
+      ? requestedProcessId
+      : getDefaultProcessId(db);
+    res.render("experiment_new", { recipes, machines, processes, defaultProcessId });
   });
 
   router.post("/experiments", (req, res) => {
-    if (!hasRole(req, ["admin", "manager", "engineer"])) {
-      return res.status(403).send("Forbidden");
-    }
     const recipeIds = Array.isArray(req.body.recipe_ids)
       ? req.body.recipe_ids.map((id: string) => Number(id))
       : req.body.recipe_ids
         ? [Number(req.body.recipe_ids)]
         : [];
+    const requestedProcessId = req.body.process_id ? Number(req.body.process_id) : null;
+    if (!canManageProcessById(req, Number.isFinite(requestedProcessId) ? requestedProcessId : null)) {
+      return res.status(403).send("Forbidden");
+    }
 
     const experimentId = createExperimentWithDefaults(db, {
       name: req.body.name,
       notes: req.body.notes || null,
       recipe_ids: recipeIds,
       machine_id: req.body.machine_id ? Number(req.body.machine_id) : null,
+      process_id: req.body.process_id ? Number(req.body.process_id) : null,
       owner_user_id: req.user?.id ?? null
     });
     ensureQualificationDefaults(db, experimentId);
 
-    res.redirect(`/experiments/${experimentId}`);
+    const processId = req.body.process_id ? Number(req.body.process_id) : null;
+    res.redirect(canonicalExperimentPath(experimentId, Number.isFinite(processId) ? processId : null));
   });
 
   router.use("/experiments/:id", ensureExperimentAccess(db));
@@ -127,12 +206,16 @@ export function createExperimentsRouter(db: Db) {
     const experimentId = Number(req.params.id);
     const experiment = getExperiment(db, experimentId);
     if (!experiment) return res.status(404).send("Experiment not found");
+    if (req.originalUrl.startsWith("/experiments/")) {
+      const canonicalPath = canonicalExperimentPath(experimentId, experiment.process_id);
+      if (canonicalPath !== req.path) return res.redirect(canonicalPath);
+    }
     const qualSummaries = listQualSummaries(db, experimentId);
     const qualSteps = listQualSteps(db, experimentId);
     const stepStatusByNumber = new Map(qualSteps.map((step) => [step.step_number, step.status]));
     const stepIdByNumber = new Map(qualSteps.map((step) => [step.step_number, step.id]));
     const summaryByStep = new Map(qualSummaries.map((summary) => [summary.step_number, summary.summary_json]));
-    const qualificationCards = getQualificationSteps().map((stepDef) => {
+    const qualificationCards = getQualificationStepsForExperiment(db, experimentId).map((stepDef) => {
       const stepNumber = stepDef.step_number;
       const summaryJson = summaryByStep.get(stepNumber) || null;
       let summaryData: Record<string, unknown> | null = null;
@@ -256,10 +339,8 @@ export function createExperimentsRouter(db: Db) {
   });
 
   router.post("/experiments/:id/doe", (req, res) => {
-    if (!hasRole(req, ["admin", "manager", "engineer"])) {
-      return res.status(403).send("Forbidden");
-    }
     const experimentId = Number(req.params.id);
+    if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
     const doeName = String(req.body.name || "").trim();
     const existing = listDoeStudies(db, experimentId);
     const name = doeName || `DOE ${existing.length + 1}`;
@@ -283,10 +364,8 @@ export function createExperimentsRouter(db: Db) {
   });
 
   router.post("/experiments/:id/reports", (req, res) => {
-    if (!hasRole(req, ["admin", "manager", "engineer"])) {
-      return res.status(403).send("Forbidden");
-    }
     const experimentId = Number(req.params.id);
+    if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
     const nameRaw = String(req.body.name || "").trim();
     const executors = String(req.body.executors || "").trim() || null;
     const include = Array.isArray(req.body.include)
@@ -312,10 +391,8 @@ export function createExperimentsRouter(db: Db) {
   });
 
   router.post("/experiments/:id/reports/:reportId", (req, res) => {
-    if (!hasRole(req, ["admin", "manager", "engineer"])) {
-      return res.status(403).send("Forbidden");
-    }
     const experimentId = Number(req.params.id);
+    if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
     const reportId = Number(req.params.reportId);
     const existing = getReportConfig(db, reportId);
     if (!existing || existing.experiment_id !== experimentId) {
@@ -347,10 +424,8 @@ export function createExperimentsRouter(db: Db) {
   });
 
   router.post("/experiments/:id/doe/:doeId/clone", (req, res) => {
-    if (!hasRole(req, ["admin", "manager", "engineer"])) {
-      return res.status(403).send("Forbidden");
-    }
     const experimentId = Number(req.params.id);
+    if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
     const doeId = Number(req.params.doeId);
     const doe = getDoeStudy(db, doeId);
     if (!doe || doe.experiment_id !== experimentId) {
@@ -400,10 +475,8 @@ export function createExperimentsRouter(db: Db) {
   });
 
   router.post("/experiments/:id/doe/:doeId/delete", (req, res) => {
-    if (!hasRole(req, ["admin", "manager", "engineer"])) {
-      return res.status(403).send("Forbidden");
-    }
     const experimentId = Number(req.params.id);
+    if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
     const doeId = Number(req.params.doeId);
     const doe = getDoeStudy(db, doeId);
     if (!doe || doe.experiment_id !== experimentId) {
@@ -414,10 +487,8 @@ export function createExperimentsRouter(db: Db) {
   });
 
   router.post("/experiments/:id/doe/:doeId/name", (req, res) => {
-    if (!hasRole(req, ["admin", "manager", "engineer"])) {
-      return res.status(403).send("Forbidden");
-    }
     const experimentId = Number(req.params.id);
+    if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
     const doeId = Number(req.params.doeId);
     const doe = getDoeStudy(db, doeId);
     if (!doe || doe.experiment_id !== experimentId) {
@@ -567,8 +638,11 @@ export function createExperimentsRouter(db: Db) {
 
       const allRuns = loadRuns(db, doeId);
       const analysisValues = listAnalysisRunValuesByRunIds(db, allRuns.map((run) => run.id));
-      const analysisValueMap = new Map(
-        analysisValues.map((row) => [`${row.run_id}:${row.field_id}`, row])
+      const analysisValueMap = buildAnalysisValueMapWithFallback(
+        allRuns,
+        analysisValues,
+        activeAnalysisFields,
+        params
       );
       const baseRuns = filterRuns(allRuns, { recipeId }, undefined);
       let filtered = baseRuns;
@@ -700,10 +774,8 @@ export function createExperimentsRouter(db: Db) {
   });
 
   router.post("/experiments/:id/doe/:doeId/params", (req, res) => {
-    if (!hasRole(req, ["admin", "manager", "engineer"])) {
-      return res.status(403).send("Forbidden");
-    }
     const experimentId = Number(req.params.id);
+    if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
     const doeId = Number(req.params.doeId);
     const code = String(req.body.code || "").trim();
     if (!code) return res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=design`);
@@ -741,10 +813,8 @@ export function createExperimentsRouter(db: Db) {
   });
 
   router.post("/experiments/:id/machine", (req, res) => {
-    if (!hasRole(req, ["admin", "manager", "engineer"])) {
-      return res.status(403).send("Forbidden");
-    }
     const experimentId = Number(req.params.id);
+    if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
     const experiment = getExperiment(db, experimentId);
     if (!experiment) return res.status(404).send("Experiment not found");
     const raw = String(req.body.machine_id || "").trim();
@@ -754,10 +824,8 @@ export function createExperimentsRouter(db: Db) {
   });
 
   router.post("/experiments/:id/update", (req, res) => {
-    if (!hasRole(req, ["admin", "manager", "engineer"])) {
-      return res.status(403).send("Forbidden");
-    }
     const experimentId = Number(req.params.id);
+    if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
     const experiment = getExperiment(db, experimentId);
     if (!experiment) return res.status(404).send("Experiment not found");
     const name = String(req.body.name || "").trim();
@@ -802,10 +870,8 @@ export function createExperimentsRouter(db: Db) {
   });
 
   router.post("/experiments/:id/doe/:doeId/configs", (req, res) => {
-    if (!hasRole(req, ["admin", "manager", "engineer"])) {
-      return res.status(403).send("Forbidden");
-    }
     const experimentId = Number(req.params.id);
+    if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
     const doeId = Number(req.params.doeId);
     const experiment = getExperiment(db, experimentId);
     if (!experiment) return res.status(404).send("Experiment not found");
@@ -932,10 +998,8 @@ export function createExperimentsRouter(db: Db) {
   });
 
   router.post("/experiments/:id/doe/:doeId/tags", (req, res) => {
-    if (!hasRole(req, ["admin", "manager", "engineer"])) {
-      return res.status(403).send("Forbidden");
-    }
     const experimentId = Number(req.params.id);
+    if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
     const doeId = Number(req.params.doeId);
     const paramId = Number(req.body.param_id || 0);
     const allowed = String(req.body.allowed_values || "")
@@ -947,10 +1011,8 @@ export function createExperimentsRouter(db: Db) {
   });
 
   router.post("/experiments/:id/doe/:doeId/analysis-fields/standard", (req, res) => {
-    if (!hasRole(req, ["admin", "manager", "engineer"])) {
-      return res.status(403).send("Forbidden");
-    }
     const experimentId = Number(req.params.id);
+    if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
     const doeId = Number(req.params.doeId);
     const wantsJson =
       req.get("X-Requested-With") === "XMLHttpRequest" || req.accepts("json") === "json";
@@ -988,13 +1050,38 @@ export function createExperimentsRouter(db: Db) {
   });
 
   router.get("/experiments/:id/doe/:doeId/analysis-fields/tag-values", (req, res) => {
+    const experimentId = Number(req.params.id);
     const doeId = Number(req.params.doeId);
     const fieldId = Number(req.query.field_id || 0);
     if (!Number.isFinite(fieldId) || fieldId <= 0) {
       return res.json({ values: [] });
     }
     const values = listTagValuesForExperimentField(db, doeId, fieldId);
-    res.json({ values });
+    if (values.length) return res.json({ values });
+
+    const runs = loadRuns(db, doeId);
+    const params = listParamDefinitions(db, experimentId);
+    const fields = listExperimentAnalysisFields(db, doeId);
+    const field = fields.find((item) => item.id === fieldId);
+    if (!field) return res.json({ values: [] });
+    const analysisValues = listAnalysisRunValuesByRunIds(db, runs.map((run) => run.id));
+    const valueMap = buildAnalysisValueMapWithFallback(runs, analysisValues, [field], params);
+    const tagSet = new Set<string>();
+    for (const run of runs) {
+      const row = valueMap.get(`${run.id}:${fieldId}`);
+      if (!row?.value_tags_json) continue;
+      try {
+        const parsed = JSON.parse(row.value_tags_json);
+        if (!Array.isArray(parsed)) continue;
+        parsed.forEach((tag) => {
+          const cleaned = String(tag || "").trim();
+          if (cleaned) tagSet.add(cleaned);
+        });
+      } catch {
+        // ignore invalid tags json
+      }
+    }
+    return res.json({ values: Array.from(tagSet.values()).sort((a, b) => a.localeCompare(b)) });
   });
 
   router.get("/experiments/:id/doe/:doeId/analysis-fields/active", (req, res) => {
@@ -1010,10 +1097,8 @@ export function createExperimentsRouter(db: Db) {
   });
 
   router.post("/experiments/:id/doe/:doeId/analysis-fields/custom", (req, res) => {
-    if (!hasRole(req, ["admin", "manager", "engineer"])) {
-      return res.status(403).send("Forbidden");
-    }
     const experimentId = Number(req.params.id);
+    if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
     const doeId = Number(req.params.doeId);
     const wantsJson =
       req.get("X-Requested-With") === "XMLHttpRequest" || req.accepts("json") === "json";
@@ -1061,10 +1146,8 @@ export function createExperimentsRouter(db: Db) {
   });
 
   router.post("/experiments/:id/doe/:doeId/analysis-fields/custom/active", (req, res) => {
-    if (!hasRole(req, ["admin", "manager", "engineer"])) {
-      return res.status(403).send("Forbidden");
-    }
     const experimentId = Number(req.params.id);
+    if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
     const doeId = Number(req.params.doeId);
     const wantsJson =
       req.get("X-Requested-With") === "XMLHttpRequest" || req.accepts("json") === "json";
@@ -1087,10 +1170,8 @@ export function createExperimentsRouter(db: Db) {
   });
 
   router.post("/experiments/:id/doe/:doeId/analysis-fields/new", (req, res) => {
-    if (!hasRole(req, ["admin", "manager", "engineer"])) {
-      return res.status(403).send("Forbidden");
-    }
     const experimentId = Number(req.params.id);
+    if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
     const doeId = Number(req.params.doeId);
     const wantsJson =
       req.get("X-Requested-With") === "XMLHttpRequest" || req.accepts("json") === "json";
@@ -1163,10 +1244,8 @@ export function createExperimentsRouter(db: Db) {
   });
 
   router.post("/experiments/:id/doe/:doeId/generate", (req, res) => {
-    if (!hasRole(req, ["admin", "manager", "engineer"])) {
-      return res.status(403).send("Forbidden");
-    }
     const experimentId = Number(req.params.id);
+    if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
     const doeId = Number(req.params.doeId);
     const experiment = getExperiment(db, experimentId);
     if (!experiment) return res.status(404).send("Experiment not found");
@@ -1196,8 +1275,11 @@ export function createExperimentsRouter(db: Db) {
     const params = listParamDefinitions(db, experimentId);
     const activeAnalysisFields = listActiveAnalysisFields(db, doeId);
     const analysisValues = listAnalysisRunValuesByRunIds(db, runs.map((run) => run.id));
-    const analysisValueMap = new Map(
-      analysisValues.map((row) => [`${row.run_id}:${row.field_id}`, row])
+    const analysisValueMap = buildAnalysisValueMapWithFallback(
+      runs,
+      analysisValues,
+      activeAnalysisFields,
+      params
     );
 
     if (type === "runs") {
@@ -1399,4 +1481,65 @@ function parseDesignMetadata(jsonBlob: string | null): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+function buildAnalysisValueMapWithFallback(
+  runs: Array<{
+    id: number;
+    values: Record<number, number | null>;
+    tags: Record<number, string[]>;
+  }>,
+  analysisValues: Array<{
+    run_id: number;
+    field_id: number;
+    value_real: number | null;
+    value_text: string | null;
+    value_tags_json: string | null;
+  }>,
+  fields: Array<{ id: number; code: string; field_type: string }>,
+  params: Array<{ id: number; code: string }>
+) {
+  const map = new Map<string, {
+    run_id: number;
+    field_id: number;
+    value_real: number | null;
+    value_text: string | null;
+    value_tags_json: string | null;
+  }>();
+  analysisValues.forEach((row) => {
+    map.set(`${row.run_id}:${row.field_id}`, row);
+  });
+
+  const paramIdByCode = new Map(params.map((param) => [param.code, param.id]));
+  for (const field of fields) {
+    const paramId = paramIdByCode.get(field.code);
+    if (!paramId) continue;
+    for (const run of runs) {
+      const key = `${run.id}:${field.id}`;
+      if (map.has(key)) continue;
+      if (field.field_type === "tag") {
+        const tags = run.tags[paramId] ?? [];
+        if (!tags.length) continue;
+        map.set(key, {
+          run_id: run.id,
+          field_id: field.id,
+          value_real: null,
+          value_text: null,
+          value_tags_json: JSON.stringify(tags)
+        });
+        continue;
+      }
+      const value = run.values[paramId];
+      if (value == null) continue;
+      map.set(key, {
+        run_id: run.id,
+        field_id: field.id,
+        value_real: value,
+        value_text: null,
+        value_tags_json: null
+      });
+    }
+  }
+
+  return map;
 }

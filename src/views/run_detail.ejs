@@ -3,7 +3,7 @@
 <div class="container">
   <div class="card">
     <div class="card-header">
-      <a class="back-link" href="/experiments/<%= experiment.id %>/doe/<%= run.doe_id %>?tab=runs" aria-label="Back to detailed optimization runs">
+      <a class="back-link" href="<%= `${experimentPath(experiment)}/doe/${run.doe_id}?tab=runs` %>" aria-label="Back to detailed optimization runs">
         <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
       </a>
       <h1 class="card-title">Run <%= run.run_code %></h1>
