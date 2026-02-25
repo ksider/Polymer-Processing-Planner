@@ -7,14 +7,14 @@
         <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
       </a>
       <div>
-        <h1 class="card-title"><%- formatInline(doe.name) %></h1>
+        <h1 class="card-title" id="doeTitle"><%- formatInline(doe.name) %></h1>
         <p class="small-note">
           <strong><%- formatInline(experiment.name) %></strong> · <%= doe.design_type %> · Seed <%= doe.seed %>
         </p>
       </div>
       <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
         <div class="section-actions">
-          <button class="icon-button" type="button" id="openDoeNameDialog" title="Edit DOE name">
+          <button class="icon-button" type="button" id="openDoeNameDialog" title="DOE settings">
             <span class="material-symbols-rounded" aria-hidden="true">edit</span>
           </button>
         </div>
@@ -1199,51 +1199,13 @@
 
   function setupAutosave(form) {
     if (!form) return;
-    const status = form.querySelector('[data-autosave-status]');
-    let timer = null;
-
-    const submit = () => {
-      const body = new URLSearchParams(new FormData(form));
-      if (status) status.textContent = 'Saving...';
-      return fetch(form.action, {
-        method: form.method || 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        body
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error('Save failed');
-          if (status) status.textContent = 'Saved';
-          return true;
-        })
-        .catch(() => {
-          if (status) status.textContent = 'Save failed';
-          return false;
-        });
-    };
-
-    const schedule = () => {
-      if (timer) window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        submit().then((ok) => {
-          if (ok) refreshActiveFields();
-        });
-      }, 200);
-    };
-
-    form.addEventListener('change', (event) => {
-      if (event.target && event.target.matches('input, select, textarea')) {
-        schedule();
-      }
-    });
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
-      submit().then((ok) => {
-        if (ok) refreshActiveFields();
+    if (window.IMPlanner?.setupAutosaveForm) {
+      return window.IMPlanner.setupAutosaveForm(form, {
+        debounceMs: 200,
+        listenInput: false,
+        onSuccess: () => refreshActiveFields()
       });
-    });
+    }
   }
 
   const outputSelect = document.getElementById('outputParamSelect');
@@ -1502,15 +1464,27 @@
 
 <dialog class="modal-frame" id="doeNameDialog">
   <div class="modal-header">
-    <strong>Edit DOE name</strong>
+    <strong>DOE settings</strong>
     <button class="pure-button" type="button" data-close>Close</button>
   </div>
-  <form class="pure-form" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/name" method="post">
+  <form class="pure-form" id="doeSettingsForm" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/name" method="post">
     <div class="modal-body">
       <label for="doeNameInput">DOE name</label>
       <input id="doeNameInput" name="name" type="text" value="<%- formatInline(doe.name) %>" required>
+      <% if (canAssignEntities) { %>
+        <label for="doeAssigneeInput">Responsible</label>
+        <select id="doeAssigneeInput" name="assignee_user_id">
+          <option value="">Unassigned</option>
+          <% assignableUsers.forEach((user) => { %>
+            <option value="<%= user.id %>" <%= doeAssigneeId === user.id ? 'selected' : '' %>>
+              <%= user.name || user.email %> (<%= user.role || 'user' %>)
+            </option>
+          <% }); %>
+        </select>
+      <% } %>
     </div>
     <div class="modal-footer">
+      <span class="small-note" data-autosave-status></span>
       <button class="pure-button" type="button" data-close>Cancel</button>
       <button class="pure-button pure-button-primary" type="submit">Save</button>
     </div>
@@ -1519,8 +1493,24 @@
 
 <script>
   const doeNameDialog = document.getElementById('doeNameDialog');
+  const doeSettingsForm = document.getElementById('doeSettingsForm');
+  const doeNameInput = document.getElementById('doeNameInput');
+  const doeTitle = document.getElementById('doeTitle');
   document.getElementById('openDoeNameDialog')?.addEventListener('click', () => doeNameDialog?.showModal());
   doeNameDialog?.querySelectorAll('[data-close]').forEach((btn) => {
     btn.addEventListener('click', () => doeNameDialog.close());
   });
+  if (window.IMPlanner?.setupAutosaveForm && doeSettingsForm) {
+    window.IMPlanner.setupAutosaveForm(doeSettingsForm, {
+      debounceMs: 250,
+      onSuccess: async (resp) => {
+        try {
+          const payload = await resp.json();
+          if (doeTitle && payload?.name) doeTitle.textContent = payload.name;
+        } catch {
+          if (doeTitle && doeNameInput) doeTitle.textContent = doeNameInput.value;
+        }
+      }
+    });
+  }
 </script>

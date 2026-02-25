@@ -295,6 +295,9 @@ export function createExperimentsRouter(db: Db) {
     // Owner selection is visible only to admin/manager.
     const canManageOwner = req.user?.role === "admin" || req.user?.role === "manager";
     const canAssignEntities = canAssignEntityResponsibility(req.user, experiment);
+    const canDeleteTasks =
+      req.user?.role === "admin" ||
+      (!!req.user?.id && !!experiment.process_id && isProcessOwner(db, experiment.process_id, req.user.id));
     const users = canManageOwner || canAssignEntities ? listUsers(db) : [];
     const assignableUsers = users.filter((user) => user.status === "ACTIVE");
     const userLabelById = new Map(
@@ -322,6 +325,7 @@ export function createExperimentsRouter(db: Db) {
       userLabelById,
       canManageOwner,
       canAssignEntities,
+      canDeleteTasks,
       assignmentByStep,
       assignmentByDoe,
       ownerName
@@ -490,12 +494,41 @@ export function createExperimentsRouter(db: Db) {
     const experimentId = Number(req.params.id);
     if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
     const doeId = Number(req.params.doeId);
+    const experiment = getExperiment(db, experimentId);
+    if (!experiment) return res.status(404).send("Experiment not found");
     const doe = getDoeStudy(db, doeId);
     if (!doe || doe.experiment_id !== experimentId) {
       return res.status(404).send("DOE not found");
     }
     const name = String(req.body?.name || "").trim();
     if (name) updateDoeStudyName(db, doeId, name);
+    let assigneeUserId: number | null = null;
+    if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "assignee_user_id")) {
+      if (canAssignEntityResponsibility(req.user, experiment)) {
+        const rawAssignee = String(req.body?.assignee_user_id ?? "").trim();
+        assigneeUserId = rawAssignee ? Number(rawAssignee) : null;
+        if (rawAssignee && !Number.isFinite(assigneeUserId)) {
+          return res.status(400).send("Invalid assignee");
+        }
+        assignEntityResponsibility(db, {
+          experimentId,
+          entityType: "doe",
+          entityId: doeId,
+          assigneeUserId,
+          assignedByUserId: req.user?.id ?? null,
+          experimentName: experiment.name
+        });
+      }
+    }
+    const ajax = req.get("X-Requested-With");
+    if (ajax === "XMLHttpRequest" || ajax === "fetch") {
+      return res.json({
+        ok: true,
+        doeId,
+        name: name || doe.name,
+        assignee_user_id: assigneeUserId
+      });
+    }
     res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=design`);
   });
 
@@ -522,7 +555,17 @@ export function createExperimentsRouter(db: Db) {
       assignedByUserId: req.user?.id ?? null,
       experimentName: experiment.name
     });
-    res.redirect(`/experiments/${experimentId}#qualification`);
+    const ajax = req.get("X-Requested-With");
+    if (ajax === "XMLHttpRequest" || ajax === "fetch") {
+      const assignee = assigneeUserId ? findUserById(db, assigneeUserId) : null;
+      return res.json({
+        ok: true,
+        step_number: stepNumber,
+        assignee_user_id: assigneeUserId,
+        assignee_label: assignee ? assignee.name || assignee.email : null
+      });
+    }
+    res.redirect(`/experiments/${experimentId}/qualification/${stepNumber}`);
   });
 
   router.post("/experiments/:id/doe/:doeId/assignee", (req, res) => {
@@ -584,6 +627,14 @@ export function createExperimentsRouter(db: Db) {
     const runs = listRuns(db, doeId);
     const runRows = loadRuns(db, doeId);
     const qualSummaries = listQualSummaries(db, experimentId);
+    const canAssignEntities = canAssignEntityResponsibility(req.user, experiment);
+    const assignableUsers = canAssignEntities
+      ? listUsers(db).filter((user) => user.status === "ACTIVE")
+      : [];
+    const doeAssignment = listEntityAssignmentsByExperiment(db, experimentId).find(
+      (row) => row.entity_type === "doe" && row.entity_id === doeId
+    );
+    const doeAssigneeId = doeAssignment?.assignee_user_id ?? null;
     const activeInputParams = inputParams.filter((param) => {
       const cfg = configs.find((c) => c.param_def_id === param.id);
       return cfg?.active === 1;
@@ -769,7 +820,10 @@ export function createExperimentsRouter(db: Db) {
       runPreview,
       errorMessage,
       nonRandomizedParamId,
-      qualSummaries
+      qualSummaries,
+      canAssignEntities,
+      assignableUsers,
+      doeAssigneeId
     });
   });
 

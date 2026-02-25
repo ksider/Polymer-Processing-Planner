@@ -2,31 +2,28 @@
 <%- include('partials/nav') %>
 <div class="container">
   <div class="card">
-    <div class="card-header">
+    <div class="card-header card-header-main">
       <a class="back-link" href="<%= `${experimentPath(experimentId)}#qualification` %>" aria-label="Back to experiment qualification">
         <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
       </a>
-      <h1 class="card-title">Step <%= step.step_number %>: <%= stepDef?.name || 'Qualification Step' %></h1>
-      <div class="section-actions">
-        <div class="small-note">
+      <div>
+        <h1 class="card-title">Step <%= step.step_number %>: <%= stepDef?.name || 'Qualification Step' %></h1>
+        <p class="small-note">
           Responsible:
-          <% if (stepAssigneeId) { %>
-            <a href="/users/<%= stepAssigneeId %>"><%- formatInline(stepAssigneeLabel || `User #${stepAssigneeId}`) %></a>
-          <% } else { %>
-            <span>-</span>
-          <% } %>
-        </div>
+          <span id="qualStepResponsibleLabel">
+            <% if (stepAssigneeId) { %>
+              <a href="/users/<%= stepAssigneeId %>"><%- formatInline(stepAssigneeLabel || `User #${stepAssigneeId}`) %></a>
+            <% } else { %>
+              <span>-</span>
+            <% } %>
+          </span>
+        </p>
+      </div>
+      <div class="section-actions">
         <% if (canAssignEntities) { %>
-          <form class="pure-form assignment-form" action="/experiments/<%= experimentId %>/qualification/<%= step.step_number %>/assignee" method="post">
-            <select name="assignee_user_id" onchange="this.form.submit()">
-              <option value="">Unassigned</option>
-              <% assignableUsers.forEach((user) => { %>
-                <option value="<%= user.id %>" <%= stepAssigneeId === user.id ? 'selected' : '' %>>
-                  <%= user.name || user.email %> (<%= user.role || 'user' %>)
-                </option>
-              <% }); %>
-            </select>
-          </form>
+          <button class="icon-button" type="button" id="openQualSettingsDialog" title="Qualification settings">
+            <span class="material-symbols-rounded" aria-hidden="true">edit</span>
+          </button>
         <% } %>
       </div>
     </div>
@@ -116,6 +113,33 @@
     </div>
   </div>
 </div>
+
+<% if (canAssignEntities) { %>
+  <dialog class="modal-frame" id="qualSettingsDialog">
+    <div class="modal-header">
+      <strong>Qualification settings</strong>
+      <button class="pure-button" type="button" data-close>Close</button>
+    </div>
+    <form class="pure-form" id="qualSettingsForm" action="/experiments/<%= experimentId %>/qualification/<%= step.step_number %>/assignee" method="post">
+      <div class="modal-body">
+        <label for="qualStepAssigneeInput">Responsible</label>
+        <select id="qualStepAssigneeInput" name="assignee_user_id">
+          <option value="">Unassigned</option>
+          <% assignableUsers.forEach((user) => { %>
+            <option value="<%= user.id %>" <%= stepAssigneeId === user.id ? 'selected' : '' %>>
+              <%= user.name || user.email %> (<%= user.role || 'user' %>)
+            </option>
+          <% }); %>
+        </select>
+      </div>
+      <div class="modal-footer">
+        <span class="small-note" data-autosave-status></span>
+        <button class="pure-button" type="button" data-close>Cancel</button>
+        <button class="pure-button pure-button-primary" type="submit">Save</button>
+      </div>
+    </form>
+  </dialog>
+<% } %>
 
 <dialog class="modal-frame" id="qualFieldDialog">
   <div class="modal-header">
@@ -215,6 +239,11 @@
     const experimentId = <%= experimentId %>;
     const stepNumber = <%= step.step_number %>;
     const table = document.getElementById('compoundingRunsTable');
+    const qualSettingsDialog = document.getElementById('qualSettingsDialog');
+    const qualSettingsForm = document.getElementById('qualSettingsForm');
+    const qualStepAssigneeInput = document.getElementById('qualStepAssigneeInput');
+    const qualStepResponsibleLabel = document.getElementById('qualStepResponsibleLabel');
+    const qualAssignableUserById = new Map(<%- JSON.stringify((assignableUsers || []).map((user) => [String(user.id), user.name || user.email])) %>);
 
     const post = async (url, body) => {
       const response = await fetch(url, { method: 'POST', body });
@@ -307,9 +336,33 @@
 
     const fieldDialog = document.getElementById('qualFieldDialog');
     document.getElementById('openQualFields')?.addEventListener('click', () => fieldDialog?.showModal());
+    document.getElementById('openQualSettingsDialog')?.addEventListener('click', () => qualSettingsDialog?.showModal());
     fieldDialog?.querySelectorAll('[data-close]').forEach((button) => {
       button.addEventListener('click', () => fieldDialog.close());
     });
+    qualSettingsDialog?.querySelectorAll('[data-close]').forEach((button) => {
+      button.addEventListener('click', () => qualSettingsDialog.close());
+    });
+    if (window.IMPlanner?.setupAutosaveForm && qualSettingsForm) {
+      window.IMPlanner.setupAutosaveForm(qualSettingsForm, {
+        debounceMs: 250,
+        onSuccess: async (resp) => {
+          let payload = null;
+          try { payload = await resp.json(); } catch {}
+          const assigneeId = String(payload?.assignee_user_id ?? qualStepAssigneeInput?.value ?? '');
+          if (!qualStepResponsibleLabel) return;
+          if (!assigneeId) {
+            qualStepResponsibleLabel.textContent = '-';
+            return;
+          }
+          const link = document.createElement('a');
+          link.href = `/users/${assigneeId}`;
+          link.textContent = payload?.assignee_label || qualAssignableUserById.get(assigneeId) || `User #${assigneeId}`;
+          qualStepResponsibleLabel.innerHTML = '';
+          qualStepResponsibleLabel.appendChild(link);
+        }
+      });
+    }
 
     fieldDialog?.addEventListener('change', async (event) => {
       const target = event.target;

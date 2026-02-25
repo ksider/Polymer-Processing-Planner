@@ -122,29 +122,19 @@
         <% doeStudies.forEach((doe) => { %>
           <div class="section-row">
             <div class="section-main">
-              <a class="section-title" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>?tab=design"><strong><%- formatInline(doe.name) %></strong></a>
+              <a class="section-title" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>?tab=design"><strong data-doe-name-label data-doe-id="<%= doe.id %>"><%- formatInline(doe.name) %></strong></a>
               <div class="small-note">Type: <%= doe.design_type %> · Seed: <%= doe.seed %></div>
               <div class="small-note">
                 Responsible:
                 <% const doeAssigneeId = assignmentByDoe.get(doe.id); %>
-                <% if (doeAssigneeId) { %>
-                  <a href="/users/<%= doeAssigneeId %>"><%- formatInline(userLabelById.get(doeAssigneeId) || `User #${doeAssigneeId}`) %></a>
-                <% } else { %>
-                  <span>-</span>
-                <% } %>
+                <span data-doe-responsible-label data-doe-id="<%= doe.id %>">
+                  <% if (doeAssigneeId) { %>
+                    <a href="/users/<%= doeAssigneeId %>"><%- formatInline(userLabelById.get(doeAssigneeId) || `User #${doeAssigneeId}`) %></a>
+                  <% } else { %>
+                    <span>-</span>
+                  <% } %>
+                </span>
               </div>
-              <% if (canAssignEntities) { %>
-                <form class="pure-form assignment-form" action="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/assignee" method="post">
-                  <select name="assignee_user_id" onchange="this.form.submit()">
-                    <option value="">Unassigned</option>
-                    <% assignableUsers.forEach((user) => { %>
-                      <option value="<%= user.id %>" <%= doeAssigneeId === user.id ? 'selected' : '' %>>
-                        <%= user.name || user.email %> (<%= user.role || 'user' %>)
-                      </option>
-                    <% }); %>
-                  </select>
-                </form>
-              <% } %>
             </div>
           <div class="section-actions">
             <a class="pure-button pure-button-secondary" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>?tab=analysis">Analysis</a>
@@ -153,10 +143,11 @@
               <button
                 class="icon-button"
                 type="button"
-                title="Edit DOE name"
+                title="DOE settings"
                 data-doe-edit
                 data-doe-id="<%= doe.id %>"
                 data-doe-name="<%= doe.name %>"
+                data-doe-assignee="<%= doeAssigneeId ?? '' %>"
               >
                 <span class="material-symbols-rounded" aria-hidden="true">edit</span>
               </button>
@@ -529,6 +520,7 @@
       </div>
     </div>
     <div class="modal-footer">
+      <span class="small-note" data-autosave-status></span>
       <button class="pure-button" type="button" data-close>Cancel</button>
       <button class="pure-button pure-button-primary" type="submit">Save</button>
     </div>
@@ -674,6 +666,11 @@
   <div class="modal-header">
     <strong id="taskTitle">Task</strong>
     <div class="modal-actions">
+      <% if (canDeleteTasks) { %>
+        <button class="icon-btn icon-only danger" type="button" id="taskDeleteBtn" title="Delete task">
+          <span class="material-symbols-rounded" aria-hidden="true">delete</span>
+        </button>
+      <% } %>
       <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
         <button class="icon-btn icon-only" type="button" id="openTaskEdit" title="Edit task">
           <span class="material-symbols-rounded" aria-hidden="true">edit</span>
@@ -798,13 +795,24 @@
 
 <dialog class="modal-frame" id="doeEditDialog">
   <div class="modal-header">
-    <strong>Edit DOE name</strong>
+    <strong>DOE settings</strong>
     <button class="pure-button" type="button" data-close>Close</button>
   </div>
   <form class="pure-form" id="doeEditForm" method="post">
     <div class="modal-body">
       <label for="doeEditName">DOE name</label>
       <input id="doeEditName" name="name" type="text" required>
+      <% if (canAssignEntities) { %>
+        <label for="doeEditAssignee">Responsible</label>
+        <select id="doeEditAssignee" name="assignee_user_id">
+          <option value="">Unassigned</option>
+          <% assignableUsers.forEach((user) => { %>
+            <option value="<%= user.id %>">
+              <%= user.name || user.email %> (<%= user.role || 'user' %>)
+            </option>
+          <% }); %>
+        </select>
+      <% } %>
     </div>
     <div class="modal-footer">
       <button class="pure-button" type="button" data-close>Cancel</button>
@@ -824,19 +832,51 @@
   const doeEditDialog = document.getElementById('doeEditDialog');
   const doeEditForm = document.getElementById('doeEditForm');
   const doeEditName = document.getElementById('doeEditName');
+  const doeEditAssignee = document.getElementById('doeEditAssignee');
+  const assignableUserNameById = new Map(<%- JSON.stringify((assignableUsers || []).map((user) => [String(user.id), user.name || user.email])) %>);
+  let activeDoeEditBtn = null;
   document.querySelectorAll('[data-doe-edit]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const doeId = btn.dataset.doeId;
       const doeName = btn.dataset.doeName || '';
+      const doeAssignee = btn.dataset.doeAssignee || '';
       if (!doeEditDialog || !doeEditForm || !doeEditName || !doeId) return;
       doeEditForm.setAttribute('action', `/experiments/<%= experiment.id %>/doe/${doeId}/name`);
       doeEditName.value = doeName;
+      if (doeEditAssignee) doeEditAssignee.value = doeAssignee;
+      activeDoeEditBtn = btn;
       doeEditDialog.showModal();
     });
   });
+  if (window.IMPlanner?.setupAutosaveForm && doeEditForm) {
+    window.IMPlanner.setupAutosaveForm(doeEditForm, {
+      debounceMs: 250,
+      onSuccess: async (resp) => {
+        let payload = null;
+        try { payload = await resp.json(); } catch {}
+        const doeId = activeDoeEditBtn?.dataset?.doeId;
+        if (!doeId) return;
+        const nextName = payload?.name || doeEditName?.value || '';
+        if (activeDoeEditBtn && nextName) activeDoeEditBtn.dataset.doeName = nextName;
+        const nameLabel = document.querySelector(`[data-doe-name-label][data-doe-id="${doeId}"]`);
+        if (nameLabel && nextName) nameLabel.textContent = nextName;
+        if (doeEditAssignee) {
+          const assigneeId = String(doeEditAssignee.value || '');
+          if (activeDoeEditBtn) activeDoeEditBtn.dataset.doeAssignee = assigneeId;
+          const assigneeLabel = document.querySelector(`[data-doe-responsible-label][data-doe-id="${doeId}"]`);
+          if (assigneeLabel) {
+            assigneeLabel.textContent = assigneeId
+              ? (assignableUserNameById.get(assigneeId) || `User #${assigneeId}`)
+              : '-';
+          }
+        }
+      }
+    });
+  }
   const taskDetailDialog = document.getElementById('taskDetailDialog');
   const taskEditDialog = document.getElementById('taskEditDialog');
   const openTaskEdit = document.getElementById('openTaskEdit');
+  const taskDeleteBtn = document.getElementById('taskDeleteBtn');
   const taskCreateDialog = document.getElementById('taskCreateDialog');
   document.getElementById('openTaskCreate')?.addEventListener('click', () => taskCreateDialog?.showModal());
   document.querySelectorAll('[data-close]').forEach((btn) => {
@@ -2057,6 +2097,16 @@
 
   taskDetailDialog?.addEventListener('close', () => {
     calendarMenu?.classList.remove('is-open');
+  });
+  taskDeleteBtn?.addEventListener('click', async () => {
+    if (!currentTaskId) return;
+    if (!confirm('Delete this task?')) return;
+    const resp = await fetch(`/tasks/${currentTaskId}/delete`, { method: 'POST' });
+    if (!resp.ok) return;
+    taskDetailDialog?.close();
+    taskEditDialog?.close();
+    currentTaskId = null;
+    loadTasks();
   });
   taskEditDialog?.addEventListener('close', () => {
     taskEditEntitiesPanel?.classList.remove('is-open');

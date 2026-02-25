@@ -270,6 +270,73 @@
   });
   root.initTagSelects = initTagSelects;
 
+  root.setupAutosaveForm = (form, options = {}) => {
+    if (!form || form.dataset.autosaveBound === "1") return null;
+    form.dataset.autosaveBound = "1";
+    const statusEl =
+      options.statusEl ||
+      (options.statusSelector ? form.querySelector(options.statusSelector) : null) ||
+      form.querySelector("[data-autosave-status]");
+    const debounceMs = Number(options.debounceMs ?? 250);
+    const listenInput = options.listenInput !== false;
+    let timer = null;
+
+    const setStatus = (text) => {
+      if (statusEl) statusEl.textContent = text;
+    };
+
+    const submit = async () => {
+      const body = new URLSearchParams(new FormData(form));
+      setStatus("Saving...");
+      try {
+        const resp = await fetch(form.action, {
+          method: form.method || "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+            "X-Requested-With": "XMLHttpRequest"
+          },
+          body
+        });
+        if (!resp.ok) throw new Error("Save failed");
+        setStatus("Saved");
+        if (typeof options.onSuccess === "function") {
+          await options.onSuccess(resp, form);
+        }
+        return true;
+      } catch {
+        setStatus("Save failed");
+        if (typeof options.onError === "function") options.onError(form);
+        return false;
+      }
+    };
+
+    const schedule = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        submit();
+      }, debounceMs);
+    };
+
+    form.addEventListener("change", (event) => {
+      if (event.target && event.target.matches("input, select, textarea")) {
+        schedule();
+      }
+    });
+    if (listenInput) {
+      form.addEventListener("input", (event) => {
+        if (event.target && event.target.matches("input[type='text'], input[type='search'], textarea")) {
+          schedule();
+        }
+      });
+    }
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      submit();
+    });
+
+    return { submit };
+  };
+
   const observer = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
       mutation.addedNodes.forEach((node) => {

@@ -27,6 +27,7 @@ import { getQualificationStepName } from "../services/qualification_service.js";
 import { getExperiment } from "../repos/experiments_repo.js";
 import { getDoeStudy } from "../repos/doe_repo.js";
 import { getReportConfig } from "../repos/reports_repo.js";
+import { isProcessOwner } from "../repos/processes_repo.js";
 
 export function createTasksRouter(db: Db) {
   const router = express.Router();
@@ -266,10 +267,22 @@ export function createTasksRouter(db: Db) {
     res.json({ ok: true, progress, status });
   });
 
-  // Delete task.
-  router.post("/tasks/:id/delete", requireTaskManager, (req, res) => {
+  // Delete task (admin or process owner only).
+  router.post("/tasks/:id/delete", requireTaskRead, (req, res) => {
     const taskId = Number(req.params.id);
     if (!Number.isFinite(taskId)) return res.status(400).json({ error: "Invalid task" });
+    const task = getTask(db, taskId);
+    if (!task) return res.status(404).json({ error: "Task not found" });
+    const experiment = getExperiment(db, task.experiment_id);
+    const processId = experiment?.process_id ?? null;
+    const isAdmin = req.user?.role === "admin";
+    const canAsProcessOwner =
+      !!req.user?.id &&
+      Number.isFinite(processId) &&
+      isProcessOwner(db, Number(processId), req.user.id);
+    if (!isAdmin && !canAsProcessOwner) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     deleteTask(db, taskId);
     res.json({ ok: true });
   });
