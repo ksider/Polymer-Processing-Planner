@@ -116,6 +116,28 @@ Planned: export data to CSV.
   - notifications feed with mark-read actions
 - Report signature is restricted to the experiment owner.
 
+## Calendar (Current UX)
+- Two calendar surfaces are available:
+  - `My Calendar` on `/me`
+  - `Process Calendar` on `/<process_route_code>` (collapsible panel)
+- Calendar events include:
+  - tasks (`task`)
+  - DOE runs (`run`)
+  - qualification runs (`qual_run`)
+- Date updates:
+  - drag one event to move one entity
+  - move a selected group by dragging one selected event
+  - bulk move selected events with `Move selected` + date input
+- Selection model:
+  - `Shift/Cmd/Ctrl + click` toggles entity selection
+  - lasso selection (mouse rectangle) selects intersecting events
+  - click empty calendar area or `Clear selection` to drop selection
+- Event click opens a details popup with:
+  - event type/status/date/owner
+  - link to run/task
+  - link to parent entity/experiment
+- Process calendar remembers panel open/closed state in browser `localStorage`.
+
 ## Process Model (Current)
 - New DB entities:
   - `process_types`

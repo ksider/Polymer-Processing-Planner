@@ -68,6 +68,10 @@
 
   <div class="card">
     <div class="run-controls">
+      <label>
+        Due date
+        <input type="date" id="qualRunDueAt" value="<%= run.due_at || '' %>">
+      </label>
       <label class="pure-checkbox">
         <input type="checkbox" id="qualRunDone" <%= run.done ? 'checked' : '' %>> Done
       </label>
@@ -129,14 +133,16 @@
 
   const doneEl = document.getElementById('qualRunDone');
   const excludeEl = document.getElementById('qualRunExclude');
+  const dueEl = document.getElementById('qualRunDueAt');
   const saveFlags = async () => {
     await fetch(`/qual-runs/<%= run.id %>/flags`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ done: doneEl.checked, exclude: excludeEl.checked })
+      body: JSON.stringify({ done: doneEl.checked, exclude: excludeEl.checked, due_at: dueEl?.value || '' })
     });
   };
   doneEl?.addEventListener('change', saveFlags);
   excludeEl?.addEventListener('change', saveFlags);
+  dueEl?.addEventListener('change', saveFlags);
 </script>
 <%- include('partials/foot') %>

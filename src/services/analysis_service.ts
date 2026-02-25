@@ -22,6 +22,7 @@ export type RunRow = {
   run_code: string;
   recipe_id: number | null;
   doe_id: number | null;
+  due_at: string | null;
   exclude_from_analysis: number;
   done: number;
   values: Record<number, number | null>;
@@ -31,7 +32,7 @@ export type RunRow = {
 export function loadRuns(db: Db, doeId: number): RunRow[] {
   const rows = db
     .prepare(
-      `SELECT r.id, r.run_order, r.run_code, r.recipe_id, r.exclude_from_analysis, r.done,
+      `SELECT r.id, r.run_order, r.run_code, r.recipe_id, r.due_at, r.exclude_from_analysis, r.done,
               r.doe_id,
               rv.param_def_id, rv.value_real, rv.value_tags_json
        FROM runs r
@@ -44,6 +45,7 @@ export function loadRuns(db: Db, doeId: number): RunRow[] {
     run_order: number;
     run_code: string;
     recipe_id: number | null;
+    due_at: string | null;
     doe_id: number | null;
     exclude_from_analysis: number;
     done: number;
@@ -60,6 +62,7 @@ export function loadRuns(db: Db, doeId: number): RunRow[] {
         run_order: row.run_order,
         run_code: row.run_code,
         recipe_id: row.recipe_id,
+        due_at: row.due_at,
         doe_id: row.doe_id,
         exclude_from_analysis: row.exclude_from_analysis,
         done: row.done,

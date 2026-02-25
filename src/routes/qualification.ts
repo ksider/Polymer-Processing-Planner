@@ -21,7 +21,8 @@ import {
   upsertQualStepSettings,
   insertQualField,
   updateQualField,
-  updateQualRunFlags
+  updateQualRunFlags,
+  updateQualRunDueAt
 } from "../repos/qual_repo.js";
 import { getExperiment } from "../repos/experiments_repo.js";
 import { getProcessById } from "../repos/processes_repo.js";
@@ -281,8 +282,24 @@ export function createQualificationRouter(db: Db) {
     const runId = Number(req.params.id);
     const done = Number(req.body.done ? 1 : 0);
     const exclude = Number(req.body.exclude ? 1 : 0);
+    const dueAtRaw = String(req.body?.due_at ?? "").trim();
+    const dueAt = /^\d{4}-\d{2}-\d{2}$/.test(dueAtRaw) ? dueAtRaw : null;
     updateQualRunFlags(db, runId, done, exclude);
+    updateQualRunDueAt(db, runId, dueAt);
     return res.json({ ok: true });
+  });
+
+  router.post("/qual-runs/:id/due-at", (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer", "operator"])) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const runId = Number(req.params.id);
+    const run = getQualRun(db, runId);
+    if (!run) return res.status(404).json({ error: "Run not found" });
+    const dueAtRaw = String(req.body?.due_at ?? "").trim();
+    const dueAt = /^\d{4}-\d{2}-\d{2}$/.test(dueAtRaw) ? dueAtRaw : null;
+    updateQualRunDueAt(db, runId, dueAt);
+    return res.json({ ok: true, due_at: dueAt });
   });
 
   router.post("/experiments/:id/qualification/:step/runs", (req, res) => {

@@ -3309,3 +3309,116 @@ body.notes-drawer-open {
     display: none;
   }
 }
+
+.calendar-host {
+  margin-top: 0.75rem;
+  position: relative;
+}
+
+.calendar-tools {
+  margin-top: 0.65rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.calendar-tools input[type="date"] {
+  min-width: 10.5rem;
+}
+
+.calendar-host .fc {
+  --fc-border-color: #dddcd6;
+  --fc-page-bg-color: #fcfcfa;
+  --fc-neutral-bg-color: #f5f4ef;
+  --fc-list-event-hover-bg-color: #f4f2ea;
+  --fc-today-bg-color: #f3eee3;
+}
+
+.calendar-host .fc .fc-toolbar-title {
+  font-size: 1.02rem;
+}
+
+.calendar-host .fc .fc-event {
+  border-radius: 8px;
+  border-width: 1px;
+  border-style: solid;
+  padding: 1px 4px;
+}
+
+.calendar-host .fc .calendar-event-selected,
+.calendar-host .fc .fc-event.calendar-event-selected,
+.calendar-host .fc .fc-daygrid-event.calendar-event-selected,
+.calendar-host .fc .fc-timegrid-event.calendar-event-selected {
+  border: 4px solid #ff2b2b !important;
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 6px rgba(255, 43, 43, 0.9), 0 4px 12px rgba(255, 43, 43, 0.25) !important;
+  outline: 2px solid #ff2b2b !important;
+  outline-offset: -2px !important;
+  transform: translateY(-1px) scale(1.01);
+  z-index: 5;
+  filter: none !important;
+}
+
+.calendar-host .fc .calendar-event-selected .fc-event-title,
+.calendar-host .fc .fc-event.calendar-event-selected .fc-event-title {
+  font-weight: 700;
+  color: #121212 !important;
+}
+
+.calendar-host .fc .calendar-event-selected .fc-event-title::before,
+.calendar-host .fc .fc-event.calendar-event-selected .fc-event-title::before {
+  content: "● ";
+}
+
+.calendar-host .fc .fc-event.calendar-event-open {
+  filter: saturate(0.88);
+}
+
+.calendar-host .fc .fc-event.calendar-event-done {
+  filter: saturate(1.1);
+}
+
+/* Calendar interactions should not trigger native text selection. */
+.calendar-host,
+.calendar-host * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+}
+
+.calendar-host .fc,
+.calendar-host .fc .fc-scrollgrid,
+.calendar-host .fc .fc-col-header-cell,
+.calendar-host .fc .fc-daygrid-day,
+.calendar-host .fc .fc-daygrid-day-frame,
+.calendar-host .fc .fc-daygrid-day-number,
+.calendar-host .fc .fc-event,
+.calendar-host .fc .fc-event-title,
+.calendar-host .fc .fc-toolbar-title,
+.calendar-host .fc .fc-button {
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  user-select: none !important;
+}
+
+.calendar-host ::selection {
+  background: transparent;
+}
+
+.calendar-lasso {
+  position: absolute;
+  border: 2px dashed #0b5fff;
+  background: rgba(11, 95, 255, 0.14);
+  pointer-events: none;
+  z-index: 20;
+}
+
+.process-calendar-panel > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.process-calendar-panel > summary::-webkit-details-marker {
+  display: none;
+}

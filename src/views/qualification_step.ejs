@@ -142,6 +142,7 @@
           <thead>
             <tr>
               <th>Run</th>
+              <th>Due date</th>
               <th>Injection speed <span class="small-note"><%= unitByCode.inj_speed || injField?.unit || '' %></span></th>
               <th>Press pressure <span class="small-note"><%= (unitByCode.peak_inj_pressure || pressField?.unit || '') %></span></th>
               <th>Fill time <span class="small-note"><%= (unitByCode.fill_time || fillField?.unit || '') %></span></th>
@@ -160,7 +161,7 @@
           </thead>
           <tbody>
             <% if (runs.length === 0) { %>
-              <tr><td colspan="<%= 7 + extraFields.length %>">No runs yet.</td></tr>
+              <tr><td colspan="<%= 8 + extraFields.length %>">No runs yet.</td></tr>
             <% } %>
             <% runs.forEach((run) => { %>
               <% const runValues = runValueMap[String(run.id)] || {}; %>
@@ -171,6 +172,7 @@
               <% const viscVal = viscField?.id ? (runValues[String(viscField.id)]?.value_real ?? '') : ''; %>
               <tr data-run-row data-run-id="<%= run.id %>">
                 <td><strong><%= run.run_code %></strong></td>
+                <td><input type="date" data-run-due value="<%= run.due_at || '' %>"></td>
                 <td><input type="number" step="any" data-field-id="<%= injFieldId %>" data-field-type="number" value="<%= injVal %>"></td>
                 <td><input type="number" step="any" data-field-id="<%= pressFieldId %>" data-field-type="number" value="<%= pressVal %>"></td>
                 <td><input type="number" step="any" data-field-id="<%= fillFieldId %>" data-field-type="number" value="<%= fillVal %>"></td>
@@ -260,9 +262,12 @@
     <div class="card">
       <div class="card-header">
         <h2 class="card-title">Cavities</h2>
-        <button class="icon-button" type="button" id="addCavityBtn" title="Add cavity">
-          <span class="material-symbols-rounded" aria-hidden="true">add</span>
-        </button>
+        <div class="section-actions">
+          <label class="small-note">Due date <input type="date" id="cavityRunDue" value="<%= runs[0]?.due_at || '' %>"></label>
+          <button class="icon-button" type="button" id="addCavityBtn" title="Add cavity">
+            <span class="material-symbols-rounded" aria-hidden="true">add</span>
+          </button>
+        </div>
       </div>
       <% const fieldByCode2 = new Map(); fields.forEach((field) => fieldByCode2.set(field.code, field)); %>
       <% const cavityIndices = Array.from(new Set(fields.map((field) => { const match = /^cavity(\d+)_weight_g$/.exec(field.code); return match ? Number(match[1]) : null; }).filter((v) => Number.isFinite(v)))).sort((a, b) => a - b); %>
@@ -418,9 +423,12 @@
     <div class="card">
       <div class="card-header">
         <h2 class="card-title">Pressure points</h2>
-        <button class="icon-button" type="button" id="addPressurePoint" title="Add point">
-          <span class="material-symbols-rounded" aria-hidden="true">add</span>
-        </button>
+        <div class="section-actions">
+          <label class="small-note">Due date <input type="date" id="pressureRunDue" value="<%= runs[0]?.due_at || '' %>"></label>
+          <button class="icon-button" type="button" id="addPressurePoint" title="Add point">
+            <span class="material-symbols-rounded" aria-hidden="true">add</span>
+          </button>
+        </div>
       </div>
       <% const fieldByCode3 = new Map(); fields.forEach((field) => fieldByCode3.set(field.code, field)); %>
       <% const pressureDefaults = [
@@ -600,6 +608,7 @@
           <thead>
             <tr>
               <th>Run</th>
+              <th>Due date</th>
               <th>Temperature <span class="small-note">°C</span></th>
               <th>Hold pressure <span class="small-note">bar</span></th>
               <th>Short shot</th>
@@ -619,7 +628,7 @@
           </thead>
           <tbody>
             <% if (runs.length === 0) { %>
-              <tr><td colspan="<%= 6 + extraFields4.length %>">No runs yet.</td></tr>
+              <tr><td colspan="<%= 7 + extraFields4.length %>">No runs yet.</td></tr>
             <% } %>
             <% runs.forEach((run) => { %>
               <% const runValues4 = runValueMap[String(run.id)] || {}; %>
@@ -629,6 +638,7 @@
               <% const flashVal = flashField ? (runValues4[String(flashField.id)]?.value_real ?? 0) : 0; %>
               <tr data-run-row data-run-id="<%= run.id %>">
                 <td><strong><%= run.run_code %></strong></td>
+                <td><input type="date" data-run-due value="<%= run.due_at || '' %>"></td>
                 <td><input type="number" step="any" data-field-id="<%= tempField?.id %>" data-field-type="number" value="<%= tempVal %>"></td>
                 <td><input type="number" step="any" data-field-id="<%= holdField?.id %>" data-field-type="number" value="<%= holdVal %>"></td>
                 <td><input type="checkbox" data-field-id="<%= shortField?.id %>" data-field-type="boolean" <%= shortVal === 1 ? 'checked' : '' %>></td>
@@ -791,6 +801,7 @@
           <thead>
             <tr>
               <th>Run</th>
+              <th>Due date</th>
               <th>Hold time <span class="small-note">s</span></th>
               <th>Part weight <span class="small-note">g</span></th>
               <% extraFields5.forEach((field) => { %>
@@ -808,7 +819,7 @@
           </thead>
           <tbody>
             <% if (runs.length === 0) { %>
-              <tr><td colspan="<%= 4 + extraFields5.length %>">No runs yet.</td></tr>
+              <tr><td colspan="<%= 5 + extraFields5.length %>">No runs yet.</td></tr>
             <% } %>
             <% runs.forEach((run) => { %>
               <% const runValues5 = runValueMap[String(run.id)] || {}; %>
@@ -816,6 +827,7 @@
               <% const weightVal = weightField ? (runValues5[String(weightField.id)]?.value_real ?? '') : ''; %>
               <tr data-run-row data-run-id="<%= run.id %>">
                 <td><strong><%= run.run_code %></strong></td>
+                <td><input type="date" data-run-due value="<%= run.due_at || '' %>"></td>
                 <td><input type="number" step="any" data-field-id="<%= holdField?.id %>" data-field-type="number" value="<%= holdVal %>"></td>
                 <td><input type="number" step="any" data-field-id="<%= weightField?.id %>" data-field-type="number" value="<%= weightVal %>"></td>
                 <% extraFields5.forEach((field) => { %>
@@ -956,6 +968,7 @@
           <thead>
             <tr>
               <th>Run</th>
+              <th>Due date</th>
               <th>Cooling time <span class="small-note">s</span></th>
               <th>Cosmetic OK</th>
               <th>Critical dim <span class="small-note">mm</span></th>
@@ -974,7 +987,7 @@
           </thead>
           <tbody>
             <% if (runs.length === 0) { %>
-              <tr><td colspan="<%= 5 + extraFields6.length %>">No runs yet.</td></tr>
+              <tr><td colspan="<%= 6 + extraFields6.length %>">No runs yet.</td></tr>
             <% } %>
             <% runs.forEach((run) => { %>
               <% const runValues6 = runValueMap[String(run.id)] || {}; %>
@@ -983,6 +996,7 @@
               <% const criticalVal = criticalField ? (runValues6[String(criticalField.id)]?.value_real ?? '') : ''; %>
               <tr data-run-row data-run-id="<%= run.id %>">
                 <td><strong><%= run.run_code %></strong></td>
+                <td><input type="date" data-run-due value="<%= run.due_at || '' %>"></td>
                 <td><input type="number" step="any" data-field-id="<%= coolingField?.id %>" data-field-type="number" value="<%= coolingVal %>"></td>
                 <td><input type="checkbox" data-field-id="<%= cosmeticField?.id %>" data-field-type="boolean" <%= cosmeticVal === 1 ? 'checked' : '' %>></td>
                 <td><input type="number" step="any" data-field-id="<%= criticalField?.id %>" data-field-type="number" value="<%= criticalVal %>"></td>
@@ -1084,23 +1098,40 @@
         <thead>
           <tr>
             <th>Run</th>
+            <th>Due date</th>
             <th>Done</th>
             <th>Exclude</th>
           </tr>
         </thead>
         <tbody>
           <% if (runs.length === 0) { %>
-            <tr><td colspan="3">No runs yet.</td></tr>
+            <tr><td colspan="4">No runs yet.</td></tr>
           <% } %>
           <% runs.forEach((run) => { %>
             <tr class="<%= run.done ? 'run-done' : '' %> <%= run.exclude_from_analysis ? 'run-excluded' : '' %>">
               <td><a href="/qual-runs/<%= run.id %>"><%= run.run_code %></a></td>
+              <td><input type="date" data-qual-list-due data-run-id="<%= run.id %>" value="<%= run.due_at || '' %>"></td>
               <td><%= run.done ? 'Yes' : 'No' %></td>
               <td><%= run.exclude_from_analysis ? 'Yes' : 'No' %></td>
             </tr>
           <% }); %>
         </tbody>
       </table>
+      <script>
+        (() => {
+          const inputs = Array.from(document.querySelectorAll('input[data-qual-list-due]'));
+          inputs.forEach((input) => {
+            input.addEventListener('change', async () => {
+              const runId = input.getAttribute('data-run-id');
+              if (!runId) return;
+              const form = new FormData();
+              form.append('due_at', input.value || '');
+              const resp = await fetch(`/qual-runs/${runId}/due-at`, { method: 'POST', body: form });
+              if (!resp.ok) window.alert('Failed to save run date.');
+            });
+          });
+        })();
+      </script>
     </div>
   <% } %>
 </div>
@@ -2151,6 +2182,7 @@
       row.dataset.runId = run.id;
       row.innerHTML = `
         <td><strong>${run.run_code}</strong></td>
+        <td><input type="date" data-run-due value=""></td>
         <td><input type="number" step="any" data-field-id="${injFieldId || ''}" data-field-type="number" value=""></td>
         <td><input type="number" step="any" data-field-id="${pressFieldId || ''}" data-field-type="number" value=""></td>
         <td><input type="number" step="any" data-field-id="${fillFieldId || ''}" data-field-type="number" value=""></td>
@@ -2327,9 +2359,20 @@
     const handleRunInput = (target) => {
       const row = target.closest('[data-run-row]');
       const runId = row?.dataset.runId;
+      if (!runId) return;
+      if (target.hasAttribute('data-run-due')) {
+        const payload = new URLSearchParams();
+        payload.append('due_at', target.value || '');
+        fetch(`/qual-runs/${runId}/due-at`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: payload
+        });
+        return;
+      }
       const fieldIdRaw = target.getAttribute('data-field-id');
       const fieldId = fieldIdRaw ? Number(fieldIdRaw) : NaN;
-      if (!runId || !Number.isFinite(fieldId)) return;
+      if (!Number.isFinite(fieldId)) return;
       const fieldType = target.dataset.fieldType || (target.type === 'checkbox' ? 'boolean' : 'text');
       const key = `${runId}:${fieldId}`;
       if (runSaveTimers.has(key)) clearTimeout(runSaveTimers.get(key));
@@ -2538,6 +2581,7 @@
     const targetWeightValueEl = document.getElementById('cavityTargetWeightValue');
     const addCavityBtn = document.getElementById('addCavityBtn');
     const cavityTableBody = document.querySelector('.table-scroll tbody');
+    const cavityRunDueInput = document.getElementById('cavityRunDue');
 
     openCavitySetup?.addEventListener('click', () => cavitySetupDialog?.showModal());
     cavitySetupDialog?.querySelectorAll('[data-close]').forEach((btn) => {
@@ -2677,6 +2721,17 @@
       }
       return cavityRunId;
     };
+    cavityRunDueInput?.addEventListener('change', async () => {
+      const runId = await ensureCavityRun();
+      if (!runId) return;
+      const payload = new URLSearchParams();
+      payload.append('due_at', cavityRunDueInput.value || '');
+      await fetch(`/qual-runs/${runId}/due-at`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: payload
+      });
+    });
 
     const saveRunValue = async (runId, fieldId, value, asJson = false) => {
       const payload = asJson
@@ -2892,6 +2947,7 @@
     const addPressurePoint = document.getElementById('addPressurePoint');
     const pressureBody = document.getElementById('pressurePointBody');
     let pressureRunId = document.getElementById('pressureRunId')?.value;
+    const pressureRunDueInput = document.getElementById('pressureRunDue');
 
     openPressureSetup?.addEventListener('click', () => pressureSetupDialog?.showModal());
     pressureSetupDialog?.querySelectorAll('[data-close]').forEach((btn) => {
@@ -2965,6 +3021,17 @@
       }
       return pressureRunId;
     };
+    pressureRunDueInput?.addEventListener('change', async () => {
+      const runId = await ensurePressureRun();
+      if (!runId) return;
+      const payload = new URLSearchParams();
+      payload.append('due_at', pressureRunDueInput.value || '');
+      await fetch(`/qual-runs/${runId}/due-at`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: payload
+      });
+    });
 
     const saveRunValue = async (runId, fieldId, value) => {
       const payload = new URLSearchParams({ field_id: fieldId, value });
@@ -3241,9 +3308,20 @@
     const handleRunInput = (target) => {
       const row = target.closest('[data-run-row]');
       const runId = row?.dataset.runId;
+      if (!runId) return;
+      if (target.hasAttribute('data-run-due')) {
+        const payload = new URLSearchParams();
+        payload.append('due_at', target.value || '');
+        fetch(`/qual-runs/${runId}/due-at`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: payload
+        });
+        return;
+      }
       const fieldIdRaw = target.getAttribute('data-field-id');
       const fieldId = fieldIdRaw ? Number(fieldIdRaw) : NaN;
-      if (!runId || !Number.isFinite(fieldId)) return;
+      if (!Number.isFinite(fieldId)) return;
       const fieldType = target.dataset.fieldType || (target.type === 'checkbox' ? 'boolean' : 'text');
       const key = `${runId}:${fieldId}`;
       if (runSaveTimers.has(key)) clearTimeout(runSaveTimers.get(key));
@@ -3288,6 +3366,7 @@
       row.dataset.runId = run.id;
       row.innerHTML = `
         <td><strong>${run.run_code}</strong></td>
+        <td><input type="date" data-run-due value=""></td>
         <td><input type="number" step="any" data-field-id="${tempFieldId || ''}" data-field-type="number" value=""></td>
         <td><input type="number" step="any" data-field-id="${holdFieldId || ''}" data-field-type="number" value=""></td>
         <td><input type="checkbox" data-field-id="${shortFieldId || ''}" data-field-type="boolean"></td>
@@ -3699,9 +3778,20 @@
     const handleRunInput = (target) => {
       const row = target.closest('[data-run-row]');
       const runId = row?.dataset.runId;
+      if (!runId) return;
+      if (target.hasAttribute('data-run-due')) {
+        const payload = new URLSearchParams();
+        payload.append('due_at', target.value || '');
+        fetch(`/qual-runs/${runId}/due-at`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: payload
+        });
+        return;
+      }
       const fieldIdRaw = target.getAttribute('data-field-id');
       const fieldId = fieldIdRaw ? Number(fieldIdRaw) : NaN;
-      if (!runId || !Number.isFinite(fieldId)) return;
+      if (!Number.isFinite(fieldId)) return;
       const fieldType = target.dataset.fieldType || (target.type === 'checkbox' ? 'boolean' : 'text');
       const key = `${runId}:${fieldId}`;
       if (runSaveTimers.has(key)) clearTimeout(runSaveTimers.get(key));
@@ -3803,6 +3893,7 @@
       row.dataset.runId = run.id;
       row.innerHTML = `
         <td><strong>${run.run_code}</strong></td>
+        <td><input type="date" data-run-due value=""></td>
         <td><input type="number" step="any" data-field-id="${holdFieldId || ''}" data-field-type="number" value=""></td>
         <td><input type="number" step="any" data-field-id="${weightFieldId || ''}" data-field-type="number" value=""></td>
         ${extraFields
@@ -4027,9 +4118,20 @@
     const handleRunInput = (target) => {
       const row = target.closest('[data-run-row]');
       const runId = row?.dataset.runId;
+      if (!runId) return;
+      if (target.hasAttribute('data-run-due')) {
+        const payload = new URLSearchParams();
+        payload.append('due_at', target.value || '');
+        fetch(`/qual-runs/${runId}/due-at`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: payload
+        });
+        return;
+      }
       const fieldIdRaw = target.getAttribute('data-field-id');
       const fieldId = fieldIdRaw ? Number(fieldIdRaw) : NaN;
-      if (!runId || !Number.isFinite(fieldId)) return;
+      if (!Number.isFinite(fieldId)) return;
       const fieldType = target.dataset.fieldType || (target.type === 'checkbox' ? 'boolean' : 'text');
       const key = `${runId}:${fieldId}`;
       if (runSaveTimers.has(key)) clearTimeout(runSaveTimers.get(key));
@@ -4115,6 +4217,7 @@
       row.dataset.runId = run.id;
       row.innerHTML = `
         <td><strong>${run.run_code}</strong></td>
+        <td><input type="date" data-run-due value=""></td>
         <td><input type="number" step="any" data-field-id="${coolingFieldId || ''}" data-field-type="number" value=""></td>
         <td><input type="checkbox" data-field-id="${cosmeticFieldId || ''}" data-field-type="boolean"></td>
         <td><input type="number" step="any" data-field-id="${criticalFieldId || ''}" data-field-type="number" value=""></td>

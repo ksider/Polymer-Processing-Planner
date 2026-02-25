@@ -644,6 +644,7 @@
           <tr>
             <th>Run</th>
             <th>Recipe</th>
+            <th>Due date</th>
             <th>Done</th>
             <th>Exclude</th>
             <% activeInputParams.forEach((param) => { %>
@@ -653,12 +654,15 @@
         </thead>
         <tbody>
           <% if (runs.length === 0) { %>
-            <tr><td colspan="<%= 4 + activeInputParams.length %>">No runs yet. Generate a runlist.</td></tr>
+            <tr><td colspan="<%= 5 + activeInputParams.length %>">No runs yet. Generate a runlist.</td></tr>
           <% } %>
           <% runRows.forEach((run) => { %>
             <tr class="<%= run.done ? 'run-done' : '' %> <%= run.exclude_from_analysis ? 'run-excluded' : '' %>">
               <td><a href="/experiments/<%= experiment.id %>/runs/<%= run.id %>"><%= run.run_code %></a></td>
               <td><%- run.recipe_id ? formatInline(recipeMap.get(run.recipe_id)) : '-' %></td>
+              <td>
+                <input type="date" data-run-due data-run-id="<%= run.id %>" value="<%= run.due_at || '' %>">
+              </td>
               <td><%= run.done ? 'Yes' : 'No' %></td>
               <td><%= run.exclude_from_analysis ? 'Yes' : 'No' %></td>
               <% activeInputParams.forEach((param) => { %>
@@ -669,6 +673,27 @@
         </tbody>
       </table>
     </div>
+    <script>
+      (() => {
+        const dueInputs = Array.from(document.querySelectorAll('input[data-run-due]'));
+        dueInputs.forEach((input) => {
+          input.addEventListener('change', async () => {
+            const runId = input.getAttribute('data-run-id');
+            if (!runId) return;
+            const params = new URLSearchParams();
+            params.set('due_at', input.value || '');
+            const resp = await fetch(`/experiments/<%= experiment.id %>/runs/${runId}/due-at`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+              body: params
+            });
+            if (!resp.ok) {
+              window.alert('Failed to save run date.');
+            }
+          });
+        });
+      })();
+    </script>
   <% } %>
 
   <% if (tab === 'analysis') { %>

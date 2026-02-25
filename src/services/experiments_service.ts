@@ -404,6 +404,8 @@ export function generateRuns(db: Db, experimentId: number, doeId: number) {
     recipe_id: number | null;
     replicate_key: string | null;
     replicate_index: number | null;
+    owner_user_id: number | null;
+    due_at: string | null;
     done: number;
     exclude_from_analysis: number;
   }> = [];
@@ -430,6 +432,8 @@ export function generateRuns(db: Db, experimentId: number, doeId: number) {
           recipe_id: recipeId,
           replicate_key: replicateKey,
           replicate_index: r + 1,
+          owner_user_id: experiment.owner_user_id ?? null,
+          due_at: null,
           done: 0,
           exclude_from_analysis: 0
         });

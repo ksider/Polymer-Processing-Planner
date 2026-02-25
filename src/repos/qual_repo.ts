@@ -13,6 +13,7 @@ export type QualRun = {
   step_id: number;
   run_order: number;
   run_code: string;
+  due_at: string | null;
   done: number;
   exclude_from_analysis: number;
 };
@@ -87,7 +88,7 @@ export function updateQualStepStatus(db: Db, stepId: number, status: QualStep["s
 export function listQualRuns(db: Db, stepId: number): QualRun[] {
   return db
     .prepare(
-      "SELECT id, experiment_id, step_id, run_order, run_code, done, exclude_from_analysis FROM qual_runs WHERE step_id = ? ORDER BY run_order"
+      "SELECT id, experiment_id, step_id, run_order, run_code, due_at, done, exclude_from_analysis FROM qual_runs WHERE step_id = ? ORDER BY run_order"
     )
     .all(stepId) as QualRun[];
 }
@@ -95,7 +96,7 @@ export function listQualRuns(db: Db, stepId: number): QualRun[] {
 export function getQualRun(db: Db, runId: number): QualRun | null {
   const row = db
     .prepare(
-      "SELECT id, experiment_id, step_id, run_order, run_code, done, exclude_from_analysis FROM qual_runs WHERE id = ?"
+      "SELECT id, experiment_id, step_id, run_order, run_code, due_at, done, exclude_from_analysis FROM qual_runs WHERE id = ?"
     )
     .get(runId) as QualRun | undefined;
   return row ?? null;
@@ -110,8 +111,8 @@ export function createQualRuns(db: Db, experimentId: number, stepId: number, cou
     .get(stepId) as { step_number: number } | undefined;
   const stepNumber = step?.step_number ?? stepId;
   const insert = db.prepare(
-    `INSERT INTO qual_runs (experiment_id, step_id, run_order, run_code, done, exclude_from_analysis)
-     VALUES (?, ?, ?, ?, 0, 0)`
+    `INSERT INTO qual_runs (experiment_id, step_id, run_order, run_code, due_at, done, exclude_from_analysis)
+     VALUES (?, ?, ?, ?, NULL, 0, 0)`
   );
   for (let i = 1; i <= count; i += 1) {
     const order = current.max_order + i;
@@ -210,6 +211,10 @@ export function updateQualRunFlags(db: Db, runId: number, done: number, exclude:
     exclude,
     runId
   );
+}
+
+export function updateQualRunDueAt(db: Db, runId: number, dueAt: string | null) {
+  db.prepare("UPDATE qual_runs SET due_at = ? WHERE id = ?").run(dueAt, runId);
 }
 
 export function upsertQualSummary(

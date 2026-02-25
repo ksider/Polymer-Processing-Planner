@@ -21,6 +21,41 @@
   </div>
 
   <div class="card">
+    <details class="process-calendar-panel">
+      <summary class="card-title">Process Calendar</summary>
+      <div class="small-note">All dated tasks and runs in this process. Select entities with Shift/Cmd/Ctrl + click, then drag one selected event or use Move selected.</div>
+      <div class="calendar-tools">
+        <span id="calendarSelectionCount" class="small-note">Selected: 0</span>
+        <button class="pure-button" type="button" id="calendarClearSelection">Clear selection</button>
+        <input class="pure-input" type="date" id="calendarBatchDate">
+        <button class="pure-button pure-button-primary" type="button" id="calendarBatchMove">Move selected</button>
+      </div>
+      <div id="processCalendar" class="calendar-host" data-process-id="<%= process.id %>"></div>
+    </details>
+  </div>
+
+  <dialog class="modal-frame" id="calendarEventDialog">
+    <div class="modal-header">
+      <strong id="calendarEventTitle">Calendar event</strong>
+      <button class="icon-btn icon-only" type="button" data-close title="Close">
+        <span class="material-symbols-rounded">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div><strong>Type:</strong> <span id="calendarEventType">-</span></div>
+      <div><strong>Status:</strong> <span id="calendarEventStatus">-</span></div>
+      <div><strong>Due:</strong> <span id="calendarEventDue">-</span></div>
+      <div><strong>Responsible:</strong> <span id="calendarEventOwner">-</span></div>
+      <div><strong>Entity:</strong> <span id="calendarEventEntity">-</span></div>
+      <div><strong>Process:</strong> <span id="calendarEventProcess">-</span></div>
+      <div class="section-actions" style="margin-top:0.75rem;">
+        <a class="pure-button pure-button-primary" id="calendarEventDetailLink" href="#">Open run/task</a>
+        <a class="pure-button" id="calendarEventEntityLink" href="#">Open entity</a>
+      </div>
+    </div>
+  </dialog>
+
+  <div class="card">
     <h2 class="card-title">Experiments in this process</h2>
     <table class="pure-table table-compact">
       <thead>
@@ -93,3 +128,382 @@
   </script>
 <% } %>
 <%- include('partials/foot') %>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script>
+  (() => {
+    const host = document.getElementById('processCalendar');
+    if (!host || !window.FullCalendar) return;
+    host.addEventListener('selectstart', (event) => {
+      event.preventDefault();
+    });
+    host.addEventListener('mousedown', (event) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+      event.preventDefault();
+    });
+    const processId = Number(host.dataset.processId || 0);
+    if (!Number.isFinite(processId) || processId <= 0) return;
+    const calendarPanel = document.querySelector('.process-calendar-panel');
+    const calendarPanelStateKey = `im-planner:process:${processId}:calendar-panel-open`;
+    const readPanelState = () => {
+      try {
+        return window.localStorage.getItem(calendarPanelStateKey);
+      } catch (_err) {
+        return null;
+      }
+    };
+    const writePanelState = (isOpen) => {
+      try {
+        window.localStorage.setItem(calendarPanelStateKey, isOpen ? '1' : '0');
+      } catch (_err) {
+        // Ignore storage errors (private mode / restricted storage).
+      }
+    };
+    if (calendarPanel) {
+      const savedState = readPanelState();
+      if (savedState === '0') calendarPanel.open = false;
+      if (savedState === '1') calendarPanel.open = true;
+    }
+    const selectedCountEl = document.getElementById('calendarSelectionCount');
+    const clearSelectionBtn = document.getElementById('calendarClearSelection');
+    const batchDateInput = document.getElementById('calendarBatchDate');
+    const batchMoveBtn = document.getElementById('calendarBatchMove');
+    const eventDialog = document.getElementById('calendarEventDialog');
+    const eventTitle = document.getElementById('calendarEventTitle');
+    const eventType = document.getElementById('calendarEventType');
+    const eventStatus = document.getElementById('calendarEventStatus');
+    const eventDue = document.getElementById('calendarEventDue');
+    const eventOwner = document.getElementById('calendarEventOwner');
+    const eventEntity = document.getElementById('calendarEventEntity');
+    const eventProcess = document.getElementById('calendarEventProcess');
+    const eventDetailLink = document.getElementById('calendarEventDetailLink');
+    const eventEntityLink = document.getElementById('calendarEventEntityLink');
+    const selectedEventIds = new Set();
+    const eventElementMap = new Map();
+    let lassoEl = null;
+    let lassoActive = false;
+    let lassoMoved = false;
+    let lassoStartX = 0;
+    let lassoStartY = 0;
+    let lassoBaseSelection = new Set();
+    const toDateOnly = (date) => {
+      if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+    const addDays = (date, days) => {
+      if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+      const next = new Date(date.getTime());
+      next.setDate(next.getDate() + days);
+      return next;
+    };
+    const updateSelectionCount = () => {
+      if (selectedCountEl) selectedCountEl.textContent = `Selected: ${selectedEventIds.size}`;
+    };
+    const refreshSelectionUi = (calendar) => {
+      const availableIds = new Set(eventElementMap.keys());
+      Array.from(selectedEventIds.values()).forEach((id) => {
+        if (!availableIds.has(String(id))) selectedEventIds.delete(id);
+      });
+      updateSelectionCount();
+      applySelectionToEvents();
+    };
+    const intersectsRect = (a, b) => {
+      return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
+    };
+    const applySelectionToEvents = () => {
+      const applySelectedStyle = (node, selected) => {
+        if (!(node instanceof HTMLElement)) return;
+        if (selected) {
+          node.style.borderColor = '#d32f2f';
+          node.style.boxShadow = '';
+          node.style.outline = '';
+          node.style.outlineOffset = '';
+          node.style.transform = '';
+          node.style.zIndex = '';
+          node.style.filter = '';
+        } else {
+          node.style.borderColor = '';
+          node.style.boxShadow = '';
+          node.style.outline = '';
+          node.style.outlineOffset = '';
+          node.style.transform = '';
+          node.style.zIndex = '';
+          node.style.filter = '';
+        }
+      };
+      eventElementMap.forEach((elements, eventId) => {
+        const isSelected = selectedEventIds.has(eventId);
+        elements.forEach((el) => {
+          el.classList.toggle('calendar-event-selected', isSelected);
+          const innerEvent = el.matches('.fc-event') ? el : el.querySelector('.fc-event');
+          if (innerEvent) innerEvent.classList.toggle('calendar-event-selected', isSelected);
+          applySelectedStyle(el, isSelected);
+          applySelectedStyle(innerEvent, isSelected);
+        });
+      });
+    };
+    const clearSelection = (calendar) => {
+      selectedEventIds.clear();
+      refreshSelectionUi(calendar);
+    };
+    const patchMove = async (eventId, day) => {
+      const resp = await fetch(`/calendar/events/${encodeURIComponent(eventId)}/move`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ starts_at: day })
+      });
+      if (!resp.ok) throw new Error('move failed');
+    };
+    const openEventDetails = (event) => {
+      if (!eventDialog) return;
+      const props = event.extendedProps || {};
+      if (eventTitle) eventTitle.textContent = event.title || 'Calendar event';
+      if (eventType) eventType.textContent = props.kindLabel || '-';
+      if (eventStatus) eventStatus.textContent = props.status || '-';
+      if (eventDue) eventDue.textContent = event.start ? new Date(event.start).toLocaleDateString() : '-';
+      if (eventOwner) eventOwner.textContent = props.ownerLabel || '-';
+      if (eventEntity) eventEntity.textContent = props.entityLabel || '-';
+      if (eventProcess) eventProcess.textContent = props.processName || '-';
+      if (eventDetailLink) eventDetailLink.href = props.detailUrl || event.url || '#';
+      if (eventEntityLink) eventEntityLink.href = props.entityUrl || '#';
+      if (typeof eventDialog.showModal === 'function') eventDialog.showModal();
+    };
+    const clearLasso = () => {
+      if (lassoEl && lassoEl.parentNode) lassoEl.parentNode.removeChild(lassoEl);
+      lassoEl = null;
+      lassoActive = false;
+      lassoMoved = false;
+    };
+    const updateLassoSelection = (calendar, clientX, clientY) => {
+      if (!lassoEl) return;
+      const hostRect = host.getBoundingClientRect();
+      const left = Math.min(lassoStartX, clientX);
+      const top = Math.min(lassoStartY, clientY);
+      const right = Math.max(lassoStartX, clientX);
+      const bottom = Math.max(lassoStartY, clientY);
+      const width = right - left;
+      const height = bottom - top;
+      lassoEl.style.left = `${left - hostRect.left}px`;
+      lassoEl.style.top = `${top - hostRect.top}px`;
+      lassoEl.style.width = `${width}px`;
+      lassoEl.style.height = `${height}px`;
+      if (width > 3 || height > 3) lassoMoved = true;
+
+      const lassoRect = { left, top, right, bottom };
+      const nextSelection = new Set(lassoBaseSelection);
+      eventElementMap.forEach((elements, eventId) => {
+        const hit = elements.some((el) => intersectsRect(el.getBoundingClientRect(), lassoRect));
+        if (hit) nextSelection.add(eventId);
+      });
+      selectedEventIds.clear();
+      nextSelection.forEach((id) => selectedEventIds.add(id));
+      refreshSelectionUi(calendar);
+    };
+    const startLasso = (calendar, event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('.fc-event')) return;
+      if (target.closest('.fc-button')) return;
+      if (target.closest('.calendar-tools')) return;
+      if (event.button !== 0) return;
+
+      const additive = Boolean(event.shiftKey || event.metaKey || event.ctrlKey);
+      if (additive) lassoBaseSelection = new Set(selectedEventIds);
+      else {
+        lassoBaseSelection = new Set();
+        selectedEventIds.clear();
+        refreshSelectionUi(calendar);
+      }
+
+      lassoActive = true;
+      lassoMoved = false;
+      lassoStartX = event.clientX;
+      lassoStartY = event.clientY;
+      lassoEl = document.createElement('div');
+      lassoEl.className = 'calendar-lasso';
+      host.appendChild(lassoEl);
+      updateLassoSelection(calendar, event.clientX, event.clientY);
+      event.preventDefault();
+
+      const onMove = (moveEvent) => {
+        if (!lassoActive) return;
+        updateLassoSelection(calendar, moveEvent.clientX, moveEvent.clientY);
+      };
+      const onUp = (upEvent) => {
+        if (!lassoActive) return;
+        updateLassoSelection(calendar, upEvent.clientX, upEvent.clientY);
+        if (!lassoMoved && !additive) {
+          selectedEventIds.clear();
+          refreshSelectionUi(calendar);
+        }
+        clearLasso();
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    };
+    const calendar = new window.FullCalendar.Calendar(host, {
+      initialView: 'dayGridMonth',
+      height: 'auto',
+      firstDay: 1,
+      headerToolbar: {
+        left: 'prev,next today',
+        center: 'title',
+        right: 'dayGridMonth,timeGridWeek,listWeek'
+      },
+      editable: true,
+      eventDurationEditable: false,
+      eventsSet: () => {
+        refreshSelectionUi(calendar);
+      },
+      eventDidMount: (arg) => {
+        const eventId = String(arg.event.id);
+        const list = eventElementMap.get(eventId) || [];
+        list.push(arg.el);
+        eventElementMap.set(eventId, list);
+        arg.el.classList.toggle('calendar-event-selected', selectedEventIds.has(eventId));
+      },
+      eventWillUnmount: (arg) => {
+        const eventId = String(arg.event.id);
+        const list = eventElementMap.get(eventId) || [];
+        const next = list.filter((el) => el !== arg.el);
+        if (next.length) eventElementMap.set(eventId, next);
+        else eventElementMap.delete(eventId);
+      },
+      events: async (_fetchInfo, success, failure) => {
+        try {
+          const resp = await fetch(`/calendar/events?scope=process&process_id=${processId}`);
+          if (!resp.ok) throw new Error('Failed to load events');
+          const data = await resp.json();
+          success(Array.isArray(data?.events) ? data.events : []);
+        } catch (err) {
+          failure(err);
+        }
+      },
+      eventDrop: async (info) => {
+        const day = info.event.start ? toDateOnly(info.event.start) : '';
+        const draggedId = String(info.event.id);
+        const isBatchMove = selectedEventIds.size > 1 && selectedEventIds.has(draggedId);
+        try {
+          if (!isBatchMove) {
+            await patchMove(info.event.id, day);
+            return;
+          }
+          const oldDate = info.oldEvent?.start;
+          const newDate = info.event?.start;
+          if (!oldDate || !newDate) throw new Error('missing dates');
+          const dayMs = 24 * 60 * 60 * 1000;
+          const deltaDays = Math.round((newDate.getTime() - oldDate.getTime()) / dayMs);
+          const selectedIds = Array.from(selectedEventIds.values()).sort((a, b) => {
+            const aEvent = calendar.getEventById(a);
+            const bEvent = calendar.getEventById(b);
+            const aTime = aEvent?.start?.getTime() ?? 0;
+            const bTime = bEvent?.start?.getTime() ?? 0;
+            if (aTime !== bTime) return aTime - bTime;
+            return String(a).localeCompare(String(b));
+          });
+          for (const eventId of selectedIds) {
+            if (eventId === draggedId) {
+              await patchMove(eventId, day);
+              continue;
+            }
+            const event = calendar.getEventById(eventId);
+            if (!event?.start) continue;
+            const shifted = addDays(event.start, deltaDays);
+            const shiftedDay = shifted ? toDateOnly(shifted) : '';
+            if (!shiftedDay) continue;
+            await patchMove(eventId, shiftedDay);
+          }
+          await calendar.refetchEvents();
+          refreshSelectionUi(calendar);
+        } catch (_err) {
+          info.revert();
+          await calendar.refetchEvents();
+          window.alert('Failed to move date.');
+        }
+      },
+      eventClick: (info) => {
+        info.jsEvent.preventDefault();
+        const toggleMode = Boolean(info.jsEvent?.shiftKey || info.jsEvent?.metaKey || info.jsEvent?.ctrlKey);
+        if (toggleMode) {
+          const eventId = String(info.event.id);
+          if (selectedEventIds.has(eventId)) selectedEventIds.delete(eventId);
+          else selectedEventIds.add(eventId);
+          refreshSelectionUi(calendar);
+          return;
+        }
+        openEventDetails(info.event);
+      }
+    });
+
+    clearSelectionBtn?.addEventListener('click', () => clearSelection(calendar));
+    batchMoveBtn?.addEventListener('click', async () => {
+      const targetDate = String(batchDateInput?.value || '');
+      const selectedIds = Array.from(selectedEventIds.values());
+      if (!selectedIds.length) {
+        window.alert('Select events first.');
+        return;
+      }
+      if (!targetDate) {
+        window.alert('Pick a target date.');
+        return;
+      }
+      const anchor = calendar.getEventById(selectedIds[0]);
+      if (!anchor?.start) return;
+      const anchorDate = anchor.start;
+      const targetBase = new Date(`${targetDate}T00:00:00`);
+      const dayMs = 24 * 60 * 60 * 1000;
+      const deltaDays = Math.round((targetBase.getTime() - anchorDate.getTime()) / dayMs);
+      try {
+        for (const eventId of selectedIds) {
+          const event = calendar.getEventById(eventId);
+          if (!event?.start) continue;
+          const next = addDays(event.start, deltaDays);
+          const nextDay = next ? toDateOnly(next) : '';
+          if (!nextDay) continue;
+          await patchMove(eventId, nextDay);
+        }
+        selectedEventIds.clear();
+        await calendar.refetchEvents();
+        refreshSelectionUi(calendar);
+      } catch (_err) {
+        await calendar.refetchEvents();
+        window.alert('Failed to move selected events.');
+      }
+    });
+
+    eventDialog?.querySelectorAll('[data-close]').forEach((btn) => {
+      btn.addEventListener('click', () => eventDialog.close());
+    });
+    host.addEventListener('pointerdown', (event) => {
+      startLasso(calendar, event);
+    });
+    document.addEventListener('mousedown', (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (host.contains(target)) {
+        if (!target.closest('.fc-event') && selectedEventIds.size > 0) {
+          clearSelection(calendar);
+        }
+        return;
+      }
+      if (target.closest('.calendar-tools')) return;
+      if (eventDialog && eventDialog.contains(target)) return;
+      if (selectedEventIds.size === 0) return;
+      clearSelection(calendar);
+    });
+    calendarPanel?.addEventListener('toggle', () => {
+      writePanelState(Boolean(calendarPanel.open));
+      if (calendarPanel.open) {
+        window.setTimeout(() => calendar.updateSize(), 0);
+      }
+    });
+
+    updateSelectionCount();
+    calendar.render();
+  })();
+</script>

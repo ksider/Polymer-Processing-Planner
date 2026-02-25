@@ -58,10 +58,12 @@ export function createRunsRouter(db: Db) {
 
     const done = req.body.done ? 1 : 0;
     const exclude = req.body.exclude ? 1 : 0;
+    const dueAtRaw = String(req.body?.due_at ?? "").trim();
+    const dueAt = /^\d{4}-\d{2}-\d{2}$/.test(dueAtRaw) ? dueAtRaw : null;
     if (exclude && !hasRole(req, ["admin", "manager", "engineer"])) {
       return res.status(403).send("Forbidden");
     }
-    updateRunStatus(db, runId, done, exclude);
+    updateRunStatus(db, runId, done, exclude, dueAt);
 
     return res.redirect(`/experiments/${run.experiment_id}/runs/${runId}`);
   };
@@ -148,6 +150,22 @@ export function createRunsRouter(db: Db) {
   router.post("/experiments/:id/runs/:runId", (req, res) => {
     const runId = Number(req.params.runId);
     return saveRun(req, res, runId);
+  });
+
+  router.post("/experiments/:id/runs/:runId/due-at", (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer", "operator"])) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const runId = Number(req.params.runId);
+    const experimentId = Number(req.params.id);
+    const run = getRun(db, runId);
+    if (!run || run.experiment_id !== experimentId) {
+      return res.status(404).json({ error: "Run not found" });
+    }
+    const dueAtRaw = String(req.body?.due_at ?? "").trim();
+    const dueAt = /^\d{4}-\d{2}-\d{2}$/.test(dueAtRaw) ? dueAtRaw : null;
+    updateRunStatus(db, runId, run.done, run.exclude_from_analysis, dueAt);
+    return res.json({ ok: true, due_at: dueAt });
   });
 
   return router;

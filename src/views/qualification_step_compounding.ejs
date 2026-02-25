@@ -54,6 +54,7 @@
         <thead>
           <tr>
             <th>Run</th>
+            <th>Due date</th>
             <% activeFields.forEach((field) => { %>
               <th>
                 <%- formatInline(field.label) %>
@@ -67,12 +68,13 @@
         </thead>
         <tbody>
           <% if (runs.length === 0) { %>
-            <tr><td colspan="<%= activeFields.length + 4 %>">No runs yet.</td></tr>
+            <tr><td colspan="<%= activeFields.length + 5 %>">No runs yet.</td></tr>
           <% } %>
           <% runs.forEach((run) => { %>
             <% const values = runValueMap[String(run.id)] || {}; %>
             <tr data-run-row data-run-id="<%= run.id %>">
               <td><strong><%= run.run_code %></strong></td>
+              <td><input type="date" data-run-due value="<%= run.due_at || '' %>"></td>
               <% activeFields.forEach((field) => { %>
                 <% const value = values[String(field.id)]; %>
                 <td>
@@ -311,6 +313,13 @@
         form.append('done', done);
         form.append('exclude', exclude);
         try { await post(`/qual-runs/${runId}/flags`, form); } catch {}
+        return;
+      }
+
+      if (target.hasAttribute('data-run-due')) {
+        const form = new FormData();
+        form.append('due_at', target.value || '');
+        try { await post(`/qual-runs/${runId}/due-at`, form); } catch {}
       }
     });
 

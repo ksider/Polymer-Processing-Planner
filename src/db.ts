@@ -298,11 +298,14 @@ function initDb(db: Db) {
       recipe_id INTEGER,
       replicate_key TEXT,
       replicate_index INTEGER,
+      owner_user_id INTEGER,
+      due_at TEXT,
       done INTEGER NOT NULL DEFAULT 0,
       exclude_from_analysis INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       FOREIGN KEY (experiment_id) REFERENCES experiments(id) ON DELETE CASCADE,
-      FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE SET NULL
+      FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE SET NULL,
+      FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE SET NULL
     );
     CREATE TABLE IF NOT EXISTS run_values (
       run_id INTEGER NOT NULL,
@@ -393,6 +396,7 @@ function initDb(db: Db) {
       step_id INTEGER NOT NULL,
       run_order INTEGER NOT NULL,
       run_code TEXT NOT NULL,
+      due_at TEXT,
       done INTEGER NOT NULL DEFAULT 0,
       exclude_from_analysis INTEGER NOT NULL DEFAULT 0,
       FOREIGN KEY (experiment_id) REFERENCES experiments(id) ON DELETE CASCADE,
@@ -672,6 +676,26 @@ function initDb(db: Db) {
   if (!hasColumn(db, "runs", "doe_id")) {
     db.exec("ALTER TABLE runs ADD COLUMN doe_id INTEGER");
   }
+  if (!hasColumn(db, "runs", "owner_user_id")) {
+    db.exec("ALTER TABLE runs ADD COLUMN owner_user_id INTEGER");
+  }
+  if (!hasColumn(db, "runs", "due_at")) {
+    db.exec("ALTER TABLE runs ADD COLUMN due_at TEXT");
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS idx_runs_owner_due ON runs(owner_user_id, due_at)");
+  if (!hasColumn(db, "qual_runs", "due_at")) {
+    db.exec("ALTER TABLE qual_runs ADD COLUMN due_at TEXT");
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS idx_qual_runs_due_at ON qual_runs(due_at)");
+  db.exec(`
+    UPDATE runs
+    SET owner_user_id = (
+      SELECT e.owner_user_id
+      FROM experiments e
+      WHERE e.id = runs.experiment_id
+    )
+    WHERE owner_user_id IS NULL;
+  `);
 
   const standardFields: Array<{
     code: string;

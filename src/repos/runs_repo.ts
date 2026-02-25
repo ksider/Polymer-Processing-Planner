@@ -9,6 +9,8 @@ export type Run = {
   recipe_id: number | null;
   replicate_key: string | null;
   replicate_index: number | null;
+  owner_user_id: number | null;
+  due_at: string | null;
   done: number;
   exclude_from_analysis: number;
   created_at: string;
@@ -44,13 +46,18 @@ export function insertRuns(
   db: Db,
   experimentId: number,
   doeId: number,
-  runs: Array<Omit<Run, "id" | "created_at" | "experiment_id" | "doe_id">>,
+  runs: Array<
+    Omit<Run, "id" | "created_at" | "experiment_id" | "doe_id" | "owner_user_id" | "due_at"> & {
+      owner_user_id?: number | null;
+      due_at?: string | null;
+    }
+  >,
   values: Array<RunValue>
 ) {
   const insertRun = db.prepare(
     `INSERT INTO runs
-     (experiment_id, doe_id, run_order, run_code, recipe_id, replicate_key, replicate_index, done, exclude_from_analysis, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     (experiment_id, doe_id, run_order, run_code, recipe_id, replicate_key, replicate_index, owner_user_id, due_at, done, exclude_from_analysis, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertValue = db.prepare(
     "INSERT INTO run_values (run_id, param_def_id, value_real, value_text, value_tags_json) VALUES (?, ?, ?, ?, ?)"
@@ -66,6 +73,8 @@ export function insertRuns(
         run.recipe_id,
         run.replicate_key,
         run.replicate_index,
+        run.owner_user_id ?? null,
+        run.due_at ?? null,
         run.done,
         run.exclude_from_analysis,
         now
@@ -127,13 +136,23 @@ export function updateRunStatus(
   db: Db,
   runId: number,
   done: number,
-  excludeFromAnalysis: number
+  excludeFromAnalysis: number,
+  dueAt?: string | null
 ) {
-  db.prepare("UPDATE runs SET done = ?, exclude_from_analysis = ? WHERE id = ?").run(
-    done,
-    excludeFromAnalysis,
-    runId
-  );
+  if (typeof dueAt !== "undefined") {
+    db.prepare("UPDATE runs SET done = ?, exclude_from_analysis = ?, due_at = ? WHERE id = ?").run(
+      done,
+      excludeFromAnalysis,
+      dueAt,
+      runId
+    );
+    return;
+  }
+  db.prepare("UPDATE runs SET done = ?, exclude_from_analysis = ? WHERE id = ?").run(done, excludeFromAnalysis, runId);
+}
+
+export function updateRunSchedule(db: Db, runId: number, dueAt: string | null) {
+  db.prepare("UPDATE runs SET due_at = ? WHERE id = ?").run(dueAt, runId);
 }
 
 export function getNextPrevRunIds(db: Db, doeId: number, runOrder: number) {

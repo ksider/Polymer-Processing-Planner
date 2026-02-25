@@ -130,6 +130,10 @@
 
     <div class="card">
       <div class="run-controls">
+        <label>
+          Due date
+          <input type="date" name="due_at" value="<%= run.due_at || '' %>">
+        </label>
         <label class="pure-checkbox">
           <input type="checkbox" name="done" <%= run.done ? 'checked' : '' %>> Done
         </label>
