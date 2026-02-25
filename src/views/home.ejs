@@ -13,17 +13,12 @@
     <% } %>
     <div class="card-grid">
       <% (processCards || []).forEach((process) => { %>
+        <% const processDisplayName = String(process.name || '').replace(/\bDefault\b/gi, '').replace(/\s{2,}/g, ' ').trim(); %>
         <div class="card card-link process-card" style="display:block; cursor:pointer;" data-href="<%= process.route_code ? `/${process.route_code}` : `/?process_id=${process.id}` %>">
           <div class="card-header">
             <div>
-              <h3 class="card-title"><%- formatInline(process.name) %></h3>
-              <% if (process.route_code) { %>
-                <div class="small-note">Route: /<%= process.route_code %></div>
-              <% } %>
+              <h3 class="card-title"><%- formatInline(processDisplayName || process.name) %></h3>
               <div class="small-note">Owner: <%- formatInline(process.owner_label || 'Unassigned') %></div>
-            </div>
-            <div class="section-actions">
-              <span class="status-pill status-in_progress"><%- formatInline(process.process_type_name || 'Process') %></span>
             </div>
           </div>
           <div class="small-note">Filter experiments on this page</div>

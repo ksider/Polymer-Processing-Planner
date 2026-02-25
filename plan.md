@@ -68,7 +68,11 @@
 
 ## 4) Архитектурные принципы для масштабирования
 1. Feature modules: каждый процесс подключает свои блоки (параметры, шаги, шаблоны отчетов) как модуль.
-2. Единое ядро: auth/roles/notes/tasks/reports/editor/calendar/search.
+2. Единое ядро: auth/roles/notes/tasks/reports/editor/search.
+3. Отдельные сервисы платформы:
+1. `Calendar Service` (tasks/notes/reports/events, ICS/Google sync, reminders),
+2. `Notification Service` (in-app + email hooks),
+3. `Audit Service` (журнал изменений и действий).
 3. Общий Report Editor: один Tiptap-движок и одна тулбар-логика для всех типов процессов.
 4. Типизированные entity metadata: расширения через `entity_type + schema`, без копипаста таблиц.
 5. Совместимость по роутам: старые URL продолжают работать через redirect/compat слой.
@@ -115,7 +119,11 @@
 
 ## Wave D — общесистемные функции
 1. Экспорт данных: CSV/ZIP/XLSX.
-2. Пользовательский календарь (`tasks + notes + reports`) + ICS/Google.
+2. Отдельный `Calendar Service`:
+1. агрегатор событий (`tasks + notes + reports + qualification/doe milestones`),
+2. календарный API и фильтры,
+3. ICS feed + экспорт в Google/Outlook,
+4. reminder pipeline (in-app, далее email/webhook).
 3. Глобальный поиск + расширенный аудит.
 4. Основа внутренних сообщений (поверх текущих notifications).
 
@@ -142,6 +150,11 @@
 2. `/<process_code>/<id>` -> experiment page,
 3. legacy `/experiments/:id` -> canonical redirect.
 5. Завершить стабилизацию report/notes editor (toolbar parity + data sidebar в report editor).
+6. Спроектировать и зафиксировать контракт `Calendar Service`:
+1. единая модель `calendar_events`,
+2. источники событий и правила синхронизации,
+3. API `GET /calendar/events`, `GET /calendar/feed.ics`, `POST /calendar/sync/google`,
+4. права доступа на события по owner/process ACL.
 
 ---
 
@@ -249,3 +262,171 @@
 1. process-specific default active outputs для `coating`,
 1. общий модуль анализа + fallback `analysis_run_values -> run_values`.
 5. Создан demo experiment `Coating` с заполненными Qualification/DOE данными.
+
+---
+
+## 10) План внедрения дерева проекта
+
+Цель: ввести единое дерево навигации и структуры работ для всех процессов, без форка текущих сущностей.
+
+### 10.1 Целевая структура дерева
+1. `Process` (корень ветки).
+2. `Experiment`.
+3. `Section` (`Qualification`, `DOE`, `Reports`, `Tasks`, `Journal`).
+4. `Node`:
+1. qualification step,
+2. doe study,
+3. run,
+4. report,
+5. task,
+6. note.
+
+### 10.2 Минимальная модель данных (без ломки текущей БД)
+1. Добавить таблицу `project_tree_nodes`:
+1. `id`, `process_id`, `experiment_id`, `parent_id`,
+2. `node_type`, `entity_type`, `entity_id`,
+3. `title`, `sort_order`, `is_archived`,
+4. `created_at`, `updated_at`.
+2. Добавить таблицу `project_tree_state`:
+1. `user_id`, `node_id`, `is_collapsed`, `pinned`.
+3. Дерево не хранит бизнес-данные сущностей, только ссылки и порядок отображения.
+
+### 10.3 API и роутинг дерева
+1. `GET /tree?process_id=&experiment_id=` — отдать срез дерева по ACL.
+2. `POST /tree/node` — создать пользовательский узел/группу.
+3. `PATCH /tree/node/:id` — переименование/архивация/сортировка.
+4. `POST /tree/reorder` — массовое обновление `parent_id/sort_order`.
+5. `PATCH /tree/state/:node_id` — состояние раскрытия для пользователя.
+
+### 10.4 Правила синхронизации с текущими сущностями
+1. При создании `experiment/doe/run/report/task/note` автоматически добавлять/обновлять узел.
+2. При удалении/архивации сущности помечать узел как `is_archived=1`, не удалять физически.
+3. Источник истины для данных остается в текущих таблицах (`experiments`, `doe_studies`, `runs`, ...).
+4. Узел дерева всегда содержит канонический `href` по текущему роутингу.
+
+### 10.5 UI внедрение (по этапам)
+1. Этап 1: read-only дерево в левом сайдбаре страницы эксперимента.
+2. Этап 2: drag-and-drop сортировка и пользовательские группы.
+3. Этап 3: фильтры по owner/status/date и быстрый поиск внутри дерева.
+4. Этап 4: связка с календарем и уведомлениями (узел -> события/дедлайны).
+
+### 10.6 План внедрения по спринтам
+1. Sprint 1: схема БД + read-only API + автогенерация узлов для существующих экспериментов.
+2. Sprint 2: UI read-only дерево + переходы по каноническим ссылкам + ACL тесты.
+3. Sprint 3: reorder/grouping + сохранение state пользователя.
+4. Sprint 4: интеграция с `Calendar Service` и задачами (дедлайны из дерева).
+
+### 10.7 Критерии готовности
+1. Любой процесс отображается единообразно как дерево без process-specific UI форков.
+2. Добавление нового типа процесса не требует изменений в механике дерева.
+3. Дерево соблюдает ACL `admin/manager/process_owner/experiment_owner`.
+4. Роуты и breadcrumbs строятся от узла дерева к каноническому URL без legacy-ссылок.
+
+---
+
+## 11) Пошаговое внедрение `Calendar Service`
+
+Цель: единый календарь сущностей с персональным и процессным представлением, drag&drop переносом дат и цветовой схемой, совпадающей с заметками.
+
+### 11.1 Scope и UX-контуры
+1. Страница пользователя (`/me`):
+1. отдельный блок календаря `My Calendar`;
+2. показывать только сущности, привязанные к текущему пользователю (owner/assignee).
+2. Страница процесса (`/<process_code>`):
+1. раскрываемый блок `Process Calendar` (collapsed by default);
+2. показывать все сущности пользователей, находящихся в контуре процесса и его подчиненной ответственности.
+3. Перенос дат:
+1. даты всех поддерживаемых сущностей меняются drag&drop в календаре;
+2. изменения сразу пишутся в источник данных сущности;
+3. аудит изменения даты обязателен.
+4. Цвета:
+1. цвета календарных событий строго наследуются из палитры заметок (`entity-experiment`, `entity-qualification_step`, `entity-doe`, `entity-run`, `entity-report`, `entity-task`).
+
+### 11.2 Модель ответственности и доступа
+1. Персональный календарь:
+1. включает сущности, где пользователь: `owner_user_id`, `assignee_user_id`, либо явный assignment.
+2. Процессный календарь:
+1. для `admin/manager` — все сущности процесса;
+2. для `process owner` — сущности процесса + сущности назначенных/подчиненных пользователей процесса;
+3. для остальных — только доступные по текущему ACL сущности процесса.
+3. Для поддержки “нижестоящих пользователей” добавить явную модель подчиненности (если ее еще нет):
+1. таблица `user_reporting_lines (manager_user_id, member_user_id, process_id NULLABLE, created_at)`;
+2. process-scoped и global связи;
+3. резолвер `getScopeUsers(actor, processId)`.
+
+### 11.3 Данные и БД (миграции)
+1. Добавить таблицу `calendar_events` (агрегатор):
+1. `id`, `entity_type`, `entity_id`, `experiment_id`, `process_id`,
+2. `owner_user_id`, `assignee_user_id`,
+3. `title`, `starts_at`, `ends_at`, `all_day`,
+4. `status`, `color_token`, `source_due_field`,
+5. `created_at`, `updated_at`.
+2. Добавить `due_at` в сущности, где даты еще нет (минимум для стартового охвата):
+1. `runs.due_at` (обязательно),
+2. при необходимости `qual_steps.due_at`, `doe_studies.due_at`, `reports.target_date`.
+3. Привязка владельца `run`:
+1. `runs.owner_user_id` заполняется из владельца родительской сущности (приоритет: entity assignee -> experiment owner -> process owner).
+4. Индексы:
+1. `calendar_events(process_id, starts_at)`,
+2. `calendar_events(owner_user_id, starts_at)`,
+3. `calendar_events(entity_type, entity_id)` unique.
+
+### 11.4 Сервисный слой и синхронизация
+1. Создать `calendar_service.ts`:
+1. `upsertEventFromEntity(entityType, entityId)`,
+2. `listMyEvents(userId, range)`,
+3. `listProcessEvents(processId, actorUserId, range)`,
+4. `moveEvent(eventId, nextStart, nextEnd, actorUserId)`.
+2. Правило “single source of truth”:
+1. календарь хранит проекцию;
+2. при переносе меняется дата в исходной сущности (`tasks.due_at`, `runs.due_at`, ...), затем пересчет `calendar_events`.
+3. Хуки синхронизации:
+1. create/update/delete task/run/doe/report/qualification-step -> `upsert/remove calendar_event`;
+2. assignment change -> обновить owner/assignee event.
+
+### 11.5 API
+1. `GET /calendar/events?scope=my|process&process_id=&from=&to=&entity_types=`
+2. `PATCH /calendar/events/:id/move` body: `{ starts_at, ends_at }`
+3. `GET /calendar/feed.ics?scope=my|process&process_id=`
+4. `POST /calendar/sync/google` (после MVP)
+5. Валидация:
+1. actor должен иметь доступ к entity;
+2. перенос даты запрещен без прав редактирования исходной сущности.
+
+### 11.6 UI внедрение
+1. `/me`:
+1. новый card `My Calendar` над таблицей задач;
+2. фильтры: entity type, process, owner;
+3. drag&drop перенос с optimistic update + rollback on error.
+2. `/<process_code>`:
+1. collapsible block `Process Calendar` под шапкой процесса;
+2. default collapsed;
+3. quick legend цветов + фильтр “My team / All visible”.
+3. Цветовая карта:
+1. вынести в единый конфиг `entityColorMap` из существующих css токенов заметок;
+2. календарь и notes используют один источник.
+
+### 11.7 Порядок реализации (по спринтам)
+1. Sprint 1 (Backend foundation):
+1. миграции (`runs.due_at`, `runs.owner_user_id`, `calendar_events`, optional `user_reporting_lines`);
+2. `calendar_service` + sync hooks для `tasks` и `runs`;
+3. `GET /calendar/events` + ACL.
+2. Sprint 2 (My Calendar MVP):
+1. UI календаря на `/me`;
+2. drag&drop для `task` и `run`;
+3. аудит изменений дат.
+3. Sprint 3 (Process Calendar):
+1. collapsible календарь на странице процесса;
+2. выборка “нижестоящих пользователей” через reporting lines;
+3. process filters + performance tuning.
+4. Sprint 4 (Coverage expansion):
+1. подключение `qualification/doe/report` дат;
+2. ICS feed на scope my/process;
+3. Google sync и reminders.
+
+### 11.8 Критерии готовности
+1. На `/me` видны все сущности пользователя в календаре, с корректными цветами по entity типам.
+2. На странице процесса календарь раскрывается и показывает все сущности подчиненного контура по ACL.
+3. Drag&drop меняет дату в исходной сущности, а не только в проекции.
+4. Для `run` дата и владелец сохраняются и используются в календаре.
+5. Цвета календаря и заметок совпадают 1:1 по entity type.
