@@ -306,7 +306,7 @@ export function createTasksRouter(db: Db) {
     const ics = [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
-      "PRODID:-//IM Planner//EN",
+      "PRODID:-//Polymer Processing Planner//EN",
       "BEGIN:VEVENT",
       `UID:task-${task.id}@im-planner`,
       `DTSTAMP:${formatDateTimeUTC(new Date())}`,
