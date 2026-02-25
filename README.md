@@ -24,7 +24,9 @@
 </table>
 
 <p>
-  <img src="visual/im-experiment.gif" alt="Polymer Processing Planner screenshot" />
+  <img src="visual/rheo_s.gif" alt="Polymer Processing Planner screenshot" />
+  <br />
+  <a href="https://youtu.be/0Hs7cjxP4B0" target="_blank" rel="noopener noreferrer">Watch on YouTube</a>
 </p>
 
 ## Install + Run
