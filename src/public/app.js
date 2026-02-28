@@ -270,6 +270,52 @@
   });
   root.initTagSelects = initTagSelects;
 
+  const parseResponseByType = async (resp) => {
+    const contentType = resp.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) return resp.json();
+    return resp.text();
+  };
+
+  root.postForm = async (url, data) => {
+    const params =
+      data instanceof URLSearchParams
+        ? data
+        : data instanceof FormData
+          ? new URLSearchParams(Array.from(data.entries()).map(([k, v]) => [k, String(v)]))
+          : new URLSearchParams(
+              Object.entries(data || {}).map(([k, v]) => [k, String(v ?? "")])
+            );
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        "X-Requested-With": "XMLHttpRequest"
+      },
+      body: params
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text || `Request failed (${resp.status})`);
+    }
+    return parseResponseByType(resp);
+  };
+
+  root.postJson = async (url, data) => {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest"
+      },
+      body: JSON.stringify(data || {})
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text || `Request failed (${resp.status})`);
+    }
+    return parseResponseByType(resp);
+  };
+
   root.setupAutosaveForm = (form, options = {}) => {
     if (!form || form.dataset.autosaveBound === "1") return null;
     form.dataset.autosaveBound = "1";

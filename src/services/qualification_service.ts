@@ -153,12 +153,12 @@ const compoundingStepDefinitions: StepDefinition[] = [
     name: "RTD / Residence Time Stability",
     default_runs: 6,
     fields: [
-      { code: "tracer_peak_time_s", label: "Tracer peak time", field_type: "number", unit: "s", group_label: "Measurements", required: 1 },
-      { code: "tracer_tail_time_s", label: "Tracer tail time", field_type: "number", unit: "s", group_label: "Measurements", required: 1 },
-      { code: "torque_stability_pct", label: "Torque stability", field_type: "number", unit: "%", group_label: "Measurements" },
-      { code: "pressure_stability_pct", label: "Pressure stability", field_type: "number", unit: "%", group_label: "Measurements" },
+      { code: "screw_rpm", label: "Screw RPM", field_type: "number", unit: "rpm", group_label: "Inputs", required: 1 },
+      { code: "mid_temp_c", label: "Mid barrel temp", field_type: "number", unit: "°C", group_label: "Inputs" },
+      { code: "head_temp_c", label: "Head temp", field_type: "number", unit: "°C", group_label: "Inputs" },
+      { code: "stabilization_time_min", label: "Stabilization time", field_type: "number", unit: "min", group_label: "Measurements", required: 1 },
       { code: "MFR_g_10min", label: "MFR", field_type: "number", unit: "g/10min", group_label: "Measurements" },
-      { code: "stabilization_time_min", label: "Stabilization time", field_type: "number", unit: "min", group_label: "Summary" }
+      { code: "qualification_note", label: "Qualification note", field_type: "text", unit: null, group_label: "Summary" }
     ]
   },
   {
@@ -168,10 +168,18 @@ const compoundingStepDefinitions: StepDefinition[] = [
     fields: [
       { code: "screw_rpm", label: "Screw RPM", field_type: "number", unit: "rpm", group_label: "Inputs", required: 1 },
       { code: "throughput_kg_h", label: "Throughput", field_type: "number", unit: "kg/h", group_label: "Inputs", required: 1 },
-      { code: "torque_pct", label: "Torque", field_type: "number", unit: "%", group_label: "Measurements", required: 1 },
+      { code: "torque_pct", label: "Torque", field_type: "number", unit: "%", group_label: "Measurements" },
+      { code: "motor_current_a", label: "Motor current", field_type: "number", unit: "A", group_label: "Measurements", required: 1 },
       { code: "melt_temp_c", label: "Melt temp", field_type: "number", unit: "°C", group_label: "Measurements" },
-      { code: "die_pressure_bar", label: "Die pressure", field_type: "number", unit: "bar", group_label: "Measurements" },
-      { code: "SME_kJ_kg", label: "SME", field_type: "number", unit: "kJ/kg", group_label: "Derived" }
+      {
+        code: "SME_kJ_kg",
+        label: "SME",
+        field_type: "number",
+        unit: "kJ/kg",
+        group_label: "Derived",
+        is_derived: 1,
+        derived_formula_code: "sme_proxy"
+      }
     ]
   },
   {
@@ -181,10 +189,9 @@ const compoundingStepDefinitions: StepDefinition[] = [
     fields: [
       { code: "mid_temp_c", label: "Mid barrel temp", field_type: "number", unit: "°C", group_label: "Inputs", required: 1 },
       { code: "head_temp_c", label: "Head temp", field_type: "number", unit: "°C", group_label: "Inputs", required: 1 },
-      { code: "screw_rpm", label: "Screw RPM", field_type: "number", unit: "rpm", group_label: "Inputs" },
       { code: "throughput_kg_h", label: "Throughput", field_type: "number", unit: "kg/h", group_label: "Inputs" },
       { code: "melt_temp_c", label: "Melt temp", field_type: "number", unit: "°C", group_label: "Measurements", required: 1 },
-      { code: "die_pressure_bar", label: "Die pressure", field_type: "number", unit: "bar", group_label: "Measurements" }
+      { code: "MFR_g_10min", label: "MFR", field_type: "number", unit: "g/10min", group_label: "Measurements" }
     ]
   },
   {
@@ -236,6 +243,7 @@ const coatingDefectTags = JSON.stringify([
 ]);
 
 const surfaceTreatmentTags = JSON.stringify(["none", "corona", "plasma"]);
+const coatingMethodTags = JSON.stringify(["knife", "slot_die", "spray", "gravure"]);
 
 const coatingStepDefinitions: StepDefinition[] = [
   {
@@ -267,6 +275,7 @@ const coatingStepDefinitions: StepDefinition[] = [
     name: "Coat Weight Calibration",
     default_runs: 6,
     fields: [
+      { code: "coating_method", label: "Coating method", field_type: "tag", unit: null, group_label: "Inputs", allowed_values_json: coatingMethodTags },
       { code: "coating_speed_m_min", label: "Coating speed", field_type: "number", unit: "m/min", group_label: "Inputs", required: 1 },
       { code: "wet_film_thickness_um", label: "Wet film thickness", field_type: "number", unit: "µm", group_label: "Inputs" },
       { code: "flow_rate_ml_min", label: "Flow rate", field_type: "number", unit: "ml/min", group_label: "Inputs" },
@@ -371,6 +380,27 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
         derived_formula_code: field.derived_formula_code ?? null
       });
     }
+    for (const field of def.fields) {
+      const existingField = fields.find((item) => item.code === field.code);
+      if (!existingField) continue;
+      const updatePatch: Partial<{
+        is_derived: 0 | 1;
+        derived_formula_code: string | null;
+        allowed_values_json: string | null;
+      }> = {};
+      if ((existingField.is_derived ?? 0) !== (field.is_derived ?? 0)) {
+        updatePatch.is_derived = (field.is_derived ?? 0) as 0 | 1;
+      }
+      if ((existingField.derived_formula_code ?? null) !== (field.derived_formula_code ?? null)) {
+        updatePatch.derived_formula_code = field.derived_formula_code ?? null;
+      }
+      if ((existingField.allowed_values_json ?? null) !== (field.allowed_values_json ?? null)) {
+        updatePatch.allowed_values_json = field.allowed_values_json ?? null;
+      }
+      if (Object.keys(updatePatch).length) {
+        updateQualField(db, existingField.id, updatePatch);
+      }
+    }
     if (processTypeCode === "injection" && step.step_number === 1) {
       const existingSettings = getQualStepSettings(db, experimentId, step.step_number);
       if (!existingSettings) {
@@ -464,6 +494,44 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
       const warpageField = fields.find((field) => field.code === "warpage_mm");
       if (warpageField && warpageField.is_enabled !== 0) {
         updateQualField(db, warpageField.id, { is_enabled: 0 });
+      }
+    }
+    if (processTypeCode === "compounding" && step.step_number === 1) {
+      const legacyCodes = new Set([
+        "throughput_kg_h",
+        "tracer_peak_time_s",
+        "tracer_tail_time_s",
+        "torque_stability_pct",
+        "pressure_stability_pct"
+      ]);
+      fields.forEach((field) => {
+        if (legacyCodes.has(field.code) && field.is_enabled !== 0) {
+          updateQualField(db, field.id, { is_enabled: 0 });
+        }
+      });
+    }
+    if (processTypeCode === "compounding" && step.step_number === 2) {
+      const torqueField = fields.find((field) => field.code === "torque_pct");
+      if (torqueField && torqueField.is_enabled !== 1) {
+        updateQualField(db, torqueField.id, { is_enabled: 1 });
+      }
+      const currentField = fields.find((field) => field.code === "motor_current_a");
+      if (currentField && currentField.is_enabled !== 1) {
+        updateQualField(db, currentField.id, { is_enabled: 1 });
+      }
+      const pressureField = fields.find((field) => field.code === "die_pressure_bar");
+      if (pressureField && pressureField.is_enabled !== 0) {
+        updateQualField(db, pressureField.id, { is_enabled: 0 });
+      }
+    }
+    if (processTypeCode === "compounding" && step.step_number === 3) {
+      const rpmField = fields.find((field) => field.code === "screw_rpm");
+      if (rpmField && rpmField.is_enabled !== 0) {
+        updateQualField(db, rpmField.id, { is_enabled: 0 });
+      }
+      const pressureField = fields.find((field) => field.code === "die_pressure_bar");
+      if (pressureField && pressureField.is_enabled !== 0) {
+        updateQualField(db, pressureField.id, { is_enabled: 0 });
       }
     }
     const runs = listQualRuns(db, step.id);
@@ -623,6 +691,7 @@ export function recomputeDerivedAndSummary(
   stepId: number,
   stepNumber: number
 ) {
+  const processTypeCode = getProcessTypeCodeForExperiment(db, experimentId);
   const machineParamMap = (() => {
     const row = db
       .prepare("SELECT machine_id FROM experiments WHERE id = ?")
@@ -696,110 +765,132 @@ export function recomputeDerivedAndSummary(
       }
     };
 
-    if (stepNumber === 1) {
-      const fill = getNumber("fill_time_s");
-      const peak = getNumber("peak_inj_pressure_bar");
-      const shearRate = fill != null && fill !== 0 ? 1 / fill : null;
-      if (shearRate != null) {
-        setDerived("shear_rate_proxy", shearRate);
-      }
-      if (peak != null) {
-        if (shearRate != null && fill != null) {
-          setDerived("rel_viscosity", peak * fill * intensificationCoeff);
+    if (processTypeCode === "injection") {
+      if (stepNumber === 1) {
+        const fill = getNumber("fill_time_s");
+        const peak = getNumber("peak_inj_pressure_bar");
+        const shearRate = fill != null && fill !== 0 ? 1 / fill : null;
+        if (shearRate != null) {
+          setDerived("shear_rate_proxy", shearRate);
         }
-      }
-    }
-    if (stepNumber === 2) {
-      const cavityWeightFields = fields
-        .filter((field) => parseCavityIndex(field.code) != null)
-        .sort((a, b) => (parseCavityIndex(a.code) || 0) - (parseCavityIndex(b.code) || 0));
-      const weights = cavityWeightFields
-        .map((field) => {
-          const value = valueMap.get(field.id);
-          return value?.value_real ?? null;
-        })
-        .filter((val): val is number => Number.isFinite(val));
-      let targetWeight: number | null = null;
-      const settingsRaw = getQualStepSettings(db, experimentId, stepNumber);
-      if (settingsRaw) {
-        try {
-          const parsed = JSON.parse(settingsRaw);
-          const resolved = resolveSettingNumber(parsed?.target_weight_g);
-          if (Number.isFinite(resolved)) targetWeight = resolved;
-        } catch {
-          targetWeight = null;
-        }
-      }
-      if (weights.length >= 1) {
-        const avg = weights.reduce((a, b) => a + b, 0) / weights.length;
-        const ref = targetWeight && weights.length < 3 ? targetWeight : avg;
-        const variation = ref
-          ? Math.max(...weights.map((w) => Math.abs((ref - w) / ref) * 100))
-          : null;
-        setDerived("cavity_weight_variation_pct", variation);
-      }
-    }
-    if (stepNumber === 3) {
-      let intensificationCoeffLocal = intensificationCoeff;
-      let machineMaxOverride: number | null = null;
-      const settingsRaw = getQualStepSettings(db, experimentId, stepNumber);
-      if (settingsRaw) {
-        try {
-          const parsed = JSON.parse(settingsRaw);
-          const resolvedCoeff = resolveSettingNumber(parsed?.intensification_coeff);
-          if (Number.isFinite(resolvedCoeff)) {
-            intensificationCoeffLocal = resolvedCoeff;
+        if (peak != null) {
+          if (shearRate != null && fill != null) {
+            setDerived("rel_viscosity", peak * fill * intensificationCoeff);
           }
-          const resolvedMax = resolveSettingNumber(parsed?.machine_max_pressure_bar);
-          if (Number.isFinite(resolvedMax)) {
-            machineMaxOverride = resolvedMax;
-          }
-        } catch {
-          intensificationCoeffLocal = intensificationCoeff;
-          machineMaxOverride = null;
         }
       }
-      const pressureRaw = [
-        getNumber("pressure_air_shot_bar"),
-        getNumber("pressure_sprue_bar"),
-        getNumber("pressure_runner_bar"),
-        getNumber("pressure_part_10_bar"),
-        getNumber("pressure_part_50_bar"),
-        getNumber("pressure_part_95_bar")
-      ];
-      const pressures = pressureRaw
-        .filter((val): val is number => Number.isFinite(val))
-        .map((val) => val * intensificationCoeffLocal);
-      const maxPressure = pressures.length ? Math.max(...pressures) : null;
-      const machineMax = machineMaxOverride ?? getNumber("machine_max_pressure_bar");
-      if (maxPressure != null && machineMax != null && machineMax !== 0) {
-        setDerived("max_pressure_pct", (maxPressure / machineMax) * 100);
-      }
-      if (pressureRaw.length) {
-        const labels = [
-          "air_shot",
-          "sprue",
-          "runner",
-          "part_10",
-          "part_50",
-          "part_95"
-        ];
-        const profile = labels
-          .map((label, idx) => {
-            const value = pressureRaw[idx];
-            const peak = Number.isFinite(value as number)
-              ? (value as number) * intensificationCoeffLocal
-              : null;
-            return `${label}: ${peak ?? "-"}`;
+      if (stepNumber === 2) {
+        const cavityWeightFields = fields
+          .filter((field) => parseCavityIndex(field.code) != null)
+          .sort((a, b) => (parseCavityIndex(a.code) || 0) - (parseCavityIndex(b.code) || 0));
+        const weights = cavityWeightFields
+          .map((field) => {
+            const value = valueMap.get(field.id);
+            return value?.value_real ?? null;
           })
-          .join(", ");
-        setDerived("pressure_drop_profile", profile);
+          .filter((val): val is number => Number.isFinite(val));
+        let targetWeight: number | null = null;
+        const settingsRaw = getQualStepSettings(db, experimentId, stepNumber);
+        if (settingsRaw) {
+          try {
+            const parsed = JSON.parse(settingsRaw);
+            const resolved = resolveSettingNumber(parsed?.target_weight_g);
+            if (Number.isFinite(resolved)) targetWeight = resolved;
+          } catch {
+            targetWeight = null;
+          }
+        }
+        if (weights.length >= 1) {
+          const avg = weights.reduce((a, b) => a + b, 0) / weights.length;
+          const ref = targetWeight && weights.length < 3 ? targetWeight : avg;
+          const variation = ref
+            ? Math.max(...weights.map((w) => Math.abs((ref - w) / ref) * 100))
+            : null;
+          setDerived("cavity_weight_variation_pct", variation);
+        }
+      }
+      if (stepNumber === 3) {
+        let intensificationCoeffLocal = intensificationCoeff;
+        let machineMaxOverride: number | null = null;
+        const settingsRaw = getQualStepSettings(db, experimentId, stepNumber);
+        if (settingsRaw) {
+          try {
+            const parsed = JSON.parse(settingsRaw);
+            const resolvedCoeff = resolveSettingNumber(parsed?.intensification_coeff);
+            if (Number.isFinite(resolvedCoeff)) {
+              intensificationCoeffLocal = resolvedCoeff;
+            }
+            const resolvedMax = resolveSettingNumber(parsed?.machine_max_pressure_bar);
+            if (Number.isFinite(resolvedMax)) {
+              machineMaxOverride = resolvedMax;
+            }
+          } catch {
+            intensificationCoeffLocal = intensificationCoeff;
+            machineMaxOverride = null;
+          }
+        }
+        const pressureRaw = [
+          getNumber("pressure_air_shot_bar"),
+          getNumber("pressure_sprue_bar"),
+          getNumber("pressure_runner_bar"),
+          getNumber("pressure_part_10_bar"),
+          getNumber("pressure_part_50_bar"),
+          getNumber("pressure_part_95_bar")
+        ];
+        const pressures = pressureRaw
+          .filter((val): val is number => Number.isFinite(val))
+          .map((val) => val * intensificationCoeffLocal);
+        const maxPressure = pressures.length ? Math.max(...pressures) : null;
+        const machineMax = machineMaxOverride ?? getNumber("machine_max_pressure_bar");
+        if (maxPressure != null && machineMax != null && machineMax !== 0) {
+          setDerived("max_pressure_pct", (maxPressure / machineMax) * 100);
+        }
+        if (pressureRaw.length) {
+          const labels = [
+            "air_shot",
+            "sprue",
+            "runner",
+            "part_10",
+            "part_50",
+            "part_95"
+          ];
+          const profile = labels
+            .map((label, idx) => {
+              const value = pressureRaw[idx];
+              const peak = Number.isFinite(value as number)
+                ? (value as number) * intensificationCoeffLocal
+                : null;
+              return `${label}: ${peak ?? "-"}`;
+            })
+            .join(", ");
+          setDerived("pressure_drop_profile", profile);
+        }
+      }
+    }
+    if (processTypeCode === "compounding" && stepNumber === 2) {
+      const rpm = getNumber("screw_rpm");
+      const throughput = getNumber("throughput_kg_h");
+      const torquePct = getNumber("torque_pct");
+      const motorCurrentA = getNumber("motor_current_a");
+      const driveSignal =
+        Number.isFinite(torquePct as number) && Number(torquePct) !== 0
+          ? torquePct
+          : motorCurrentA;
+      if (
+        rpm != null &&
+        throughput != null &&
+        throughput > 0 &&
+        driveSignal != null
+      ) {
+        // SME proxy supports either torque% or motor current, whichever is available.
+        const smeProxy = (driveSignal * rpm) / throughput * 0.01;
+        setDerived("SME_kJ_kg", smeProxy);
       }
     }
   }
 
-  const summary = buildStepSummary(db, experimentId, stepId, stepNumber, fieldByCode);
-  if (stepNumber === 1 && settings) {
+  const summary = buildStepSummary(db, experimentId, stepId, stepNumber, fieldByCode, processTypeCode);
+  if (processTypeCode === "injection" && stepNumber === 1 && settings) {
     try {
       const parsed = JSON.parse(settings);
       const resolved = resolveSettingNumber(parsed?.recommended_inj_speed);
@@ -818,7 +909,8 @@ function buildStepSummary(
   experimentId: number,
   stepId: number,
   stepNumber: number,
-  fieldByCode: Map<string, { id: number }>
+  fieldByCode: Map<string, { id: number }>,
+  processTypeCode: string
 ) {
   const runs = listQualRuns(db, stepId);
   const summaries: Record<string, unknown> = {
@@ -842,8 +934,13 @@ function buildStepSummary(
     const value = numberFor(values, code);
     return value === 1;
   };
+  const boolOrNullFor = (values: Map<number, { value_real: number | null }>, code: string) => {
+    const value = numberFor(values, code);
+    if (value == null) return null;
+    return value === 1;
+  };
 
-  if (stepNumber === 1) {
+  if (processTypeCode === "injection" && stepNumber === 1) {
     let best: { inj: number; viscosity: number } | null = null;
     for (const row of runValues) {
       const inj = numberFor(row.values, "inj_speed");
@@ -853,7 +950,7 @@ function buildStepSummary(
     }
     summaries.recommended_inj_speed = best?.inj ?? null;
   }
-  if (stepNumber === 2) {
+  if (processTypeCode === "injection" && stepNumber === 2) {
     let maxVar: number | null = null;
     for (const row of runValues) {
       const v = numberFor(row.values, "cavity_weight_variation_pct");
@@ -862,7 +959,7 @@ function buildStepSummary(
     }
     summaries.max_cavity_imbalance_pct = maxVar;
   }
-  if (stepNumber === 3) {
+  if (processTypeCode === "injection" && stepNumber === 3) {
     let maxPct: number | null = null;
     for (const row of runValues) {
       const v = numberFor(row.values, "max_pressure_pct");
@@ -872,7 +969,7 @@ function buildStepSummary(
     summaries.max_pressure_pct = maxPct;
     summaries.pressure_margin_ok = maxPct != null ? maxPct <= 90 : null;
   }
-  if (stepNumber === 4) {
+  if (processTypeCode === "injection" && stepNumber === 4) {
     const goodPoints = runValues
       .map((row) => ({
         temp: numberFor(row.values, "melt_temp_c"),
@@ -913,7 +1010,7 @@ function buildStepSummary(
       }
     }
   }
-  if (stepNumber === 5) {
+  if (processTypeCode === "injection" && stepNumber === 5) {
     const points = runValues
       .map((row) => ({
         hold: numberFor(row.values, "hold_time_s"),
@@ -942,7 +1039,7 @@ function buildStepSummary(
     }
     summaries.gate_seal_time_s = gateSeal;
   }
-  if (stepNumber === 6) {
+  if (processTypeCode === "injection" && stepNumber === 6) {
     const points = runValues
       .map((row) => ({
         cooling: numberFor(row.values, "cooling_time_s"),
@@ -952,6 +1049,309 @@ function buildStepSummary(
     const okPoints = points.filter((row) => row.ok);
     if (okPoints.length) {
       summaries.min_cooling_time_s = Math.min(...okPoints.map((row) => row.cooling));
+    }
+  }
+
+  if (processTypeCode === "compounding") {
+    if (stepNumber === 1) {
+      const activeRows = runValues.filter((row) => row.run.exclude_from_analysis !== 1);
+      const stabilization = activeRows
+        .map((row) => numberFor(row.values, "stabilization_time_min"))
+        .filter((v): v is number => Number.isFinite(v));
+      if (stabilization.length) {
+        summaries.stabilization_time_min = Math.min(...stabilization);
+      }
+      const mfrValues = activeRows
+        .map((row) => numberFor(row.values, "MFR_g_10min"))
+        .filter((v): v is number => Number.isFinite(v))
+        .sort((a, b) => a - b);
+      const mfrMedian = mfrValues.length
+        ? mfrValues[Math.floor(mfrValues.length / 2)]
+        : null;
+      const candidates = activeRows
+        .map((row) => {
+          const screw = numberFor(row.values, "screw_rpm");
+          const midTemp = numberFor(row.values, "mid_temp_c");
+          const headTemp = numberFor(row.values, "head_temp_c");
+          const stabilizationTime = numberFor(row.values, "stabilization_time_min");
+          const mfr = numberFor(row.values, "MFR_g_10min");
+          if (screw == null || stabilizationTime == null) return null;
+          const stabilizationTerm = stabilizationTime;
+          const mfrTerm =
+            mfr != null && mfrMedian != null && mfrMedian !== 0
+              ? Math.abs((mfr - mfrMedian) / mfrMedian) * 10
+              : 0;
+          const score = stabilizationTerm + mfrTerm;
+          return {
+            runCode: row.run.run_code,
+            screw,
+            midTemp,
+            headTemp,
+            stabilizationTime,
+            mfr,
+            score
+          };
+        })
+        .filter((item): item is NonNullable<typeof item> => Boolean(item));
+      if (candidates.length) {
+        const best = candidates.reduce((acc, item) => (item.score < acc.score ? item : acc));
+        const scoreLimit = best.score * 1.25;
+        const windowPoints = candidates.filter((item) => item.score <= scoreLimit);
+        const minBy = (arr: typeof windowPoints, key: keyof (typeof windowPoints)[number]) =>
+          Math.min(...arr.map((item) => item[key] as number));
+        const maxBy = (arr: typeof windowPoints, key: keyof (typeof windowPoints)[number]) =>
+          Math.max(...arr.map((item) => item[key] as number));
+        summaries.recommended_run = best.runCode;
+        summaries.recommended_screw_rpm = best.screw;
+        summaries.recommended_mid_temp_c = best.midTemp;
+        summaries.recommended_head_temp_c = best.headTemp;
+        summaries.recommended_stabilization_time_min = best.stabilizationTime;
+        summaries.recommended_mfr_g_10min = best.mfr;
+        if (windowPoints.length) {
+          summaries.window_screw_rpm_min = minBy(windowPoints, "screw");
+          summaries.window_screw_rpm_max = maxBy(windowPoints, "screw");
+          const validMid = windowPoints.filter((item) => Number.isFinite(item.midTemp as number));
+          const validHead = windowPoints.filter((item) => Number.isFinite(item.headTemp as number));
+          if (validMid.length) {
+            summaries.window_mid_temp_c_min = minBy(validMid, "midTemp");
+            summaries.window_mid_temp_c_max = maxBy(validMid, "midTemp");
+          }
+          if (validHead.length) {
+            summaries.window_head_temp_c_min = minBy(validHead, "headTemp");
+            summaries.window_head_temp_c_max = maxBy(validHead, "headTemp");
+          }
+        }
+      }
+    }
+    if (stepNumber === 2) {
+      const activeRows = runValues.filter((row) => row.run.exclude_from_analysis !== 1);
+      const smeValues = activeRows
+        .map((row) => numberFor(row.values, "SME_kJ_kg"))
+        .filter((v): v is number => Number.isFinite(v));
+      if (smeValues.length) {
+        summaries.sme_min_kj_kg = Math.min(...smeValues);
+        summaries.sme_max_kj_kg = Math.max(...smeValues);
+        const sorted = [...smeValues].sort((a, b) => a - b);
+        const quantile = (p: number) => {
+          if (sorted.length === 1) return sorted[0];
+          const idx = (sorted.length - 1) * p;
+          const lo = Math.floor(idx);
+          const hi = Math.ceil(idx);
+          if (lo === hi) return sorted[lo];
+          const frac = idx - lo;
+          return sorted[lo] * (1 - frac) + sorted[hi] * frac;
+        };
+        const q1 = quantile(0.25);
+        const q3 = quantile(0.75);
+        const median = quantile(0.5);
+        summaries.sme_median_kj_kg = median;
+
+        const candidates = activeRows
+          .map((row) => {
+            const rpm = numberFor(row.values, "screw_rpm");
+            const throughput = numberFor(row.values, "throughput_kg_h");
+            const sme = numberFor(row.values, "SME_kJ_kg");
+            const melt = numberFor(row.values, "melt_temp_c");
+            if (rpm == null || throughput == null || sme == null) return null;
+            return {
+              runCode: row.run.run_code,
+              rpm,
+              throughput,
+              sme,
+              melt
+            };
+          })
+          .filter((item): item is NonNullable<typeof item> => Boolean(item));
+        const windowCandidatesBase =
+          sorted.length >= 4
+            ? candidates.filter((item) => item.sme >= q1 && item.sme <= q3)
+            : candidates;
+        const windowCandidates = windowCandidatesBase.length ? windowCandidatesBase : candidates;
+        const score = (item: (typeof candidates)[number]) => {
+          const smeDrift = median !== 0 ? Math.abs((item.sme - median) / median) * 100 : Math.abs(item.sme - median);
+          const meltPenalty = item.melt != null ? Math.max(item.melt, 0) * 0.001 : 0;
+          return smeDrift + meltPenalty;
+        };
+        if (windowCandidates.length) {
+          const best = windowCandidates.reduce((acc, item) => (score(item) < score(acc) ? item : acc));
+          const minBy = (arr: typeof windowCandidates, key: keyof (typeof windowCandidates)[number]) =>
+            Math.min(...arr.map((item) => item[key] as number));
+          const maxBy = (arr: typeof windowCandidates, key: keyof (typeof windowCandidates)[number]) =>
+            Math.max(...arr.map((item) => item[key] as number));
+
+          summaries.recommended_run = best.runCode;
+          summaries.recommended_screw_rpm = best.rpm;
+          summaries.recommended_throughput_kg_h = best.throughput;
+          summaries.recommended_sme_kj_kg = best.sme;
+          summaries.recommended_melt_temp_c = best.melt;
+
+          summaries.window_sme_min_kj_kg = minBy(windowCandidates, "sme");
+          summaries.window_sme_max_kj_kg = maxBy(windowCandidates, "sme");
+          summaries.window_screw_rpm_min = minBy(windowCandidates, "rpm");
+          summaries.window_screw_rpm_max = maxBy(windowCandidates, "rpm");
+          summaries.window_throughput_kg_h_min = minBy(windowCandidates, "throughput");
+          summaries.window_throughput_kg_h_max = maxBy(windowCandidates, "throughput");
+        }
+      }
+    }
+    if (stepNumber === 3) {
+      const activeRows = runValues.filter((row) => row.run.exclude_from_analysis !== 1);
+      const points = activeRows
+        .map((row) => {
+          const melt = numberFor(row.values, "melt_temp_c");
+          const mfr = numberFor(row.values, "MFR_g_10min");
+          if (!Number.isFinite(melt as number) || !Number.isFinite(mfr as number)) return null;
+          return {
+            runCode: row.run.run_code,
+            melt: melt as number,
+            mfr: mfr as number
+          };
+        })
+        .filter((item): item is NonNullable<typeof item> => Boolean(item));
+      if (!points.length) return summaries;
+
+      const mfrValues = points.map((item) => item.mfr).sort((a, b) => a - b);
+      const mfrMedian = mfrValues[Math.floor(mfrValues.length / 2)];
+      const mfrDeviationLimitPct = 20;
+      const stable = points.filter((item) => {
+        if (!Number.isFinite(mfrMedian) || mfrMedian === 0) return true;
+        const driftPct = ((item.mfr - mfrMedian) / mfrMedian) * 100;
+        return Math.abs(driftPct) <= mfrDeviationLimitPct;
+      });
+      const rising = points.filter((item) => {
+        if (!Number.isFinite(mfrMedian) || mfrMedian === 0) return false;
+        const driftPct = ((item.mfr - mfrMedian) / mfrMedian) * 100;
+        return driftPct > mfrDeviationLimitPct;
+      });
+      const falling = points.filter((item) => {
+        if (!Number.isFinite(mfrMedian) || mfrMedian === 0) return false;
+        const driftPct = ((item.mfr - mfrMedian) / mfrMedian) * 100;
+        return driftPct < -mfrDeviationLimitPct;
+      });
+      const windowPoints = stable.length ? stable : points;
+      const recommended = windowPoints.reduce((acc, item) => {
+        const scoreAcc = Math.abs(acc.mfr - mfrMedian);
+        const scoreItem = Math.abs(item.mfr - mfrMedian);
+        return scoreItem < scoreAcc ? item : acc;
+      });
+
+      const meltWindow = windowPoints.map((item) => item.melt);
+      const mfrWindow = windowPoints.map((item) => item.mfr);
+      summaries.recommended_run = recommended.runCode;
+      summaries.recommended_melt_temp_c = recommended.melt;
+      summaries.recommended_mfr_g_10min = recommended.mfr;
+      summaries.melt_temp_min_c = Math.min(...meltWindow);
+      summaries.melt_temp_max_c = Math.max(...meltWindow);
+      summaries.mfr_avg_g_10min = mfrWindow.reduce((acc, value) => acc + value, 0) / mfrWindow.length;
+      summaries.mfr_min_g_10min = Math.min(...mfrWindow);
+      summaries.mfr_max_g_10min = Math.max(...mfrWindow);
+      summaries.mfr_median_g_10min = mfrMedian;
+      summaries.mfr_deviation_limit_pct = mfrDeviationLimitPct;
+      summaries.mfr_rising_outlier_count = rising.length;
+      summaries.mfr_falling_outlier_count = falling.length;
+      summaries.mfr_stable_run_count = stable.length;
+      summaries.mfr_unstable_flag = rising.length > 0 || falling.length > 0;
+      summaries.mfr_interpretation =
+        rising.length > 0
+          ? "MFR spikes detected: possible degradation risk."
+          : falling.length > 0
+            ? "MFR drops detected: possible crosslinking/instability risk."
+            : "MFR stable within deviation limit.";
+    }
+    if (stepNumber === 4) {
+      const fillerVar = runValues
+        .map((row) => numberFor(row.values, "filler_variation_pct"))
+        .filter((v): v is number => Number.isFinite(v));
+      if (fillerVar.length) {
+        summaries.filler_variation_avg_pct =
+          fillerVar.reduce((acc, value) => acc + value, 0) / fillerVar.length;
+      }
+    }
+    if (stepNumber === 5) {
+      const moisture = runValues
+        .map((row) => numberFor(row.values, "pellet_moisture_pct"))
+        .filter((v): v is number => Number.isFinite(v));
+      if (moisture.length) {
+        summaries.pellet_moisture_avg_pct =
+          moisture.reduce((acc, value) => acc + value, 0) / moisture.length;
+      }
+    }
+    if (stepNumber === 6) {
+      const dispersionOk = runValues
+        .map((row) => boolFor(row.values, "dispersion_ok"))
+        .filter((v) => v === true || v === false);
+      if (dispersionOk.length) {
+        summaries.dispersion_pass_rate_pct =
+          (dispersionOk.filter((v) => v).length / dispersionOk.length) * 100;
+      }
+    }
+  }
+
+  if (processTypeCode === "coating") {
+    if (stepNumber === 1) {
+      const visc100 = runValues
+        .map((row) => numberFor(row.values, "viscosity_100s"))
+        .filter((v): v is number => Number.isFinite(v));
+      if (visc100.length) {
+        summaries.viscosity_100s_avg_mpas =
+          visc100.reduce((acc, value) => acc + value, 0) / visc100.length;
+      }
+    }
+    if (stepNumber === 2) {
+      const angle = runValues
+        .map((row) => numberFor(row.values, "water_contact_angle_deg"))
+        .filter((v): v is number => Number.isFinite(v));
+      if (angle.length) {
+        summaries.contact_angle_avg_deg =
+          angle.reduce((acc, value) => acc + value, 0) / angle.length;
+      }
+    }
+    if (stepNumber === 3) {
+      const coatWeight = runValues
+        .map((row) => numberFor(row.values, "coat_weight_g_m2"))
+        .filter((v): v is number => Number.isFinite(v));
+      if (coatWeight.length) {
+        summaries.coat_weight_avg_g_m2 =
+          coatWeight.reduce((acc, value) => acc + value, 0) / coatWeight.length;
+      }
+    }
+    if (stepNumber === 4) {
+      const defectFree = runValues
+        .map((row) => {
+          const field = fieldByCode.get("defect_tags");
+          if (!field) return null;
+          const raw = row.values.get(field.id)?.value_tags_json;
+          if (!raw) return true;
+          try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed.length === 0 : true;
+          } catch {
+            return null;
+          }
+        })
+        .filter((v): v is boolean => v === true || v === false);
+      if (defectFree.length) {
+        summaries.defect_free_rate_pct =
+          (defectFree.filter((v) => v).length / defectFree.length) * 100;
+      }
+    }
+    if (stepNumber === 5) {
+      const adhesionPass = runValues
+        .map((row) => boolOrNullFor(row.values, "adhesion_pass"))
+        .filter((v): v is boolean => v === true || v === false);
+      if (adhesionPass.length) {
+        summaries.adhesion_pass_rate_pct =
+          (adhesionPass.filter((v) => v).length / adhesionPass.length) * 100;
+      }
+    }
+    if (stepNumber === 6) {
+      const barrierPass = runValues
+        .map((row) => boolOrNullFor(row.values, "barrier_pass"))
+        .filter((v): v is boolean => v === true || v === false);
+      if (barrierPass.length) {
+        summaries.barrier_pass_rate_pct =
+          (barrierPass.filter((v) => v).length / barrierPass.length) * 100;
+      }
     }
   }
 

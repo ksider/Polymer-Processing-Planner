@@ -206,6 +206,11 @@ export function createExperimentsRouter(db: Db) {
     const experimentId = Number(req.params.id);
     const experiment = getExperiment(db, experimentId);
     if (!experiment) return res.status(404).send("Experiment not found");
+    const processTypeCode = (() => {
+      if (!experiment.process_id) return "injection";
+      const process = getProcessById(db, experiment.process_id);
+      return String(process?.process_type_code || "injection").toLowerCase();
+    })();
     if (req.originalUrl.startsWith("/experiments/")) {
       const canonicalPath = canonicalExperimentPath(experimentId, experiment.process_id);
       if (canonicalPath !== req.path) return res.redirect(canonicalPath);
@@ -309,6 +314,7 @@ export function createExperimentsRouter(db: Db) {
     const ownerName = ownerUser?.name?.trim() || ownerUser?.email?.trim() || "";
     res.render("experiment_detail", {
       experiment,
+      processTypeCode,
       qualSummaries,
       qualificationCards,
       status,

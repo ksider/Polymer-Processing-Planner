@@ -1004,12 +1004,17 @@ sub {
 }
 
 .qualification-compact-card {
+  position: relative;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: #fff;
   padding: 0.55rem 0.65rem;
   display: grid;
   gap: 0.35rem;
+}
+
+.qualification-compact-card.is-locked {
+  opacity: 0.78;
 }
 
 .qualification-compact-head {
@@ -1057,6 +1062,35 @@ sub {
   text-decoration: underline;
   text-underline-offset: 3px;
   font-weight: 600;
+}
+
+.section-title.is-disabled {
+  color: var(--slate);
+  text-decoration: none;
+  cursor: not-allowed;
+}
+
+.card-lock-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: all;
+}
+
+.card-lock-overlay span {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #6a665f;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid #d1c7b9;
+  background: rgba(248, 243, 234, 0.95);
 }
 
 .section-title:hover {
@@ -1346,6 +1380,25 @@ sub {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 0.75rem;
+}
+
+.recommendation-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.recommendation-item {
+  padding: 0.25rem 0.4rem;
+}
+
+.recommendation-value {
+  font-weight: 700;
+  color: var(--ink);
 }
 
 .setup-summary.setup-summary-two {
@@ -1730,6 +1783,7 @@ table.pure-table {
 }
 
 .qual-step-card {
+  position: relative;
   background: #f8f3ea;
   border: 1px solid #e2dad0;
   border-radius: 16px;
@@ -1742,6 +1796,14 @@ table.pure-table {
 .qual-step-card .qual-step-btn {
   width: 100%;
   text-align: center;
+}
+
+.qual-step-card.is-locked {
+  opacity: 0.8;
+}
+
+.qual-step-card.is-locked .qual-step-btn {
+  pointer-events: none;
 }
 
 .qual-step-header {

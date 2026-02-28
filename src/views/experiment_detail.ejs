@@ -73,9 +73,14 @@
       </div>
       <div class="qualification-compact-grid">
         <% (qualificationCards || []).forEach((card) => { %>
-          <div class="qualification-compact-card">
+          <% const stepLocked = processTypeCode === 'compounding' && card.stepNumber >= 4; %>
+          <div class="qualification-compact-card <%= stepLocked ? 'is-locked' : '' %>">
             <div class="qualification-compact-head">
-              <a class="section-title" href="/experiments/<%= experiment.id %>/qualification/<%= card.stepNumber %>">Step <%= card.stepNumber %></a>
+              <% if (stepLocked) { %>
+                <span class="section-title is-disabled">Step <%= card.stepNumber %></span>
+              <% } else { %>
+                <a class="section-title" href="/experiments/<%= experiment.id %>/qualification/<%= card.stepNumber %>">Step <%= card.stepNumber %></a>
+              <% } %>
               <span class="status-pill status-<%= card.status %>"><%= card.statusLabel %></span>
             </div>
             <div class="qualification-compact-name"><%- formatInline(card.name) %></div>
@@ -100,6 +105,11 @@
                 <span class="small-note">No summary yet.</span>
               <% } %>
             </div>
+            <% if (stepLocked) { %>
+              <div class="card-lock-overlay" aria-hidden="true">
+                <span>Temporarily disabled</span>
+              </div>
+            <% } %>
           </div>
         <% }); %>
       </div>

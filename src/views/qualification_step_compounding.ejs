@@ -36,6 +36,101 @@
     <% } %>
   </div>
 
+  <% let summaryData = null; %>
+  <% if (summaryJson) { try { summaryData = JSON.parse(summaryJson); } catch { summaryData = null; } } %>
+  <% const settings = stepSettings || {}; %>
+  <% const fmt = (value, digits = 2) => (typeof value === 'number' && Number.isFinite(value) ? formatNumber(value, digits) : '-'); %>
+  <% if (step.step_number === 1) { %>
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Recommended Baseline from RTD Stability</h2>
+      </div>
+      <div class="setup-summary">
+        <div>
+          <div class="small-note">Recommended run</div>
+          <div class="setup-value" data-live-step1="recommended_run"><%= summaryData?.recommended_run || '-' %></div>
+        </div>
+        <div>
+          <div class="small-note">Screw RPM</div>
+          <div class="setup-value"><span data-live-step1="recommended_screw_rpm"><%= fmt(summaryData?.recommended_screw_rpm, 0) %></span> <span class="small-note">rpm</span></div>
+        </div>
+        <div>
+          <div class="small-note">MFR</div>
+          <div class="setup-value"><span data-live-step1="recommended_mfr_g_10min"><%= fmt(summaryData?.recommended_mfr_g_10min) %></span> <span class="small-note">g/10min</span></div>
+        </div>
+        <div>
+          <div class="small-note">Head temp</div>
+          <div class="setup-value"><span data-live-step1="recommended_head_temp_c"><%= fmt(summaryData?.recommended_head_temp_c, 1) %></span> <span class="small-note">°C</span></div>
+        </div>
+        <div>
+          <div class="small-note">Mid temp</div>
+          <div class="setup-value"><span data-live-step1="recommended_mid_temp_c"><%= fmt(summaryData?.recommended_mid_temp_c, 1) %></span> <span class="small-note">°C</span></div>
+        </div>
+        <div>
+          <div class="small-note">Min stabilization</div>
+          <div class="setup-value"><span data-live-step1="recommended_stabilization_time_min"><%= fmt(summaryData?.recommended_stabilization_time_min ?? summaryData?.stabilization_time_min, 1) %></span> <span class="small-note">min</span></div>
+        </div>
+      </div>
+      <div class="small-note" style="margin-top: .75rem;">
+        Window estimate:
+        screw <strong><span data-live-step1="window_screw_rpm_min"><%= fmt(summaryData?.window_screw_rpm_min, 0) %></span> - <span data-live-step1="window_screw_rpm_max"><%= fmt(summaryData?.window_screw_rpm_max, 0) %></span> rpm</strong>,
+        head temp <strong><span data-live-step1="window_head_temp_c_min"><%= fmt(summaryData?.window_head_temp_c_min, 1) %></span> - <span data-live-step1="window_head_temp_c_max"><%= fmt(summaryData?.window_head_temp_c_max, 1) %></span> °C</strong>,
+        mid temp <strong><span data-live-step1="window_mid_temp_c_min"><%= fmt(summaryData?.window_mid_temp_c_min, 1) %></span> - <span data-live-step1="window_mid_temp_c_max"><%= fmt(summaryData?.window_mid_temp_c_max, 1) %></span> °C</strong>
+      </div>
+    </div>
+  <% } %>
+  <% if (step.step_number === 2) { %>
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Recommended SME Window</h2>
+      </div>
+      <div class="setup-summary">
+        <div>
+          <div class="small-note">Recommended run</div>
+          <div class="setup-value" data-live-step2="recommended_run"><%= summaryData?.recommended_run || '-' %></div>
+        </div>
+        <div>
+          <div class="small-note">Screw RPM</div>
+          <div class="setup-value"><span data-live-step2="recommended_screw_rpm"><%= fmt(summaryData?.recommended_screw_rpm, 0) %></span> <span class="small-note">rpm</span></div>
+        </div>
+        <div>
+          <div class="small-note">Throughput</div>
+          <div class="setup-value"><span data-live-step2="recommended_throughput_kg_h"><%= fmt(summaryData?.recommended_throughput_kg_h, 2) %></span> <span class="small-note">kg/h</span></div>
+        </div>
+        <div>
+          <div class="small-note">SME</div>
+          <div class="setup-value"><span data-live-step2="recommended_sme_kj_kg"><%= fmt(summaryData?.recommended_sme_kj_kg, 2) %></span> <span class="small-note">kJ/kg</span></div>
+        </div>
+        <div>
+          <div class="small-note">Melt temp</div>
+          <div class="setup-value"><span data-live-step2="recommended_melt_temp_c"><%= fmt(summaryData?.recommended_melt_temp_c, 1) %></span> <span class="small-note">°C</span></div>
+        </div>
+      </div>
+      <div class="small-note" style="margin-top: .75rem;">
+        Window estimate:
+        SME <strong><span data-live-step2="window_sme_min_kj_kg"><%= fmt(summaryData?.window_sme_min_kj_kg, 2) %></span> - <span data-live-step2="window_sme_max_kj_kg"><%= fmt(summaryData?.window_sme_max_kj_kg, 2) %></span> kJ/kg</strong>,
+        screw <strong><span data-live-step2="window_screw_rpm_min"><%= fmt(summaryData?.window_screw_rpm_min, 0) %></span> - <span data-live-step2="window_screw_rpm_max"><%= fmt(summaryData?.window_screw_rpm_max, 0) %></span> rpm</strong>,
+        throughput <strong><span data-live-step2="window_throughput_kg_h_min"><%= fmt(summaryData?.window_throughput_kg_h_min, 2) %></span> - <span data-live-step2="window_throughput_kg_h_max"><%= fmt(summaryData?.window_throughput_kg_h_max, 2) %></span> kg/h</strong>
+      </div>
+    </div>
+  <% } %>
+  <% if (step.step_number === 3) { %>
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Setup</h2>
+        <div class="setup-actions">
+          <button class="pure-button pure-button-secondary" type="button" id="openStep3Setup">Edit setup</button>
+        </div>
+      </div>
+      <div class="setup-summary">
+        <div>
+          <div class="small-note">Target screw RPM</div>
+          <div class="setup-value"><span data-live-step3="target_screw_rpm"><%= fmt(Number(settings.target_screw_rpm), 0) %></span> <span class="small-note">rpm</span></div>
+        </div>
+      </div>
+    </div>
+  <% } %>
+
   <%- include('partials/entity_notes', {
     experimentId: experimentId,
     entityType: 'qualification_step',
@@ -49,13 +144,17 @@
       <h2 class="card-title">Runs</h2>
     </div>
     <% const activeFields = fields.filter((field) => field.is_enabled === 1); %>
+    <% const inputFields = activeFields.filter((field) => String(field.group_label || '').toLowerCase() === 'inputs'); %>
+    <% const measurementFields = activeFields.filter((field) => String(field.group_label || '').toLowerCase() === 'measurements'); %>
+    <% const summaryFields = activeFields.filter((field) => !['inputs', 'measurements'].includes(String(field.group_label || '').toLowerCase())); %>
+    <% const orderedFields = [...inputFields, ...measurementFields, ...summaryFields]; %>
     <div class="table-scroll">
       <table class="pure-table table-compact" id="compoundingRunsTable">
         <thead>
           <tr>
             <th>Run</th>
             <th>Due date</th>
-            <% activeFields.forEach((field) => { %>
+            <% orderedFields.forEach((field) => { %>
               <th>
                 <%- formatInline(field.label) %>
                 <% if (field.unit) { %><span class="small-note"> <%= field.unit %></span><% } %>
@@ -68,18 +167,18 @@
         </thead>
         <tbody>
           <% if (runs.length === 0) { %>
-            <tr><td colspan="<%= activeFields.length + 5 %>">No runs yet.</td></tr>
+            <tr><td colspan="<%= orderedFields.length + 5 %>">No runs yet.</td></tr>
           <% } %>
           <% runs.forEach((run) => { %>
             <% const values = runValueMap[String(run.id)] || {}; %>
             <tr data-run-row data-run-id="<%= run.id %>">
               <td><strong><%= run.run_code %></strong></td>
               <td><input type="date" data-run-due value="<%= run.due_at || '' %>"></td>
-              <% activeFields.forEach((field) => { %>
+              <% orderedFields.forEach((field) => { %>
                 <% const value = values[String(field.id)]; %>
                 <td>
                   <% if (field.is_derived) { %>
-                    <span class="small-note">
+                    <span class="small-note" data-derived-code="<%= field.code %>">
                       <% if (field.field_type === 'number') { %>
                         <%= formatNumber(value?.value_real) %>
                       <% } else if (field.field_type === 'tag') { %>
@@ -114,6 +213,72 @@
       </table>
     </div>
   </div>
+
+  <% if (step.step_number === 1) { %>
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">MFR vs Screw RPM</h2>
+      </div>
+      <div class="chart-card">
+        <div id="compoundingStep1Chart" style="width: 100%; height: 320px;"></div>
+      </div>
+    </div>
+  <% } %>
+  <% if (step.step_number === 2) { %>
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">SME vs Screw RPM (by Melt Temperature)</h2>
+      </div>
+      <div class="chart-card">
+        <div id="compoundingStep2Chart" style="width: 100%; height: 340px;"></div>
+      </div>
+      <p class="small-note" id="step2RecommendationReason" style="margin-top: .75rem;">
+        Recommendation reason will appear here after data entry.
+      </p>
+    </div>
+  <% } %>
+  <% if (step.step_number === 3) { %>
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Recommendation (MFR Stability)</h2>
+      </div>
+      <div class="recommendation-summary">
+        <div class="recommendation-item">
+          <div class="small-note">Recommended run</div>
+          <div class="recommendation-value" data-live-step3="recommended_run"><%= summaryData?.recommended_run || '-' %></div>
+        </div>
+        <div class="recommendation-item">
+          <div class="small-note">Recommended melt temp</div>
+          <div class="recommendation-value"><span data-live-step3="recommended_melt_temp_c"><%= fmt(summaryData?.recommended_melt_temp_c, 1) %></span> <span class="small-note">°C</span></div>
+        </div>
+        <div class="recommendation-item">
+          <div class="small-note">Recommended MFR</div>
+          <div class="recommendation-value"><span data-live-step3="recommended_mfr_g_10min"><%= fmt(summaryData?.recommended_mfr_g_10min, 2) %></span> <span class="small-note">g/10min</span></div>
+        </div>
+        <div class="recommendation-item">
+          <div class="small-note">Melt temp window</div>
+          <div class="recommendation-value"><span data-live-step3="melt_temp_min_c"><%= fmt(summaryData?.melt_temp_min_c, 1) %></span> - <span data-live-step3="melt_temp_max_c"><%= fmt(summaryData?.melt_temp_max_c, 1) %></span> <span class="small-note">°C</span></div>
+        </div>
+        <div class="recommendation-item">
+          <div class="small-note">MFR median / limit</div>
+          <div class="recommendation-value"><span data-live-step3="mfr_median_g_10min"><%= fmt(summaryData?.mfr_median_g_10min, 2) %></span> <span class="small-note">g/10min</span> / <span data-live-step3="mfr_deviation_limit_pct"><%= fmt(summaryData?.mfr_deviation_limit_pct, 0) %></span><span class="small-note">%</span></div>
+        </div>
+        <div class="recommendation-item">
+          <div class="small-note">Outliers (high/low)</div>
+          <div class="recommendation-value"><span data-live-step3="mfr_rising_outlier_count"><%= fmt(summaryData?.mfr_rising_outlier_count, 0) %></span> / <span data-live-step3="mfr_falling_outlier_count"><%= fmt(summaryData?.mfr_falling_outlier_count, 0) %></span></div>
+        </div>
+      </div>
+      <div class="chart-card" style="margin-top: 1rem;">
+        <div id="compoundingStep3Chart" style="width: 100%; height: 340px;"></div>
+      </div>
+      <div class="chart-card" style="margin-top: .75rem;">
+        <div id="compoundingStep3DeviationChart" style="width: 100%; height: 260px;"></div>
+      </div>
+      <p class="small-note" id="step3RecommendationReason" style="margin-top: .75rem;">
+        <%= summaryData?.mfr_interpretation || 'MFR stability interpretation will appear after data entry.' %>
+      </p>
+    </div>
+  <% } %>
 </div>
 
 <% if (canAssignEntities) { %>
@@ -138,6 +303,26 @@
         <span class="small-note" data-autosave-status></span>
         <button class="pure-button" type="button" data-close>Cancel</button>
         <button class="pure-button pure-button-primary" type="submit">Save</button>
+      </div>
+    </form>
+  </dialog>
+<% } %>
+
+<% if (step.step_number === 3) { %>
+  <dialog class="modal-frame" id="step3SetupDialog">
+    <div class="modal-header">
+      <strong>Step 3 setup</strong>
+      <button class="pure-button" type="button" data-close>Close</button>
+    </div>
+    <form class="pure-form" id="step3SetupForm" action="/experiments/<%= experimentId %>/qualification/<%= step.step_number %>/settings" method="post">
+      <div class="modal-body">
+        <label for="targetScrewRpmInput">Target screw RPM</label>
+        <input id="targetScrewRpmInput" name="target_screw_rpm" type="number" step="1" min="0" value="<%= settings.target_screw_rpm ?? '' %>" />
+        <p class="small-note">Used as fixed setup value for this step, not as a run column.</p>
+      </div>
+      <div class="modal-footer">
+        <span class="small-note" data-autosave-status></span>
+        <button class="pure-button" type="button" data-close>Close</button>
       </div>
     </form>
   </dialog>
@@ -236,25 +421,28 @@
   </div>
 </dialog>
 
+<script src="/vendor/echarts/dist/echarts.min.js"></script>
 <script>
   (function () {
     const experimentId = <%= experimentId %>;
     const stepNumber = <%= step.step_number %>;
     const table = document.getElementById('compoundingRunsTable');
+    const fieldIdByCode = <%- JSON.stringify(Object.fromEntries(fields.map((field) => [field.code, field.id]))) %>;
     const qualSettingsDialog = document.getElementById('qualSettingsDialog');
     const qualSettingsForm = document.getElementById('qualSettingsForm');
+    const step3SetupDialog = document.getElementById('step3SetupDialog');
+    const step3SetupForm = document.getElementById('step3SetupForm');
     const qualStepAssigneeInput = document.getElementById('qualStepAssigneeInput');
     const qualStepResponsibleLabel = document.getElementById('qualStepResponsibleLabel');
     const qualAssignableUserById = new Map(<%- JSON.stringify((assignableUsers || []).map((user) => [String(user.id), user.name || user.email])) %>);
 
     const post = async (url, body) => {
-      const response = await fetch(url, { method: 'POST', body });
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || `Request failed (${response.status})`);
+      if (window.IMPlanner?.postForm) {
+        return window.IMPlanner.postForm(url, body);
       }
-      const contentType = response.headers.get('content-type') || '';
-      return contentType.includes('application/json') ? response.json() : null;
+      const response = await fetch(url, { method: 'POST', body });
+      if (!response.ok) throw new Error(`Request failed (${response.status})`);
+      return null;
     };
 
     const saveTimers = new Map();
@@ -264,6 +452,540 @@
         try { await fn(); } catch {}
       }, 180);
       saveTimers.set(key, timer);
+    };
+    const parseNumber = (raw) => {
+      if (raw == null) return null;
+      const text = String(raw).trim().replace(',', '.');
+      if (!text) return null;
+      const num = Number(text);
+      return Number.isFinite(num) ? num : null;
+    };
+    const numFromRow = (row, code) => {
+      const fieldId = fieldIdByCode?.[code];
+      if (!fieldId) return null;
+      const input = row.querySelector(`[data-field-id="${fieldId}"]`);
+      if (!input) return null;
+      return parseNumber(input.value);
+    };
+    const fmtLive = (value, digits = 2) => {
+      if (!Number.isFinite(value)) return '-';
+      const num = Number(value);
+      if (digits <= 0) return String(Math.round(num));
+      return num.toFixed(digits).replace(/\.?0+$/, '');
+    };
+    const setLive = (scope, key, value, digits = 2) => {
+      const node = document.querySelector(`[${scope}="${key}"]`);
+      if (!node) return;
+      if (typeof value === 'number') {
+        node.textContent = fmtLive(value, digits);
+        return;
+      }
+      node.textContent = value == null || value === '' ? '-' : String(value);
+    };
+    const setReasonText = (text) => {
+      const node = document.getElementById('step2RecommendationReason');
+      if (!node) return;
+      node.textContent = text || 'Recommendation reason is unavailable.';
+    };
+    const setStep3ReasonText = (text) => {
+      const node = document.getElementById('step3RecommendationReason');
+      if (!node) return;
+      node.textContent = text || 'MFR stability interpretation is unavailable.';
+    };
+    const syncStep3Settings = () => {
+      if (stepNumber !== 3) return;
+      const input = document.getElementById('targetScrewRpmInput');
+      const value = parseNumber(input?.value);
+      setLive('data-live-step3', 'target_screw_rpm', value, 0);
+    };
+    const getActiveRows = () => {
+      const rows = Array.from(table?.querySelectorAll('tr[data-run-row]') || []);
+      return rows.filter((row) => !row.querySelector('input[data-flag="exclude"]')?.checked);
+    };
+    const quantileSorted = (sorted, p) => {
+      if (!sorted.length) return null;
+      if (sorted.length === 1) return sorted[0];
+      const idx = (sorted.length - 1) * p;
+      const lo = Math.floor(idx);
+      const hi = Math.ceil(idx);
+      if (lo === hi) return sorted[lo];
+      const frac = idx - lo;
+      return sorted[lo] * (1 - frac) + sorted[hi] * frac;
+    };
+    const recomputeStep1Recommendations = () => {
+      if (stepNumber !== 1) return;
+      const rows = getActiveRows();
+      const mfrValues = rows
+        .map((row) => numFromRow(row, 'MFR_g_10min'))
+        .filter((v) => Number.isFinite(v))
+        .sort((a, b) => a - b);
+      const mfrMedian = mfrValues.length ? mfrValues[Math.floor(mfrValues.length / 2)] : null;
+      const candidates = rows.map((row) => {
+        const runCode = row.querySelector('td strong')?.textContent?.trim() || '';
+        const screw = numFromRow(row, 'screw_rpm');
+        const midTemp = numFromRow(row, 'mid_temp_c');
+        const headTemp = numFromRow(row, 'head_temp_c');
+        const stabilization = numFromRow(row, 'stabilization_time_min');
+        const mfr = numFromRow(row, 'MFR_g_10min');
+        if (!Number.isFinite(screw) || !Number.isFinite(stabilization)) return null;
+        const mfrTerm =
+          Number.isFinite(mfr) && Number.isFinite(mfrMedian) && mfrMedian !== 0
+            ? Math.abs((mfr - mfrMedian) / mfrMedian) * 10
+            : 0;
+        const score = stabilization + mfrTerm;
+        return { runCode, screw, midTemp, headTemp, stabilization, mfr, score };
+      }).filter(Boolean);
+      if (!candidates.length) return;
+      const best = candidates.reduce((a, b) => (b.score < a.score ? b : a));
+      const scoreLimit = best.score * 1.25;
+      const windowPoints = candidates.filter((item) => item.score <= scoreLimit);
+      const minBy = (arr, key) => Math.min(...arr.map((item) => item[key]).filter((v) => Number.isFinite(v)));
+      const maxBy = (arr, key) => Math.max(...arr.map((item) => item[key]).filter((v) => Number.isFinite(v)));
+      setLive('data-live-step1', 'recommended_run', best.runCode);
+      setLive('data-live-step1', 'recommended_screw_rpm', best.screw, 0);
+      setLive('data-live-step1', 'recommended_mfr_g_10min', best.mfr, 2);
+      setLive('data-live-step1', 'recommended_head_temp_c', best.headTemp, 1);
+      setLive('data-live-step1', 'recommended_mid_temp_c', best.midTemp, 1);
+      setLive('data-live-step1', 'recommended_stabilization_time_min', best.stabilization, 1);
+      if (windowPoints.length) {
+        setLive('data-live-step1', 'window_screw_rpm_min', minBy(windowPoints, 'screw'), 0);
+        setLive('data-live-step1', 'window_screw_rpm_max', maxBy(windowPoints, 'screw'), 0);
+        setLive('data-live-step1', 'window_head_temp_c_min', minBy(windowPoints, 'headTemp'), 1);
+        setLive('data-live-step1', 'window_head_temp_c_max', maxBy(windowPoints, 'headTemp'), 1);
+        setLive('data-live-step1', 'window_mid_temp_c_min', minBy(windowPoints, 'midTemp'), 1);
+        setLive('data-live-step1', 'window_mid_temp_c_max', maxBy(windowPoints, 'midTemp'), 1);
+      }
+    };
+    const recomputeStep2Recommendations = () => {
+      if (stepNumber !== 2) return;
+      const rows = getActiveRows();
+      const candidates = rows.map((row) => {
+        const runCode = row.querySelector('td strong')?.textContent?.trim() || '';
+        const rpm = numFromRow(row, 'screw_rpm');
+        const throughput = numFromRow(row, 'throughput_kg_h');
+        const torque = numFromRow(row, 'torque_pct');
+        const current = numFromRow(row, 'motor_current_a');
+        const driveSignal = Number.isFinite(torque) && torque !== 0 ? torque : current;
+        const melt = numFromRow(row, 'melt_temp_c');
+        if (!Number.isFinite(rpm) || !Number.isFinite(throughput) || throughput <= 0 || !Number.isFinite(driveSignal)) return null;
+        const sme = (driveSignal * rpm) / throughput * 0.01;
+        return { runCode, rpm, throughput, sme, melt };
+      }).filter(Boolean);
+      if (!candidates.length) {
+        setReasonText('No valid runs yet. Fill Screw RPM, Throughput, and Torque or Motor current.');
+        return;
+      }
+      const smeValues = candidates.map((item) => item.sme).sort((a, b) => a - b);
+      const q1 = quantileSorted(smeValues, 0.25);
+      const q3 = quantileSorted(smeValues, 0.75);
+      const median = quantileSorted(smeValues, 0.5);
+      const windowBase = smeValues.length >= 4
+        ? candidates.filter((item) => item.sme >= q1 && item.sme <= q3)
+        : candidates;
+      const windowCandidates = windowBase.length ? windowBase : candidates;
+      const score = (item) => {
+        const smeDrift = median !== 0 ? Math.abs((item.sme - median) / median) * 100 : Math.abs(item.sme - median);
+        const meltPenalty = Number.isFinite(item.melt) ? Math.max(item.melt, 0) * 0.001 : 0;
+        return smeDrift + meltPenalty;
+      };
+      const best = windowCandidates.reduce((a, b) => (score(b) < score(a) ? b : a));
+      const minBy = (arr, key) => Math.min(...arr.map((item) => item[key]).filter((v) => Number.isFinite(v)));
+      const maxBy = (arr, key) => Math.max(...arr.map((item) => item[key]).filter((v) => Number.isFinite(v)));
+      setLive('data-live-step2', 'recommended_run', best.runCode);
+      setLive('data-live-step2', 'recommended_screw_rpm', best.rpm, 0);
+      setLive('data-live-step2', 'recommended_throughput_kg_h', best.throughput, 2);
+      setLive('data-live-step2', 'recommended_sme_kj_kg', best.sme, 2);
+      setLive('data-live-step2', 'recommended_melt_temp_c', best.melt, 1);
+      setLive('data-live-step2', 'window_sme_min_kj_kg', minBy(windowCandidates, 'sme'), 2);
+      setLive('data-live-step2', 'window_sme_max_kj_kg', maxBy(windowCandidates, 'sme'), 2);
+      setLive('data-live-step2', 'window_screw_rpm_min', minBy(windowCandidates, 'rpm'), 0);
+      setLive('data-live-step2', 'window_screw_rpm_max', maxBy(windowCandidates, 'rpm'), 0);
+      setLive('data-live-step2', 'window_throughput_kg_h_min', minBy(windowCandidates, 'throughput'), 2);
+      setLive('data-live-step2', 'window_throughput_kg_h_max', maxBy(windowCandidates, 'throughput'), 2);
+
+      const bestScore = score(best);
+      const iqrMode = smeValues.length >= 4 ? 'IQR window' : 'full sample';
+      setReasonText(
+        `Selected ${best.runCode}: SME ${fmtLive(best.sme, 2)} is closest to median ${fmtLive(median, 2)} ` +
+        `inside ${iqrMode} [${fmtLive(q1, 2)}..${fmtLive(q3, 2)}], score ${fmtLive(bestScore, 2)} ` +
+        `(SME drift + melt temp penalty).`
+      );
+    };
+    const recomputeStep3Recommendations = () => {
+      if (stepNumber !== 3) return;
+      const model = buildStep3Model();
+      if (!model) {
+        setStep3ReasonText('No valid runs yet. Fill Melt temp and MFR to evaluate stability.');
+        return;
+      }
+      const minBy = (arr, key) => Math.min(...arr.map((item) => item[key]).filter((v) => Number.isFinite(v)));
+      const maxBy = (arr, key) => Math.max(...arr.map((item) => item[key]).filter((v) => Number.isFinite(v)));
+      setLive('data-live-step3', 'recommended_run', model.recommended.runCode);
+      setLive('data-live-step3', 'recommended_melt_temp_c', model.recommended.melt, 1);
+      setLive('data-live-step3', 'recommended_mfr_g_10min', model.recommended.mfr, 2);
+      setLive('data-live-step3', 'melt_temp_min_c', minBy(model.windowPoints, 'melt'), 1);
+      setLive('data-live-step3', 'melt_temp_max_c', maxBy(model.windowPoints, 'melt'), 1);
+      setLive('data-live-step3', 'mfr_median_g_10min', model.mfrMedian, 2);
+      setLive('data-live-step3', 'mfr_deviation_limit_pct', model.limitPct, 0);
+      setLive('data-live-step3', 'mfr_rising_outlier_count', model.high.length, 0);
+      setLive('data-live-step3', 'mfr_falling_outlier_count', model.low.length, 0);
+      if (model.high.length) {
+        setStep3ReasonText('MFR spikes detected (> +20% from median): potential degradation risk. These runs are excluded from the recommended window.');
+      } else if (model.low.length) {
+        setStep3ReasonText('MFR drops detected (< -20% from median): potential crosslinking/instability risk. These runs are excluded from the recommended window.');
+      } else {
+        setStep3ReasonText('MFR is stable within ±20% from median. Recommended run is closest to median MFR in the stable window.');
+      }
+    };
+    const buildStep3Model = () => {
+      if (stepNumber !== 3) return null;
+      const rows = getActiveRows();
+      const points = rows.map((row, index) => {
+        const runCode = row.querySelector('td strong')?.textContent?.trim() || '';
+        const melt = numFromRow(row, 'melt_temp_c');
+        const mfr = numFromRow(row, 'MFR_g_10min');
+        if (!Number.isFinite(melt) || !Number.isFinite(mfr)) return null;
+        return { runCode, melt, mfr, runIndex: index + 1 };
+      }).filter(Boolean);
+      if (!points.length) return null;
+
+      const mfrValues = points.map((item) => item.mfr).sort((a, b) => a - b);
+      const mfrMedian = mfrValues[Math.floor(mfrValues.length / 2)];
+      const limitPct = 20;
+      const classify = (item) => {
+        if (!Number.isFinite(mfrMedian) || mfrMedian === 0) return 'stable';
+        const drift = ((item.mfr - mfrMedian) / mfrMedian) * 100;
+        if (drift > limitPct) return 'high';
+        if (drift < -limitPct) return 'low';
+        return 'stable';
+      };
+
+      const stable = points.filter((item) => classify(item) === 'stable');
+      const high = points.filter((item) => classify(item) === 'high');
+      const low = points.filter((item) => classify(item) === 'low');
+      const windowPoints = stable.length ? stable : points;
+      const recommended = windowPoints.reduce((acc, item) => (
+        Math.abs(item.mfr - mfrMedian) < Math.abs(acc.mfr - mfrMedian) ? item : acc
+      ));
+      const upper = mfrMedian * (1 + limitPct / 100);
+      const lower = mfrMedian * (1 - limitPct / 100);
+
+      return { points, mfrMedian, limitPct, stable, high, low, windowPoints, recommended, upper, lower };
+    };
+    const recomputeStep3Chart = () => {
+      if (stepNumber !== 3) return;
+      const container = document.getElementById('compoundingStep3Chart');
+      if (!container || !window.echarts) return;
+      const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+      const model = buildStep3Model();
+      if (!model) {
+        chart.clear();
+        chart.setOption({
+          title: { text: 'Fill Melt temp and MFR to build stability map', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#8a8a8a', fontWeight: 'normal' } }
+        });
+        return;
+      }
+      const stable = model.stable.map((item) => ({ value: [item.melt, item.mfr], name: item.runCode }));
+      const high = model.high.map((item) => ({ value: [item.melt, item.mfr], name: item.runCode }));
+      const low = model.low.map((item) => ({ value: [item.melt, item.mfr], name: item.runCode }));
+      chart.setOption({
+        tooltip: {
+          trigger: 'item',
+          formatter: (params) => `${params.name}<br/>Melt temp: ${fmtLive(params.value[0], 1)} °C<br/>MFR: ${fmtLive(params.value[1], 2)} g/10min`
+        },
+        legend: { top: 0 },
+        grid: { left: 52, right: 18, top: 36, bottom: 44 },
+        xAxis: { type: 'value', name: 'Melt temp (°C)', scale: true },
+        yAxis: { type: 'value', name: 'MFR (g/10min)', scale: true },
+        series: [
+          {
+            name: 'Stable',
+            type: 'scatter',
+            symbolSize: 9,
+            itemStyle: { color: '#19be6b' },
+            data: stable,
+            markLine: {
+              symbol: 'none',
+              label: { formatter: '{b}', color: '#666' },
+              lineStyle: { type: 'dashed', color: '#999' },
+              data: [
+                { name: 'MFR median', yAxis: model.mfrMedian },
+                { name: '+20%', yAxis: model.upper },
+                { name: '-20%', yAxis: model.lower }
+              ]
+            }
+          },
+          {
+            name: 'High MFR outlier',
+            type: 'scatter',
+            symbolSize: 9,
+            itemStyle: { color: '#ed4014' },
+            data: high
+          },
+          {
+            name: 'Low MFR outlier',
+            type: 'scatter',
+            symbolSize: 9,
+            itemStyle: { color: '#2d8cf0' },
+            data: low
+          },
+          {
+            name: 'Recommended',
+            type: 'effectScatter',
+            symbolSize: 12,
+            rippleEffect: { scale: 2.2, period: 4 },
+            itemStyle: { color: '#ff8f1f' },
+            data: [{ value: [model.recommended.melt, model.recommended.mfr], name: model.recommended.runCode }]
+          }
+        ]
+      }, { notMerge: true, lazyUpdate: true });
+    };
+    const recomputeStep3DeviationChart = () => {
+      if (stepNumber !== 3) return;
+      const container = document.getElementById('compoundingStep3DeviationChart');
+      if (!container || !window.echarts) return;
+      const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+      const model = buildStep3Model();
+      if (!model) {
+        chart.clear();
+        chart.setOption({
+          title: { text: 'Deviation map appears when Melt temp and MFR are filled', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#8a8a8a', fontWeight: 'normal' } }
+        });
+        return;
+      }
+      const data = model.points.map((item) => {
+        const deviationPct = model.mfrMedian !== 0 ? ((item.mfr - model.mfrMedian) / model.mfrMedian) * 100 : 0;
+        return { name: item.runCode, value: [item.runCode, Number(deviationPct.toFixed(2))] };
+      });
+      chart.setOption({
+        tooltip: {
+          trigger: 'item',
+          formatter: (params) => `${params.name}<br/>Deviation: ${fmtLive(params.value[1], 2)}%`
+        },
+        grid: { left: 56, right: 20, top: 24, bottom: 56 },
+        xAxis: { type: 'category', name: 'Run', axisLabel: { rotate: 25 } },
+        yAxis: { type: 'value', name: 'MFR deviation (%)', min: (val) => Math.min(val.min - 5, -model.limitPct - 5), max: (val) => Math.max(val.max + 5, model.limitPct + 5) },
+        visualMap: {
+          show: false,
+          dimension: 1,
+          pieces: [
+            { gt: model.limitPct, color: '#ed4014' },
+            { lte: model.limitPct, gte: -model.limitPct, color: '#19be6b' },
+            { lt: -model.limitPct, color: '#2d8cf0' }
+          ]
+        },
+        series: [
+          {
+            name: 'Runs',
+            type: 'scatter',
+            symbolSize: 10,
+            data,
+            markArea: {
+              itemStyle: { color: 'rgba(25,190,107,0.10)' },
+              data: [[
+                { yAxis: -model.limitPct },
+                { yAxis: model.limitPct }
+              ]]
+            },
+            markLine: {
+              symbol: 'none',
+              lineStyle: { type: 'dashed', color: '#999' },
+              data: [{ yAxis: 0 }, { yAxis: model.limitPct }, { yAxis: -model.limitPct }]
+            }
+          },
+          {
+            name: 'Recommended',
+            type: 'effectScatter',
+            symbolSize: 13,
+            rippleEffect: { scale: 2, period: 4 },
+            itemStyle: { color: '#ff8f1f' },
+            data: [
+              {
+                name: model.recommended.runCode,
+                value: [
+                  model.recommended.runCode,
+                  model.mfrMedian !== 0
+                    ? Number((((model.recommended.mfr - model.mfrMedian) / model.mfrMedian) * 100).toFixed(2))
+                    : 0
+                ]
+              }
+            ]
+          }
+        ]
+      }, { notMerge: true, lazyUpdate: true });
+    };
+    const updateStep2DerivedCells = () => {
+      if (stepNumber !== 2) return;
+      const rows = Array.from(table?.querySelectorAll('tr[data-run-row]') || []);
+      rows.forEach((row) => {
+        const rpm = numFromRow(row, 'screw_rpm');
+        const throughput = numFromRow(row, 'throughput_kg_h');
+        const torque = numFromRow(row, 'torque_pct');
+        const motorCurrent = numFromRow(row, 'motor_current_a');
+        const driveSignal = torque != null && torque !== 0 ? torque : motorCurrent;
+        const target = row.querySelector('[data-derived-code="SME_kJ_kg"]');
+        if (!target) return;
+        if (rpm == null || throughput == null || throughput <= 0 || driveSignal == null) {
+          target.textContent = '-';
+          return;
+        }
+        const sme = (driveSignal * rpm) / throughput * 0.01;
+        target.textContent = Number.isFinite(sme) ? String(Math.round(sme * 100) / 100) : '-';
+      });
+    };
+    const safeRecomputeCharts = () => {
+      try { updateStep2DerivedCells(); } catch {}
+      try { recomputeStep1Chart(); } catch {}
+      try { recomputeStep2Chart(); } catch {}
+      try { recomputeStep1Recommendations(); } catch {}
+      try { recomputeStep2Recommendations(); } catch {}
+      try { recomputeStep3Recommendations(); } catch {}
+      try { recomputeStep3Chart(); } catch {}
+      try { recomputeStep3DeviationChart(); } catch {}
+    };
+    const recomputeStep1Chart = () => {
+      if (stepNumber !== 1) return;
+      const container = document.getElementById('compoundingStep1Chart');
+      if (!container || !window.echarts) return;
+      const rows = Array.from(table?.querySelectorAll('tr[data-run-row]') || []);
+      const points = [];
+      rows.forEach((row) => {
+        const stabilization = numFromRow(row, 'stabilization_time_min');
+        const mfr = numFromRow(row, 'MFR_g_10min');
+        const screw = numFromRow(row, 'screw_rpm');
+        const headTemp = numFromRow(row, 'head_temp_c');
+        if (stabilization == null || mfr == null || screw == null) return;
+        const score = stabilization;
+        points.push({
+          value: [screw, mfr, stabilization, headTemp ?? null, score],
+          name: row.querySelector('td strong')?.textContent?.trim() || 'run'
+        });
+      });
+      const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+      if (!points.length) {
+        chart.clear();
+        chart.setOption({
+          title: { text: 'Fill Stabilization time + MFR to build quick baseline map', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#8a8a8a', fontWeight: 'normal' } }
+        });
+        return;
+      }
+      const best = points.reduce((acc, item) => (item.value[4] < acc.value[4] ? item : acc));
+      const headTemps = points
+        .map((p) => p.value[3])
+        .filter((v) => Number.isFinite(v))
+        .map((v) => Number(v));
+      const vmMin = headTemps.length ? Math.min(...headTemps) : 0;
+      const vmMax = headTemps.length ? Math.max(...headTemps) : 1;
+      chart.setOption({
+        tooltip: {
+          trigger: 'item',
+          formatter: (params) => {
+            const [screw, mfr, stabilization, headTemp, score] = params.value;
+            return `${params.name}<br/>Stabilization: ${stabilization} min<br/>MFR: ${mfr} g/10min<br/>RPM: ${screw}<br/>Head temp: ${headTemp ?? '-'} °C<br/>Score: ${Number(score).toFixed(2)}`;
+          }
+        },
+        grid: { left: 46, right: 18, top: 24, bottom: 44 },
+        xAxis: { name: 'Screw RPM', nameLocation: 'middle', nameGap: 28, type: 'value' },
+        yAxis: { name: 'MFR (g/10min)', type: 'value' },
+        visualMap: {
+          min: vmMin,
+          max: vmMax,
+          dimension: 3,
+          orient: 'horizontal',
+          left: 'center',
+          bottom: 0,
+          text: ['Head temp °C', ''],
+          calculable: false,
+          inRange: { color: ['#74c180', '#f2b35f', '#d46b6b'] }
+        },
+        series: [
+          {
+            type: 'scatter',
+            data: points,
+            symbolSize: (value) => Math.max(10, Math.min(22, value[2] / 2)),
+            itemStyle: { borderColor: '#fff', borderWidth: 1 },
+            label: { show: true, formatter: '{b}', position: 'top', fontSize: 11, color: '#666' },
+            markPoint: {
+              symbol: 'pin',
+              symbolSize: 40,
+              data: [{ coord: [best.value[0], best.value[1]], value: 'Best', name: `Best: ${best.name}` }],
+              label: { formatter: 'Best', color: '#fff', fontWeight: 'bold' }
+            }
+          }
+        ]
+      });
+    };
+    const recomputeStep2Chart = () => {
+      if (stepNumber !== 2) return;
+      const container = document.getElementById('compoundingStep2Chart');
+      if (!container || !window.echarts) return;
+      const rows = Array.from(table?.querySelectorAll('tr[data-run-row]') || []);
+      const grouped = new Map();
+      const labelByKey = new Map();
+      rows.forEach((row) => {
+        const rpm = numFromRow(row, 'screw_rpm');
+        const throughput = numFromRow(row, 'throughput_kg_h');
+        const torque = numFromRow(row, 'torque_pct');
+        const motorCurrent = numFromRow(row, 'motor_current_a');
+        const driveSignal = torque != null && torque !== 0 ? torque : motorCurrent;
+        const meltTemp = numFromRow(row, 'melt_temp_c');
+        if (rpm == null || throughput == null || throughput <= 0 || driveSignal == null) return;
+        const sme = (driveSignal * rpm) / throughput * 0.01;
+        const tempKey = meltTemp == null ? 'unknown' : String(Math.round(meltTemp));
+        const tempLabel = meltTemp == null ? 'No melt temp' : `${Math.round(meltTemp)} °C`;
+        if (!grouped.has(tempKey)) grouped.set(tempKey, []);
+        grouped.get(tempKey).push({
+          value: [rpm, sme],
+          run: row.querySelector('td strong')?.textContent?.trim() || 'run',
+          throughput
+        });
+        labelByKey.set(tempKey, tempLabel);
+      });
+      const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+      if (!grouped.size) {
+        chart.clear();
+        chart.setOption({
+          title: { text: 'Fill Screw RPM, Throughput and Torque or Motor current to build SME map', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#8a8a8a', fontWeight: 'normal' } }
+        });
+        return;
+      }
+      const colorPalette = ['#2d8cf0', '#19be6b', '#ff9900', '#ed4014', '#9a66e4', '#13c2c2'];
+      const series = Array.from(grouped.entries())
+        .sort((a, b) => {
+          const av = a[0] === 'unknown' ? Number.POSITIVE_INFINITY : Number(a[0]);
+          const bv = b[0] === 'unknown' ? Number.POSITIVE_INFINITY : Number(b[0]);
+          return av - bv;
+        })
+        .map(([key, points], index) => ({
+          name: labelByKey.get(key) || key,
+          type: 'line',
+          smooth: false,
+          symbol: 'circle',
+          symbolSize: 8,
+          color: colorPalette[index % colorPalette.length],
+          data: points.sort((a, b) => a.value[0] - b.value[0]).map((p) => p.value),
+          lineStyle: { width: 2 },
+          emphasis: { focus: 'series' }
+        }));
+      chart.setOption({
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: { type: 'cross' }
+        },
+        legend: { top: 0 },
+        grid: { left: 52, right: 18, top: 36, bottom: 44 },
+        xAxis: {
+          type: 'value',
+          name: 'Screw RPM',
+          nameLocation: 'middle',
+          nameGap: 28,
+          scale: true,
+          min: 'dataMin',
+          max: 'dataMax'
+        },
+        yAxis: { type: 'value', name: 'SME (kJ/kg)' },
+        series
+      }, { notMerge: true, lazyUpdate: true });
     };
 
     table?.addEventListener('input', (event) => {
@@ -275,6 +997,8 @@
       const fieldType = target.getAttribute('data-field-type');
       if (!runId || !fieldId || !fieldType) return;
       const key = `${runId}:${fieldId}`;
+      // Repaint immediate data/plots.
+      safeRecomputeCharts();
       queueSave(key, async () => {
         let value = target.value;
         if (fieldType === 'tag') {
@@ -302,6 +1026,7 @@
         form.append('field_id', target.getAttribute('data-field-id') || '');
         form.append('value', target.checked ? '1' : '0');
         try { await post(`/qual-runs/${runId}/value`, form); } catch {}
+        safeRecomputeCharts();
         return;
       }
 
@@ -313,6 +1038,7 @@
         form.append('done', done);
         form.append('exclude', exclude);
         try { await post(`/qual-runs/${runId}/flags`, form); } catch {}
+        safeRecomputeCharts();
         return;
       }
 
@@ -321,6 +1047,8 @@
         form.append('due_at', target.value || '');
         try { await post(`/qual-runs/${runId}/due-at`, form); } catch {}
       }
+      // Recompute recommendations on committed values (after input is finalized).
+      safeRecomputeCharts();
     });
 
     table?.addEventListener('click', async (event) => {
@@ -346,11 +1074,15 @@
     const fieldDialog = document.getElementById('qualFieldDialog');
     document.getElementById('openQualFields')?.addEventListener('click', () => fieldDialog?.showModal());
     document.getElementById('openQualSettingsDialog')?.addEventListener('click', () => qualSettingsDialog?.showModal());
+    document.getElementById('openStep3Setup')?.addEventListener('click', () => step3SetupDialog?.showModal());
     fieldDialog?.querySelectorAll('[data-close]').forEach((button) => {
       button.addEventListener('click', () => fieldDialog.close());
     });
     qualSettingsDialog?.querySelectorAll('[data-close]').forEach((button) => {
       button.addEventListener('click', () => qualSettingsDialog.close());
+    });
+    step3SetupDialog?.querySelectorAll('[data-close]').forEach((button) => {
+      button.addEventListener('click', () => step3SetupDialog.close());
     });
     if (window.IMPlanner?.setupAutosaveForm && qualSettingsForm) {
       window.IMPlanner.setupAutosaveForm(qualSettingsForm, {
@@ -372,6 +1104,34 @@
         }
       });
     }
+    if (window.IMPlanner?.setupAutosaveForm && step3SetupForm) {
+      window.IMPlanner.setupAutosaveForm(step3SetupForm, {
+        debounceMs: 250,
+        onSuccess: () => {
+          syncStep3Settings();
+        }
+      });
+    }
+    document.getElementById('targetScrewRpmInput')?.addEventListener('input', syncStep3Settings);
+    safeRecomputeCharts();
+    syncStep3Settings();
+    window.addEventListener('resize', () => {
+      const container = document.getElementById('compoundingStep1Chart');
+      if (container && window.echarts) {
+        const chart = echarts.getInstanceByDom(container);
+        chart?.resize();
+      }
+      const container2 = document.getElementById('compoundingStep2Chart');
+      if (container2 && window.echarts) {
+        const chart2 = echarts.getInstanceByDom(container2);
+        chart2?.resize();
+      }
+      const container3 = document.getElementById('compoundingStep3Chart');
+      if (container3 && window.echarts) {
+        const chart3 = echarts.getInstanceByDom(container3);
+        chart3?.resize();
+      }
+    });
 
     fieldDialog?.addEventListener('change', async (event) => {
       const target = event.target;

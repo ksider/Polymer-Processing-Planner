@@ -86,6 +86,7 @@ function getDefaultActiveOutputCodes(processTypeCode = "injection"): Set<string>
   if (processTypeCode === "compounding") {
     return new Set([
       "torque_pct",
+      "motor_current_a",
       "melt_temp_c",
       "die_pressure_bar",
       "SME_kJ_kg",

@@ -76,6 +76,7 @@ const SEED_PARAMS: SeedParam[] = [
   { code: "moisture_target_pct", label: "Moisture Target", unit: "%", field_kind: "INPUT", field_type: "number", group_label: "Compounding" },
   { code: "vent_on", label: "Vent On", unit: "0/1", field_kind: "INPUT", field_type: "number", group_label: "Compounding" },
   { code: "torque_pct", label: "Torque", unit: "%", field_kind: "OUTPUT", field_type: "number", group_label: "Compounding Outputs" },
+  { code: "motor_current_a", label: "Motor Current", unit: "A", field_kind: "OUTPUT", field_type: "number", group_label: "Compounding Outputs" },
   { code: "melt_temp_c", label: "Melt Temp", unit: "C", field_kind: "OUTPUT", field_type: "number", group_label: "Compounding Outputs" },
   { code: "die_pressure_bar", label: "Die Pressure", unit: "bar", field_kind: "OUTPUT", field_type: "number", group_label: "Compounding Outputs" },
   { code: "SME_kJ_kg", label: "SME", unit: "kJ/kg", field_kind: "OUTPUT", field_type: "number", group_label: "Compounding Outputs" },

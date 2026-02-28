@@ -92,11 +92,15 @@
     statusEl.textContent = 'Saving...';
     saving = true;
     try {
-      await fetch(`/qual-runs/<%= run.id %>/value`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ field_id: fieldId, value })
-      });
+      if (window.IMPlanner?.postJson) {
+        await window.IMPlanner.postJson(`/qual-runs/<%= run.id %>/value`, { field_id: fieldId, value });
+      } else {
+        await fetch(`/qual-runs/<%= run.id %>/value`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ field_id: fieldId, value })
+        });
+      }
       statusEl.textContent = 'Saved ✓';
     } catch {
       statusEl.textContent = 'Error ↺';
@@ -135,11 +139,19 @@
   const excludeEl = document.getElementById('qualRunExclude');
   const dueEl = document.getElementById('qualRunDueAt');
   const saveFlags = async () => {
-    await fetch(`/qual-runs/<%= run.id %>/flags`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ done: doneEl.checked, exclude: excludeEl.checked, due_at: dueEl?.value || '' })
-    });
+    if (window.IMPlanner?.postJson) {
+      await window.IMPlanner.postJson(`/qual-runs/<%= run.id %>/flags`, {
+        done: doneEl.checked,
+        exclude: excludeEl.checked,
+        due_at: dueEl?.value || ''
+      });
+    } else {
+      await fetch(`/qual-runs/<%= run.id %>/flags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ done: doneEl.checked, exclude: excludeEl.checked, due_at: dueEl?.value || '' })
+      });
+    }
   };
   doneEl?.addEventListener('change', saveFlags);
   excludeEl?.addEventListener('change', saveFlags);

@@ -1,6 +1,8 @@
 <%- include('partials/head', { title: 'Polymer Processing Planner | Qualification' }) %>
 <%- include('partials/nav') %>
 <div class="container">
+  <% const currentProcessType = String(typeof processTypeCode === 'string' ? processTypeCode : 'injection').toLowerCase(); %>
+  <% const limitLaterSteps = currentProcessType === 'compounding'; %>
   <div class="card">
     <div class="card-header">
       <a class="back-link" href="<%= experimentPath(experimentId) %>" aria-label="Back to experiment">
@@ -11,7 +13,8 @@
     <p class="small-note">Six-step qualification lives inside this experiment.</p>
     <div class="qual-step-grid">
       <% steps.forEach((step) => { const def = stepDefinitions.find((d) => d.step_number === step.step_number); const summary = summaryMap.get(step.step_number); %>
-        <div class="qual-step-card">
+        <% const stepLocked = limitLaterSteps && step.step_number >= 4; %>
+        <div class="qual-step-card <%= stepLocked ? 'is-locked' : '' %>">
           <div class="qual-step-header">
             <div class="qual-step-title">
               <div class="badge">Step <%= step.step_number %></div>
@@ -61,7 +64,12 @@
           <% } else { %>
             <div class="small-note">No summary yet.</div>
           <% } %>
-          <a class="pure-button pure-button-secondary qual-step-btn" href="/experiments/<%= experimentId %>/qualification/<%= step.step_number %>">Open Step</a>
+          <% if (stepLocked) { %>
+            <button class="pure-button pure-button-secondary qual-step-btn" type="button" disabled>Temporarily disabled</button>
+            <div class="card-lock-overlay" aria-hidden="true"><span>Temporarily disabled</span></div>
+          <% } else { %>
+            <a class="pure-button pure-button-secondary qual-step-btn" href="/experiments/<%= experimentId %>/qualification/<%= step.step_number %>">Open Step</a>
+          <% } %>
         </div>
       <% }); %>
     </div>

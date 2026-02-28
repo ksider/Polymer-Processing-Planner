@@ -72,8 +72,9 @@ test("compounding experiment gets process-specific qualification pack and DOE de
   const step1 = qualStepRows.find((row) => row.step_number === 1);
   assert.ok(step1, "qualification step 1 is missing");
   const step1FieldCodes = new Set(listQualFields(db, step1?.id ?? 0).map((field) => field.code));
-  assert.ok(step1FieldCodes.has("tracer_peak_time_s"));
+  assert.ok(step1FieldCodes.has("stabilization_time_min"));
   assert.ok(step1FieldCodes.has("MFR_g_10min"));
+  assert.equal(step1FieldCodes.has("tracer_peak_time_s"), false, "legacy tracer fields should not be default in compounding step 1");
   assert.equal(step1FieldCodes.has("inj_speed"), false, "injection-only fields should not be seeded");
 
   const doeId = createDoeWithDefaults(db, {

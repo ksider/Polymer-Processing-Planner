@@ -57,9 +57,18 @@ export function createQualificationRouter(db: Db) {
   router.get("/experiments/:id/qualification/:step", (req, res) => {
     const experimentId = Number(req.params.id);
     const stepNumber = Number(req.params.step);
-    ensureQualificationDefaults(db, experimentId);
     const experiment = getExperiment(db, experimentId);
     if (!experiment) return res.status(404).send("Experiment not found");
+    const processTypeCode = (() => {
+      if (!experiment.process_id) return "injection";
+      const process = getProcessById(db, experiment.process_id);
+      return String(process?.process_type_code || "injection").toLowerCase();
+    })();
+    const isLimitedProcess = processTypeCode === "compounding";
+    if (isLimitedProcess && stepNumber >= 4) {
+      return res.redirect(`/experiments/${experimentId}#qualification`);
+    }
+    ensureQualificationDefaults(db, experimentId);
     const step = getQualStep(db, experimentId, stepNumber);
     if (!step) return res.status(404).send("Step not found");
     const fields = listQualFields(db, step.id);
@@ -82,11 +91,14 @@ export function createQualificationRouter(db: Db) {
       runValueMap[String(run.id)] = row;
     }
     const settingsJson = getQualStepSettings(db, experimentId, stepNumber);
-    const processTypeCode = (() => {
-      if (!experiment.process_id) return "injection";
-      const process = getProcessById(db, experiment.process_id);
-      return String(process?.process_type_code || "injection").toLowerCase();
-    })();
+    let stepSettings: Record<string, unknown> = {};
+    if (settingsJson) {
+      try {
+        stepSettings = JSON.parse(settingsJson) as Record<string, unknown>;
+      } catch {
+        stepSettings = {};
+      }
+    }
     const canAssignEntities = canAssignEntityResponsibility(req.user, experiment);
     const assignableUsers = canAssignEntities
       ? listUsers(db).filter((user) => user.status === "ACTIVE")
@@ -95,6 +107,8 @@ export function createQualificationRouter(db: Db) {
     const stepAssigneeId = assignment?.assignee_user_id ?? null;
     const stepAssignee = stepAssigneeId ? findUserById(db, stepAssigneeId) : null;
     const stepAssigneeLabel = stepAssignee?.name?.trim() || stepAssignee?.email?.trim() || null;
+    // Keep summary synchronized with current run values and formulas on page open.
+    recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
     const summaryRow = listQualSummaries(db, experimentId).find(
       (row) => row.step_number === stepNumber
     );
@@ -107,6 +121,7 @@ export function createQualificationRouter(db: Db) {
         runs,
         globalParams,
         runValueMap,
+        stepSettings,
         summaryJson: summaryRow?.summary_json ?? null,
         canAssignEntities,
         assignableUsers,
@@ -280,12 +295,17 @@ export function createQualificationRouter(db: Db) {
       return res.status(403).json({ error: "Forbidden" });
     }
     const runId = Number(req.params.id);
+    const run = getQualRun(db, runId);
+    if (!run) return res.status(404).json({ error: "Run not found" });
+    const step = getQualStepById(db, run.step_id);
+    if (!step) return res.status(404).json({ error: "Step not found" });
     const done = Number(req.body.done ? 1 : 0);
     const exclude = Number(req.body.exclude ? 1 : 0);
     const dueAtRaw = String(req.body?.due_at ?? "").trim();
     const dueAt = /^\d{4}-\d{2}-\d{2}$/.test(dueAtRaw) ? dueAtRaw : null;
     updateQualRunFlags(db, runId, done, exclude);
     updateQualRunDueAt(db, runId, dueAt);
+    recomputeDerivedAndSummary(db, run.experiment_id, run.step_id, step.step_number);
     return res.json({ ok: true });
   });
 
@@ -951,11 +971,17 @@ export function createQualificationRouter(db: Db) {
       cpw_gen_mode: req.body.cpw_gen_mode ? String(req.body.cpw_gen_mode) : null,
       cpw_temp_step_c: parseSettingValue(req.body.cpw_temp_step_c),
       cpw_hold_step_bar: parseSettingValue(req.body.cpw_hold_step_bar),
+      target_screw_rpm: parseSettingValue(req.body.target_screw_rpm),
       custom_fields: customFields
     };
     upsertQualStepSettings(db, experimentId, stepNumber, JSON.stringify(settings));
     recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
-    return res.json({ ok: true });
+    const wantsJson =
+      req.xhr ||
+      String(req.get("X-Requested-With") || "").toLowerCase() === "xmlhttprequest" ||
+      String(req.get("Accept") || "").toLowerCase().includes("application/json");
+    if (wantsJson) return res.json({ ok: true });
+    return res.redirect(`/experiments/${experimentId}/qualification/${stepNumber}`);
   });
 
   router.post("/param-library", (req, res) => {
