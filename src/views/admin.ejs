@@ -179,6 +179,41 @@
       </table>
     </div>
   </div>
+
+  <div class="card">
+    <h2 class="card-title">Processes on Home</h2>
+    <div id="adminProcessToastArea"></div>
+    <div class="table-wrap">
+      <table class="pure-table pure-table-striped">
+        <thead>
+          <tr>
+            <th>Process</th>
+            <th>Route</th>
+            <th>Visible on Home</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% (processes || []).forEach((process) => { %>
+            <tr>
+              <td>
+                <strong><%- formatInline(process.name) %></strong>
+                <span class="small-note">(<%- formatInline(process.process_type_name || 'Process') %>)</span>
+              </td>
+              <td><code>/<%- formatInline(process.route_code || process.process_type_code || '') %></code></td>
+              <td>
+                <form id="processHomeForm-<%= process.id %>" method="post" action="/admin/processes/<%= process.id %>/home-visibility" class="pure-form inline-form autosave-form ajax-form" data-admin-scope="processes">
+                  <label class="pure-checkbox">
+                    <input type="checkbox" name="show_on_home" data-autosave="processHomeForm-<%= process.id %>" <%= Number(process.show_on_home || 0) === 1 ? 'checked' : '' %>>
+                    show
+                  </label>
+                </form>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 <%- include("partials/foot") %>
 
@@ -264,7 +299,11 @@
         body: payload
       });
       if (!resp.ok) {
-        const target = form?.getAttribute('data-exp-action') ? 'experiments' : 'users';
+        const target = form?.getAttribute('data-exp-action')
+          ? 'experiments'
+          : form?.getAttribute('data-admin-scope') === 'processes'
+            ? 'processes'
+            : 'users';
         showToast('Save failed', 'error', target);
       }
     }, 400);
@@ -291,8 +330,13 @@
 
   const toastArea = document.getElementById('adminToastArea');
   const expToastArea = document.getElementById('adminExperimentToastArea');
+  const processToastArea = document.getElementById('adminProcessToastArea');
   const showToast = (message, kind = 'success', target = 'users') => {
-    const area = target === 'experiments' ? expToastArea : toastArea;
+    const area = target === 'experiments'
+      ? expToastArea
+      : target === 'processes'
+        ? processToastArea
+        : toastArea;
     if (!area) return;
     const toast = document.createElement('div');
     toast.className = `toast toast-${kind} toast-inline`;
@@ -310,6 +354,7 @@
       event.preventDefault();
       const expAction = form.getAttribute('data-exp-action');
       const isExperiment = Boolean(expAction);
+      const isProcess = form?.getAttribute('data-admin-scope') === 'processes';
       const banToggle = form.querySelector('[data-ban-toggle]');
       const payload = new URLSearchParams(new FormData(form));
       const resp = await fetch(form.action, {
@@ -322,10 +367,10 @@
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
-        showToast(data?.message || 'Action failed', 'error', isExperiment ? 'experiments' : 'users');
+        showToast(data?.message || 'Action failed', 'error', isExperiment ? 'experiments' : (isProcess ? 'processes' : 'users'));
         return;
       }
-      showToast(data?.message || 'Saved', 'success', isExperiment ? 'experiments' : 'users');
+      showToast(data?.message || 'Saved', 'success', isExperiment ? 'experiments' : (isProcess ? 'processes' : 'users'));
       if (isExperiment) {
         const row = form.closest('tr[data-exp-status]');
         if (expAction === 'delete' && row) {

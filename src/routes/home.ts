@@ -59,11 +59,21 @@ export function createHomeRouter(db: Db) {
 
   const renderProcesses = (req: express.Request, res: express.Response) => {
     const isPrivileged = req.user?.role === "admin" || req.user?.role === "manager";
+    const allProcesses = listProcessesWithStats(db);
+    const visibleProcessIds = new Set(
+      allProcesses
+        .filter((process) => Number(process.show_on_home ?? 1) === 1)
+        .map((process) => Number(process.id))
+    );
     const allExperiments = isPrivileged
       ? listExperimentsWithMeta(db, false)
       : req.user?.id
         ? listExperimentsForUserWithMeta(db, req.user.id, false)
         : [];
+    const visibleExperiments = allExperiments.filter((exp) => {
+      const processId = Number(exp.process_id || 0);
+      return Number.isFinite(processId) && visibleProcessIds.has(processId);
+    });
     const ownerLabelByProcessId = new Map<number, string>();
     const getOwnerLabel = (processId: number, ownerUserId: number | null | undefined) => {
       if (!Number.isFinite(processId) || processId <= 0) return "Unassigned";
@@ -75,7 +85,9 @@ export function createHomeRouter(db: Db) {
       return label;
     };
     const processCards = isPrivileged
-      ? listProcessesWithStats(db).map((process) => ({
+      ? allProcesses
+        .filter((process) => visibleProcessIds.has(Number(process.id)))
+        .map((process) => ({
           id: process.id,
           name: process.name,
           route_code: getProcessRouteCode(process),
@@ -94,9 +106,10 @@ export function createHomeRouter(db: Db) {
             process_type_name: string;
             experiment_count: number;
           }>();
-          allExperiments.forEach((exp) => {
+          visibleExperiments.forEach((exp) => {
             const processId = Number(exp.process_id || 0);
             if (!Number.isFinite(processId) || processId <= 0) return;
+            if (!visibleProcessIds.has(processId)) return;
             const existing = cardsById.get(processId);
             if (existing) {
               existing.experiment_count += 1;
@@ -125,8 +138,8 @@ export function createHomeRouter(db: Db) {
       ? processCards.find((process) => process.id === selectedProcessId) || null
       : null;
     const experiments = selectedProcess
-      ? allExperiments.filter((exp) => Number(exp.process_id || 0) === selectedProcess.id)
-      : allExperiments;
+      ? visibleExperiments.filter((exp) => Number(exp.process_id || 0) === selectedProcess.id)
+      : visibleExperiments;
     const isAdmin = req.user?.role === "admin";
     const assignableUsers = isAdmin ? listUsers(db).filter((user) => user.status === "ACTIVE") : [];
     processCards.sort((a, b) => a.name.localeCompare(b.name));

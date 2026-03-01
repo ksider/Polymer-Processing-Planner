@@ -22,6 +22,10 @@ import {
   deleteExperiment,
   type ExperimentListRow
 } from "../repos/experiments_repo.js";
+import {
+  listProcessesWithStats,
+  updateProcessHomeVisibility
+} from "../repos/processes_repo.js";
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -37,6 +41,10 @@ export function createAdminRouter(db: Db) {
   router.get("/", (_req, res) => {
     const settings = getAdminSettings(db);
     const users = listUsers(db);
+    const processes = listProcessesWithStats(db).map((process) => ({
+      ...process,
+      show_on_home: Number(process.show_on_home ?? 1) === 1 ? 1 : 0
+    }));
     const experimentsRaw = listExperimentsWithMeta(db, true);
     const experiments = experimentsRaw.map((exp: ExperimentListRow) => {
       const summaryCount = Number(exp.qual_summary_count || 0);
@@ -58,10 +66,34 @@ export function createAdminRouter(db: Db) {
       title: "Admin",
       settings,
       users,
+      processes,
       experiments,
       notice,
       error
     });
+  });
+
+  router.post("/processes/:id/home-visibility", (req, res) => {
+    const processId = Number(req.params.id);
+    if (!Number.isFinite(processId)) {
+      if (wantsJson(req)) {
+        return res.status(400).json({ ok: false, message: "Invalid process" });
+      }
+      return res.redirect("/admin?error=Invalid process");
+    }
+    const showOnHome = req.body?.show_on_home ? 1 : 0;
+    updateProcessHomeVisibility(db, processId, showOnHome);
+    insertAudit(db, {
+      actorUserId: req.user?.id ?? null,
+      action: "admin.process.home_visibility.update",
+      targetUserId: null,
+      detailsJson: JSON.stringify({ process_id: processId, show_on_home: showOnHome })
+    });
+    const message = showOnHome ? "Process shown on home" : "Process hidden from home";
+    if (wantsJson(req)) {
+      return res.json({ ok: true, message });
+    }
+    return res.redirect(`/admin?notice=${encodeURIComponent(message)}`);
   });
 
   router.post("/domain", (req, res) => {

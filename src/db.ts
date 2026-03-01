@@ -196,6 +196,7 @@ function initDb(db: Db) {
       name TEXT NOT NULL,
       route_code TEXT,
       owner_user_id INTEGER,
+      show_on_home INTEGER NOT NULL DEFAULT 1,
       status TEXT NOT NULL DEFAULT 'active',
       meta_json TEXT,
       created_at TEXT NOT NULL,
@@ -506,6 +507,10 @@ function initDb(db: Db) {
   }
   if (!hasColumn(db, "processes", "route_code")) {
     db.exec("ALTER TABLE processes ADD COLUMN route_code TEXT");
+  }
+  if (!hasColumn(db, "processes", "show_on_home")) {
+    db.exec("ALTER TABLE processes ADD COLUMN show_on_home INTEGER NOT NULL DEFAULT 1");
+    db.exec("UPDATE processes SET show_on_home = 1 WHERE show_on_home IS NULL");
   }
   db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_processes_route_code_unique

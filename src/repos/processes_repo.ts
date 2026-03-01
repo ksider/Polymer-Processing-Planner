@@ -13,6 +13,7 @@ export type ProcessRow = {
   name: string;
   route_code: string | null;
   owner_user_id: number | null;
+  show_on_home?: number;
   status: string;
   meta_json: string | null;
   created_at: string;
@@ -153,6 +154,10 @@ export function updateProcessSettings(db: Db, processId: number, ownerUserId: nu
 
 export function updateProcessOwner(db: Db, processId: number, ownerUserId: number | null): void {
   db.prepare("UPDATE processes SET owner_user_id = ? WHERE id = ?").run(ownerUserId, processId);
+}
+
+export function updateProcessHomeVisibility(db: Db, processId: number, showOnHome: number): void {
+  db.prepare("UPDATE processes SET show_on_home = ? WHERE id = ?").run(showOnHome ? 1 : 0, processId);
 }
 
 export function getDefaultProcessId(db: Db): number | null {
