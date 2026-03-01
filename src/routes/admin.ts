@@ -24,7 +24,10 @@ import {
 } from "../repos/experiments_repo.js";
 import {
   listProcessesWithStats,
-  updateProcessHomeVisibility
+  updateProcessHomeVisibility,
+  updateProcessSettings,
+  getProcessById,
+  normalizeRouteCode
 } from "../repos/processes_repo.js";
 
 function normalizeEmail(email: string) {
@@ -73,7 +76,7 @@ export function createAdminRouter(db: Db) {
     });
   });
 
-  router.post("/processes/:id/home-visibility", (req, res) => {
+  router.post("/processes/:id/settings", (req, res) => {
     const processId = Number(req.params.id);
     if (!Number.isFinite(processId)) {
       if (wantsJson(req)) {
@@ -81,15 +84,44 @@ export function createAdminRouter(db: Db) {
       }
       return res.redirect("/admin?error=Invalid process");
     }
+    const process = getProcessById(db, processId);
+    if (!process) {
+      if (wantsJson(req)) {
+        return res.status(404).json({ ok: false, message: "Process not found" });
+      }
+      return res.redirect("/admin?error=Process not found");
+    }
+    const rawOwner = String(req.body?.owner_user_id ?? "").trim();
+    const ownerUserId = rawOwner ? Number(rawOwner) : null;
+    if (rawOwner && !Number.isFinite(ownerUserId)) {
+      if (wantsJson(req)) {
+        return res.status(400).json({ ok: false, message: "Invalid owner" });
+      }
+      return res.redirect("/admin?error=Invalid owner");
+    }
+    const routeCode = normalizeRouteCode(String(req.body?.route_code ?? ""));
     const showOnHome = req.body?.show_on_home ? 1 : 0;
+    try {
+      updateProcessSettings(db, processId, Number.isFinite(ownerUserId) ? ownerUserId : null, routeCode);
+    } catch {
+      if (wantsJson(req)) {
+        return res.status(400).json({ ok: false, message: "Route code already in use" });
+      }
+      return res.redirect("/admin?error=Route code already in use");
+    }
     updateProcessHomeVisibility(db, processId, showOnHome);
     insertAudit(db, {
       actorUserId: req.user?.id ?? null,
-      action: "admin.process.home_visibility.update",
+      action: "admin.process.settings.update",
       targetUserId: null,
-      detailsJson: JSON.stringify({ process_id: processId, show_on_home: showOnHome })
+      detailsJson: JSON.stringify({
+        process_id: processId,
+        owner_user_id: Number.isFinite(ownerUserId) ? ownerUserId : null,
+        route_code: routeCode,
+        show_on_home: showOnHome
+      })
     });
-    const message = showOnHome ? "Process shown on home" : "Process hidden from home";
+    const message = "Process settings updated";
     if (wantsJson(req)) {
       return res.json({ ok: true, message });
     }

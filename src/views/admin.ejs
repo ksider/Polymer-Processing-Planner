@@ -189,6 +189,7 @@
           <tr>
             <th>Process</th>
             <th>Route</th>
+            <th>Owner</th>
             <th>Visible on Home</th>
           </tr>
         </thead>
@@ -199,11 +200,34 @@
                 <strong><%- formatInline(process.name) %></strong>
                 <span class="small-note">(<%- formatInline(process.process_type_name || 'Process') %>)</span>
               </td>
-              <td><code>/<%- formatInline(process.route_code || process.process_type_code || '') %></code></td>
               <td>
-                <form id="processHomeForm-<%= process.id %>" method="post" action="/admin/processes/<%= process.id %>/home-visibility" class="pure-form inline-form autosave-form ajax-form" data-admin-scope="processes">
+                <form id="processSettingsForm-<%= process.id %>" method="post" action="/admin/processes/<%= process.id %>/settings" class="pure-form inline-form autosave-form ajax-form" data-admin-scope="processes">
+                  <input
+                    type="text"
+                    name="route_code"
+                    value="<%- formatInline(process.route_code || process.process_type_code || '') %>"
+                    pattern="[a-z0-9][a-z0-9_-]*"
+                    data-autosave="processSettingsForm-<%= process.id %>"
+                    style="min-width: 140px;"
+                  />
+                </form>
+              </td>
+              <td>
+                <form class="pure-form inline-form">
+                  <select name="owner_user_id" form="processSettingsForm-<%= process.id %>" data-autosave="processSettingsForm-<%= process.id %>">
+                    <option value="">Unassigned</option>
+                    <% users.forEach((user) => { %>
+                      <option value="<%= user.id %>" <%= process.owner_user_id === user.id ? 'selected' : '' %>>
+                        <%= user.name ? user.name : user.email %>
+                      </option>
+                    <% }) %>
+                  </select>
+                </form>
+              </td>
+              <td>
+                <form class="pure-form inline-form">
                   <label class="pure-checkbox">
-                    <input type="checkbox" name="show_on_home" data-autosave="processHomeForm-<%= process.id %>" <%= Number(process.show_on_home || 0) === 1 ? 'checked' : '' %>>
+                    <input type="checkbox" name="show_on_home" form="processSettingsForm-<%= process.id %>" data-autosave="processSettingsForm-<%= process.id %>" <%= Number(process.show_on_home || 0) === 1 ? 'checked' : '' %>>
                     show
                   </label>
                 </form>

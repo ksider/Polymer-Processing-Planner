@@ -13,9 +13,6 @@
         <% if (canManage) { %>
           <a class="pure-button pure-button-primary" href="/experiments/new?process_id=<%= process.id %>">Create Experiment</a>
         <% } %>
-        <% if (isAdmin) { %>
-          <button class="pure-button" type="button" id="processSettingsOpen">Process settings</button>
-        <% } %>
       </div>
     </div>
   </div>
@@ -92,41 +89,6 @@
     </table>
   </div>
 </div>
-<% if (isAdmin) { %>
-  <dialog id="processSettingsDialog">
-    <form method="dialog" class="pure-form pure-form-stacked" style="min-width:320px;">
-      <h3 class="card-title" style="margin-top:0;">Process Settings</h3>
-      <p class="small-note">Admin only: edit process route and assign owner.</p>
-      <label for="owner_user_id">Responsible (Process Owner)</label>
-      <select id="owner_user_id" name="owner_user_id" form="processSettingsForm">
-        <option value="">Unassigned</option>
-        <% (assignableUsers || []).forEach((user) => { %>
-          <option value="<%= user.id %>" <%= process.owner_user_id === user.id ? 'selected' : '' %>>
-            <%= user.name ? `${user.name} (${user.email})` : user.email %>
-          </option>
-        <% }) %>
-      </select>
-      <label for="route_code">Process Route Code</label>
-      <input id="route_code" name="route_code" form="processSettingsForm" placeholder="injection" pattern="[a-z0-9][a-z0-9_-]*" value="<%= process.route_code || process.process_type_code || '' %>">
-      <div class="small-note">Used in URLs: /&lt;route_code&gt; and /&lt;route_code&gt;/&lt;experiment_id&gt;</div>
-      <div class="section-actions" style="margin-top:0.75rem;">
-        <button class="pure-button" value="cancel">Cancel</button>
-        <button class="pure-button pure-button-primary" form="processSettingsForm" value="default">Save</button>
-      </div>
-    </form>
-  </dialog>
-  <form id="processSettingsForm" action="/processes/<%= process.id %>/settings" method="post"></form>
-  <script>
-    (() => {
-      const openBtn = document.getElementById('processSettingsOpen');
-      const dialog = document.getElementById('processSettingsDialog');
-      if (!openBtn || !dialog) return;
-      openBtn.addEventListener('click', () => {
-        if (typeof dialog.showModal === 'function') dialog.showModal();
-      });
-    })();
-  </script>
-<% } %>
 <%- include('partials/foot') %>
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
 <script>
