@@ -1,0 +1,464 @@
+<%- include('partials/head', { title: title || 'Messages' }) %>
+<%- include('partials/nav') %>
+<div class="container messages-page-container">
+  <div class="card messages-workspace">
+    <div class="messages-layout">
+      <aside class="messages-sidebar">
+        <div class="messages-sidebar-head">
+          <h1 class="card-title">Messages</h1>
+          <div class="messages-view-tabs">
+            <a class="pure-button <%= view === 'chat' ? 'pure-button-primary' : '' %>" href="/messages?view=chat">Chats</a>
+            <a class="pure-button <%= view === 'deleted' ? 'pure-button-primary' : '' %>" href="/messages?view=deleted">Deleted</a>
+          </div>
+        </div>
+
+        <div class="messages-sidebar-body">
+        <% if (view === 'chat') { %>
+          <div class="messages-compose-search">
+            <label for="openDirectInput">Open direct chat</label>
+            <input
+              id="openDirectInput"
+              type="search"
+              placeholder="Type name or email..."
+              autocomplete="off"
+              data-open-direct-input
+            >
+            <div class="messages-user-suggest" data-open-direct-suggest hidden></div>
+          </div>
+
+          <div class="messages-list-block is-chat-list">
+            <div class="messages-list-title">All chats</div>
+            <% if (!rooms || rooms.length === 0) { %>
+              <div class="small-note">No chats yet.</div>
+            <% } %>
+            <div class="messages-conversation-list">
+              <% (rooms || []).forEach((room) => { %>
+                <% const isActive = activeRoom && Number(activeRoom.id) === Number(room.room_id); %>
+                <% const typeLabel = room.room_type === 'group' ? 'GROUP' : (room.room_type === 'system' ? 'SYSTEM' : 'DIRECT'); %>
+                <div class="messages-conversation-row <%= room.room_type === 'group' ? 'is-group' : '' %>">
+                  <a
+                    class="messages-conversation-item room-type-<%= room.room_type %> <%= isActive ? 'is-active' : '' %>"
+                    href="/messages?view=chat&room_id=<%= room.room_id %>"
+                  >
+                    <div class="messages-conversation-top">
+                      <strong><%- formatInline(room.title) %></strong>
+                      <div class="messages-conversation-badges">
+                        <span class="messages-room-type"><%= typeLabel %></span>
+                      <% if (room.room_type === 'group' && room.mention_unread_count > 0) { %>
+                        <span class="messages-mention-pill" title="Unread mentions">@<%= room.mention_unread_count > 99 ? '99+' : room.mention_unread_count %></span>
+                      <% } %>
+                      <% if (room.unread_count > 0) { %>
+                        <span class="messages-unread-pill"><%= room.unread_count > 99 ? '99+' : room.unread_count %></span>
+                      <% } %>
+                      </div>
+                    </div>
+                  </a>
+                  <% if (room.room_type === 'group') { %>
+                    <form class="pure-form messages-room-delete-form" action="/messages/rooms/<%= room.room_id %>/delete" method="post">
+                      <button class="icon-btn icon-only danger" type="submit" title="Delete group chat" onclick="return confirm('Delete this group chat for all participants?');">
+                        <span class="material-symbols-rounded">delete</span>
+                      </button>
+                    </form>
+                  <% } %>
+                </div>
+              <% }); %>
+            </div>
+          </div>
+
+          <div class="messages-list-block">
+            <div class="messages-list-title">New group chat</div>
+            <button class="pure-button pure-button-primary" type="button" id="openGroupChatDialog">Create group chat</button>
+          </div>
+
+          <div class="messages-list-block">
+            <div class="messages-list-title">Users without direct chat</div>
+            <% if (!usersWithoutConversation || usersWithoutConversation.length === 0) { %>
+              <div class="small-note">You already have direct chats with all active users.</div>
+            <% } %>
+            <div class="messages-user-list">
+              <% (usersWithoutConversation || []).forEach((user) => { %>
+                <a class="messages-user-item" href="/messages?view=chat&user_id=<%= user.id %>">
+                  <strong><%- formatInline(user.name || user.email) %></strong>
+                  <span class="small-note"><%- formatInline(user.email) %></span>
+                </a>
+              <% }); %>
+            </div>
+          </div>
+        <% } else { %>
+          <div class="messages-list-block">
+            <div class="messages-list-title">Deleted messages</div>
+            <div class="messages-flat-list">
+              <% if (!deletedItems || deletedItems.length === 0) { %>
+                <div class="small-note">No deleted messages.</div>
+              <% } %>
+              <% (deletedItems || []).forEach((item) => { %>
+                <div class="messages-flat-item">
+                  <strong><%- formatInline(item.subject) %></strong>
+                  <div class="small-note"><%- formatInline(item.body || '-') %></div>
+                  <div class="messages-row-actions">
+                    <form class="pure-form" action="/messages/<%= item.id %>/restore" method="post">
+                      <button class="pure-button button-sm" type="submit">Restore</button>
+                    </form>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          </div>
+        <% } %>
+        </div>
+      </aside>
+
+      <section class="messages-thread">
+        <% if (view === 'deleted') { %>
+          <div class="messages-empty-thread">
+            <strong>Deleted messages</strong>
+            <div class="small-note">Messages are hidden only for you. Restore from the left panel.</div>
+          </div>
+        <% } else if (!activeRoom) { %>
+          <div class="messages-empty-thread">
+            <strong>Select chat</strong>
+            <div class="small-note">Open a direct chat from search or create a new group chat.</div>
+          </div>
+        <% } else { %>
+          <% const activeRoomType = activeRoom.room_type || 'direct'; %>
+          <div class="messages-thread-head">
+            <div class="messages-thread-head-main">
+              <div class="messages-thread-title-row">
+                <strong><%- formatInline((rooms.find((room) => Number(room.room_id) === Number(activeRoom.id)) || {}).title || activeRoom.title || 'Chat') %></strong>
+                <span class="messages-thread-kind">
+                  <%= activeRoomType === 'group' ? 'Group chat' : (activeRoomType === 'system' ? 'System notifications' : 'Direct chat') %>
+                </span>
+              </div>
+              <% if (activeRoomType === 'group') { %>
+                <div class="messages-thread-members-inline">
+                  <% (roomMembers || []).forEach((member) => { %>
+                    <div class="messages-member-chip is-compact">
+                      <span><%- formatInline(member.name || member.email || `User #${member.user_id}`) %></span>
+                      <% if (member.member_role === 'owner') { %>
+                        <span class="messages-room-type">OWNER</span>
+                      <% } %>
+                      <% if (canManageMembers && Number(member.user_id) !== Number(currentUser?.id)) { %>
+                        <form class="pure-form" action="/messages/rooms/<%= activeRoom.id %>/members/<%= member.user_id %>/remove" method="post">
+                          <button class="pure-button button-sm danger" type="submit">Remove</button>
+                        </form>
+                      <% } %>
+                    </div>
+                  <% }) %>
+                </div>
+              <% } %>
+            </div>
+            <div class="messages-thread-head-actions">
+              <% if (activeRoomType === 'group' && canManageMembers) { %>
+                <button class="icon-btn icon-only" type="button" data-add-member-open title="Add participant">
+                  <span class="material-symbols-rounded">group_add</span>
+                </button>
+              <% } %>
+              <form class="pure-form" action="/messages/rooms/<%= activeRoom.id %>/read" method="post">
+                <button class="pure-button button-sm" type="submit">Mark read</button>
+              </form>
+            </div>
+          </div>
+
+          <% if (activeRoomType === 'group') { %>
+            <% if (canManageMembers) { %>
+              <dialog class="modal-frame" id="addMemberDialog">
+                <div class="modal-header">
+                  <strong>Add Participant</strong>
+                  <button class="icon-btn icon-only" type="button" data-add-member-close title="Close">
+                    <span class="material-symbols-rounded">close</span>
+                  </button>
+                </div>
+                <div class="modal-body">
+                  <div class="messages-add-member-list">
+                    <% let hasCandidates = false; %>
+                    <% (subordinateUsers || []).forEach((user) => { %>
+                      <% const alreadyIn = (roomMembers || []).some((member) => Number(member.user_id) === Number(user.id)); %>
+                      <% if (!alreadyIn) { hasCandidates = true; %>
+                        <form class="pure-form messages-add-member-row" action="/messages/rooms/<%= activeRoom.id %>/members/add" method="post">
+                          <input type="hidden" name="user_id" value="<%= user.id %>">
+                          <div>
+                            <strong><%- formatInline(user.name || user.email) %></strong>
+                            <div class="small-note"><%- formatInline(user.email) %> · <%- formatInline(user.role || 'user') %></div>
+                          </div>
+                          <button class="pure-button button-sm" type="submit">Add</button>
+                        </form>
+                      <% } %>
+                    <% }) %>
+                    <% if (!hasCandidates) { %>
+                      <div class="small-note">No eligible users to add.</div>
+                    <% } %>
+                  </div>
+                </div>
+              </dialog>
+            <% } %>
+          <% } %>
+
+          <div class="messages-thread-body">
+            <% if (!threadMessages || threadMessages.length === 0) { %>
+              <div class="small-note">No messages yet.</div>
+            <% } %>
+            <% (threadMessages || []).forEach((msg) => { %>
+              <div
+                id="msg-<%= msg.message_id %>"
+                class="messages-bubble-row <%= msg.direction === 'outgoing' ? 'is-outgoing' : 'is-incoming' %> <%= selectedMessageId && Number(selectedMessageId) === Number(msg.message_id) ? 'is-selected' : '' %>"
+              >
+                <div class="messages-bubble">
+                  <% if (msg.direction === 'outgoing' || currentUser?.role === 'admin') { %>
+                    <form class="pure-form messages-bubble-delete" action="/messages/<%= msg.id %>/delete" method="post">
+                      <button class="icon-btn icon-only" type="submit" title="Delete message">
+                        <span class="material-symbols-rounded">delete</span>
+                      </button>
+                    </form>
+                  <% } %>
+                  <% if (msg.subject) { %>
+                    <div class="messages-bubble-subject"><%- formatInline(msg.subject) %></div>
+                  <% } %>
+                  <% if (msg.body) { %>
+                    <div class="messages-bubble-body"><%- formatInline(msg.body) %></div>
+                  <% } %>
+                  <% if (msg.payload && msg.payload.path) { %>
+                    <div class="messages-bubble-link">
+                      <a href="<%= msg.payload.path %>">Open linked entity</a>
+                    </div>
+                  <% } %>
+                  <div class="messages-bubble-meta">
+                    <% const authorLabel = msg.direction === 'outgoing'
+                      ? (currentUser?.name || currentUser?.email || 'You')
+                      : (msg.sender_name || msg.sender_email || 'System'); %>
+                    <% const mentionLabel = msg.direction === 'outgoing'
+                      ? (currentUser?.name || currentUser?.email || '')
+                      : (msg.sender_name || msg.sender_email || ''); %>
+                    <% if (mentionLabel) { %>
+                      <button
+                        class="messages-bubble-author messages-author-link"
+                        type="button"
+                        data-mention-insert="<%= mentionLabel %>"
+                        title="Insert mention"
+                      ><%- formatInline(authorLabel) %></button>
+                    <% } else { %>
+                      <span class="messages-bubble-author"><%- formatInline(authorLabel) %></span>
+                    <% } %>
+                    <span><%= new Date(msg.message_created_at || msg.created_at).toLocaleString() %></span>
+                    <a class="messages-message-no" href="/messages?view=chat&room_id=<%= activeRoom.id %>&message_id=<%= msg.message_id %>#msg-<%= msg.message_id %>" title="Direct link to message">#<%= msg.message_no %></a>
+                    <% if (msg.direction === 'incoming' && msg.status === 'unread') { %>
+                      <span class="messages-unread-pill">new</span>
+                    <% } %>
+                  </div>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+
+          <% if (activeRoomType !== 'system') { %>
+            <div class="messages-thread-compose">
+              <% if (sendError) { %>
+                <div class="auth-error"><%= sendError %></div>
+              <% } %>
+              <form class="pure-form pure-form-stacked" action="/messages/rooms/<%= activeRoom.id %>/send" method="post">
+                <fieldset class="pure-group">
+                  <% if (activeRoomType !== 'group') { %>
+                    <input id="threadSubject" name="subject" type="text" required placeholder="Subject">
+                  <% } else { %>
+                    <input id="threadSubject" name="subject" type="hidden" value="">
+                  <% } %>
+                  <textarea id="threadBody" name="body" rows="3" placeholder="Message"></textarea>
+                </fieldset>
+                <button class="pure-button pure-button-primary" type="submit">Send</button>
+              </form>
+            </div>
+          <% } %>
+        <% } %>
+      </section>
+    </div>
+  </div>
+</div>
+
+<dialog class="modal-frame" id="groupChatDialog">
+  <div class="modal-header">
+    <strong>New Group Chat</strong>
+    <button class="icon-btn icon-only" type="button" data-group-chat-close title="Close">
+      <span class="material-symbols-rounded">close</span>
+    </button>
+  </div>
+  <div class="modal-body">
+    <form class="pure-form pure-form-stacked" action="/messages/rooms/create-group" method="post" data-group-create-form>
+      <label for="groupTitle">Group title</label>
+      <input id="groupTitle" name="title" type="text" placeholder="Team chat">
+      <label for="groupRecipientsInput">Participants</label>
+      <div class="messages-input-anchor">
+        <input id="groupRecipientsInput" type="search" placeholder="Type name or email..." autocomplete="off" data-group-recipient-input>
+        <div class="messages-user-suggest" data-group-recipient-suggest hidden></div>
+      </div>
+      <div class="messages-recipient-chips" data-group-recipient-chips></div>
+      <div data-group-recipient-hidden></div>
+      <button class="pure-button pure-button-primary" type="submit">Create group</button>
+    </form>
+  </div>
+</dialog>
+
+<script>
+  (() => {
+    const users = [
+      <% (users || []).forEach((user, index) => { %>
+        {
+          id: <%= user.id %>,
+          name: <%- JSON.stringify(user.name || '') %>,
+          email: <%- JSON.stringify(user.email || '') %>
+        }<%= index < (users || []).length - 1 ? ',' : '' %>
+      <% }) %>
+    ];
+
+    const renderSuggest = (inputEl, listEl, onPick) => {
+      if (!inputEl || !listEl) return;
+      const render = () => {
+        const q = String(inputEl.value || '').trim().toLowerCase();
+        if (!q) {
+          listEl.hidden = true;
+          listEl.innerHTML = '';
+          return;
+        }
+        const filtered = users
+          .filter((user) => {
+            const name = String(user.name || '').toLowerCase();
+            const email = String(user.email || '').toLowerCase();
+            return name.includes(q) || email.includes(q);
+          })
+          .slice(0, 8);
+        if (filtered.length === 0) {
+          listEl.hidden = true;
+          listEl.innerHTML = '';
+          return;
+        }
+        listEl.innerHTML = '';
+        filtered.forEach((user) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'messages-user-suggest-item';
+          btn.innerHTML = `<strong>${user.name || user.email}</strong><span>${user.email}</span>`;
+          btn.addEventListener('click', () => onPick(user));
+          listEl.appendChild(btn);
+        });
+        listEl.hidden = false;
+      };
+      inputEl.addEventListener('input', render);
+      inputEl.addEventListener('focus', render);
+      document.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof Node)) return;
+        if (inputEl.contains(target) || listEl.contains(target)) return;
+        listEl.hidden = true;
+      });
+    };
+
+    const openDirectInput = document.querySelector('[data-open-direct-input]');
+    const openDirectSuggest = document.querySelector('[data-open-direct-suggest]');
+    renderSuggest(openDirectInput, openDirectSuggest, (user) => {
+      window.location.href = `/messages?view=chat&user_id=${user.id}`;
+    });
+
+    const groupForm = document.querySelector('[data-group-create-form]');
+    const groupInput = document.querySelector('[data-group-recipient-input]');
+    const groupSuggest = document.querySelector('[data-group-recipient-suggest]');
+    const groupChips = document.querySelector('[data-group-recipient-chips]');
+    const groupHidden = document.querySelector('[data-group-recipient-hidden]');
+    const groupDialog = document.getElementById('groupChatDialog');
+    const openGroupDialogBtn = document.getElementById('openGroupChatDialog');
+    const closeGroupDialogBtn = document.querySelector('[data-group-chat-close]');
+    const selected = new Map();
+    const addMemberDialog = document.getElementById('addMemberDialog');
+    const addMemberOpenBtn = document.querySelector('[data-add-member-open]');
+    const addMemberCloseBtn = document.querySelector('[data-add-member-close]');
+
+    openGroupDialogBtn?.addEventListener('click', () => {
+      groupDialog?.showModal();
+    });
+    closeGroupDialogBtn?.addEventListener('click', () => {
+      groupDialog?.close();
+    });
+    addMemberOpenBtn?.addEventListener('click', () => {
+      addMemberDialog?.showModal();
+    });
+    addMemberCloseBtn?.addEventListener('click', () => {
+      addMemberDialog?.close();
+    });
+
+    const renderGroupRecipients = () => {
+      if (!groupChips || !groupHidden) return;
+      groupChips.innerHTML = '';
+      groupHidden.innerHTML = '';
+      selected.forEach((user) => {
+        const chip = document.createElement('span');
+        chip.className = 'messages-recipient-chip';
+        chip.innerHTML = `<span>${user.name || user.email}</span>`;
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'messages-recipient-chip-remove';
+        removeBtn.textContent = '×';
+        removeBtn.addEventListener('click', () => {
+          selected.delete(user.id);
+          renderGroupRecipients();
+        });
+        chip.appendChild(removeBtn);
+        groupChips.appendChild(chip);
+
+        const hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = 'recipient_user_ids';
+        hidden.value = String(user.id);
+        groupHidden.appendChild(hidden);
+      });
+    };
+
+    renderSuggest(groupInput, groupSuggest, (user) => {
+      selected.set(user.id, user);
+      renderGroupRecipients();
+      if (groupInput) groupInput.value = '';
+      if (groupSuggest) groupSuggest.hidden = true;
+    });
+
+    document.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const mentionBtn = target.closest('[data-mention-insert]');
+      if (!mentionBtn) return;
+      const threadBody = document.getElementById('threadBody');
+      if (!(threadBody instanceof HTMLTextAreaElement)) return;
+      const mentionRaw = String(mentionBtn.getAttribute('data-mention-insert') || '').trim();
+      if (!mentionRaw) return;
+      const mentionText = `@${mentionRaw} `;
+      const start = Number.isFinite(threadBody.selectionStart) ? threadBody.selectionStart : threadBody.value.length;
+      const end = Number.isFinite(threadBody.selectionEnd) ? threadBody.selectionEnd : threadBody.value.length;
+      const before = threadBody.value.slice(0, start);
+      const after = threadBody.value.slice(end);
+      threadBody.value = `${before}${mentionText}${after}`;
+      const nextCaret = before.length + mentionText.length;
+      threadBody.focus();
+      threadBody.setSelectionRange(nextCaret, nextCaret);
+    });
+
+    document.addEventListener('keydown', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLTextAreaElement)) return;
+      if (target.id !== 'threadBody') return;
+      if (!(event.ctrlKey || event.metaKey) || event.key !== 'Enter') return;
+      const form = target.closest('form');
+      if (!(form instanceof HTMLFormElement)) return;
+      event.preventDefault();
+      form.requestSubmit();
+    });
+
+    const threadBodyWrap = document.querySelector('.messages-thread-body');
+    if (threadBodyWrap instanceof HTMLElement) {
+      const hasHashTarget = String(window.location.hash || '').startsWith('#msg-');
+      const params = new URLSearchParams(window.location.search);
+      const hasSelectedMessage = params.has('message_id');
+      if (!hasHashTarget && !hasSelectedMessage) {
+        requestAnimationFrame(() => {
+          threadBodyWrap.scrollTop = threadBodyWrap.scrollHeight;
+        });
+      }
+    }
+
+  })();
+</script>
+<%- include('partials/foot') %>

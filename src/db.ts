@@ -184,6 +184,61 @@ function initDb(db: Db) {
       read_at TEXT,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+    CREATE TABLE IF NOT EXISTS messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind TEXT NOT NULL, -- system | assignment | task | manual
+      visibility TEXT NOT NULL DEFAULT 'direct', -- direct | collective
+      chat_room_id INTEGER,
+      sender_user_id INTEGER,
+      subject TEXT NOT NULL,
+      body TEXT,
+      payload_json TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (chat_room_id) REFERENCES chat_rooms(id) ON DELETE SET NULL,
+      FOREIGN KEY (sender_user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE TABLE IF NOT EXISTS chat_rooms (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      room_type TEXT NOT NULL DEFAULT 'direct', -- direct | group | system
+      title TEXT,
+      created_by_user_id INTEGER,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE TABLE IF NOT EXISTS chat_room_members (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      room_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      member_role TEXT NOT NULL DEFAULT 'member', -- owner | member
+      status TEXT NOT NULL DEFAULT 'active', -- active | removed
+      added_at TEXT NOT NULL,
+      removed_at TEXT,
+      UNIQUE(room_id, user_id),
+      FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS message_boxes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      message_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      folder TEXT NOT NULL DEFAULT 'inbox', -- inbox | sent | deleted
+      status TEXT NOT NULL DEFAULT 'unread', -- unread | read
+      mention_flag INTEGER NOT NULL DEFAULT 0,
+      deleted_at TEXT,
+      read_at TEXT,
+      created_at TEXT NOT NULL,
+      UNIQUE(message_id, user_id),
+      FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS notification_message_links (
+      notification_id INTEGER NOT NULL UNIQUE,
+      message_id INTEGER NOT NULL UNIQUE,
+      migrated_at TEXT NOT NULL,
+      FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE,
+      FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+    );
     CREATE TABLE IF NOT EXISTS process_types (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       code TEXT NOT NULL UNIQUE,
@@ -461,6 +516,15 @@ function initDb(db: Db) {
     CREATE INDEX IF NOT EXISTS idx_entity_assignments_assignee ON entity_assignments(assignee_user_id);
     CREATE INDEX IF NOT EXISTS idx_entity_assignments_exp_assignee_status ON entity_assignments(experiment_id, assignee_user_id, status);
     CREATE INDEX IF NOT EXISTS idx_notifications_user_status ON notifications(user_id, status, created_at);
+    CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at, id);
+    CREATE INDEX IF NOT EXISTS idx_messages_sender_created ON messages(sender_user_id, created_at, id);
+    CREATE INDEX IF NOT EXISTS idx_chat_rooms_type_updated ON chat_rooms(room_type, updated_at, id);
+    CREATE INDEX IF NOT EXISTS idx_chat_room_members_room_status ON chat_room_members(room_id, status, user_id);
+    CREATE INDEX IF NOT EXISTS idx_chat_room_members_user_status ON chat_room_members(user_id, status, room_id);
+    CREATE INDEX IF NOT EXISTS idx_message_boxes_user_folder_created ON message_boxes(user_id, folder, created_at, id);
+    CREATE INDEX IF NOT EXISTS idx_message_boxes_user_status_created ON message_boxes(user_id, status, created_at, id);
+    CREATE INDEX IF NOT EXISTS idx_message_boxes_message_id ON message_boxes(message_id);
+    CREATE INDEX IF NOT EXISTS idx_notification_message_links_notification_id ON notification_message_links(notification_id);
     CREATE INDEX IF NOT EXISTS idx_experiments_owner_archived ON experiments(owner_user_id, archived_at);
     CREATE INDEX IF NOT EXISTS idx_processes_type_status ON processes(process_type_id, status);
     CREATE INDEX IF NOT EXISTS idx_qual_step_summary_experiment_step ON qual_step_summary(experiment_id, step_number);
@@ -645,6 +709,284 @@ function initDb(db: Db) {
   }
   if (!hasColumn(db, "notifications", "read_at")) {
     db.exec("ALTER TABLE notifications ADD COLUMN read_at TEXT");
+  }
+  if (!hasColumn(db, "messages", "chat_room_id")) {
+    db.exec("ALTER TABLE messages ADD COLUMN chat_room_id INTEGER");
+  }
+  if (!hasColumn(db, "message_boxes", "mention_flag")) {
+    db.exec("ALTER TABLE message_boxes ADD COLUMN mention_flag INTEGER NOT NULL DEFAULT 0");
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS idx_messages_chat_room_created ON messages(chat_room_id, created_at, id)");
+  const backfillRoomsForMessages = db
+    .prepare(
+      `SELECT id, visibility, sender_user_id, subject, created_at
+       FROM messages
+       WHERE chat_room_id IS NULL
+       ORDER BY id`
+    )
+    .all() as Array<{
+    id: number;
+    visibility: "direct" | "collective";
+    sender_user_id: number | null;
+    subject: string;
+    created_at: string;
+  }>;
+  if (backfillRoomsForMessages.length > 0) {
+    const migrateRooms = db.transaction(() => {
+      const insertRoom = db.prepare(
+        `INSERT INTO chat_rooms
+         (room_type, title, created_by_user_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)`
+      );
+      const upsertMember = db.prepare(
+        `INSERT INTO chat_room_members
+         (room_id, user_id, member_role, status, added_at, removed_at)
+         VALUES (?, ?, ?, 'active', ?, NULL)
+         ON CONFLICT(room_id, user_id) DO UPDATE SET
+           status = 'active',
+           removed_at = NULL`
+      );
+      const updateMessageRoom = db.prepare("UPDATE messages SET chat_room_id = ? WHERE id = ?");
+      const updateRoomUpdatedAt = db.prepare("UPDATE chat_rooms SET updated_at = ? WHERE id = ?");
+      const findDirectRoom = db.prepare(
+        `SELECT r.id
+         FROM chat_rooms r
+         JOIN chat_room_members m1 ON m1.room_id = r.id AND m1.user_id = ? AND m1.status = 'active'
+         JOIN chat_room_members m2 ON m2.room_id = r.id AND m2.user_id = ? AND m2.status = 'active'
+         WHERE r.room_type = 'direct'
+           AND (
+             SELECT COUNT(*) FROM chat_room_members m3
+             WHERE m3.room_id = r.id AND m3.status = 'active'
+           ) = 2
+         ORDER BY r.id
+         LIMIT 1`
+      );
+      const findSystemRoom = db.prepare(
+        `SELECT r.id
+         FROM chat_rooms r
+         JOIN chat_room_members m ON m.room_id = r.id AND m.user_id = ? AND m.status = 'active'
+         WHERE r.room_type = 'system'
+         ORDER BY r.id
+         LIMIT 1`
+      );
+      const listParticipants = db.prepare(
+        `SELECT user_id
+         FROM message_boxes
+         WHERE message_id = ?
+         ORDER BY user_id`
+      );
+      for (const message of backfillRoomsForMessages) {
+        const participants = (listParticipants.all(message.id) as Array<{ user_id: number }>)
+          .map((row) => Number(row.user_id))
+          .filter((id) => Number.isFinite(id) && id > 0);
+        const uniqParticipants = [...new Set(participants)];
+        if (uniqParticipants.length === 0) continue;
+
+        let roomId: number | null = null;
+        const createdAt = message.created_at || new Date().toISOString();
+        const updatedAt = createdAt;
+
+        if (message.visibility === "direct" && uniqParticipants.length === 2) {
+          const a = Math.min(uniqParticipants[0], uniqParticipants[1]);
+          const b = Math.max(uniqParticipants[0], uniqParticipants[1]);
+          const existing = findDirectRoom.get(a, b) as { id: number } | undefined;
+          if (existing?.id) {
+            roomId = existing.id;
+          } else {
+            const created = insertRoom.run("direct", null, message.sender_user_id ?? null, createdAt, updatedAt);
+            roomId = Number(created.lastInsertRowid);
+            upsertMember.run(roomId, a, message.sender_user_id === a ? "owner" : "member", createdAt);
+            upsertMember.run(roomId, b, message.sender_user_id === b ? "owner" : "member", createdAt);
+          }
+        } else if (message.visibility === "direct" && uniqParticipants.length === 1) {
+          const onlyUser = uniqParticipants[0];
+          const existing = findSystemRoom.get(onlyUser) as { id: number } | undefined;
+          if (existing?.id) {
+            roomId = existing.id;
+          } else {
+            const created = insertRoom.run("system", "Notifications", null, createdAt, updatedAt);
+            roomId = Number(created.lastInsertRowid);
+            upsertMember.run(roomId, onlyUser, "member", createdAt);
+          }
+        } else {
+          const roomTitle = (message.subject || "").trim() || "Group chat";
+          const created = insertRoom.run("group", roomTitle, message.sender_user_id ?? null, createdAt, updatedAt);
+          roomId = Number(created.lastInsertRowid);
+          for (const userId of uniqParticipants) {
+            upsertMember.run(roomId, userId, message.sender_user_id === userId ? "owner" : "member", createdAt);
+          }
+        }
+
+        if (!roomId) continue;
+        updateMessageRoom.run(roomId, message.id);
+        updateRoomUpdatedAt.run(updatedAt, roomId);
+      }
+    });
+    migrateRooms();
+  }
+  // One-time migration: move legacy notifications into the new messages mailbox.
+  const legacyNotifications = db
+    .prepare(
+      `SELECT
+         n.id,
+         n.user_id,
+         n.type,
+         n.title,
+         n.body,
+         n.payload_json,
+         n.status,
+         n.created_at,
+         n.read_at
+       FROM notifications n
+       LEFT JOIN notification_message_links l ON l.notification_id = n.id
+       WHERE l.notification_id IS NULL
+       ORDER BY n.id`
+    )
+    .all() as Array<{
+    id: number;
+    user_id: number;
+    type: string;
+    title: string;
+    body: string | null;
+    payload_json: string | null;
+    status: "unread" | "read" | "archived";
+    created_at: string;
+    read_at: string | null;
+  }>;
+  if (legacyNotifications.length > 0) {
+    const migrateLegacyNotifications = db.transaction(() => {
+      const insertMessage = db.prepare(
+        `INSERT INTO messages
+         (kind, visibility, sender_user_id, subject, body, payload_json, created_at)
+         VALUES (?, 'direct', NULL, ?, ?, ?, ?)`
+      );
+      const insertBox = db.prepare(
+        `INSERT INTO message_boxes
+         (message_id, user_id, folder, status, deleted_at, read_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      );
+      const insertLink = db.prepare(
+        `INSERT INTO notification_message_links
+         (notification_id, message_id, migrated_at)
+         VALUES (?, ?, ?)`
+      );
+      const now = new Date().toISOString();
+      for (const note of legacyNotifications) {
+        const kind =
+          note.type === "assignment" || note.type === "system" || note.type === "task"
+            ? note.type
+            : "manual";
+        const folder = note.status === "archived" ? "deleted" : "inbox";
+        const status = note.status === "unread" ? "unread" : "read";
+        const deletedAt = note.status === "archived" ? (note.read_at ?? note.created_at) : null;
+        const readAt = note.status === "unread" ? null : (note.read_at ?? note.created_at);
+
+        const result = insertMessage.run(
+          kind,
+          note.title,
+          note.body ?? null,
+          note.payload_json ?? null,
+          note.created_at ?? now
+        );
+        const messageId = Number(result.lastInsertRowid);
+        insertBox.run(
+          messageId,
+          note.user_id,
+          folder,
+          status,
+          deletedAt,
+          readAt,
+          note.created_at ?? now
+        );
+        insertLink.run(note.id, messageId, now);
+      }
+    });
+    migrateLegacyNotifications();
+  }
+  const messagesWithoutRoom = db
+    .prepare(
+      `SELECT
+         m.id as message_id,
+         MIN(mb.user_id) as user_id
+       FROM messages m
+       JOIN message_boxes mb ON mb.message_id = m.id
+       WHERE m.chat_room_id IS NULL
+       GROUP BY m.id
+       HAVING COUNT(*) = 1`
+    )
+    .all() as Array<{ message_id: number; user_id: number }>;
+  if (messagesWithoutRoom.length > 0) {
+    const attachSystemRooms = db.transaction(() => {
+      const findSystemRoom = db.prepare(
+        `SELECT r.id
+         FROM chat_rooms r
+         JOIN chat_room_members m ON m.room_id = r.id
+         WHERE r.room_type = 'system'
+           AND m.user_id = ?
+           AND m.status = 'active'
+         ORDER BY r.id
+         LIMIT 1`
+      );
+      const insertRoom = db.prepare(
+        `INSERT INTO chat_rooms (room_type, title, created_by_user_id, created_at, updated_at)
+         VALUES ('system', 'Notifications', NULL, ?, ?)`
+      );
+      const upsertMember = db.prepare(
+        `INSERT INTO chat_room_members (room_id, user_id, member_role, status, added_at, removed_at)
+         VALUES (?, ?, 'member', 'active', ?, NULL)
+         ON CONFLICT(room_id, user_id) DO UPDATE SET status='active', removed_at=NULL`
+      );
+      const updateMessageRoom = db.prepare("UPDATE messages SET chat_room_id = ? WHERE id = ?");
+      const now = new Date().toISOString();
+      for (const row of messagesWithoutRoom) {
+        const existing = findSystemRoom.get(row.user_id) as { id: number } | undefined;
+        const roomId = existing?.id
+          ? existing.id
+          : Number(insertRoom.run(now, now).lastInsertRowid);
+        upsertMember.run(roomId, row.user_id, now);
+        updateMessageRoom.run(roomId, row.message_id);
+      }
+    });
+    attachSystemRooms();
+  }
+  // Deduplicate system rooms per user: keep the oldest room and move messages to it.
+  const duplicatedSystemUsers = db
+    .prepare(
+      `SELECT m.user_id, COUNT(*) as room_count
+       FROM chat_room_members m
+       JOIN chat_rooms r ON r.id = m.room_id
+       WHERE r.room_type = 'system'
+         AND m.status = 'active'
+       GROUP BY m.user_id
+       HAVING COUNT(*) > 1`
+    )
+    .all() as Array<{ user_id: number; room_count: number }>;
+  if (duplicatedSystemUsers.length > 0) {
+    const dedupeSystemRooms = db.transaction(() => {
+      const listRooms = db.prepare(
+        `SELECT r.id
+         FROM chat_rooms r
+         JOIN chat_room_members m ON m.room_id = r.id
+         WHERE r.room_type = 'system'
+           AND m.user_id = ?
+           AND m.status = 'active'
+         ORDER BY r.id`
+      );
+      const moveMessages = db.prepare(
+        `UPDATE messages SET chat_room_id = ? WHERE chat_room_id = ?`
+      );
+      const deleteRoom = db.prepare("DELETE FROM chat_rooms WHERE id = ?");
+      for (const row of duplicatedSystemUsers) {
+        const rooms = (listRooms.all(row.user_id) as Array<{ id: number }>).map((item) => item.id);
+        if (rooms.length <= 1) continue;
+        const keepId = rooms[0];
+        for (const roomId of rooms.slice(1)) {
+          moveMessages.run(keepId, roomId);
+          deleteRoom.run(roomId);
+        }
+      }
+    });
+    dedupeSystemRooms();
   }
   if (!hasColumn(db, "report_documents", "content_md")) {
     db.exec("ALTER TABLE report_documents ADD COLUMN content_md TEXT");

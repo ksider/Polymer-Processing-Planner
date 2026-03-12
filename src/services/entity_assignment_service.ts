@@ -8,7 +8,7 @@ import {
 } from "../repos/entity_assignments_repo.js";
 import { createTask, createTaskEntity, getTask, updateTask } from "../repos/tasks_repo.js";
 import { getAssignmentTaskByAssignmentId, upsertAssignmentTask } from "../repos/assignment_tasks_repo.js";
-import { createNotification } from "../repos/notifications_repo.js";
+import { sendSystemMessageFromActor } from "./messages_service.js";
 import { getQualificationStepName } from "./qualification_service.js";
 
 function getEntityLabel(db: Db, experimentId: number, entityType: EntityAssignmentType, entityId: number) {
@@ -99,35 +99,37 @@ export function assignEntityResponsibility(
     }
 
     if (previousAssigneeId !== data.assigneeUserId) {
-      createNotification(db, {
-        user_id: data.assigneeUserId,
-        type: "assignment",
-        title: `You were assigned to ${entityLabel}`,
+      sendSystemMessageFromActor(db, {
+        actor_user_id: data.assignedByUserId ?? null,
+        recipient_user_ids: [data.assigneeUserId],
+        kind: "assignment",
+        subject: `You were assigned to ${entityLabel}`,
         body: `${data.experimentName}`,
-        payload_json: JSON.stringify({
+        payload: {
           experiment_id: data.experimentId,
           entity_type: data.entityType,
           entity_id: data.entityId,
           path: entityPath
-        })
+        }
       });
     }
   }
 
   if (previousAssigneeId && previousAssigneeId !== data.assigneeUserId) {
-    createNotification(db, {
-      user_id: previousAssigneeId,
-      type: "assignment",
-      title: `Assignment updated: ${entityLabel}`,
+    sendSystemMessageFromActor(db, {
+      actor_user_id: data.assignedByUserId ?? null,
+      recipient_user_ids: [previousAssigneeId],
+      kind: "assignment",
+      subject: `Assignment updated: ${entityLabel}`,
       body: data.assigneeUserId
         ? `You are no longer responsible for this entity.`
         : `Responsibility was cleared.`,
-      payload_json: JSON.stringify({
+      payload: {
         experiment_id: data.experimentId,
         entity_type: data.entityType,
         entity_id: data.entityId,
         path: entityPath
-      })
+      }
     });
   }
 

@@ -27,6 +27,7 @@ export function createHomeRouter(db: Db) {
     "users",
     "recipes",
     "machines",
+    "messages",
     "runs",
     "reports",
     "tasks",

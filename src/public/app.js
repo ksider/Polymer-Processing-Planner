@@ -383,6 +383,181 @@
     return { submit };
   };
 
+  const initMessagesPopover = () => {
+    const toggle = document.querySelector("[data-messages-popover-toggle]");
+    const popover = document.querySelector("[data-messages-popover]");
+    const bodyEl = document.querySelector("[data-messages-popover-body]");
+    const readAllBtn = document.querySelector("[data-messages-read-all]");
+    if (!toggle || !popover || !bodyEl) return;
+
+    const ensureBadge = () => {
+      let badge = toggle.querySelector("[data-messages-unread-badge]");
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "nav-bell-badge";
+        badge.dataset.messagesUnreadBadge = "1";
+        toggle.appendChild(badge);
+      }
+      return badge;
+    };
+
+    const updateBadge = (count) => {
+      const value = Number(count || 0);
+      const existing = toggle.querySelector("[data-messages-unread-badge]");
+      if (value <= 0) {
+        existing?.remove();
+        return;
+      }
+      const badge = existing || ensureBadge();
+      badge.textContent = value > 99 ? "99+" : String(value);
+    };
+
+    const formatTime = (iso) => {
+      if (!iso) return "-";
+      const date = new Date(iso);
+      if (Number.isNaN(date.getTime())) return "-";
+      return date.toLocaleString();
+    };
+
+    const renderLoading = () => {
+      bodyEl.innerHTML = "";
+      const note = document.createElement("div");
+      note.className = "small-note messages-popover-empty";
+      note.textContent = "Loading...";
+      bodyEl.appendChild(note);
+    };
+
+    const renderItems = (items) => {
+      bodyEl.innerHTML = "";
+      if (!Array.isArray(items) || items.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "small-note messages-popover-empty";
+        empty.textContent = "No unread messages.";
+        bodyEl.appendChild(empty);
+        return;
+      }
+      items.forEach((item) => {
+        const card = document.createElement("div");
+        card.className = "messages-popover-item";
+
+        const head = document.createElement("div");
+        head.className = "messages-popover-item-head";
+        const title = document.createElement("div");
+        title.className = "messages-popover-item-title";
+        title.textContent = String(item?.subject || "Message");
+        const time = document.createElement("div");
+        time.className = "small-note";
+        time.textContent = formatTime(item?.message_created_at || item?.created_at);
+        head.appendChild(title);
+        head.appendChild(time);
+
+        const body = document.createElement("div");
+        body.className = "small-note";
+        body.textContent = String(item?.body || "");
+
+        const actions = document.createElement("div");
+        actions.className = "messages-popover-item-actions";
+        const openLink = document.createElement("a");
+        openLink.className = "pure-button button-sm";
+        openLink.href = String(item?.payload?.path || "/messages");
+        openLink.textContent = "Open";
+        const readBtn = document.createElement("button");
+        readBtn.className = "pure-button button-sm pure-button-secondary";
+        readBtn.type = "button";
+        readBtn.textContent = "Read";
+        readBtn.dataset.messageReadId = String(item?.id || "");
+        actions.appendChild(openLink);
+        actions.appendChild(readBtn);
+
+        card.appendChild(head);
+        if (item?.body) card.appendChild(body);
+        card.appendChild(actions);
+        bodyEl.appendChild(card);
+      });
+    };
+
+    const loadUnread = async (showLoading = false) => {
+      if (showLoading) renderLoading();
+      try {
+        const resp = await fetch("/messages/unread.json?limit=12", {
+          headers: {
+            "X-Requested-With": "XMLHttpRequest"
+          }
+        });
+        if (!resp.ok) throw new Error(`Request failed (${resp.status})`);
+        const data = await resp.json();
+        renderItems(data?.items || []);
+        updateBadge(Number(data?.unread_count || 0));
+      } catch {
+        bodyEl.innerHTML = "";
+        const error = document.createElement("div");
+        error.className = "small-note messages-popover-empty";
+        error.textContent = "Failed to load messages.";
+        bodyEl.appendChild(error);
+      }
+    };
+
+    const setOpen = (next) => {
+      if (next) {
+        popover.hidden = false;
+        toggle.setAttribute("aria-expanded", "true");
+        loadUnread(true);
+      } else {
+        popover.hidden = true;
+        toggle.setAttribute("aria-expanded", "false");
+      }
+    };
+
+    toggle.addEventListener("click", (event) => {
+      event.preventDefault();
+      const isOpen = !popover.hidden;
+      setOpen(!isOpen);
+    });
+
+    document.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (toggle.contains(target) || popover.contains(target)) return;
+      if (!popover.hidden) setOpen(false);
+    });
+
+    bodyEl.addEventListener("click", async (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const button = target.closest("[data-message-read-id]");
+      if (!button) return;
+      const messageId = Number(button.getAttribute("data-message-read-id"));
+      if (!Number.isFinite(messageId)) return;
+      button.setAttribute("disabled", "disabled");
+      try {
+        const data = await root.postForm(`/messages/${messageId}/read.json`, {});
+        updateBadge(Number(data?.unread_count || 0));
+        loadUnread(false);
+      } catch {
+        button.removeAttribute("disabled");
+      }
+    });
+
+    readAllBtn?.addEventListener("click", async (event) => {
+      event.preventDefault();
+      readAllBtn.setAttribute("disabled", "disabled");
+      try {
+        const data = await root.postForm("/messages/read-all.json", {});
+        updateBadge(Number(data?.unread_count || 0));
+        loadUnread(false);
+      } catch {
+        // Ignore; user can retry.
+      } finally {
+        readAllBtn.removeAttribute("disabled");
+      }
+    });
+
+    window.addEventListener("focus", () => {
+      if (!popover.hidden) loadUnread(false);
+      else loadUnread(false);
+    });
+  };
+
   const observer = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
       mutation.addedNodes.forEach((node) => {
@@ -397,6 +572,7 @@
     });
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
+  initMessagesPopover();
 
   root.createCustomFieldManager = ({
     listEl,

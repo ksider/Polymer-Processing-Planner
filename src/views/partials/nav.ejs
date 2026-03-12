@@ -25,12 +25,31 @@
   </div>
   <% if (currentUser) { %>
     <div class="nav-auth">
-      <a class="nav-bell" href="/me#notifications" title="Notifications">
+      <a
+        class="nav-bell"
+        href="/messages"
+        title="Messages"
+        data-messages-popover-toggle
+        aria-haspopup="dialog"
+        aria-expanded="false"
+      >
         <span class="material-symbols-rounded" aria-hidden="true">notifications</span>
         <% if (unreadNotifications && unreadNotifications > 0) { %>
-          <span class="nav-bell-badge"><%= unreadNotifications > 99 ? '99+' : unreadNotifications %></span>
+          <span class="nav-bell-badge" data-messages-unread-badge><%= unreadNotifications > 99 ? '99+' : unreadNotifications %></span>
         <% } %>
       </a>
+      <div class="messages-popover" data-messages-popover hidden>
+        <div class="messages-popover-head">
+          <strong>Unread messages</strong>
+          <button class="pure-button button-sm" type="button" data-messages-read-all>Mark all read</button>
+        </div>
+        <div class="messages-popover-body" data-messages-popover-body>
+          <div class="small-note">Loading...</div>
+        </div>
+        <div class="messages-popover-foot">
+          <a class="pure-button pure-button-primary" href="/messages">Open messages</a>
+        </div>
+      </div>
       <span class="nav-user">
         <a href="/me"><%= currentUser.name ? currentUser.name : currentUser.email %></a>
       </span>

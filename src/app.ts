@@ -14,6 +14,7 @@ import { createHttpsRedirect } from "./middleware/https.js";
 import { createAuditRouter } from "./routes/audit.js";
 import { createProfileRouter } from "./routes/profile.js";
 import { createTasksRouter } from "./routes/tasks.js";
+import { createMessagesRouter } from "./routes/messages.js";
 import { createHomeRouter } from "./routes/home.js";
 import { createRecipesRouter } from "./routes/recipes.js";
 import { createExperimentsRouter } from "./routes/experiments.js";
@@ -25,7 +26,7 @@ import { createUsersRouter } from "./routes/users.js";
 import { createNotesRouter } from "./routes/notes.js";
 import { createCalendarRouter } from "./routes/calendar.js";
 import { buildBreadcrumbs } from "./services/breadcrumbs.js";
-import { countUnreadNotifications } from "./repos/notifications_repo.js";
+import { countUnreadMessageBoxes } from "./repos/messages_repo.js";
 import { getProcessById, getProcessRouteCode } from "./repos/processes_repo.js";
 import { getExperiment } from "./repos/experiments_repo.js";
 
@@ -146,7 +147,7 @@ app.use((req, res, next) => {
   const wantsHtml = req.accepts(["html", "json"]) === "html";
   res.locals.breadcrumbs = wantsHtml ? buildBreadcrumbs(db, req) : [];
   res.locals.unreadNotifications = wantsHtml && req.user?.id
-    ? countUnreadNotifications(db, req.user.id)
+    ? countUnreadMessageBoxes(db, req.user.id)
     : 0;
   next();
 });
@@ -173,6 +174,7 @@ app.use("/audit", createAuditRouter(db));
 app.use(createProfileRouter(db));
 app.use(createCalendarRouter(db));
 app.use(createTasksRouter(db));
+app.use(createMessagesRouter(db));
 app.use(createHomeRouter(db));
 app.use(createRecipesRouter(db));
 app.use(createExperimentsRouter(db));
