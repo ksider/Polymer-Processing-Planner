@@ -31,6 +31,7 @@ function initDb(db: Db) {
       password_hash TEXT,
       google_sub TEXT,
       role TEXT,
+      avatar_style_json TEXT,
       status TEXT NOT NULL DEFAULT 'ACTIVE',
       temp_password INTEGER NOT NULL DEFAULT 0,
       reset_requested_at TEXT,
@@ -719,6 +720,9 @@ function initDb(db: Db) {
   }
   if (!hasColumn(db, "users", "name")) {
     db.exec("ALTER TABLE users ADD COLUMN name TEXT");
+  }
+  if (!hasColumn(db, "users", "avatar_style_json")) {
+    db.exec("ALTER TABLE users ADD COLUMN avatar_style_json TEXT");
   }
   if (!hasColumn(db, "admin_settings", "require_https")) {
     db.exec("ALTER TABLE admin_settings ADD COLUMN require_https INTEGER NOT NULL DEFAULT 0");

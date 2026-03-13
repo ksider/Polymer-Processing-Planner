@@ -51,7 +51,10 @@
         </div>
       </div>
       <span class="nav-user">
-        <a href="/me"><%= currentUser.name ? currentUser.name : currentUser.email %></a>
+        <a href="/me">
+          <img class="nav-user-avatar" src="<%= avatarUrl(currentUser.id) %>" alt="<%= currentUser.name ? currentUser.name : currentUser.email %> avatar">
+          <span><%= currentUser.name ? currentUser.name : currentUser.email %></span>
+        </a>
       </span>
       <form method="post" action="/auth/logout">
         <button class="pure-button pure-button-primary" type="submit">Logout</button>

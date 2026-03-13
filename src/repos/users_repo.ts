@@ -7,6 +7,7 @@ export type UserRow = {
   password_hash: string | null;
   google_sub: string | null;
   role: string | null;
+  avatar_style_json: string | null;
   status: string;
   temp_password: number;
   reset_requested_at: string | null;
@@ -43,8 +44,12 @@ export function updateUserName(db: Db, id: number, name: string | null) {
   db.prepare("UPDATE users SET name = ? WHERE id = ?").run(name, id);
 }
 
+export function updateUserAvatarStyle(db: Db, id: number, avatarStyleJson: string | null) {
+  db.prepare("UPDATE users SET avatar_style_json = ? WHERE id = ?").run(avatarStyleJson, id);
+}
+
 export function listUsers(db: Db): UserListRow[] {
-  return db.prepare("SELECT id, name, email, google_sub, role, status, temp_password, reset_requested_at, created_at, last_login_at FROM users ORDER BY created_at DESC")
+  return db.prepare("SELECT id, name, email, google_sub, role, avatar_style_json, status, temp_password, reset_requested_at, created_at, last_login_at FROM users ORDER BY created_at DESC")
     .all() as UserListRow[];
 }
 
@@ -71,8 +76,8 @@ export function createUser(
 ) {
   const createdAt = new Date().toISOString();
   const result = db.prepare(
-    `INSERT INTO users (name, email, password_hash, role, status, temp_password, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO users (name, email, password_hash, role, avatar_style_json, status, temp_password, created_at)
+     VALUES (?, ?, ?, ?, NULL, ?, ?, ?)`
   ).run(name, email, passwordHash, role, status, tempPassword, createdAt);
   return Number(result.lastInsertRowid);
 }

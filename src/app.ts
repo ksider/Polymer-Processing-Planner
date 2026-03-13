@@ -121,6 +121,11 @@ app.locals.processPath = (value: unknown) => {
   return processCode ? `/${processCode}` : `/?process_id=${processId}`;
 };
 
+app.locals.avatarUrl = (userId: unknown) => {
+  const id = Number(userId);
+  return Number.isFinite(id) && id > 0 ? `/avatars/${id}.svg` : "";
+};
+
 const viewsPath = path.resolve(process.cwd(), "src", "views");
 const publicPath = path.resolve(process.cwd(), "src", "public");
 

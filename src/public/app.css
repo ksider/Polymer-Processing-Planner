@@ -452,8 +452,17 @@ sub {
   box-shadow: inset 0 -10px 20px rgba(0, 0, 0, 0.12);
 }
 
+.messages-conversation-avatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
 .messages-conversation-avatar.room-type-direct {
-  background: linear-gradient(135deg, #f0ba63 0%, #c88332 100%);
+  background: transparent;
+  box-shadow: none;
 }
 
 .messages-conversation-avatar.room-type-group {
@@ -793,6 +802,8 @@ sub {
 
 .messages-bubble-row {
   display: flex;
+  align-items: flex-end;
+  gap: 0.55rem;
 }
 
 .messages-bubble-row.is-incoming {
@@ -801,6 +812,31 @@ sub {
 
 .messages-bubble-row.is-outgoing {
   justify-content: flex-end;
+}
+
+.messages-thread-avatar {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #9a6e3d;
+}
+
+.messages-thread-avatar.is-outgoing {
+  order: 2;
+}
+
+.messages-thread-avatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 .messages-bubble-row.is-selected .messages-bubble,
@@ -1152,8 +1188,19 @@ sub {
 }
 
 .nav-user a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
   color: inherit;
   text-decoration: none;
+}
+
+.nav-user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid #dbcdb8;
+  background: #fff;
 }
 
 .auth-card {
@@ -1579,6 +1626,12 @@ sub {
   gap: 0.5rem;
 }
 
+.profile-hero-main {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
 .profile-hero-row {
   display: flex;
   align-items: flex-start;
@@ -1590,6 +1643,107 @@ sub {
   font-size: 1.3rem;
   margin-bottom: 0.35rem;
 }
+
+.profile-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 22px;
+  border: 1px solid #decfb9;
+  background: #fff;
+}
+
+.profile-avatar-lg {
+  width: 110px;
+  height: 110px;
+  border-radius: 28px;
+  border: 0;
+  background: transparent;
+}
+
+.profile-avatar-config {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.profile-settings-block {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border-radius: 16px;
+  border: 1px solid #e4d7c7;
+  background: linear-gradient(180deg, #fffdf8 0%, #f8f2e9 100%);
+}
+
+.profile-settings-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.7rem;
+}
+
+.profile-avatar-config-top {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.profile-avatar-config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem 0.9rem;
+}
+
+.profile-avatar-section {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.profile-avatar-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.profile-avatar-chip {
+  border: 1px solid #ddd1c1;
+  background: #fffaf3;
+  color: #51493f;
+  border-radius: 999px;
+  padding: 0.28rem 0.55rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  font-size: 0.84rem;
+}
+
+.profile-avatar-chip.is-active {
+  border-color: #2c7ea0;
+  background: #ebf6fb;
+  color: #2c7ea0;
+}
+
+.profile-avatar-chip .material-symbols-rounded {
+  font-size: 1rem;
+}
+
+.profile-avatar-swatch {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.profile-avatar-swatch.palette-amber { background: #f0ba63; }
+.profile-avatar-swatch.palette-ocean { background: #58a9cf; }
+.profile-avatar-swatch.palette-rose { background: #d45771; }
+.profile-avatar-swatch.palette-mint { background: #37966b; }
+.profile-avatar-swatch.palette-violet { background: #6b5db7; }
+.profile-avatar-swatch.skin-fair { background: #f2d3b1; }
+.profile-avatar-swatch.skin-warm { background: #e8b37e; }
+.profile-avatar-swatch.skin-olive { background: #c68655; }
+.profile-avatar-swatch.skin-brown { background: #8d5524; }
+.profile-avatar-swatch.skin-deep { background: #5c3836; }
 
 
 .grid-two {
@@ -1604,6 +1758,10 @@ sub {
 
 @media (max-width: 900px) {
   .chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-avatar-config-grid {
     grid-template-columns: 1fr;
   }
 }

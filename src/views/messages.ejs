@@ -58,7 +58,11 @@
                     href="/messages?view=chat&room_id=<%= room.room_id %>"
                   >
                     <div class="messages-conversation-avatar room-type-<%= room.room_type %>">
-                      <span><%= avatarSeed.slice(0, 1).toUpperCase() %></span>
+                      <% if (room.room_type === 'direct' && partnerUser?.id) { %>
+                        <img src="<%= avatarUrl(partnerUser.id) %>" alt="<%= partnerUser.name || partnerUser.email %> avatar">
+                      <% } else { %>
+                        <span><%= avatarSeed.slice(0, 1).toUpperCase() %></span>
+                      <% } %>
                     </div>
                     <div class="messages-conversation-main">
                       <div class="messages-conversation-top">
@@ -104,7 +108,7 @@
               <% (usersWithoutConversation || []).forEach((user) => { %>
                 <a class="messages-user-item" href="/messages?view=chat&user_id=<%= user.id %>">
                   <span class="messages-conversation-avatar room-type-direct">
-                    <span><%= String(user.name || user.email || 'U').slice(0, 1).toUpperCase() %></span>
+                    <img src="<%= avatarUrl(user.id) %>" alt="<%= user.name || user.email %> avatar">
                   </span>
                   <span class="messages-user-copy">
                     <strong><%- formatInline(user.name || user.email) %></strong>
@@ -285,6 +289,18 @@
                 id="msg-<%= msg.message_id %>"
                 class="messages-bubble-row <%= msg.direction === 'outgoing' ? 'is-outgoing' : 'is-incoming' %> <%= selectedMessageId && Number(selectedMessageId) === Number(msg.message_id) ? 'is-selected' : '' %>"
               >
+                <div class="messages-thread-avatar <%= msg.direction === 'outgoing' ? 'is-outgoing' : 'is-incoming' %>">
+                  <% if ((msg.direction === 'outgoing' && currentUser?.id) || (msg.direction === 'incoming' && msg.sender_user_id)) { %>
+                    <img
+                      src="<%= avatarUrl(msg.direction === 'outgoing' ? currentUser.id : msg.sender_user_id) %>"
+                      alt="<%= msg.direction === 'outgoing'
+                        ? (currentUser?.name || currentUser?.email || 'You')
+                        : (msg.sender_name || msg.sender_email || 'User') %> avatar"
+                    >
+                  <% } else { %>
+                    <span class="material-symbols-rounded">notifications</span>
+                  <% } %>
+                </div>
                 <div class="messages-bubble">
                   <div class="messages-bubble-tools">
                     <form class="pure-form messages-bubble-tool" action="/messages/rooms/<%= activeRoom.id %>/pins/<%= msg.message_id %>/toggle" method="post">

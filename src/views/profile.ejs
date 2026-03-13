@@ -3,12 +3,15 @@
 <div class="container">
   <div class="card profile-hero">
     <div class="profile-hero-row">
-      <div>
+      <div class="profile-hero-main">
+        <img class="profile-avatar" src="<%= avatarUrl(currentUser?.id) %>" alt="<%= currentUser?.name || currentUser?.email || 'User' %> avatar">
+        <div>
         <h1 class="card-title profile-name" id="profileName">
           <%= currentUser?.name || currentUser?.email || 'Profile' %>
         </h1>
         <div class="small-note profile-meta" id="profileMeta">
           <%= (currentUser?.role || 'user') %> · <%= currentUser?.email || '-' %>
+        </div>
         </div>
       </div>
       <button class="icon-btn icon-only" type="button" id="openProfileDialog" title="Edit profile">
@@ -36,6 +39,180 @@
         <input id="name" name="name" type="text" value="<%= currentUser?.name ?? '' %>" placeholder="Your name">
         <button class="pure-button pure-button-primary" type="submit">Update name</button>
       </form>
+      <section class="profile-settings-block">
+        <div class="profile-settings-block-head">
+          <strong>Avatar Generator</strong>
+          <span class="small-note">Changes apply automatically.</span>
+        </div>
+        <form class="pure-form pure-form-stacked profile-avatar-config" action="/me/avatar-style" method="post" data-avatar-style-form>
+          <div class="profile-avatar-config-top">
+            <img class="profile-avatar profile-avatar-lg" id="profileAvatarPreview" src="<%= avatarUrl(currentUser?.id) %>" alt="Avatar preview">
+            <div class="small-note" id="profileAvatarStatus">Changes apply automatically.</div>
+          </div>
+          <input type="hidden" name="palette" value="<%= currentAvatarStyle?.palette || 'amber' %>">
+          <input type="hidden" name="presentation" value="<%= currentAvatarStyle?.presentation || 'neutral' %>">
+          <input type="hidden" name="skin_tone" value="<%= currentAvatarStyle?.skinTone || 'warm' %>">
+          <input type="hidden" name="hair" value="<%= currentAvatarStyle?.hair || 'short' %>">
+          <input type="hidden" name="accessory" value="<%= currentAvatarStyle?.accessory || 'none' %>">
+          <input type="hidden" name="facial_hair" value="<%= currentAvatarStyle?.facialHair || 'none' %>">
+          <input type="hidden" name="eyes" value="<%= currentAvatarStyle?.eyes || 'calm' %>">
+          <input type="hidden" name="mouth" value="<%= currentAvatarStyle?.mouth || 'default' %>">
+
+          <div class="profile-avatar-config-grid">
+            <section class="profile-avatar-section">
+              <div class="messages-list-title">Presentation</div>
+              <div class="profile-avatar-chip-row" data-avatar-group="presentation">
+                <% (avatarStyleOptions?.presentation || []).forEach((item) => { %>
+                  <button
+                    class="profile-avatar-chip <%= currentAvatarStyle?.presentation === item ? 'is-active' : '' %>"
+                    type="button"
+                    data-avatar-option
+                    data-field="presentation"
+                    data-value="<%= item %>"
+                    title="<%= item %>"
+                  >
+                    <span class="material-symbols-rounded"><%= item === 'feminine' ? 'face_4' : (item === 'masculine' ? 'face_6' : 'face') %></span>
+                    <span><%= item %></span>
+                  </button>
+                <% }) %>
+              </div>
+            </section>
+
+            <section class="profile-avatar-section">
+              <div class="messages-list-title">Skin Tone</div>
+              <div class="profile-avatar-chip-row" data-avatar-group="skin_tone">
+                <% (avatarStyleOptions?.skinTone || []).forEach((item) => { %>
+                  <button
+                    class="profile-avatar-chip <%= currentAvatarStyle?.skinTone === item ? 'is-active' : '' %>"
+                    type="button"
+                    data-avatar-option
+                    data-field="skin_tone"
+                    data-value="<%= item %>"
+                    title="<%= item %>"
+                  >
+                    <span class="profile-avatar-swatch skin-<%= item %>"></span>
+                    <span><%= item %></span>
+                  </button>
+                <% }) %>
+              </div>
+            </section>
+
+            <section class="profile-avatar-section">
+              <div class="messages-list-title">Palette</div>
+              <div class="profile-avatar-chip-row" data-avatar-group="palette">
+                <% (avatarStyleOptions?.palette || []).forEach((item) => { %>
+                  <button
+                    class="profile-avatar-chip <%= currentAvatarStyle?.palette === item ? 'is-active' : '' %>"
+                    type="button"
+                    data-avatar-option
+                    data-field="palette"
+                    data-value="<%= item %>"
+                    title="<%= item %>"
+                  >
+                    <span class="profile-avatar-swatch palette-<%= item %>"></span>
+                    <span><%= item %></span>
+                  </button>
+                <% }) %>
+              </div>
+            </section>
+
+            <section class="profile-avatar-section">
+              <div class="messages-list-title">Hair</div>
+              <div class="profile-avatar-chip-row" data-avatar-group="hair">
+                <% (avatarStyleOptions?.hair || []).forEach((item) => { %>
+                  <button
+                    class="profile-avatar-chip <%= currentAvatarStyle?.hair === item ? 'is-active' : '' %>"
+                    type="button"
+                    data-avatar-option
+                    data-field="hair"
+                    data-value="<%= item %>"
+                    title="<%= item %>"
+                  >
+                    <span class="material-symbols-rounded"><%= item === 'spiky' ? 'air' : (item === 'round' ? 'face_3' : 'face') %></span>
+                    <span><%= item %></span>
+                  </button>
+                <% }) %>
+              </div>
+            </section>
+
+            <section class="profile-avatar-section">
+              <div class="messages-list-title">Accessory</div>
+              <div class="profile-avatar-chip-row" data-avatar-group="accessory">
+                <% (avatarStyleOptions?.accessory || []).forEach((item) => { %>
+                  <button
+                    class="profile-avatar-chip <%= currentAvatarStyle?.accessory === item ? 'is-active' : '' %>"
+                    type="button"
+                    data-avatar-option
+                    data-field="accessory"
+                    data-value="<%= item %>"
+                    title="<%= item %>"
+                  >
+                    <span class="material-symbols-rounded"><%= item === 'glasses' ? 'glasses' : 'visibility' %></span>
+                    <span><%= item %></span>
+                  </button>
+                <% }) %>
+              </div>
+            </section>
+
+            <section class="profile-avatar-section">
+              <div class="messages-list-title">Facial Hair</div>
+              <div class="profile-avatar-chip-row" data-avatar-group="facial_hair">
+                <% (avatarStyleOptions?.facialHair || []).forEach((item) => { %>
+                  <button
+                    class="profile-avatar-chip <%= currentAvatarStyle?.facialHair === item ? 'is-active' : '' %>"
+                    type="button"
+                    data-avatar-option
+                    data-field="facial_hair"
+                    data-value="<%= item %>"
+                    title="<%= item %>"
+                  >
+                    <span class="material-symbols-rounded"><%= item === 'mustache' ? 'mood' : 'do_not_disturb_on' %></span>
+                    <span><%= item %></span>
+                  </button>
+                <% }) %>
+              </div>
+            </section>
+
+            <section class="profile-avatar-section">
+              <div class="messages-list-title">Eyes</div>
+              <div class="profile-avatar-chip-row" data-avatar-group="eyes">
+                <% (avatarStyleOptions?.eyes || []).forEach((item) => { %>
+                  <button
+                    class="profile-avatar-chip <%= currentAvatarStyle?.eyes === item ? 'is-active' : '' %>"
+                    type="button"
+                    data-avatar-option
+                    data-field="eyes"
+                    data-value="<%= item %>"
+                    title="<%= item %>"
+                  >
+                    <span class="material-symbols-rounded"><%= item === 'wink' ? 'waving_hand' : (item === 'happy' ? 'sentiment_satisfied' : 'visibility') %></span>
+                    <span><%= item %></span>
+                  </button>
+                <% }) %>
+              </div>
+            </section>
+
+            <section class="profile-avatar-section">
+              <div class="messages-list-title">Mouth</div>
+              <div class="profile-avatar-chip-row" data-avatar-group="mouth">
+                <% (avatarStyleOptions?.mouth || []).forEach((item) => { %>
+                  <button
+                    class="profile-avatar-chip <%= currentAvatarStyle?.mouth === item ? 'is-active' : '' %>"
+                    type="button"
+                    data-avatar-option
+                    data-field="mouth"
+                    data-value="<%= item %>"
+                    title="<%= item %>"
+                  >
+                    <span class="material-symbols-rounded"><%= item === 'twinkle' ? 'mood' : (item === 'smile' ? 'sentiment_satisfied' : 'horizontal_rule') %></span>
+                    <span><%= item %></span>
+                  </button>
+                <% }) %>
+              </div>
+            </section>
+          </div>
+        </form>
+      </section>
       <form class="pure-form pure-form-stacked" action="/me/password" method="post" style="margin-top: 1rem;">
         <label for="current_password">Current password</label>
         <input id="current_password" name="current_password" type="password" autocomplete="current-password" required>
@@ -585,6 +762,10 @@
   const nameInput = document.getElementById('name');
   const nameOutput = document.getElementById('profileName');
   const metaOutput = document.getElementById('profileMeta');
+  const avatarStyleForm = document.querySelector('[data-avatar-style-form]');
+  const avatarPreview = document.getElementById('profileAvatarPreview');
+  const avatarStatus = document.getElementById('profileAvatarStatus');
+  const navAvatar = document.querySelector('.nav-user-avatar');
   const emailValue = "<%= (currentUser?.email ?? '').replace(/\"/g, '&quot;') %>";
   const roleValue = "<%= (currentUser?.role ?? 'user').replace(/\"/g, '&quot;') %>";
   const syncProfile = () => {
@@ -595,6 +776,76 @@
   };
   nameInput?.addEventListener('input', syncProfile);
   syncProfile();
+
+  if (avatarStyleForm instanceof HTMLFormElement) {
+    const hiddenField = (name) => avatarStyleForm.querySelector(`input[name="${name}"]`);
+    const buildAvatarUrl = (forSave = false) => {
+      const params = new URLSearchParams();
+      ['palette', 'presentation', 'skin_tone', 'hair', 'accessory', 'facial_hair', 'eyes', 'mouth'].forEach((name) => {
+        const input = hiddenField(name);
+        if (input instanceof HTMLInputElement && input.value) params.set(name, input.value);
+      });
+      if (forSave) params.set('ts', String(Date.now()));
+      return `${avatarStyleForm.dataset.avatarBaseUrl || '<%= avatarUrl(currentUser?.id) %>'}?${params.toString()}`;
+    };
+    let avatarTimer = null;
+    const setActiveChip = (field, value) => {
+      avatarStyleForm.querySelectorAll(`[data-field="${field}"]`).forEach((btn) => {
+        btn.classList.toggle('is-active', btn.getAttribute('data-value') === value);
+      });
+    };
+    const saveAvatar = async () => {
+      const body = new URLSearchParams();
+      ['palette', 'presentation', 'skin_tone', 'hair', 'accessory', 'facial_hair', 'eyes', 'mouth'].forEach((name) => {
+        const input = hiddenField(name);
+        if (input instanceof HTMLInputElement) body.set(name, input.value);
+      });
+      avatarStatus.textContent = 'Saving...';
+      try {
+        const resp = await fetch('/me/avatar-style.json', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+          },
+          body: body.toString()
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data?.ok) throw new Error('save failed');
+        const nextUrl = String(data.avatar_url || buildAvatarUrl(true));
+        if (avatarPreview instanceof HTMLImageElement) avatarPreview.src = nextUrl;
+        if (navAvatar instanceof HTMLImageElement) navAvatar.src = nextUrl;
+        const heroAvatar = document.querySelector('.profile-hero .profile-avatar');
+        if (heroAvatar instanceof HTMLImageElement) heroAvatar.src = nextUrl;
+        avatarStatus.textContent = 'Saved';
+        window.setTimeout(() => {
+          if (avatarStatus.textContent === 'Saved') avatarStatus.textContent = 'Changes apply automatically.';
+        }, 1200);
+      } catch {
+        avatarStatus.textContent = 'Failed to save';
+      }
+    };
+    const scheduleAvatarSave = () => {
+      if (avatarTimer) window.clearTimeout(avatarTimer);
+      avatarTimer = window.setTimeout(saveAvatar, 180);
+    };
+    avatarStyleForm.querySelectorAll('[data-avatar-option]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const field = btn.getAttribute('data-field');
+        const value = btn.getAttribute('data-value');
+        if (!field || !value) return;
+        const input = hiddenField(field);
+        if (!(input instanceof HTMLInputElement)) return;
+        input.value = value;
+        setActiveChip(field, value);
+        if (avatarPreview instanceof HTMLImageElement) {
+          avatarPreview.src = buildAvatarUrl(true);
+        }
+        avatarStatus.textContent = 'Updating...';
+        scheduleAvatarSave();
+      });
+    });
+  }
 
   if ("<%= error ? '1' : '' %>" || "<%= notice ? '1' : '' %>") {
     profileDialog?.showModal();

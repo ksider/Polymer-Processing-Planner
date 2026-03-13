@@ -1,7 +1,13 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import type { Db } from "../db.js";
-import { getUserPasswordHash, updateUserName, updateUserPassword } from "../repos/users_repo.js";
+import {
+  findUserById,
+  getUserPasswordHash,
+  updateUserAvatarStyle,
+  updateUserName,
+  updateUserPassword
+} from "../repos/users_repo.js";
 import { listExperimentsForOwnerWithMeta, type ExperimentListRow } from "../repos/experiments_repo.js";
 import { listTasksForUser } from "../repos/tasks_read_repo.js";
 import { listTaskEntities, type TaskEntityRow } from "../repos/tasks_repo.js";
@@ -13,9 +19,28 @@ import {
   markAllNotificationsRead,
   markNotificationRead
 } from "../repos/notifications_repo.js";
+import {
+  AVATAR_STYLE_OPTIONS,
+  buildAvatarRedirectUrl,
+  getAvatarStyle,
+  normalizeAvatarStyle,
+  stringifyAvatarStyle
+} from "../services/avatar_service.js";
 
 export function createProfileRouter(db: Db) {
   const router = express.Router();
+
+  const avatarUserFromRequest = (user: {
+    id?: number;
+    name?: string | null;
+    email?: string;
+    avatar_style_json?: string | null;
+  }) => ({
+    id: Number(user.id),
+    name: user.name ?? null,
+    email: String(user.email ?? ""),
+    avatar_style_json: user.avatar_style_json ?? null
+  });
 
   const enrich = (experiments: ExperimentListRow[]) =>
     experiments.map((exp) => {
@@ -87,12 +112,53 @@ export function createProfileRouter(db: Db) {
     };
   };
 
+  router.get("/avatars/:id.svg", (req, res) => {
+    if (!req.user?.id) return res.status(401).send("Unauthorized");
+    const userId = Number(req.params.id);
+    if (!Number.isFinite(userId) || userId <= 0) return res.status(400).send("Invalid user id");
+    const user = findUserById(db, userId);
+    if (!user) return res.status(404).send("Not found");
+    const hasPreviewOverride =
+      req.query.palette != null ||
+      req.query.presentation != null ||
+      req.query.skin_tone != null ||
+      req.query.hair != null ||
+      req.query.accessory != null ||
+      req.query.facial_hair != null ||
+      req.query.eyes != null ||
+      req.query.mouth != null;
+    if (hasPreviewOverride && Number(req.user.id) === userId) {
+      const previewStyle = normalizeAvatarStyle(
+        {
+          palette: String(req.query.palette ?? "").trim().toLowerCase() as never,
+          presentation: String(req.query.presentation ?? "").trim().toLowerCase() as never,
+          skinTone: String(req.query.skin_tone ?? "").trim().toLowerCase() as never,
+          hair: String(req.query.hair ?? "").trim().toLowerCase() as never,
+          accessory: String(req.query.accessory ?? "").trim().toLowerCase() as never,
+          facialHair: String(req.query.facial_hair ?? "").trim().toLowerCase() as never,
+          eyes: String(req.query.eyes ?? "").trim().toLowerCase() as never,
+          mouth: String(req.query.mouth ?? "").trim().toLowerCase() as never
+        },
+        `${user.id}:${user.email}:${user.name ?? ""}`
+      );
+      res.set("Cache-Control", "private, no-store");
+      return res.redirect(buildAvatarRedirectUrl(
+        { ...user, avatar_style_json: stringifyAvatarStyle(previewStyle) },
+        previewStyle
+      ));
+    }
+    res.set("Cache-Control", "private, no-store");
+    return res.redirect(buildAvatarRedirectUrl(user));
+  });
+
   router.get("/me", (req, res) => {
     if (!req.user?.id) return res.redirect("/auth/login");
     const data = buildProfilePayload(req.user.id);
     res.render("profile", {
       title: "Profile",
       ...data,
+      currentAvatarStyle: getAvatarStyle(avatarUserFromRequest(req.user)),
+      avatarStyleOptions: AVATAR_STYLE_OPTIONS,
       error: null,
       notice: null
     });
@@ -103,6 +169,44 @@ export function createProfileRouter(db: Db) {
     if (!req.user?.id) return res.redirect("/auth/login");
     updateUserName(db, req.user.id, name || null);
     return res.redirect("/me");
+  });
+
+  router.post("/me/avatar-style", (req, res) => {
+    if (!req.user?.id) return res.redirect("/auth/login");
+    const nextStyle = normalizeAvatarStyle(
+      {
+        palette: String(req.body?.palette ?? "amber").trim().toLowerCase() as never,
+        presentation: String(req.body?.presentation ?? "neutral").trim().toLowerCase() as never,
+        skinTone: String(req.body?.skin_tone ?? "warm").trim().toLowerCase() as never,
+        hair: String(req.body?.hair ?? "short").trim().toLowerCase() as never,
+        accessory: String(req.body?.accessory ?? "none").trim().toLowerCase() as never,
+        facialHair: String(req.body?.facial_hair ?? "none").trim().toLowerCase() as never,
+        eyes: String(req.body?.eyes ?? "calm").trim().toLowerCase() as never,
+        mouth: String(req.body?.mouth ?? "default").trim().toLowerCase() as never
+      },
+      `${req.user.id}:${req.user.email}:${req.user.name ?? ""}`
+    );
+    updateUserAvatarStyle(db, req.user.id, stringifyAvatarStyle(nextStyle));
+    return res.redirect("/me");
+  });
+
+  router.post("/me/avatar-style.json", (req, res) => {
+    if (!req.user?.id) return res.status(401).json({ error: "Unauthorized" });
+    const nextStyle = normalizeAvatarStyle(
+      {
+        palette: String(req.body?.palette ?? "amber").trim().toLowerCase() as never,
+        presentation: String(req.body?.presentation ?? "neutral").trim().toLowerCase() as never,
+        skinTone: String(req.body?.skin_tone ?? "warm").trim().toLowerCase() as never,
+        hair: String(req.body?.hair ?? "short").trim().toLowerCase() as never,
+        accessory: String(req.body?.accessory ?? "none").trim().toLowerCase() as never,
+        facialHair: String(req.body?.facial_hair ?? "none").trim().toLowerCase() as never,
+        eyes: String(req.body?.eyes ?? "calm").trim().toLowerCase() as never,
+        mouth: String(req.body?.mouth ?? "default").trim().toLowerCase() as never
+      },
+      `${req.user.id}:${req.user.email}:${req.user.name ?? ""}`
+    );
+    updateUserAvatarStyle(db, req.user.id, stringifyAvatarStyle(nextStyle));
+    return res.json({ ok: true, avatar_url: `/avatars/${req.user.id}.svg?ts=${Date.now()}` });
   });
 
   router.post("/me/password", (req, res) => {
@@ -117,6 +221,8 @@ export function createProfileRouter(db: Db) {
       return res.render("profile", {
         title: "Profile",
         ...data,
+        currentAvatarStyle: getAvatarStyle(avatarUserFromRequest(req.user)),
+        avatarStyleOptions: AVATAR_STYLE_OPTIONS,
         error: "Current password is incorrect.",
         notice: null
       });
@@ -126,6 +232,8 @@ export function createProfileRouter(db: Db) {
       return res.render("profile", {
         title: "Profile",
         ...data,
+        currentAvatarStyle: getAvatarStyle(avatarUserFromRequest(req.user)),
+        avatarStyleOptions: AVATAR_STYLE_OPTIONS,
         error: "New password must be at least 8 characters and match confirmation.",
         notice: null
       });
@@ -136,6 +244,8 @@ export function createProfileRouter(db: Db) {
     return res.render("profile", {
       title: "Profile",
       ...data,
+      currentAvatarStyle: getAvatarStyle(avatarUserFromRequest(req.user)),
+      avatarStyleOptions: AVATAR_STYLE_OPTIONS,
       error: null,
       notice: "Password updated."
     });
