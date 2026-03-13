@@ -14,27 +14,37 @@ import {
   createChatRoom,
   countUnreadMessageBoxes,
   createMessage,
+  createMessageEdit,
   createMessageBox,
+  deleteMessageDraft,
   deleteChatRoomById,
   deleteMessagesByRoomId,
   getChatRoomByIdForUser,
   getDirectRoomByUsers,
+  getMessageDraft,
   getSystemRoomByUser,
   getMessageBoxById,
   getMessageById,
+  isMessagePinnedInRoom,
   listChatRoomMembers,
+  listMessageEditsForRoom,
   listChatRoomMessages,
   listChatRoomsForUser,
   listCollectiveMessageBoxes,
   listMessageBoxesByFolder,
+  listPinnedMessagesForRoom,
   listUnreadMessageBoxes,
   markChatRoomRead,
   markAllCollectiveMessageBoxesRead,
   markAllMessageBoxesRead,
   markMessageBoxRead,
   moveMessageBoxToDeleted,
+  pinMessageInRoom,
   removeChatRoomMember,
   updateChatRoomUpdatedAt,
+  updateMessageContent,
+  unpinMessageInRoom,
+  upsertMessageDraft,
   upsertChatRoomMember,
   restoreDeletedMessageBox
 } from "../repos/messages_repo.js";
@@ -51,11 +61,15 @@ export type MessageListItem = {
   created_at: string;
   kind: string;
   visibility: string;
+  chat_room_id: number | null;
+  reply_to_message_id: number | null;
   sender_user_id: number | null;
   subject: string;
   body: string | null;
   payload_json: string | null;
   message_created_at: string;
+  edited_at: string | null;
+  edit_count: number;
   sender_name: string | null;
   sender_email: string | null;
   payload: MessagePayload | null;
@@ -79,6 +93,11 @@ export type DirectConversationItem = {
 export type DirectThreadMessageItem = MessageListItem & {
   direction: "incoming" | "outgoing";
   message_no: number;
+  is_pinned: number;
+  reply_subject: string | null;
+  reply_body: string | null;
+  reply_sender_name: string | null;
+  reply_sender_email: string | null;
 };
 
 export type ChatRoomMemberItem = {
@@ -90,6 +109,40 @@ export type ChatRoomMemberItem = {
   removed_at: string | null;
   name: string | null;
   email: string | null;
+};
+
+export type PinnedMessageItem = {
+  id: number;
+  room_id: number;
+  message_id: number;
+  pinned_by_user_id: number | null;
+  pinned_at: string;
+  subject: string;
+  body: string | null;
+  sender_name: string | null;
+  sender_email: string | null;
+  message_created_at: string;
+};
+
+export type MessageEditHistoryItem = {
+  id: number;
+  message_id: number;
+  editor_user_id: number | null;
+  subject: string;
+  body: string | null;
+  created_at: string;
+  editor_name: string | null;
+  editor_email: string | null;
+};
+
+export type MessageDraftItem = {
+  id: number;
+  user_id: number;
+  room_id: number;
+  subject: string | null;
+  body: string | null;
+  reply_to_message_id: number | null;
+  updated_at: string;
 };
 
 function normalizeSubject(subject: unknown) {
@@ -431,9 +484,13 @@ export function listDirectThread(
   db: Db,
   userId: number,
   roomId: number,
-  limit = 500
+  options?: {
+    limit?: number;
+    searchQuery?: string;
+    filter?: "all" | "mentions" | "attachments" | "system";
+  }
 ): DirectThreadMessageItem[] {
-  return listChatRoomMessages(db, userId, roomId, limit).map((row) => ({
+  return listChatRoomMessages(db, userId, roomId, options).map((row) => ({
     ...row,
     payload: parsePayload(row.payload_json)
   }));
@@ -503,6 +560,7 @@ export function sendMessageToRoom(
     senderUserId: number;
     subject: string;
     body?: string | null;
+    replyToMessageId?: number | null;
     kind?: "manual" | "system" | "assignment" | "task";
     payload?: MessagePayload | null;
   }
@@ -527,6 +585,7 @@ export function sendMessageToRoom(
       kind,
       visibility,
       chat_room_id: data.roomId,
+      reply_to_message_id: data.replyToMessageId ?? null,
       sender_user_id: data.senderUserId,
       subject: normalizeSubject(data.subject),
       body: data.body ?? null,
@@ -548,6 +607,126 @@ export function sendMessageToRoom(
     return messageId;
   });
   return tx();
+}
+
+export function listPinnedMessages(
+  db: Db,
+  userId: number,
+  roomId: number,
+  limit = 20
+): PinnedMessageItem[] {
+  return listPinnedMessagesForRoom(db, userId, roomId, limit);
+}
+
+export function listMessageEditHistory(
+  db: Db,
+  userId: number,
+  roomId: number
+): Record<number, MessageEditHistoryItem[]> {
+  const rows = listMessageEditsForRoom(db, userId, roomId);
+  return rows.reduce<Record<number, MessageEditHistoryItem[]>>((acc, row) => {
+    if (!acc[row.message_id]) acc[row.message_id] = [];
+    acc[row.message_id].push(row);
+    return acc;
+  }, {});
+}
+
+export function getDraftForRoom(db: Db, userId: number, roomId: number): MessageDraftItem | null {
+  return getMessageDraft(db, userId, roomId);
+}
+
+export function saveDraftForRoom(
+  db: Db,
+  data: {
+    userId: number;
+    roomId: number;
+    subject?: string | null;
+    body?: string | null;
+    replyToMessageId?: number | null;
+  }
+) {
+  upsertMessageDraft(db, {
+    user_id: data.userId,
+    room_id: data.roomId,
+    subject: data.subject ?? null,
+    body: data.body ?? null,
+    reply_to_message_id: data.replyToMessageId ?? null
+  });
+}
+
+export function clearDraftForRoom(db: Db, userId: number, roomId: number) {
+  deleteMessageDraft(db, userId, roomId);
+}
+
+export function togglePinMessage(
+  db: Db,
+  data: {
+    userId: number;
+    roomId: number;
+    messageId: number;
+  }
+) {
+  const room = getChatRoomByIdForUser(db, data.roomId, data.userId);
+  if (!room) throw new Error("Room not found.");
+  const message = getMessageById(db, data.messageId);
+  if (!message || Number(message.chat_room_id) !== Number(data.roomId)) {
+    throw new Error("Message not found.");
+  }
+  if (isMessagePinnedInRoom(db, data.roomId, data.messageId)) {
+    unpinMessageInRoom(db, data.roomId, data.messageId);
+    return false;
+  }
+  pinMessageInRoom(db, {
+    room_id: data.roomId,
+    message_id: data.messageId,
+    pinned_by_user_id: data.userId
+  });
+  return true;
+}
+
+export function editRoomMessage(
+  db: Db,
+  data: {
+    roomId: number;
+    actorUserId: number;
+    actorRole?: string | null;
+    messageId: number;
+    subject: string;
+    body?: string | null;
+    replyToMessageId?: number | null;
+  }
+) {
+  const room = getChatRoomByIdForUser(db, data.roomId, data.actorUserId);
+  if (!room) throw new Error("Room not found.");
+  const message = getMessageById(db, data.messageId);
+  if (!message || Number(message.chat_room_id) !== Number(data.roomId)) {
+    throw new Error("Message not found.");
+  }
+  const isOwn = Number(message.sender_user_id) === Number(data.actorUserId);
+  const isAdmin = String(data.actorRole ?? "").toLowerCase() === "admin";
+  if (!isOwn && !isAdmin) throw new Error("Forbidden");
+  const nextSubject = room.room_type === "group"
+    ? normalizeSubject(data.subject)
+    : normalizeSubject(data.subject);
+  const now = new Date().toISOString();
+  const tx = db.transaction(() => {
+    createMessageEdit(db, {
+      message_id: data.messageId,
+      editor_user_id: data.actorUserId,
+      subject: message.subject,
+      body: message.body ?? null,
+      created_at: now
+    });
+    updateMessageContent(db, {
+      message_id: data.messageId,
+      subject: nextSubject,
+      body: data.body ?? null,
+      reply_to_message_id: data.replyToMessageId ?? null,
+      edited_at: now
+    });
+    updateChatRoomUpdatedAt(db, data.roomId, now);
+  });
+  tx();
 }
 
 export function addRoomMember(

@@ -189,12 +189,16 @@ function initDb(db: Db) {
       kind TEXT NOT NULL, -- system | assignment | task | manual
       visibility TEXT NOT NULL DEFAULT 'direct', -- direct | collective
       chat_room_id INTEGER,
+      reply_to_message_id INTEGER,
       sender_user_id INTEGER,
       subject TEXT NOT NULL,
       body TEXT,
       payload_json TEXT,
       created_at TEXT NOT NULL,
+      edited_at TEXT,
+      edit_count INTEGER NOT NULL DEFAULT 0,
       FOREIGN KEY (chat_room_id) REFERENCES chat_rooms(id) ON DELETE SET NULL,
+      FOREIGN KEY (reply_to_message_id) REFERENCES messages(id) ON DELETE SET NULL,
       FOREIGN KEY (sender_user_id) REFERENCES users(id) ON DELETE SET NULL
     );
     CREATE TABLE IF NOT EXISTS chat_rooms (
@@ -238,6 +242,39 @@ function initDb(db: Db) {
       migrated_at TEXT NOT NULL,
       FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE,
       FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS message_edits (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      message_id INTEGER NOT NULL,
+      editor_user_id INTEGER,
+      subject TEXT NOT NULL,
+      body TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+      FOREIGN KEY (editor_user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE TABLE IF NOT EXISTS chat_room_pins (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      room_id INTEGER NOT NULL,
+      message_id INTEGER NOT NULL UNIQUE,
+      pinned_by_user_id INTEGER,
+      pinned_at TEXT NOT NULL,
+      FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE,
+      FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+      FOREIGN KEY (pinned_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE TABLE IF NOT EXISTS message_drafts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      room_id INTEGER NOT NULL,
+      subject TEXT,
+      body TEXT,
+      reply_to_message_id INTEGER,
+      updated_at TEXT NOT NULL,
+      UNIQUE(user_id, room_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE,
+      FOREIGN KEY (reply_to_message_id) REFERENCES messages(id) ON DELETE SET NULL
     );
     CREATE TABLE IF NOT EXISTS process_types (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -713,10 +750,23 @@ function initDb(db: Db) {
   if (!hasColumn(db, "messages", "chat_room_id")) {
     db.exec("ALTER TABLE messages ADD COLUMN chat_room_id INTEGER");
   }
+  if (!hasColumn(db, "messages", "reply_to_message_id")) {
+    db.exec("ALTER TABLE messages ADD COLUMN reply_to_message_id INTEGER");
+  }
+  if (!hasColumn(db, "messages", "edited_at")) {
+    db.exec("ALTER TABLE messages ADD COLUMN edited_at TEXT");
+  }
+  if (!hasColumn(db, "messages", "edit_count")) {
+    db.exec("ALTER TABLE messages ADD COLUMN edit_count INTEGER NOT NULL DEFAULT 0");
+  }
   if (!hasColumn(db, "message_boxes", "mention_flag")) {
     db.exec("ALTER TABLE message_boxes ADD COLUMN mention_flag INTEGER NOT NULL DEFAULT 0");
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_chat_room_created ON messages(chat_room_id, created_at, id)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_messages_reply_to ON messages(reply_to_message_id)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_message_edits_message_created ON message_edits(message_id, created_at)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_chat_room_pins_room_pinned ON chat_room_pins(room_id, pinned_at)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_message_drafts_user_room ON message_drafts(user_id, room_id)");
   const backfillRoomsForMessages = db
     .prepare(
       `SELECT id, visibility, sender_user_id, subject, created_at

@@ -5,7 +5,14 @@
     <div class="messages-layout">
       <aside class="messages-sidebar">
         <div class="messages-sidebar-head">
-          <h1 class="card-title">Messages</h1>
+          <div class="messages-sidebar-head-top">
+            <h1 class="card-title">Messages</h1>
+            <% if (view === 'chat') { %>
+              <button class="icon-btn icon-only messages-create-chat-btn" type="button" id="openGroupChatDialog" title="Create group chat">
+                <span class="material-symbols-rounded">group_add</span>
+              </button>
+            <% } %>
+          </div>
           <div class="messages-view-tabs">
             <a class="pure-button <%= view === 'chat' ? 'pure-button-primary' : '' %>" href="/messages?view=chat">Chats</a>
             <a class="pure-button <%= view === 'deleted' ? 'pure-button-primary' : '' %>" href="/messages?view=deleted">Deleted</a>
@@ -14,6 +21,13 @@
 
         <div class="messages-sidebar-body">
         <% if (view === 'chat') { %>
+          <form class="pure-form messages-chat-filter-form" action="/messages" method="get" data-auto-submit-search>
+            <input type="hidden" name="view" value="chat">
+            <% if (activeRoom?.id) { %>
+              <input type="hidden" name="room_id" value="<%= activeRoom.id %>">
+            <% } %>
+            <input type="search" name="chat_q" value="<%= chatQuery || '' %>" placeholder="Search chats...">
+          </form>
           <div class="messages-compose-search">
             <label for="openDirectInput">Open direct chat</label>
             <input
@@ -35,21 +49,40 @@
               <% (rooms || []).forEach((room) => { %>
                 <% const isActive = activeRoom && Number(activeRoom.id) === Number(room.room_id); %>
                 <% const typeLabel = room.room_type === 'group' ? 'GROUP' : (room.room_type === 'system' ? 'SYSTEM' : 'DIRECT'); %>
+                <% const partnerUser = room.partner_user_id ? (users || []).find((user) => Number(user.id) === Number(room.partner_user_id)) : null; %>
+                <% const previewText = String(room.last_body || room.last_subject || (room.room_type === 'group' ? 'No messages yet.' : 'Direct conversation')).trim(); %>
+                <% const avatarSeed = String(room.title || 'C').trim(); %>
                 <div class="messages-conversation-row <%= room.room_type === 'group' ? 'is-group' : '' %>">
                   <a
                     class="messages-conversation-item room-type-<%= room.room_type %> <%= isActive ? 'is-active' : '' %>"
                     href="/messages?view=chat&room_id=<%= room.room_id %>"
                   >
-                    <div class="messages-conversation-top">
-                      <strong><%- formatInline(room.title) %></strong>
-                      <div class="messages-conversation-badges">
-                        <span class="messages-room-type"><%= typeLabel %></span>
-                      <% if (room.room_type === 'group' && room.mention_unread_count > 0) { %>
-                        <span class="messages-mention-pill" title="Unread mentions">@<%= room.mention_unread_count > 99 ? '99+' : room.mention_unread_count %></span>
-                      <% } %>
-                      <% if (room.unread_count > 0) { %>
-                        <span class="messages-unread-pill"><%= room.unread_count > 99 ? '99+' : room.unread_count %></span>
-                      <% } %>
+                    <div class="messages-conversation-avatar room-type-<%= room.room_type %>">
+                      <span><%= avatarSeed.slice(0, 1).toUpperCase() %></span>
+                    </div>
+                    <div class="messages-conversation-main">
+                      <div class="messages-conversation-top">
+                        <div class="messages-conversation-copy">
+                          <strong><%- formatInline(room.title) %></strong>
+                          <% if (room.room_type === 'direct' && partnerUser?.role) { %>
+                            <span class="messages-conversation-role"><%- formatInline(partnerUser.role) %></span>
+                          <% } %>
+                        </div>
+                        <span class="messages-conversation-time">
+                          <%= room.last_message_at ? new Date(room.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '' %>
+                        </span>
+                      </div>
+                      <div class="messages-conversation-bottom">
+                        <span class="messages-conversation-preview"><%- formatInline(previewText) %></span>
+                        <div class="messages-conversation-badges">
+                          <span class="messages-room-type"><%= typeLabel %></span>
+                        <% if (room.room_type === 'group' && room.mention_unread_count > 0) { %>
+                          <span class="messages-mention-pill" title="Unread mentions">@<%= room.mention_unread_count > 99 ? '99+' : room.mention_unread_count %></span>
+                        <% } %>
+                        <% if (room.unread_count > 0) { %>
+                          <span class="messages-unread-pill"><%= room.unread_count > 99 ? '99+' : room.unread_count %></span>
+                        <% } %>
+                        </div>
                       </div>
                     </div>
                   </a>
@@ -62,24 +95,24 @@
                   <% } %>
                 </div>
               <% }); %>
-            </div>
-          </div>
-
-          <div class="messages-list-block">
-            <div class="messages-list-title">New group chat</div>
-            <button class="pure-button pure-button-primary" type="button" id="openGroupChatDialog">Create group chat</button>
-          </div>
-
-          <div class="messages-list-block">
-            <div class="messages-list-title">Users without direct chat</div>
-            <% if (!usersWithoutConversation || usersWithoutConversation.length === 0) { %>
-              <div class="small-note">You already have direct chats with all active users.</div>
-            <% } %>
-            <div class="messages-user-list">
+              <div class="messages-list-divider">
+                <span>Users without direct chat</span>
+              </div>
+              <% if (!usersWithoutConversation || usersWithoutConversation.length === 0) { %>
+                <div class="small-note">You already have direct chats with all active users.</div>
+              <% } %>
               <% (usersWithoutConversation || []).forEach((user) => { %>
                 <a class="messages-user-item" href="/messages?view=chat&user_id=<%= user.id %>">
-                  <strong><%- formatInline(user.name || user.email) %></strong>
-                  <span class="small-note"><%- formatInline(user.email) %></span>
+                  <span class="messages-conversation-avatar room-type-direct">
+                    <span><%= String(user.name || user.email || 'U').slice(0, 1).toUpperCase() %></span>
+                  </span>
+                  <span class="messages-user-copy">
+                    <strong><%- formatInline(user.name || user.email) %></strong>
+                    <% if (user.role) { %>
+                      <span class="messages-conversation-role"><%- formatInline(user.role) %></span>
+                    <% } %>
+                    <span class="small-note"><%- formatInline(user.email) %></span>
+                  </span>
                 </a>
               <% }); %>
             </div>
@@ -121,6 +154,8 @@
           </div>
         <% } else { %>
           <% const activeRoomType = activeRoom.room_type || 'direct'; %>
+          <% const activeRoomMeta = (rooms || []).find((room) => Number(room.room_id) === Number(activeRoom.id)) || (systemRoom && Number(systemRoom.room_id) === Number(activeRoom.id) ? systemRoom : null); %>
+          <% const activeUnreadCount = Number(activeRoomMeta?.unread_count || 0); %>
           <div class="messages-thread-head">
             <div class="messages-thread-head-main">
               <div class="messages-thread-title-row">
@@ -148,13 +183,42 @@
               <% } %>
             </div>
             <div class="messages-thread-head-actions">
+              <form class="pure-form messages-thread-search-form" action="/messages" method="get" data-auto-submit-search>
+                <input type="hidden" name="view" value="chat">
+                <input type="hidden" name="room_id" value="<%= activeRoom.id %>">
+                <% if (chatQuery) { %>
+                  <input type="hidden" name="chat_q" value="<%= chatQuery %>">
+                <% } %>
+                <input class="messages-thread-search-input" type="search" name="message_q" value="<%= messageQuery || '' %>" placeholder="Search messages...">
+                <div class="messages-filter-icons" role="group" aria-label="Message filters">
+                  <button class="icon-btn icon-only <%= messageFilter === 'all' ? 'is-active' : '' %>" type="submit" name="message_filter" value="all" title="All messages">
+                    <span class="material-symbols-rounded">forum</span>
+                  </button>
+                  <button class="icon-btn icon-only <%= messageFilter === 'mentions' ? 'is-active' : '' %>" type="submit" name="message_filter" value="mentions" title="Only mentions">
+                    <span class="material-symbols-rounded">alternate_email</span>
+                  </button>
+                  <button class="icon-btn icon-only <%= messageFilter === 'attachments' ? 'is-active' : '' %>" type="submit" name="message_filter" value="attachments" title="Only attachments">
+                    <span class="material-symbols-rounded">attach_file</span>
+                  </button>
+                  <button class="icon-btn icon-only <%= messageFilter === 'system' ? 'is-active' : '' %>" type="submit" name="message_filter" value="system" title="Only system messages">
+                    <span class="material-symbols-rounded">notifications</span>
+                  </button>
+                </div>
+              </form>
               <% if (activeRoomType === 'group' && canManageMembers) { %>
                 <button class="icon-btn icon-only" type="button" data-add-member-open title="Add participant">
                   <span class="material-symbols-rounded">group_add</span>
                 </button>
               <% } %>
               <form class="pure-form" action="/messages/rooms/<%= activeRoom.id %>/read" method="post">
-                <button class="pure-button button-sm" type="submit">Mark read</button>
+                <button
+                  class="icon-btn icon-only messages-mark-read-btn <%= activeUnreadCount > 0 ? 'is-active' : 'is-idle' %>"
+                  type="submit"
+                  title="<%= activeUnreadCount > 0 ? `Mark read (${activeUnreadCount})` : 'No unread messages' %>"
+                  <%= activeUnreadCount > 0 ? '' : 'disabled' %>
+                >
+                  <span class="material-symbols-rounded">mark_chat_read</span>
+                </button>
               </form>
             </div>
           </div>
@@ -193,22 +257,62 @@
             <% } %>
           <% } %>
 
+          <% if (pinnedMessages && pinnedMessages.length > 0) { %>
+            <div class="messages-pinned-strip">
+              <div class="messages-list-title">Pinned</div>
+              <div class="messages-pinned-list">
+                <% pinnedMessages.forEach((item) => { %>
+                  <a class="messages-pinned-item" href="/messages?view=chat&room_id=<%= activeRoom.id %>&message_id=<%= item.message_id %>#msg-<%= item.message_id %>">
+                    <strong><%- formatInline(item.subject || item.body || 'Pinned message') %></strong>
+                    <span class="small-note"><%- formatInline(item.sender_name || item.sender_email || 'System') %></span>
+                  </a>
+                <% }) %>
+              </div>
+            </div>
+          <% } %>
+
           <div class="messages-thread-body">
             <% if (!threadMessages || threadMessages.length === 0) { %>
               <div class="small-note">No messages yet.</div>
             <% } %>
             <% (threadMessages || []).forEach((msg) => { %>
+              <% if (unreadSeparatorMessageId && Number(unreadSeparatorMessageId) === Number(msg.message_id)) { %>
+                <div class="messages-unread-separator">
+                  <span>New messages</span>
+                </div>
+              <% } %>
               <div
                 id="msg-<%= msg.message_id %>"
                 class="messages-bubble-row <%= msg.direction === 'outgoing' ? 'is-outgoing' : 'is-incoming' %> <%= selectedMessageId && Number(selectedMessageId) === Number(msg.message_id) ? 'is-selected' : '' %>"
               >
                 <div class="messages-bubble">
-                  <% if (msg.direction === 'outgoing' || currentUser?.role === 'admin') { %>
-                    <form class="pure-form messages-bubble-delete" action="/messages/<%= msg.id %>/delete" method="post">
-                      <button class="icon-btn icon-only" type="submit" title="Delete message">
-                        <span class="material-symbols-rounded">delete</span>
+                  <div class="messages-bubble-tools">
+                    <form class="pure-form messages-bubble-tool" action="/messages/rooms/<%= activeRoom.id %>/pins/<%= msg.message_id %>/toggle" method="post">
+                      <button class="icon-btn icon-only" type="submit" title="<%= msg.is_pinned ? 'Unpin message' : 'Pin message' %>">
+                        <span class="material-symbols-rounded"><%= msg.is_pinned ? 'keep_off' : 'keep' %></span>
                       </button>
                     </form>
+                    <button class="icon-btn icon-only messages-bubble-tool" type="button" title="Reply" data-reply-message-id="<%= msg.message_id %>" data-reply-subject="<%= msg.subject || '' %>" data-reply-body="<%= msg.body || '' %>" data-reply-author="<%= msg.sender_name || msg.sender_email || 'System' %>">
+                      <span class="material-symbols-rounded">reply</span>
+                    </button>
+                    <% if (msg.direction === 'outgoing' || currentUser?.role === 'admin') { %>
+                      <a class="icon-btn icon-only messages-bubble-tool" href="/messages?view=chat&room_id=<%= activeRoom.id %>&edit_message_id=<%= msg.message_id %>#composer" title="Edit message">
+                        <span class="material-symbols-rounded">edit</span>
+                      </a>
+                      <form class="pure-form messages-bubble-tool" action="/messages/<%= msg.id %>/delete" method="post">
+                        <input type="hidden" name="room_id" value="<%= activeRoom.id %>">
+                        <input type="hidden" name="message_id" value="<%= msg.message_id %>">
+                        <button class="icon-btn icon-only" type="submit" title="Delete message">
+                          <span class="material-symbols-rounded">delete</span>
+                        </button>
+                      </form>
+                    <% } %>
+                  </div>
+                  <% if (msg.reply_to_message_id) { %>
+                    <a class="messages-reply-preview" href="/messages?view=chat&room_id=<%= activeRoom.id %>&message_id=<%= msg.reply_to_message_id %>">
+                      <strong><%- formatInline(msg.reply_sender_name || msg.reply_sender_email || 'Message') %></strong>
+                      <span><%- formatInline(msg.reply_subject || msg.reply_body || 'Referenced message') %></span>
+                    </a>
                   <% } %>
                   <% if (msg.subject) { %>
                     <div class="messages-bubble-subject"><%- formatInline(msg.subject) %></div>
@@ -243,32 +347,103 @@
                     <% if (msg.direction === 'incoming' && msg.status === 'unread') { %>
                       <span class="messages-unread-pill">new</span>
                     <% } %>
+                    <% if (msg.edit_count > 0) { %>
+                      <span class="messages-room-type">edited</span>
+                    <% } %>
+                    <% if (msg.is_pinned) { %>
+                      <span class="messages-room-type">pinned</span>
+                    <% } %>
                   </div>
+                  <% if (messageEditHistory && messageEditHistory[msg.message_id] && messageEditHistory[msg.message_id].length > 0) { %>
+                    <details class="messages-edit-history">
+                      <summary>History</summary>
+                      <% messageEditHistory[msg.message_id].forEach((historyItem) => { %>
+                        <div class="messages-edit-history-item">
+                          <strong><%- formatInline(historyItem.editor_name || historyItem.editor_email || 'Editor') %></strong>
+                          <span><%= new Date(historyItem.created_at).toLocaleString() %></span>
+                          <div><%- formatInline(historyItem.subject || historyItem.body || '-') %></div>
+                        </div>
+                      <% }) %>
+                    </details>
+                  <% } %>
                 </div>
               </div>
             <% }) %>
           </div>
 
           <% if (activeRoomType !== 'system') { %>
-            <div class="messages-thread-compose">
+            <div class="messages-thread-compose" id="composer">
               <% if (sendError) { %>
                 <div class="auth-error"><%= sendError %></div>
               <% } %>
               <form class="pure-form pure-form-stacked" action="/messages/rooms/<%= activeRoom.id %>/send" method="post">
+                <input id="threadReplyToMessageId" type="hidden" name="reply_to_message_id" value="<%= editTarget?.reply_to_message_id || draft?.reply_to_message_id || '' %>">
+                <input id="threadEditMessageId" type="hidden" name="edit_message_id" value="<%= editTarget?.message_id || '' %>">
+                <div class="messages-compose-state" <%= (editTarget || draft?.reply_to_message_id) ? '' : 'hidden' %>>
+                  <% const composeReplyId = editTarget?.reply_to_message_id || draft?.reply_to_message_id; %>
+                  <% const composeReplyMessage = composeReplyId ? (threadMessages || []).find((item) => Number(item.message_id) === Number(composeReplyId)) : null; %>
+                  <div class="messages-compose-state-copy">
+                    <strong id="threadReplyStateTitle"><%= editTarget ? 'Editing message' : 'Replying to message' %></strong>
+                    <span id="threadReplyStateBody"><%- formatInline(composeReplyMessage?.subject || composeReplyMessage?.body || editTarget?.subject || '') %></span>
+                  </div>
+                  <button class="icon-btn icon-only" type="button" id="clearComposeState" title="Clear state">
+                    <span class="material-symbols-rounded">close</span>
+                  </button>
+                </div>
                 <fieldset class="pure-group">
                   <% if (activeRoomType !== 'group') { %>
-                    <input id="threadSubject" name="subject" type="text" required placeholder="Subject">
+                    <input id="threadSubject" name="subject" type="text" required placeholder="Subject" value="<%= editTarget?.subject || draft?.subject || '' %>">
                   <% } else { %>
                     <input id="threadSubject" name="subject" type="hidden" value="">
                   <% } %>
-                  <textarea id="threadBody" name="body" rows="3" placeholder="Message"></textarea>
+                  <textarea id="threadBody" name="body" rows="3" placeholder="Message"><%= editTarget?.body || draft?.body || '' %></textarea>
                 </fieldset>
                 <button class="pure-button pure-button-primary" type="submit">Send</button>
+                <span class="small-note">Ctrl+Enter to send</span>
               </form>
             </div>
           <% } %>
         <% } %>
       </section>
+
+      <% if (view === 'chat') { %>
+        <aside class="messages-rail">
+          <div class="messages-rail-head">
+            <div>
+              <h2 class="messages-rail-title">Notifications</h2>
+              <div class="small-note">System messages only</div>
+            </div>
+            <% if (systemRoom) { %>
+              <a class="pure-button button-sm" href="/messages?view=chat&room_id=<%= systemRoom.room_id %>">Open</a>
+            <% } %>
+          </div>
+          <div class="messages-rail-body">
+            <% if (!systemRoom || !systemMessages || systemMessages.length === 0) { %>
+              <div class="small-note">No system notifications yet.</div>
+            <% } %>
+            <% (systemMessages || []).forEach((msg) => { %>
+              <a
+                class="messages-notice-item <%= msg.status === 'unread' ? 'is-unread' : '' %>"
+                href="/messages?view=chat&room_id=<%= systemRoom?.room_id || '' %>&message_id=<%= msg.message_id %>#msg-<%= msg.message_id %>"
+              >
+                <div class="messages-notice-title">
+                  <strong><%- formatInline(msg.subject || 'Notification') %></strong>
+                  <% if (msg.status === 'unread') { %>
+                    <span class="messages-unread-pill">new</span>
+                  <% } %>
+                </div>
+                <% if (msg.body) { %>
+                  <div class="messages-notice-body"><%- formatInline(msg.body) %></div>
+                <% } %>
+                <div class="messages-notice-meta">
+                  <span><%= new Date(msg.message_created_at || msg.created_at).toLocaleString() %></span>
+                  <span>#<%= msg.message_no %></span>
+                </div>
+              </a>
+            <% }) %>
+          </div>
+        </aside>
+      <% } %>
     </div>
   </div>
 </div>
@@ -368,6 +543,17 @@
     const addMemberDialog = document.getElementById('addMemberDialog');
     const addMemberOpenBtn = document.querySelector('[data-add-member-open]');
     const addMemberCloseBtn = document.querySelector('[data-add-member-close]');
+    const threadBody = document.getElementById('threadBody');
+    const threadSubject = document.getElementById('threadSubject');
+    const replyInput = document.getElementById('threadReplyToMessageId');
+    const editInput = document.getElementById('threadEditMessageId');
+    const composeState = document.querySelector('.messages-compose-state');
+    const composeStateTitle = document.getElementById('threadReplyStateTitle');
+    const composeStateBody = document.getElementById('threadReplyStateBody');
+    const clearComposeStateBtn = document.getElementById('clearComposeState');
+    const composerForm = threadBody?.closest('form');
+    const activeRoomId = <%= activeRoom?.id || 'null' %>;
+    let draftTimer = null;
 
     openGroupDialogBtn?.addEventListener('click', () => {
       groupDialog?.showModal();
@@ -420,20 +606,35 @@
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
       const mentionBtn = target.closest('[data-mention-insert]');
-      if (!mentionBtn) return;
-      const threadBody = document.getElementById('threadBody');
-      if (!(threadBody instanceof HTMLTextAreaElement)) return;
-      const mentionRaw = String(mentionBtn.getAttribute('data-mention-insert') || '').trim();
-      if (!mentionRaw) return;
-      const mentionText = `@${mentionRaw} `;
-      const start = Number.isFinite(threadBody.selectionStart) ? threadBody.selectionStart : threadBody.value.length;
-      const end = Number.isFinite(threadBody.selectionEnd) ? threadBody.selectionEnd : threadBody.value.length;
-      const before = threadBody.value.slice(0, start);
-      const after = threadBody.value.slice(end);
-      threadBody.value = `${before}${mentionText}${after}`;
-      const nextCaret = before.length + mentionText.length;
-      threadBody.focus();
-      threadBody.setSelectionRange(nextCaret, nextCaret);
+      const replyBtn = target.closest('[data-reply-message-id]');
+      if (mentionBtn) {
+        if (!(threadBody instanceof HTMLTextAreaElement)) return;
+        const mentionRaw = String(mentionBtn.getAttribute('data-mention-insert') || '').trim();
+        if (!mentionRaw) return;
+        const mentionText = `@${mentionRaw} `;
+        const start = Number.isFinite(threadBody.selectionStart) ? threadBody.selectionStart : threadBody.value.length;
+        const end = Number.isFinite(threadBody.selectionEnd) ? threadBody.selectionEnd : threadBody.value.length;
+        const before = threadBody.value.slice(0, start);
+        const after = threadBody.value.slice(end);
+        threadBody.value = `${before}${mentionText}${after}`;
+        const nextCaret = before.length + mentionText.length;
+        threadBody.focus();
+        threadBody.setSelectionRange(nextCaret, nextCaret);
+        scheduleDraftSave();
+        return;
+      }
+      if (!replyBtn) return;
+      if (!(replyInput instanceof HTMLInputElement) || !(composeState instanceof HTMLElement)) return;
+      const replyMessageId = String(replyBtn.getAttribute('data-reply-message-id') || '').trim();
+      const replyAuthor = String(replyBtn.getAttribute('data-reply-author') || 'Message').trim();
+      const replyText = String(replyBtn.getAttribute('data-reply-subject') || replyBtn.getAttribute('data-reply-body') || '').trim();
+      replyInput.value = replyMessageId;
+      if (editInput instanceof HTMLInputElement) editInput.value = '';
+      if (composeStateTitle) composeStateTitle.textContent = `Replying to ${replyAuthor}`;
+      if (composeStateBody) composeStateBody.textContent = replyText || 'Referenced message';
+      composeState.hidden = false;
+      threadBody?.focus();
+      scheduleDraftSave();
     });
 
     document.addEventListener('keydown', (event) => {
@@ -444,18 +645,103 @@
       const form = target.closest('form');
       if (!(form instanceof HTMLFormElement)) return;
       event.preventDefault();
-      form.requestSubmit();
+      if (!form.reportValidity()) return;
+      form.submit();
+    });
+
+    const clearComposeState = () => {
+      if (replyInput instanceof HTMLInputElement) replyInput.value = '';
+      if (editInput instanceof HTMLInputElement) editInput.value = '';
+      if (composeState instanceof HTMLElement) composeState.hidden = true;
+      if (composeStateTitle) composeStateTitle.textContent = 'Replying to message';
+      if (composeStateBody) composeStateBody.textContent = '';
+    };
+
+    clearComposeStateBtn?.addEventListener('click', () => {
+      clearComposeState();
+      scheduleDraftSave();
+    });
+
+    const scheduleDraftSave = () => {
+      if (!Number.isFinite(activeRoomId) || !composerForm) return;
+      if (draftTimer) window.clearTimeout(draftTimer);
+      draftTimer = window.setTimeout(async () => {
+        const formData = new FormData();
+        formData.set('subject', threadSubject instanceof HTMLInputElement ? threadSubject.value : '');
+        formData.set('body', threadBody instanceof HTMLTextAreaElement ? threadBody.value : '');
+        formData.set('reply_to_message_id', replyInput instanceof HTMLInputElement ? replyInput.value : '');
+        await fetch(`/messages/rooms/${activeRoomId}/draft.json`, {
+          method: 'POST',
+          body: new URLSearchParams(Array.from(formData.entries()).map(([key, value]) => [key, String(value)])),
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+          }
+        }).catch(() => {});
+      }, 250);
+    };
+
+    threadSubject?.addEventListener('input', scheduleDraftSave);
+    threadBody?.addEventListener('input', scheduleDraftSave);
+    composerForm?.addEventListener('submit', () => {
+      if (draftTimer) window.clearTimeout(draftTimer);
+    });
+
+    document.querySelectorAll('[data-auto-submit-search]').forEach((formEl) => {
+      if (!(formEl instanceof HTMLFormElement)) return;
+      const input = formEl.querySelector('input[type="search"]');
+      if (!(input instanceof HTMLInputElement)) return;
+      let timer = null;
+      input.addEventListener('input', () => {
+        if (timer) window.clearTimeout(timer);
+        timer = window.setTimeout(() => {
+          formEl.requestSubmit();
+        }, 220);
+      });
     });
 
     const threadBodyWrap = document.querySelector('.messages-thread-body');
     if (threadBodyWrap instanceof HTMLElement) {
       const hasHashTarget = String(window.location.hash || '').startsWith('#msg-');
       const params = new URLSearchParams(window.location.search);
-      const hasSelectedMessage = params.has('message_id');
-      if (!hasHashTarget && !hasSelectedMessage) {
+      const selectedMessageId = params.get('message_id');
+      const hasSelectedMessage = Boolean(selectedMessageId);
+      const isEditing = params.has('edit_message_id');
+      const scrollToMessage = (messageId) => {
+        const targetRow = messageId ? document.getElementById(`msg-${String(messageId)}`) : null;
+        if (!(targetRow instanceof HTMLElement)) return false;
+        const nextTop = Math.max(
+          0,
+          targetRow.offsetTop + targetRow.offsetHeight - threadBodyWrap.clientHeight + 12
+        );
+        threadBodyWrap.scrollTop = nextTop;
+        return true;
+      };
+      if (!hasHashTarget && hasSelectedMessage) {
         requestAnimationFrame(() => {
-          threadBodyWrap.scrollTop = threadBodyWrap.scrollHeight;
+          scrollToMessage(selectedMessageId);
+          window.setTimeout(() => scrollToMessage(selectedMessageId), 60);
         });
+      }
+      if (!hasHashTarget && !hasSelectedMessage && !isEditing) {
+        const scrollToLatest = () => {
+          const rows = threadBodyWrap.querySelectorAll('.messages-bubble-row');
+          const lastRow = rows.length > 0 ? rows[rows.length - 1] : null;
+          if (lastRow instanceof HTMLElement) {
+            const nextTop = Math.max(
+              0,
+              lastRow.offsetTop + lastRow.offsetHeight - threadBodyWrap.clientHeight + 12
+            );
+            threadBodyWrap.scrollTop = nextTop;
+            return;
+          }
+          threadBodyWrap.scrollTop = threadBodyWrap.scrollHeight;
+        };
+        requestAnimationFrame(() => {
+          scrollToLatest();
+          window.setTimeout(scrollToLatest, 60);
+        });
+        window.addEventListener('load', scrollToLatest, { once: true });
       }
     }
 

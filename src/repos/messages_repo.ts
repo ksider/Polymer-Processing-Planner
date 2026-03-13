@@ -11,11 +11,15 @@ import type {
 export type MessageListItemRow = MessageBoxRow & {
   kind: MessageKind;
   visibility: MessageVisibility;
+  chat_room_id: number | null;
+  reply_to_message_id: number | null;
   sender_user_id: number | null;
   subject: string;
   body: string | null;
   payload_json: string | null;
   message_created_at: string;
+  edited_at: string | null;
+  edit_count: number;
   sender_name: string | null;
   sender_email: string | null;
 };
@@ -33,6 +37,11 @@ export type DirectConversationRow = {
 export type DirectThreadMessageRow = MessageListItemRow & {
   direction: "incoming" | "outgoing";
   message_no: number;
+  is_pinned: number;
+  reply_subject: string | null;
+  reply_body: string | null;
+  reply_sender_name: string | null;
+  reply_sender_email: string | null;
 };
 
 export type ChatRoomListRow = {
@@ -71,12 +80,47 @@ export type ChatRoomRow = {
   updated_at: string;
 };
 
+export type MessagePinRow = {
+  id: number;
+  room_id: number;
+  message_id: number;
+  pinned_by_user_id: number | null;
+  pinned_at: string;
+  subject: string;
+  body: string | null;
+  sender_name: string | null;
+  sender_email: string | null;
+  message_created_at: string;
+};
+
+export type MessageEditRow = {
+  id: number;
+  message_id: number;
+  editor_user_id: number | null;
+  subject: string;
+  body: string | null;
+  created_at: string;
+  editor_name: string | null;
+  editor_email: string | null;
+};
+
+export type MessageDraftRow = {
+  id: number;
+  user_id: number;
+  room_id: number;
+  subject: string | null;
+  body: string | null;
+  reply_to_message_id: number | null;
+  updated_at: string;
+};
+
 export function createMessage(
   db: Db,
   data: {
     kind: MessageKind;
     visibility: MessageVisibility;
     chat_room_id?: number | null;
+    reply_to_message_id?: number | null;
     sender_user_id: number | null;
     subject: string;
     body?: string | null;
@@ -88,13 +132,14 @@ export function createMessage(
   const result = db
     .prepare(
       `INSERT INTO messages
-       (kind, visibility, chat_room_id, sender_user_id, subject, body, payload_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+       (kind, visibility, chat_room_id, reply_to_message_id, sender_user_id, subject, body, payload_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       data.kind,
       data.visibility,
       data.chat_room_id ?? null,
+      data.reply_to_message_id ?? null,
       data.sender_user_id ?? null,
       data.subject,
       data.body ?? null,
@@ -165,11 +210,15 @@ export function listMessageBoxesByFolder(
          mb.created_at,
          m.kind,
          m.visibility,
+         m.chat_room_id,
+         m.reply_to_message_id,
          m.sender_user_id,
          m.subject,
          m.body,
          m.payload_json,
          m.created_at as message_created_at,
+         m.edited_at,
+         m.edit_count,
          su.name as sender_name,
          su.email as sender_email
        FROM message_boxes mb
@@ -199,11 +248,15 @@ export function listUnreadMessageBoxes(db: Db, userId: number, limit = 20): Mess
          mb.created_at,
          m.kind,
          m.visibility,
+         m.chat_room_id,
+         m.reply_to_message_id,
          m.sender_user_id,
          m.subject,
          m.body,
          m.payload_json,
          m.created_at as message_created_at,
+         m.edited_at,
+         m.edit_count,
          su.name as sender_name,
          su.email as sender_email
        FROM message_boxes mb
@@ -234,11 +287,15 @@ export function listCollectiveMessageBoxes(db: Db, userId: number, limit = 50): 
          mb.created_at,
          m.kind,
          m.visibility,
+         m.chat_room_id,
+         m.reply_to_message_id,
          m.sender_user_id,
          m.subject,
          m.body,
          m.payload_json,
          m.created_at as message_created_at,
+         m.edited_at,
+         m.edit_count,
          su.name as sender_name,
          su.email as sender_email
        FROM message_boxes mb
@@ -346,6 +403,173 @@ export function getMessageById(db: Db, messageId: number): MessageRow | null {
     .prepare("SELECT * FROM messages WHERE id = ? LIMIT 1")
     .get(messageId) as MessageRow | undefined;
   return row ?? null;
+}
+
+export function createMessageEdit(
+  db: Db,
+  data: {
+    message_id: number;
+    editor_user_id?: number | null;
+    subject: string;
+    body?: string | null;
+    created_at?: string;
+  }
+) {
+  db.prepare(
+    `INSERT INTO message_edits
+     (message_id, editor_user_id, subject, body, created_at)
+     VALUES (?, ?, ?, ?, ?)`
+  ).run(
+    data.message_id,
+    data.editor_user_id ?? null,
+    data.subject,
+    data.body ?? null,
+    data.created_at ?? new Date().toISOString()
+  );
+}
+
+export function updateMessageContent(
+  db: Db,
+  data: {
+    message_id: number;
+    subject: string;
+    body?: string | null;
+    reply_to_message_id?: number | null;
+    edited_at?: string;
+  }
+) {
+  db.prepare(
+    `UPDATE messages
+     SET subject = ?,
+         body = ?,
+         reply_to_message_id = ?,
+         edited_at = ?,
+         edit_count = COALESCE(edit_count, 0) + 1
+     WHERE id = ?`
+  ).run(
+    data.subject,
+    data.body ?? null,
+    data.reply_to_message_id ?? null,
+    data.edited_at ?? new Date().toISOString(),
+    data.message_id
+  );
+}
+
+export function listMessageEditsForRoom(db: Db, userId: number, roomId: number): MessageEditRow[] {
+  return db.prepare(
+    `SELECT
+       e.id,
+       e.message_id,
+       e.editor_user_id,
+       e.subject,
+       e.body,
+       e.created_at,
+       u.name as editor_name,
+       u.email as editor_email
+     FROM message_edits e
+     JOIN messages m ON m.id = e.message_id
+     JOIN chat_room_members crm ON crm.room_id = m.chat_room_id AND crm.user_id = ? AND crm.status = 'active'
+     LEFT JOIN users u ON u.id = e.editor_user_id
+     WHERE m.chat_room_id = ?
+     ORDER BY e.message_id ASC, datetime(e.created_at) DESC, e.id DESC`
+  ).all(userId, roomId) as MessageEditRow[];
+}
+
+export function pinMessageInRoom(
+  db: Db,
+  data: {
+    room_id: number;
+    message_id: number;
+    pinned_by_user_id?: number | null;
+    pinned_at?: string;
+  }
+) {
+  db.prepare(
+    `INSERT OR IGNORE INTO chat_room_pins
+     (room_id, message_id, pinned_by_user_id, pinned_at)
+     VALUES (?, ?, ?, ?)`
+  ).run(
+    data.room_id,
+    data.message_id,
+    data.pinned_by_user_id ?? null,
+    data.pinned_at ?? new Date().toISOString()
+  );
+}
+
+export function unpinMessageInRoom(db: Db, roomId: number, messageId: number) {
+  db.prepare("DELETE FROM chat_room_pins WHERE room_id = ? AND message_id = ?").run(roomId, messageId);
+}
+
+export function isMessagePinnedInRoom(db: Db, roomId: number, messageId: number): boolean {
+  const row = db
+    .prepare("SELECT 1 as ok FROM chat_room_pins WHERE room_id = ? AND message_id = ? LIMIT 1")
+    .get(roomId, messageId) as { ok: number } | undefined;
+  return Boolean(row?.ok);
+}
+
+export function listPinnedMessagesForRoom(db: Db, userId: number, roomId: number, limit = 20): MessagePinRow[] {
+  const safeLimit = Number.isFinite(limit) ? Math.max(1, Number(limit)) : 20;
+  return db.prepare(
+    `SELECT
+       p.id,
+       p.room_id,
+       p.message_id,
+       p.pinned_by_user_id,
+       p.pinned_at,
+       m.subject,
+       m.body,
+       m.created_at as message_created_at,
+       u.name as sender_name,
+       u.email as sender_email
+     FROM chat_room_pins p
+     JOIN messages m ON m.id = p.message_id
+     JOIN chat_room_members crm ON crm.room_id = p.room_id AND crm.user_id = ? AND crm.status = 'active'
+     LEFT JOIN users u ON u.id = m.sender_user_id
+     WHERE p.room_id = ?
+     ORDER BY datetime(p.pinned_at) DESC, p.id DESC
+     LIMIT ?`
+  ).all(userId, roomId, safeLimit) as MessagePinRow[];
+}
+
+export function getMessageDraft(db: Db, userId: number, roomId: number): MessageDraftRow | null {
+  const row = db
+    .prepare("SELECT * FROM message_drafts WHERE user_id = ? AND room_id = ? LIMIT 1")
+    .get(userId, roomId) as MessageDraftRow | undefined;
+  return row ?? null;
+}
+
+export function upsertMessageDraft(
+  db: Db,
+  data: {
+    user_id: number;
+    room_id: number;
+    subject?: string | null;
+    body?: string | null;
+    reply_to_message_id?: number | null;
+    updated_at?: string;
+  }
+) {
+  db.prepare(
+    `INSERT INTO message_drafts
+     (user_id, room_id, subject, body, reply_to_message_id, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, room_id) DO UPDATE SET
+       subject = excluded.subject,
+       body = excluded.body,
+       reply_to_message_id = excluded.reply_to_message_id,
+       updated_at = excluded.updated_at`
+  ).run(
+    data.user_id,
+    data.room_id,
+    data.subject ?? null,
+    data.body ?? null,
+    data.reply_to_message_id ?? null,
+    data.updated_at ?? new Date().toISOString()
+  );
+}
+
+export function deleteMessageDraft(db: Db, userId: number, roomId: number) {
+  db.prepare("DELETE FROM message_drafts WHERE user_id = ? AND room_id = ?").run(userId, roomId);
 }
 
 export function createChatRoom(
@@ -585,9 +809,17 @@ export function listChatRoomMessages(
   db: Db,
   userId: number,
   roomId: number,
-  limit = 500
+  options?: {
+    limit?: number;
+    searchQuery?: string;
+    filter?: "all" | "mentions" | "attachments" | "system";
+  }
 ): DirectThreadMessageRow[] {
+  const limit = options?.limit ?? 500;
   const safeLimit = Number.isFinite(limit) ? Math.max(1, Number(limit)) : 500;
+  const searchQuery = String(options?.searchQuery ?? "").trim();
+  const filter = String(options?.filter ?? "all").trim().toLowerCase();
+  const searchLike = searchQuery ? `%${searchQuery.replace(/[%_]/g, "\\$&")}%` : null;
   return db
     .prepare(
       `WITH room_seq AS (
@@ -612,26 +844,66 @@ export function listChatRoomMessages(
          mb.created_at,
          m.kind,
          m.visibility,
+         m.chat_room_id,
+         m.reply_to_message_id,
          m.sender_user_id,
          m.subject,
          m.body,
          m.payload_json,
          m.created_at as message_created_at,
+         m.edited_at,
+         m.edit_count,
          su.name as sender_name,
          su.email as sender_email,
+         CASE WHEN pin.message_id IS NULL THEN 0 ELSE 1 END as is_pinned,
+         rm.subject as reply_subject,
+         rm.body as reply_body,
+         rsu.name as reply_sender_name,
+         rsu.email as reply_sender_email,
          CASE WHEN m.sender_user_id = ? THEN 'outgoing' ELSE 'incoming' END as direction,
          rs.message_no as message_no
        FROM message_boxes mb
        JOIN messages m ON m.id = mb.message_id
        JOIN room_seq rs ON rs.message_id = m.id
        LEFT JOIN users su ON su.id = m.sender_user_id
+       LEFT JOIN chat_room_pins pin ON pin.message_id = m.id AND pin.room_id = m.chat_room_id
+       LEFT JOIN messages rm ON rm.id = m.reply_to_message_id
+       LEFT JOIN users rsu ON rsu.id = rm.sender_user_id
        WHERE mb.user_id = ?
          AND mb.folder != 'deleted'
          AND m.chat_room_id = ?
+         AND (
+           ? = ''
+           OR COALESCE(m.subject, '') LIKE ? ESCAPE '$'
+           OR COALESCE(m.body, '') LIKE ? ESCAPE '$'
+           OR COALESCE(su.name, '') LIKE ? ESCAPE '$'
+           OR COALESCE(su.email, '') LIKE ? ESCAPE '$'
+         )
+         AND (
+           ? = 'all'
+           OR (? = 'mentions' AND mb.mention_flag = 1)
+           OR (? = 'attachments' AND COALESCE(m.payload_json, '') != '')
+           OR (? = 'system' AND m.kind = 'system')
+         )
        ORDER BY datetime(m.created_at) ASC, m.id ASC
        LIMIT ?`
     )
-    .all(roomId, userId, userId, roomId, safeLimit) as DirectThreadMessageRow[];
+    .all(
+      roomId,
+      userId,
+      userId,
+      roomId,
+      searchQuery,
+      searchLike,
+      searchLike,
+      searchLike,
+      searchLike,
+      filter,
+      filter,
+      filter,
+      filter,
+      safeLimit
+    ) as DirectThreadMessageRow[];
 }
 
 export function markChatRoomRead(

@@ -28,11 +28,15 @@ export type MessageRow = {
   id: number;
   kind: MessageKind;
   visibility: MessageVisibility;
+  chat_room_id?: number | null;
+  reply_to_message_id?: number | null;
   sender_user_id: number | null;
   subject: string;
   body: string | null;
   payload_json: string | null;
   created_at: string;
+  edited_at?: string | null;
+  edit_count?: number;
 };
 
 // Per-user mailbox item (inbox/sent/deleted + read state).
