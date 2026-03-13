@@ -1,7 +1,13 @@
 import express from "express";
 import type { Db } from "../db.js";
 import { findUserById, listUsers } from "../repos/users_repo.js";
+import { listExperimentsForUserWithMeta } from "../repos/experiments_repo.js";
+import { listQualSteps } from "../repos/qual_repo.js";
+import { listDoeStudies } from "../repos/doe_repo.js";
+import { listReportConfigs } from "../repos/reports_repo.js";
 import {
+  buildEntityAttachment,
+  MESSAGE_REACTION_OPTIONS,
   addRoomMember,
   clearDraftForRoom,
   countUnread,
@@ -24,8 +30,10 @@ import {
   removeRoomMember,
   restoreForUser,
   saveDraftForRoom,
+  searchEntityAttachments,
   sendMessageToRoom
   ,
+  toggleMessageReaction,
   togglePinMessage
 } from "../services/messages_service.js";
 
@@ -65,6 +73,12 @@ function normalizeThreadFilter(value: unknown): "all" | "mentions" | "attachment
   return "all";
 }
 
+function normalizeAttachmentEntityType(value: unknown): "experiment" | "qualification_step" | "doe" | "report" | null {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (raw === "experiment" || raw === "qualification_step" || raw === "doe" || raw === "report") return raw;
+  return null;
+}
+
 export function createMessagesRouter(db: Db) {
   const router = express.Router();
 
@@ -77,6 +91,11 @@ export function createMessagesRouter(db: Db) {
       unread_count: countUnread(db, req.user.id),
       items: unread
     });
+  });
+
+  router.get("/messages/entities.json", (req, res) => {
+    if (!req.user?.id) return res.status(401).json({ error: "Unauthorized" });
+    return res.json({ items: searchEntityAttachments(db, req.user.id, String(req.query.q ?? ""), 20) });
   });
 
   router.get("/messages", (req, res) => {
@@ -171,6 +190,21 @@ export function createMessagesRouter(db: Db) {
         : [];
 
     const deletedItems = view === "deleted" ? listByFolder(db, req.user.id, "deleted", 500) : [];
+    const attachEntityTree = req.user?.id
+      ? listExperimentsForUserWithMeta(db, req.user.id, false).map((experiment) => ({
+          experiment: buildEntityAttachment(db, "experiment", experiment.id),
+          qualificationSteps: listQualSteps(db, experiment.id)
+            .map((step) => buildEntityAttachment(db, "qualification_step", step.id))
+            .filter(Boolean),
+          does: listDoeStudies(db, experiment.id)
+            .map((doe) => buildEntityAttachment(db, "doe", doe.id))
+            .filter(Boolean),
+          reports: listReportConfigs(db, experiment.id)
+            .map((report) => buildEntityAttachment(db, "report", report.id))
+            .filter(Boolean)
+        }))
+        .filter((entry) => entry.experiment)
+      : [];
     const canManageMembers =
       req.user.role === "admin" ||
       req.user.role === "manager" ||
@@ -199,6 +233,8 @@ export function createMessagesRouter(db: Db) {
       messageFilter,
       roomMembers,
       deletedItems,
+      attachEntityTree,
+      reactionOptions: MESSAGE_REACTION_OPTIONS,
       canManageMembers: Boolean(canManageMembers),
       sendError: null
     });
@@ -227,6 +263,8 @@ export function createMessagesRouter(db: Db) {
     const body = String(req.body?.body ?? "").trim();
     const replyToMessageId = toUserId(req.body?.reply_to_message_id);
     const editMessageId = toUserId(req.body?.edit_message_id);
+    const attachmentEntityType = normalizeAttachmentEntityType(req.body?.attachment_entity_type);
+    const attachmentEntityId = toUserId(req.body?.attachment_entity_id);
     try {
       if (editMessageId) {
         editRoomMessage(db, {
@@ -247,7 +285,11 @@ export function createMessagesRouter(db: Db) {
         subject,
         body: body || null,
         replyToMessageId,
-        kind: "manual"
+        kind: "manual",
+        payload:
+          attachmentEntityType && attachmentEntityId
+            ? { attachment: buildEntityAttachment(db, attachmentEntityType, attachmentEntityId) ?? undefined }
+            : null
       });
       clearDraftForRoom(db, req.user.id, roomId);
       return res.redirect(`/messages?view=chat&room_id=${roomId}&message_id=${messageId}`);
@@ -322,6 +364,25 @@ export function createMessagesRouter(db: Db) {
       return res.redirect(`/messages?view=chat&room_id=${roomId}`);
     }
     return res.redirect("/messages?view=chat");
+  });
+
+  router.post("/messages/rooms/:roomId/messages/:messageId/reactions/toggle", (req, res) => {
+    if (!req.user?.id) return res.redirect("/auth/login");
+    const roomId = toUserId(req.params.roomId);
+    const messageId = toUserId(req.params.messageId);
+    const reaction = String(req.body?.reaction ?? "");
+    if (!roomId || !messageId) return res.redirect("/messages?view=chat");
+    try {
+      toggleMessageReaction(db, {
+        userId: req.user.id,
+        roomId,
+        messageId,
+        reaction
+      });
+    } catch {
+      // ignore invalid reaction toggle
+    }
+    return res.redirect(`/messages?view=chat&room_id=${roomId}&message_id=${messageId}`);
   });
 
   router.post("/messages/:id/read", (req, res) => {

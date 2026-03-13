@@ -114,6 +114,16 @@ export type MessageDraftRow = {
   updated_at: string;
 };
 
+export type MessageReactionRow = {
+  id: number;
+  message_id: number;
+  user_id: number;
+  reaction: string;
+  created_at: string;
+  user_name: string | null;
+  user_email: string | null;
+};
+
 export function createMessage(
   db: Db,
   data: {
@@ -187,6 +197,65 @@ export function getMessageBoxById(db: Db, messageBoxId: number, userId: number):
     .prepare("SELECT * FROM message_boxes WHERE id = ? AND user_id = ? LIMIT 1")
     .get(messageBoxId, userId) as MessageBoxRow | undefined;
   return row ?? null;
+}
+
+export function listMessageReactionsForRoom(db: Db, roomId: number): MessageReactionRow[] {
+  return db.prepare(
+    `SELECT
+       mr.id,
+       mr.message_id,
+       mr.user_id,
+       mr.reaction,
+       mr.created_at,
+       u.name as user_name,
+       u.email as user_email
+     FROM message_reactions mr
+     JOIN messages m ON m.id = mr.message_id
+     LEFT JOIN users u ON u.id = mr.user_id
+     WHERE m.chat_room_id = ?
+     ORDER BY mr.message_id ASC, mr.reaction ASC, datetime(mr.created_at) ASC, mr.id ASC`
+  ).all(roomId) as MessageReactionRow[];
+}
+
+export function hasMessageReaction(db: Db, messageId: number, userId: number, reaction: string): boolean {
+  const row = db
+    .prepare("SELECT 1 as ok FROM message_reactions WHERE message_id = ? AND user_id = ? AND reaction = ? LIMIT 1")
+    .get(messageId, userId, reaction) as { ok: number } | undefined;
+  return Boolean(row?.ok);
+}
+
+export function getUserMessageReaction(
+  db: Db,
+  messageId: number,
+  userId: number
+): Pick<MessageReactionRow, "id" | "reaction"> | null {
+  const row = db
+    .prepare("SELECT id, reaction FROM message_reactions WHERE message_id = ? AND user_id = ? LIMIT 1")
+    .get(messageId, userId) as Pick<MessageReactionRow, "id" | "reaction"> | undefined;
+  return row ?? null;
+}
+
+export function createMessageReaction(
+  db: Db,
+  data: { message_id: number; user_id: number; reaction: string; created_at?: string }
+): number {
+  const createdAt = data.created_at ?? new Date().toISOString();
+  const result = db
+    .prepare(
+      `INSERT INTO message_reactions (message_id, user_id, reaction, created_at)
+       VALUES (?, ?, ?, ?)`
+    )
+    .run(data.message_id, data.user_id, data.reaction, createdAt);
+  return Number(result.lastInsertRowid);
+}
+
+export function deleteMessageReaction(db: Db, messageId: number, userId: number, reaction: string) {
+  db.prepare("DELETE FROM message_reactions WHERE message_id = ? AND user_id = ? AND reaction = ?")
+    .run(messageId, userId, reaction);
+}
+
+export function deleteUserMessageReactions(db: Db, messageId: number, userId: number) {
+  db.prepare("DELETE FROM message_reactions WHERE message_id = ? AND user_id = ?").run(messageId, userId);
 }
 
 export function listMessageBoxesByFolder(

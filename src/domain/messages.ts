@@ -13,6 +13,19 @@ export type MessageKind = (typeof MESSAGE_KIND)[number];
 export const MESSAGE_SOURCE_ENTITY = ["task", "assignment", "experiment", "qualification_step", "doe"] as const;
 export type MessageSourceEntity = (typeof MESSAGE_SOURCE_ENTITY)[number];
 
+export type MessageAttachmentEntityType = "experiment" | "qualification_step" | "doe" | "report";
+
+export type MessageAttachment = {
+  kind: "entity";
+  entity_type: MessageAttachmentEntityType;
+  entity_id: number;
+  experiment_id?: number;
+  title: string;
+  subtitle?: string;
+  badge?: string;
+  path: string;
+};
+
 export type MessagePayload = {
   path?: string;
   experiment_id?: number;
@@ -20,6 +33,7 @@ export type MessagePayload = {
   assignment_id?: number;
   entity_type?: MessageSourceEntity;
   entity_id?: number;
+  attachment?: MessageAttachment;
   [key: string]: unknown;
 };
 

@@ -277,6 +277,16 @@ function initDb(db: Db) {
       FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE,
       FOREIGN KEY (reply_to_message_id) REFERENCES messages(id) ON DELETE SET NULL
     );
+    CREATE TABLE IF NOT EXISTS message_reactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      message_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      reaction TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      UNIQUE(message_id, user_id),
+      FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
     CREATE TABLE IF NOT EXISTS process_types (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       code TEXT NOT NULL UNIQUE,
@@ -562,6 +572,7 @@ function initDb(db: Db) {
     CREATE INDEX IF NOT EXISTS idx_message_boxes_user_folder_created ON message_boxes(user_id, folder, created_at, id);
     CREATE INDEX IF NOT EXISTS idx_message_boxes_user_status_created ON message_boxes(user_id, status, created_at, id);
     CREATE INDEX IF NOT EXISTS idx_message_boxes_message_id ON message_boxes(message_id);
+    CREATE INDEX IF NOT EXISTS idx_message_reactions_message_id ON message_reactions(message_id, reaction, user_id);
     CREATE INDEX IF NOT EXISTS idx_notification_message_links_notification_id ON notification_message_links(notification_id);
     CREATE INDEX IF NOT EXISTS idx_experiments_owner_archived ON experiments(owner_user_id, archived_at);
     CREATE INDEX IF NOT EXISTS idx_processes_type_status ON processes(process_type_id, status);
@@ -571,6 +582,17 @@ function initDb(db: Db) {
     CREATE INDEX IF NOT EXISTS idx_report_configs_experiment_id ON report_configs(experiment_id);
     CREATE INDEX IF NOT EXISTS idx_param_definitions_scope_group ON param_definitions(scope, group_label, id);
     CREATE INDEX IF NOT EXISTS idx_param_definitions_scope_kind_group ON param_definitions(scope, field_kind, group_label, id);
+  `);
+
+  db.exec(`
+    DELETE FROM message_reactions
+    WHERE id NOT IN (
+      SELECT MAX(id)
+      FROM message_reactions
+      GROUP BY message_id, user_id
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_message_reactions_message_user
+    ON message_reactions(message_id, user_id);
   `);
 
   const adminSettingsCount = db

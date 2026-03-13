@@ -8,9 +8,14 @@
           <div class="messages-sidebar-head-top">
             <h1 class="card-title">Messages</h1>
             <% if (view === 'chat') { %>
-              <button class="icon-btn icon-only messages-create-chat-btn" type="button" id="openGroupChatDialog" title="Create group chat">
-                <span class="material-symbols-rounded">group_add</span>
-              </button>
+              <div class="messages-sidebar-head-actions">
+                <button class="icon-btn icon-only messages-create-chat-btn" type="button" id="openDirectChatDialog" title="Open direct chat">
+                  <span class="material-symbols-rounded">person_add</span>
+                </button>
+                <button class="icon-btn icon-only messages-create-chat-btn" type="button" id="openGroupChatDialog" title="Create group chat">
+                  <span class="material-symbols-rounded">group_add</span>
+                </button>
+              </div>
             <% } %>
           </div>
           <div class="messages-view-tabs">
@@ -26,19 +31,8 @@
             <% if (activeRoom?.id) { %>
               <input type="hidden" name="room_id" value="<%= activeRoom.id %>">
             <% } %>
-            <input type="search" name="chat_q" value="<%= chatQuery || '' %>" placeholder="Search chats...">
+            <input class="messages-text-input" type="search" name="chat_q" value="<%= chatQuery || '' %>" placeholder="Search chats...">
           </form>
-          <div class="messages-compose-search">
-            <label for="openDirectInput">Open direct chat</label>
-            <input
-              id="openDirectInput"
-              type="search"
-              placeholder="Type name or email..."
-              autocomplete="off"
-              data-open-direct-input
-            >
-            <div class="messages-user-suggest" data-open-direct-suggest hidden></div>
-          </div>
 
           <div class="messages-list-block is-chat-list">
             <div class="messages-list-title">All chats</div>
@@ -168,23 +162,6 @@
                   <%= activeRoomType === 'group' ? 'Group chat' : (activeRoomType === 'system' ? 'System notifications' : 'Direct chat') %>
                 </span>
               </div>
-              <% if (activeRoomType === 'group') { %>
-                <div class="messages-thread-members-inline">
-                  <% (roomMembers || []).forEach((member) => { %>
-                    <div class="messages-member-chip is-compact">
-                      <span><%- formatInline(member.name || member.email || `User #${member.user_id}`) %></span>
-                      <% if (member.member_role === 'owner') { %>
-                        <span class="messages-room-type">OWNER</span>
-                      <% } %>
-                      <% if (canManageMembers && Number(member.user_id) !== Number(currentUser?.id)) { %>
-                        <form class="pure-form" action="/messages/rooms/<%= activeRoom.id %>/members/<%= member.user_id %>/remove" method="post">
-                          <button class="pure-button button-sm danger" type="submit">Remove</button>
-                        </form>
-                      <% } %>
-                    </div>
-                  <% }) %>
-                </div>
-              <% } %>
             </div>
             <div class="messages-thread-head-actions">
               <form class="pure-form messages-thread-search-form" action="/messages" method="get" data-auto-submit-search>
@@ -209,9 +186,9 @@
                   </button>
                 </div>
               </form>
-              <% if (activeRoomType === 'group' && canManageMembers) { %>
-                <button class="icon-btn icon-only" type="button" data-add-member-open title="Add participant">
-                  <span class="material-symbols-rounded">group_add</span>
+              <% if (activeRoomType === 'group') { %>
+                <button class="icon-btn icon-only" type="button" data-room-settings-open title="Chat settings">
+                  <span class="material-symbols-rounded">tune</span>
                 </button>
               <% } %>
               <form class="pure-form" action="/messages/rooms/<%= activeRoom.id %>/read" method="post">
@@ -228,6 +205,50 @@
           </div>
 
           <% if (activeRoomType === 'group') { %>
+            <dialog class="modal-frame" id="roomSettingsDialog">
+              <div class="modal-header">
+                <strong>Chat settings</strong>
+                <div class="messages-room-settings-head-actions">
+                  <% if (canManageMembers) { %>
+                    <button class="icon-btn" type="button" data-add-member-open>
+                      <span class="material-symbols-rounded">group_add</span>
+                      <span>Add participant</span>
+                    </button>
+                  <% } %>
+                  <button class="icon-btn icon-only" type="button" data-room-settings-close title="Close">
+                    <span class="material-symbols-rounded">close</span>
+                  </button>
+                </div>
+              </div>
+              <div class="modal-body">
+                <div class="messages-list-title">Participants</div>
+                <div class="messages-add-member-list">
+                  <% (roomMembers || []).forEach((member) => { %>
+                    <div class="messages-add-member-row is-static">
+                      <div>
+                        <strong><%- formatInline(member.name || member.email || `User #${member.user_id}`) %></strong>
+                        <div class="small-note">
+                          <%- formatInline(member.email || '-') %>
+                          <% if (member.member_role === 'owner') { %>
+                            · OWNER
+                          <% } %>
+                        </div>
+                      </div>
+                      <% if (canManageMembers && Number(member.user_id) !== Number(currentUser?.id)) { %>
+                        <form class="pure-form" action="/messages/rooms/<%= activeRoom.id %>/members/<%= member.user_id %>/remove" method="post">
+                          <button class="pure-button button-sm danger" type="submit">Remove</button>
+                        </form>
+                      <% } %>
+                    </div>
+                  <% }) %>
+                </div>
+                <% if (!canManageMembers) { %>
+                  <div class="small-note messages-room-settings-note">
+                    Only chat owners, managers, or admins can add or remove participants.
+                  </div>
+                <% } %>
+              </div>
+            </dialog>
             <% if (canManageMembers) { %>
               <dialog class="modal-frame" id="addMemberDialog">
                 <div class="modal-header">
@@ -301,87 +322,128 @@
                     <span class="material-symbols-rounded">notifications</span>
                   <% } %>
                 </div>
-                <div class="messages-bubble">
-                  <div class="messages-bubble-tools">
-                    <form class="pure-form messages-bubble-tool" action="/messages/rooms/<%= activeRoom.id %>/pins/<%= msg.message_id %>/toggle" method="post">
-                      <button class="icon-btn icon-only" type="submit" title="<%= msg.is_pinned ? 'Unpin message' : 'Pin message' %>">
-                        <span class="material-symbols-rounded"><%= msg.is_pinned ? 'keep_off' : 'keep' %></span>
-                      </button>
-                    </form>
-                    <button class="icon-btn icon-only messages-bubble-tool" type="button" title="Reply" data-reply-message-id="<%= msg.message_id %>" data-reply-subject="<%= msg.subject || '' %>" data-reply-body="<%= msg.body || '' %>" data-reply-author="<%= msg.sender_name || msg.sender_email || 'System' %>">
-                      <span class="material-symbols-rounded">reply</span>
-                    </button>
-                    <% if (msg.direction === 'outgoing' || currentUser?.role === 'admin') { %>
-                      <a class="icon-btn icon-only messages-bubble-tool" href="/messages?view=chat&room_id=<%= activeRoom.id %>&edit_message_id=<%= msg.message_id %>#composer" title="Edit message">
-                        <span class="material-symbols-rounded">edit</span>
-                      </a>
-                      <form class="pure-form messages-bubble-tool" action="/messages/<%= msg.id %>/delete" method="post">
-                        <input type="hidden" name="room_id" value="<%= activeRoom.id %>">
-                        <input type="hidden" name="message_id" value="<%= msg.message_id %>">
-                        <button class="icon-btn icon-only" type="submit" title="Delete message">
-                          <span class="material-symbols-rounded">delete</span>
+                <div class="messages-bubble-cluster">
+                  <div class="messages-bubble">
+                    <div class="messages-bubble-tools">
+                      <form class="pure-form messages-bubble-tool" action="/messages/rooms/<%= activeRoom.id %>/pins/<%= msg.message_id %>/toggle" method="post">
+                        <button class="icon-btn icon-only" type="submit" title="<%= msg.is_pinned ? 'Unpin message' : 'Pin message' %>">
+                          <span class="material-symbols-rounded"><%= msg.is_pinned ? 'keep_off' : 'keep' %></span>
                         </button>
                       </form>
-                    <% } %>
-                  </div>
-                  <% if (msg.reply_to_message_id) { %>
-                    <a class="messages-reply-preview" href="/messages?view=chat&room_id=<%= activeRoom.id %>&message_id=<%= msg.reply_to_message_id %>">
-                      <strong><%- formatInline(msg.reply_sender_name || msg.reply_sender_email || 'Message') %></strong>
-                      <span><%- formatInline(msg.reply_subject || msg.reply_body || 'Referenced message') %></span>
-                    </a>
-                  <% } %>
-                  <% if (msg.subject) { %>
-                    <div class="messages-bubble-subject"><%- formatInline(msg.subject) %></div>
-                  <% } %>
-                  <% if (msg.body) { %>
-                    <div class="messages-bubble-body"><%- formatInline(msg.body) %></div>
-                  <% } %>
-                  <% if (msg.payload && msg.payload.path) { %>
-                    <div class="messages-bubble-link">
-                      <a href="<%= msg.payload.path %>">Open linked entity</a>
+                      <button class="icon-btn icon-only messages-bubble-tool" type="button" title="Reply" data-reply-message-id="<%= msg.message_id %>" data-reply-subject="<%= msg.subject || '' %>" data-reply-body="<%= msg.body || '' %>" data-reply-author="<%= msg.sender_name || msg.sender_email || 'System' %>">
+                        <span class="material-symbols-rounded">reply</span>
+                      </button>
+                      <% if (msg.direction === 'outgoing' || currentUser?.role === 'admin') { %>
+                        <a class="icon-btn icon-only messages-bubble-tool" href="/messages?view=chat&room_id=<%= activeRoom.id %>&edit_message_id=<%= msg.message_id %>#composer" title="Edit message">
+                          <span class="material-symbols-rounded">edit</span>
+                        </a>
+                        <form class="pure-form messages-bubble-tool" action="/messages/<%= msg.id %>/delete" method="post">
+                          <input type="hidden" name="room_id" value="<%= activeRoom.id %>">
+                          <input type="hidden" name="message_id" value="<%= msg.message_id %>">
+                          <button class="icon-btn icon-only" type="submit" title="Delete message">
+                            <span class="material-symbols-rounded">delete</span>
+                          </button>
+                        </form>
+                      <% } %>
                     </div>
-                  <% } %>
-                  <div class="messages-bubble-meta">
-                    <% const authorLabel = msg.direction === 'outgoing'
-                      ? (currentUser?.name || currentUser?.email || 'You')
-                      : (msg.sender_name || msg.sender_email || 'System'); %>
-                    <% const mentionLabel = msg.direction === 'outgoing'
-                      ? (currentUser?.name || currentUser?.email || '')
-                      : (msg.sender_name || msg.sender_email || ''); %>
-                    <% if (mentionLabel) { %>
-                      <button
-                        class="messages-bubble-author messages-author-link"
-                        type="button"
-                        data-mention-insert="<%= mentionLabel %>"
-                        title="Insert mention"
-                      ><%- formatInline(authorLabel) %></button>
-                    <% } else { %>
-                      <span class="messages-bubble-author"><%- formatInline(authorLabel) %></span>
+                    <% if (msg.reply_to_message_id) { %>
+                      <a class="messages-reply-preview" href="/messages?view=chat&room_id=<%= activeRoom.id %>&message_id=<%= msg.reply_to_message_id %>">
+                        <strong><%- formatInline(msg.reply_sender_name || msg.reply_sender_email || 'Message') %></strong>
+                        <span><%- formatInline(msg.reply_subject || msg.reply_body || 'Referenced message') %></span>
+                      </a>
                     <% } %>
-                    <span><%= new Date(msg.message_created_at || msg.created_at).toLocaleString() %></span>
-                    <a class="messages-message-no" href="/messages?view=chat&room_id=<%= activeRoom.id %>&message_id=<%= msg.message_id %>#msg-<%= msg.message_id %>" title="Direct link to message">#<%= msg.message_no %></a>
-                    <% if (msg.direction === 'incoming' && msg.status === 'unread') { %>
-                      <span class="messages-unread-pill">new</span>
+                    <% if (msg.subject) { %>
+                      <div class="messages-bubble-subject"><%- formatInline(msg.subject) %></div>
                     <% } %>
-                    <% if (msg.edit_count > 0) { %>
-                      <span class="messages-room-type">edited</span>
+                    <% if (msg.body) { %>
+                      <div class="messages-bubble-body"><%- formatInline(msg.body) %></div>
                     <% } %>
-                    <% if (msg.is_pinned) { %>
-                      <span class="messages-room-type">pinned</span>
+                    <% if (msg.attachment && msg.attachment.path) { %>
+                      <a class="messages-attachment-card" href="<%= msg.attachment.path %>">
+                        <div class="messages-attachment-card-head">
+                          <span class="messages-room-type"><%= msg.attachment.badge || msg.attachment.entity_type %></span>
+                          <span class="material-symbols-rounded">attachment</span>
+                        </div>
+                        <strong><%- formatInline(msg.attachment.title) %></strong>
+                        <% if (msg.attachment.subtitle) { %>
+                          <span><%- formatInline(msg.attachment.subtitle) %></span>
+                        <% } %>
+                      </a>
+                    <% } %>
+                    <div class="messages-bubble-meta">
+                      <% const authorLabel = msg.direction === 'outgoing'
+                        ? (currentUser?.name || currentUser?.email || 'You')
+                        : (msg.sender_name || msg.sender_email || 'System'); %>
+                      <% const mentionLabel = msg.direction === 'outgoing'
+                        ? (currentUser?.name || currentUser?.email || '')
+                        : (msg.sender_name || msg.sender_email || ''); %>
+                      <% if (mentionLabel) { %>
+                        <button
+                          class="messages-bubble-author messages-author-link"
+                          type="button"
+                          data-mention-insert="<%= mentionLabel %>"
+                          title="Insert mention"
+                        ><%- formatInline(authorLabel) %></button>
+                      <% } else { %>
+                        <span class="messages-bubble-author"><%- formatInline(authorLabel) %></span>
+                      <% } %>
+                      <span><%= new Date(msg.message_created_at || msg.created_at).toLocaleString() %></span>
+                      <a class="messages-message-no" href="/messages?view=chat&room_id=<%= activeRoom.id %>&message_id=<%= msg.message_id %>#msg-<%= msg.message_id %>" title="Direct link to message">#<%= msg.message_no %></a>
+                      <% if (msg.direction === 'incoming' && msg.status === 'unread') { %>
+                        <span class="messages-unread-pill">new</span>
+                      <% } %>
+                      <% if (msg.edit_count > 0) { %>
+                        <span class="messages-room-type">edited</span>
+                      <% } %>
+                      <% if (msg.is_pinned) { %>
+                        <span class="messages-room-type">pinned</span>
+                      <% } %>
+                    </div>
+                    <% if (messageEditHistory && messageEditHistory[msg.message_id] && messageEditHistory[msg.message_id].length > 0) { %>
+                      <details class="messages-edit-history">
+                        <summary>History</summary>
+                        <% messageEditHistory[msg.message_id].forEach((historyItem) => { %>
+                          <div class="messages-edit-history-item">
+                            <strong><%- formatInline(historyItem.editor_name || historyItem.editor_email || 'Editor') %></strong>
+                            <span><%= new Date(historyItem.created_at).toLocaleString() %></span>
+                            <div><%- formatInline(historyItem.subject || historyItem.body || '-') %></div>
+                          </div>
+                        <% }) %>
+                      </details>
                     <% } %>
                   </div>
-                  <% if (messageEditHistory && messageEditHistory[msg.message_id] && messageEditHistory[msg.message_id].length > 0) { %>
-                    <details class="messages-edit-history">
-                      <summary>History</summary>
-                      <% messageEditHistory[msg.message_id].forEach((historyItem) => { %>
-                        <div class="messages-edit-history-item">
-                          <strong><%- formatInline(historyItem.editor_name || historyItem.editor_email || 'Editor') %></strong>
-                          <span><%= new Date(historyItem.created_at).toLocaleString() %></span>
-                          <div><%- formatInline(historyItem.subject || historyItem.body || '-') %></div>
+                  <div class="messages-reaction-rail">
+                    <% const reactionsList = msg.reactions || []; %>
+                    <% const reactionSummaryTitle = reactionsList.length > 0
+                      ? reactionsList.map((reaction) => `${reaction.emoji} ${reaction.count}: ${reaction.users.join(', ')}`).join(' | ')
+                      : 'Add reaction'; %>
+                    <div class="messages-reaction-orbit">
+                      <% if (reactionsList.length > 0) { %>
+                        <div class="messages-reaction-summary" title="<%= reactionSummaryTitle %>">
+                          <% reactionsList.forEach((reaction) => { %>
+                            <form class="pure-form messages-reaction-summary-item" action="/messages/rooms/<%= activeRoom.id %>/messages/<%= msg.message_id %>/reactions/toggle" method="post">
+                              <input type="hidden" name="reaction" value="<%= reaction.reaction %>">
+                              <button class="messages-reaction-summary-pill <%= reaction.reacted_by_current_user ? 'is-active' : '' %>" type="submit" title="<%= reaction.users.join(', ') %>">
+                                <span class="messages-reaction-summary-emoji"><%= reaction.emoji %></span>
+                                <span class="messages-reaction-summary-count"><%= reaction.count %></span>
+                              </button>
+                            </form>
+                          <% }) %>
                         </div>
+                      <% } else { %>
+                        <button class="messages-reaction-trigger is-empty" type="button" title="<%= reactionSummaryTitle %>">
+                          <span class="material-symbols-rounded">sentiment_satisfied</span>
+                        </button>
+                      <% } %>
+                      <% (reactionOptions || []).forEach((reaction, reactionIndex) => { %>
+                        <% const isActiveReaction = reactionsList.some((item) => item.reaction === reaction.code && item.reacted_by_current_user); %>
+                        <form class="pure-form messages-reaction-orbit-item orbit-pos-<%= reactionIndex + 1 %>" action="/messages/rooms/<%= activeRoom.id %>/messages/<%= msg.message_id %>/reactions/toggle" method="post">
+                          <input type="hidden" name="reaction" value="<%= reaction.code %>">
+                          <button class="messages-reaction-option <%= isActiveReaction ? 'is-active' : '' %>" type="submit" title="<%= reaction.label %>"><%= reaction.emoji %></button>
+                        </form>
                       <% }) %>
-                    </details>
-                  <% } %>
+                    </div>
+                  </div>
                 </div>
               </div>
             <% }) %>
@@ -395,6 +457,8 @@
               <form class="pure-form pure-form-stacked" action="/messages/rooms/<%= activeRoom.id %>/send" method="post">
                 <input id="threadReplyToMessageId" type="hidden" name="reply_to_message_id" value="<%= editTarget?.reply_to_message_id || draft?.reply_to_message_id || '' %>">
                 <input id="threadEditMessageId" type="hidden" name="edit_message_id" value="<%= editTarget?.message_id || '' %>">
+                <input id="threadAttachmentEntityType" type="hidden" name="attachment_entity_type" value="">
+                <input id="threadAttachmentEntityId" type="hidden" name="attachment_entity_id" value="">
                 <div class="messages-compose-state" <%= (editTarget || draft?.reply_to_message_id) ? '' : 'hidden' %>>
                   <% const composeReplyId = editTarget?.reply_to_message_id || draft?.reply_to_message_id; %>
                   <% const composeReplyMessage = composeReplyId ? (threadMessages || []).find((item) => Number(item.message_id) === Number(composeReplyId)) : null; %>
@@ -406,6 +470,15 @@
                     <span class="material-symbols-rounded">close</span>
                   </button>
                 </div>
+                <div class="messages-compose-attachment" id="threadAttachmentState" hidden>
+                  <div class="messages-compose-attachment-copy">
+                    <strong id="threadAttachmentTitle">Attached entity</strong>
+                    <span id="threadAttachmentSubtitle"></span>
+                  </div>
+                  <button class="icon-btn icon-only" type="button" id="clearAttachmentState" title="Remove attachment">
+                    <span class="material-symbols-rounded">close</span>
+                  </button>
+                </div>
                 <fieldset class="pure-group">
                   <% if (activeRoomType !== 'group') { %>
                     <input id="threadSubject" name="subject" type="text" required placeholder="Subject" value="<%= editTarget?.subject || draft?.subject || '' %>">
@@ -414,8 +487,18 @@
                   <% } %>
                   <textarea id="threadBody" name="body" rows="3" placeholder="Message"><%= editTarget?.body || draft?.body || '' %></textarea>
                 </fieldset>
-                <button class="pure-button pure-button-primary" type="submit">Send</button>
-                <span class="small-note">Ctrl+Enter to send</span>
+                <div class="messages-compose-actions">
+                  <div class="messages-compose-entity-picker">
+                    <button class="icon-btn" type="button" id="openEntityAttach" title="Attach entity">
+                      <span class="material-symbols-rounded">attach_file</span>
+                      <span>Attach</span>
+                    </button>
+                  </div>
+                  <div class="messages-compose-submit">
+                    <button class="pure-button pure-button-primary" type="submit">Send</button>
+                    <span class="small-note">Ctrl+Enter</span>
+                  </div>
+                </div>
               </form>
             </div>
           <% } %>
@@ -501,6 +584,142 @@
   </div>
 </dialog>
 
+<dialog class="modal-frame" id="directChatDialog">
+  <div class="modal-header">
+    <strong>Open Direct Chat</strong>
+    <button class="icon-btn icon-only" type="button" data-direct-chat-close title="Close">
+      <span class="material-symbols-rounded">close</span>
+    </button>
+  </div>
+  <div class="modal-body">
+    <div class="messages-compose-search">
+      <input
+        class="messages-text-input"
+        id="openDirectInput"
+        type="search"
+        placeholder="Type name or email..."
+        autocomplete="off"
+        data-open-direct-input
+      >
+      <div class="messages-user-suggest" data-open-direct-suggest hidden></div>
+    </div>
+  </div>
+</dialog>
+
+<dialog class="modal-frame" id="entityAttachDialog">
+  <div class="modal-header">
+    <strong>Attach Entity</strong>
+    <button class="icon-btn icon-only" type="button" data-entity-attach-close title="Close">
+      <span class="material-symbols-rounded">close</span>
+    </button>
+  </div>
+  <div class="modal-body">
+    <div class="messages-entity-browser-head">
+      <input class="messages-text-input" id="entityAttachInput" type="search" placeholder="Filter entities..." autocomplete="off">
+      <div class="small-note">Choose an entity and add it to the message.</div>
+    </div>
+    <div class="messages-entity-browser" id="entityAttachBrowser">
+      <% if (!attachEntityTree || attachEntityTree.length === 0) { %>
+        <div class="small-note">No entities available.</div>
+      <% } %>
+      <% (attachEntityTree || []).forEach((entry) => { %>
+        <% if (!entry.experiment) { return; } %>
+        <details class="messages-entity-tree" data-entity-tree>
+          <summary class="messages-entity-tree-summary" data-entity-label="<%= `${entry.experiment.title} ${entry.experiment.subtitle || ''}`.toLowerCase() %>">
+            <div class="messages-entity-tree-title">
+              <span class="material-symbols-rounded">folder</span>
+              <strong><%- formatInline(entry.experiment.title) %></strong>
+              <% if (entry.experiment.subtitle) { %>
+                <span class="small-note"><%- formatInline(entry.experiment.subtitle) %></span>
+              <% } %>
+            </div>
+            <button
+              class="icon-btn"
+              type="button"
+              data-attach-select
+              data-entity-type="<%= entry.experiment.entity_type %>"
+              data-entity-id="<%= entry.experiment.entity_id %>"
+              data-entity-title="<%- entry.experiment.title %>"
+              data-entity-subtitle="<%- entry.experiment.badge || entry.experiment.entity_type %><%= entry.experiment.subtitle ? ` · ${entry.experiment.subtitle}` : '' %>"
+            >
+              <span class="material-symbols-rounded">add_link</span>
+              <span>Add</span>
+            </button>
+          </summary>
+          <div class="messages-entity-tree-children">
+            <% if (entry.qualificationSteps && entry.qualificationSteps.length > 0) { %>
+              <div class="messages-entity-tree-group">
+                <div class="messages-list-title">Qualification</div>
+                <% entry.qualificationSteps.forEach((item) => { %>
+                  <div class="messages-entity-tree-row" data-entity-label="<%= `${item.title} ${item.subtitle || ''} qual`.toLowerCase() %>">
+                    <div class="messages-entity-tree-copy">
+                      <span class="material-symbols-rounded">schema</span>
+                      <div>
+                        <strong><%- formatInline(item.title) %></strong>
+                        <% if (item.subtitle) { %>
+                          <div class="small-note"><%- formatInline(item.subtitle) %></div>
+                        <% } %>
+                      </div>
+                    </div>
+                    <button class="icon-btn" type="button" data-attach-select data-entity-type="<%= item.entity_type %>" data-entity-id="<%= item.entity_id %>" data-entity-title="<%- item.title %>" data-entity-subtitle="<%- item.badge || item.entity_type %><%= item.subtitle ? ` · ${item.subtitle}` : '' %>">
+                      <span class="material-symbols-rounded">add_link</span>
+                      <span>Add</span>
+                    </button>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
+            <% if (entry.does && entry.does.length > 0) { %>
+              <div class="messages-entity-tree-group">
+                <div class="messages-list-title">DOE</div>
+                <% entry.does.forEach((item) => { %>
+                  <div class="messages-entity-tree-row" data-entity-label="<%= `${item.title} ${item.subtitle || ''} doe`.toLowerCase() %>">
+                    <div class="messages-entity-tree-copy">
+                      <span class="material-symbols-rounded">timeline</span>
+                      <div>
+                        <strong><%- formatInline(item.title) %></strong>
+                        <% if (item.subtitle) { %>
+                          <div class="small-note"><%- formatInline(item.subtitle) %></div>
+                        <% } %>
+                      </div>
+                    </div>
+                    <button class="icon-btn" type="button" data-attach-select data-entity-type="<%= item.entity_type %>" data-entity-id="<%= item.entity_id %>" data-entity-title="<%- item.title %>" data-entity-subtitle="<%- item.badge || item.entity_type %><%= item.subtitle ? ` · ${item.subtitle}` : '' %>">
+                      <span class="material-symbols-rounded">add_link</span>
+                      <span>Add</span>
+                    </button>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
+            <% if (entry.reports && entry.reports.length > 0) { %>
+              <div class="messages-entity-tree-group">
+                <div class="messages-list-title">Reports</div>
+                <% entry.reports.forEach((item) => { %>
+                  <div class="messages-entity-tree-row" data-entity-label="<%= `${item.title} ${item.subtitle || ''} report`.toLowerCase() %>">
+                    <div class="messages-entity-tree-copy">
+                      <span class="material-symbols-rounded">description</span>
+                      <div>
+                        <strong><%- formatInline(item.title) %></strong>
+                        <% if (item.subtitle) { %>
+                          <div class="small-note"><%- formatInline(item.subtitle) %></div>
+                        <% } %>
+                      </div>
+                    </div>
+                    <button class="icon-btn" type="button" data-attach-select data-entity-type="<%= item.entity_type %>" data-entity-id="<%= item.entity_id %>" data-entity-title="<%- item.title %>" data-entity-subtitle="<%- item.badge || item.entity_type %><%= item.subtitle ? ` · ${item.subtitle}` : '' %>">
+                      <span class="material-symbols-rounded">add_link</span>
+                      <span>Add</span>
+                    </button>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
+          </div>
+        </details>
+      <% }) %>
+    </div>
+  </div>
+</dialog>
+
 <script>
   (() => {
     const users = [
@@ -557,8 +776,26 @@
 
     const openDirectInput = document.querySelector('[data-open-direct-input]');
     const openDirectSuggest = document.querySelector('[data-open-direct-suggest]');
+    const directChatDialog = document.getElementById('directChatDialog');
+    const openDirectChatDialogBtn = document.getElementById('openDirectChatDialog');
+    const closeDirectChatDialogBtn = document.querySelector('[data-direct-chat-close]');
     renderSuggest(openDirectInput, openDirectSuggest, (user) => {
+      directChatDialog?.close();
       window.location.href = `/messages?view=chat&user_id=${user.id}`;
+    });
+    openDirectChatDialogBtn?.addEventListener('click', () => {
+      directChatDialog?.showModal();
+      if (openDirectInput instanceof HTMLInputElement) {
+        openDirectInput.value = '';
+        openDirectInput.focus();
+      }
+      if (openDirectSuggest instanceof HTMLElement) {
+        openDirectSuggest.hidden = true;
+        openDirectSuggest.innerHTML = '';
+      }
+    });
+    closeDirectChatDialogBtn?.addEventListener('click', () => {
+      directChatDialog?.close();
     });
 
     const groupForm = document.querySelector('[data-group-create-form]');
@@ -570,6 +807,9 @@
     const openGroupDialogBtn = document.getElementById('openGroupChatDialog');
     const closeGroupDialogBtn = document.querySelector('[data-group-chat-close]');
     const selected = new Map();
+    const roomSettingsDialog = document.getElementById('roomSettingsDialog');
+    const roomSettingsOpenBtn = document.querySelector('[data-room-settings-open]');
+    const roomSettingsCloseBtn = document.querySelector('[data-room-settings-close]');
     const addMemberDialog = document.getElementById('addMemberDialog');
     const addMemberOpenBtn = document.querySelector('[data-add-member-open]');
     const addMemberCloseBtn = document.querySelector('[data-add-member-close]');
@@ -581,6 +821,17 @@
     const composeStateTitle = document.getElementById('threadReplyStateTitle');
     const composeStateBody = document.getElementById('threadReplyStateBody');
     const clearComposeStateBtn = document.getElementById('clearComposeState');
+    const attachmentTypeInput = document.getElementById('threadAttachmentEntityType');
+    const attachmentIdInput = document.getElementById('threadAttachmentEntityId');
+    const attachmentState = document.getElementById('threadAttachmentState');
+    const attachmentTitle = document.getElementById('threadAttachmentTitle');
+    const attachmentSubtitle = document.getElementById('threadAttachmentSubtitle');
+    const clearAttachmentStateBtn = document.getElementById('clearAttachmentState');
+    const openEntityAttachBtn = document.getElementById('openEntityAttach');
+    const entityAttachDialog = document.getElementById('entityAttachDialog');
+    const entityAttachCloseBtn = document.querySelector('[data-entity-attach-close]');
+    const entityAttachInput = document.getElementById('entityAttachInput');
+    const entityAttachBrowser = document.getElementById('entityAttachBrowser');
     const composerForm = threadBody?.closest('form');
     const activeRoomId = <%= activeRoom?.id || 'null' %>;
     let draftTimer = null;
@@ -615,11 +866,21 @@
     closeGroupDialogBtn?.addEventListener('click', () => {
       groupDialog?.close();
     });
+    roomSettingsOpenBtn?.addEventListener('click', () => {
+      roomSettingsDialog?.showModal();
+    });
+    roomSettingsCloseBtn?.addEventListener('click', () => {
+      roomSettingsDialog?.close();
+    });
     addMemberOpenBtn?.addEventListener('click', () => {
+      roomSettingsDialog?.close();
       addMemberDialog?.showModal();
     });
     addMemberCloseBtn?.addEventListener('click', () => {
       addMemberDialog?.close();
+    });
+    entityAttachCloseBtn?.addEventListener('click', () => {
+      entityAttachDialog?.close();
     });
 
     const renderGroupRecipients = () => {
@@ -713,9 +974,20 @@
       clearSelectedRows();
     };
 
+    const clearAttachmentState = () => {
+      if (attachmentTypeInput instanceof HTMLInputElement) attachmentTypeInput.value = '';
+      if (attachmentIdInput instanceof HTMLInputElement) attachmentIdInput.value = '';
+      if (attachmentState instanceof HTMLElement) attachmentState.hidden = true;
+      if (attachmentTitle) attachmentTitle.textContent = 'Attached entity';
+      if (attachmentSubtitle) attachmentSubtitle.textContent = '';
+    };
+
     clearComposeStateBtn?.addEventListener('click', () => {
       clearComposeState();
       scheduleDraftSave();
+    });
+    clearAttachmentStateBtn?.addEventListener('click', () => {
+      clearAttachmentState();
     });
 
     const scheduleDraftSave = () => {
@@ -753,6 +1025,55 @@
         timer = window.setTimeout(() => {
           formEl.requestSubmit();
         }, 220);
+      });
+    });
+
+    openEntityAttachBtn?.addEventListener('click', () => {
+      if (!(entityAttachDialog instanceof HTMLDialogElement)) return;
+      entityAttachDialog.showModal();
+      if (entityAttachInput instanceof HTMLInputElement) {
+        entityAttachInput.value = '';
+        entityAttachInput.focus();
+      }
+      entityAttachBrowser?.querySelectorAll('[data-entity-tree], [data-entity-tree-row]').forEach((node) => {
+        if (node instanceof HTMLElement) node.hidden = false;
+      });
+    });
+
+    if (entityAttachInput instanceof HTMLInputElement && entityAttachBrowser instanceof HTMLElement) {
+      entityAttachInput.addEventListener('input', () => {
+        const q = String(entityAttachInput.value || '').trim().toLowerCase();
+        entityAttachBrowser.querySelectorAll('[data-entity-tree]').forEach((treeNode) => {
+          if (!(treeNode instanceof HTMLDetailsElement)) return;
+          const summary = treeNode.querySelector('[data-entity-label]');
+          const treeLabel = String(summary?.getAttribute('data-entity-label') || '');
+          let hasVisibleChild = false;
+          treeNode.querySelectorAll('[data-entity-tree-row]').forEach((row) => {
+            if (!(row instanceof HTMLElement)) return;
+            const rowLabel = String(row.getAttribute('data-entity-label') || '');
+            const match = !q || rowLabel.includes(q) || treeLabel.includes(q);
+            row.hidden = !match;
+            if (match) hasVisibleChild = true;
+          });
+          const matchTree = !q || treeLabel.includes(q) || hasVisibleChild;
+          treeNode.hidden = !matchTree;
+          if (matchTree && q) treeNode.open = true;
+        });
+      });
+    }
+
+    document.querySelectorAll('[data-attach-select]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const entityType = String(btn.getAttribute('data-entity-type') || '').trim();
+        const entityId = String(btn.getAttribute('data-entity-id') || '').trim();
+        const title = String(btn.getAttribute('data-entity-title') || 'Attached entity').trim();
+        const subtitle = String(btn.getAttribute('data-entity-subtitle') || '').trim();
+        if (attachmentTypeInput instanceof HTMLInputElement) attachmentTypeInput.value = entityType;
+        if (attachmentIdInput instanceof HTMLInputElement) attachmentIdInput.value = entityId;
+        if (attachmentState instanceof HTMLElement) attachmentState.hidden = false;
+        if (attachmentTitle) attachmentTitle.textContent = title;
+        if (attachmentSubtitle) attachmentSubtitle.textContent = subtitle;
+        entityAttachDialog?.close();
       });
     });
 

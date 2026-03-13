@@ -1,9 +1,15 @@
 import type { Db } from "../db.js";
+import { getExperiment, listExperimentsForUserWithMeta } from "../repos/experiments_repo.js";
+import { listQualSteps, getQualStepById } from "../repos/qual_repo.js";
+import { getDoeStudy, listDoeStudies } from "../repos/doe_repo.js";
+import { getReportConfig, listReportConfigs } from "../repos/reports_repo.js";
 import { findUserById } from "../repos/users_repo.js";
 import {
   normalizeMessageBoxFolder,
   normalizeMessageKind,
   normalizeMessageVisibility,
+  type MessageAttachment,
+  type MessageAttachmentEntityType,
   type MessageBoxFolder,
   type MessageBoxStatus,
   type MessagePayload,
@@ -15,7 +21,10 @@ import {
   countUnreadMessageBoxes,
   createMessage,
   createMessageEdit,
+  createMessageReaction,
   createMessageBox,
+  deleteMessageReaction,
+  deleteUserMessageReactions,
   deleteMessageDraft,
   deleteChatRoomById,
   deleteMessagesByRoomId,
@@ -23,11 +32,13 @@ import {
   getDirectRoomByUsers,
   getMessageDraft,
   getSystemRoomByUser,
+  getUserMessageReaction,
   getMessageBoxById,
   getMessageById,
   isMessagePinnedInRoom,
   listChatRoomMembers,
   listMessageEditsForRoom,
+  listMessageReactionsForRoom,
   listChatRoomMessages,
   listChatRoomsForUser,
   listCollectiveMessageBoxes,
@@ -73,7 +84,34 @@ export type MessageListItem = {
   sender_name: string | null;
   sender_email: string | null;
   payload: MessagePayload | null;
+  attachment: MessageAttachment | null;
+  reactions: MessageReactionSummary[];
 };
+
+export type MessageReactionOption = {
+  code: string;
+  emoji: string;
+  label: string;
+};
+
+export type MessageReactionSummary = {
+  reaction: string;
+  emoji: string;
+  count: number;
+  reacted_by_current_user: boolean;
+  users: string[];
+};
+
+export const MESSAGE_REACTION_OPTIONS: MessageReactionOption[] = [
+  { code: "thumbs_up", emoji: "👍", label: "Approve" },
+  { code: "check", emoji: "✅", label: "Done" },
+  { code: "eyes", emoji: "👀", label: "Watching" },
+  { code: "warning", emoji: "⚠️", label: "Attention" },
+  { code: "thinking", emoji: "🤔", label: "Question" },
+  { code: "block", emoji: "⛔", label: "Blocked" }
+];
+
+const REACTION_EMOJI_BY_CODE = new Map(MESSAGE_REACTION_OPTIONS.map((item) => [item.code, item.emoji]));
 
 export type DirectConversationItem = {
   room_id: number;
@@ -219,11 +257,134 @@ function parsePayload(payloadJson: string | null): MessagePayload | null {
   }
 }
 
-function hydrateListItem(row: Omit<MessageListItem, "payload">): MessageListItem {
+export function buildEntityAttachment(
+  db: Db,
+  entityType: MessageAttachmentEntityType,
+  entityId: number,
+  forcedPath?: string
+): MessageAttachment | null {
+  if (entityType === "experiment") {
+    const experiment = getExperiment(db, entityId);
+    if (!experiment) return null;
+    return {
+      kind: "entity",
+      entity_type: "experiment",
+      entity_id: experiment.id,
+      experiment_id: experiment.id,
+      title: experiment.name,
+      subtitle: experiment.design_type || undefined,
+      badge: "EXPERIMENT",
+      path: forcedPath || `/experiments/${experiment.id}`
+    };
+  }
+  if (entityType === "qualification_step") {
+    const step = getQualStepById(db, entityId);
+    if (!step) return null;
+    const experiment = getExperiment(db, step.experiment_id);
+    return {
+      kind: "entity",
+      entity_type: "qualification_step",
+      entity_id: step.id,
+      experiment_id: step.experiment_id,
+      title: `Qualification Step ${step.step_number}`,
+      subtitle: experiment?.name || undefined,
+      badge: "QUAL",
+      path: forcedPath || `/experiments/${step.experiment_id}/qualification/${step.step_number}`
+    };
+  }
+  if (entityType === "doe") {
+    const doe = getDoeStudy(db, entityId);
+    if (!doe) return null;
+    const experiment = getExperiment(db, doe.experiment_id);
+    return {
+      kind: "entity",
+      entity_type: "doe",
+      entity_id: doe.id,
+      experiment_id: doe.experiment_id,
+      title: doe.name,
+      subtitle: experiment?.name || doe.design_type || undefined,
+      badge: "DOE",
+      path: forcedPath || `/experiments/${doe.experiment_id}/doe/${doe.id}?tab=design`
+    };
+  }
+  if (entityType === "report") {
+    const report = getReportConfig(db, entityId);
+    if (!report) return null;
+    const experiment = getExperiment(db, report.experiment_id);
+    return {
+      kind: "entity",
+      entity_type: "report",
+      entity_id: report.id,
+      experiment_id: report.experiment_id,
+      title: report.name,
+      subtitle: experiment?.name || undefined,
+      badge: "REPORT",
+      path: forcedPath || `/reports/${report.id}`
+    };
+  }
+  return null;
+}
+
+function buildMessageAttachmentFromPayload(db: Db, payload: MessagePayload | null): MessageAttachment | null {
+  if (!payload) return null;
+  if (payload.attachment && typeof payload.attachment === "object" && payload.attachment.path) {
+    return payload.attachment as MessageAttachment;
+  }
+  const entityType = String(payload.entity_type ?? "").trim().toLowerCase() as MessageAttachmentEntityType;
+  const entityId = Number(payload.entity_id);
+  const experimentId = Number(payload.experiment_id);
+  const path = String(payload.path ?? "").trim();
+  if (!path || !entityType || !Number.isFinite(entityId) || entityId <= 0) return null;
+  return buildEntityAttachment(
+    db,
+    entityType,
+    entityType === "experiment" && Number.isFinite(experimentId) && experimentId > 0 ? experimentId : entityId,
+    path
+  );
+}
+
+function hydrateListItem(
+  db: Db,
+  row: Omit<MessageListItem, "payload" | "attachment" | "reactions">
+): MessageListItem {
+  const payload = parsePayload(row.payload_json);
   return {
     ...row,
-    payload: parsePayload(row.payload_json)
+    payload,
+    attachment: buildMessageAttachmentFromPayload(db, payload),
+    reactions: []
   };
+}
+
+function hydrateReactionSummary(
+  reactions: ReturnType<typeof listMessageReactionsForRoom>,
+  currentUserId: number
+): Record<number, MessageReactionSummary[]> {
+  const byMessage = new Map<number, Map<string, MessageReactionSummary>>();
+  for (const row of reactions) {
+    if (!REACTION_EMOJI_BY_CODE.has(row.reaction)) continue;
+    if (!byMessage.has(row.message_id)) byMessage.set(row.message_id, new Map<string, MessageReactionSummary>());
+    const messageMap = byMessage.get(row.message_id)!;
+    if (!messageMap.has(row.reaction)) {
+      messageMap.set(row.reaction, {
+        reaction: row.reaction,
+        emoji: REACTION_EMOJI_BY_CODE.get(row.reaction)!,
+        count: 0,
+        reacted_by_current_user: false,
+        users: []
+      });
+    }
+    const summary = messageMap.get(row.reaction)!;
+    summary.count += 1;
+    if (Number(row.user_id) === Number(currentUserId)) summary.reacted_by_current_user = true;
+    summary.users.push(row.user_name || row.user_email || `User #${row.user_id}`);
+  }
+  return Object.fromEntries(
+    Array.from(byMessage.entries()).map(([messageId, reactionMap]) => [
+      messageId,
+      Array.from(reactionMap.values())
+    ])
+  );
 }
 
 function defaultRestoreFolder(senderUserId: number | null, userId: number): MessageBoxFolder {
@@ -394,19 +555,19 @@ export function sendSystemMessageFromActor(
 export function listByFolder(db: Db, userId: number, folder: MessageBoxFolder, limit = 50): MessageListItem[] {
   const normalizedFolder = normalizeMessageBoxFolder(folder);
   return listMessageBoxesByFolder(db, userId, normalizedFolder, limit).map((row) =>
-    hydrateListItem(row as Omit<MessageListItem, "payload">)
+    hydrateListItem(db, row as Omit<MessageListItem, "payload" | "attachment" | "reactions">)
   );
 }
 
 export function listUnreadForPopup(db: Db, userId: number, limit = 20): MessageListItem[] {
   return listUnreadMessageBoxes(db, userId, limit).map((row) =>
-    hydrateListItem(row as Omit<MessageListItem, "payload">)
+    hydrateListItem(db, row as Omit<MessageListItem, "payload" | "attachment" | "reactions">)
   );
 }
 
 export function listCollectiveForUser(db: Db, userId: number, limit = 50): MessageListItem[] {
   return listCollectiveMessageBoxes(db, userId, limit).map((row) =>
-    hydrateListItem(row as Omit<MessageListItem, "payload">)
+    hydrateListItem(db, row as Omit<MessageListItem, "payload" | "attachment" | "reactions">)
   );
 }
 
@@ -490,10 +651,16 @@ export function listDirectThread(
     filter?: "all" | "mentions" | "attachments" | "system";
   }
 ): DirectThreadMessageItem[] {
-  return listChatRoomMessages(db, userId, roomId, options).map((row) => ({
-    ...row,
-    payload: parsePayload(row.payload_json)
-  }));
+  const reactionMap = hydrateReactionSummary(listMessageReactionsForRoom(db, roomId), userId);
+  return listChatRoomMessages(db, userId, roomId, options).map((row) => {
+    const hydrated = hydrateListItem(db, row as Omit<MessageListItem, "payload" | "attachment" | "reactions">);
+    return {
+      ...row,
+      payload: hydrated.payload,
+      attachment: hydrated.attachment,
+      reactions: reactionMap[row.message_id] || []
+    };
+  });
 }
 
 export function markDirectThreadRead(db: Db, userId: number, roomId: number) {
@@ -658,6 +825,37 @@ export function clearDraftForRoom(db: Db, userId: number, roomId: number) {
   deleteMessageDraft(db, userId, roomId);
 }
 
+export function searchEntityAttachments(db: Db, userId: number, query: string, limit = 20): MessageAttachment[] {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return [];
+  const experiments = listExperimentsForUserWithMeta(db, userId, false);
+  const items: MessageAttachment[] = [];
+  const push = (attachment: MessageAttachment | null, haystack: Array<string | null | undefined>) => {
+    if (!attachment) return;
+    if (!haystack.some((value) => String(value || "").toLowerCase().includes(q))) return;
+    if (items.some((item) => item.entity_type === attachment.entity_type && item.entity_id === attachment.entity_id)) return;
+    items.push(attachment);
+  };
+  for (const experiment of experiments) {
+    push(buildEntityAttachment(db, "experiment", experiment.id), [experiment.name, experiment.design_type, String(experiment.id)]);
+    for (const step of listQualSteps(db, experiment.id)) {
+      push(buildEntityAttachment(db, "qualification_step", step.id), [
+        `qualification step ${step.step_number}`,
+        `step ${step.step_number}`,
+        experiment.name
+      ]);
+    }
+    for (const doe of listDoeStudies(db, experiment.id)) {
+      push(buildEntityAttachment(db, "doe", doe.id), [doe.name, doe.design_type, experiment.name]);
+    }
+    for (const report of listReportConfigs(db, experiment.id)) {
+      push(buildEntityAttachment(db, "report", report.id), [report.name, experiment.name]);
+    }
+    if (items.length >= limit) break;
+  }
+  return items.slice(0, limit);
+}
+
 export function togglePinMessage(
   db: Db,
   data: {
@@ -680,6 +878,36 @@ export function togglePinMessage(
     room_id: data.roomId,
     message_id: data.messageId,
     pinned_by_user_id: data.userId
+  });
+  return true;
+}
+
+export function toggleMessageReaction(
+  db: Db,
+  data: { userId: number; roomId: number; messageId: number; reaction: string }
+) {
+  const room = getChatRoomByIdForUser(db, data.roomId, data.userId);
+  if (!room) throw new Error("Room not found.");
+  const message = getMessageById(db, data.messageId);
+  if (!message || Number(message.chat_room_id) !== Number(data.roomId)) {
+    throw new Error("Message not found.");
+  }
+  const reaction = String(data.reaction || "").trim();
+  if (!MESSAGE_REACTION_OPTIONS.some((item) => item.code === reaction)) {
+    throw new Error("Invalid reaction.");
+  }
+  const existingReaction = getUserMessageReaction(db, data.messageId, data.userId);
+  if (existingReaction?.reaction === reaction) {
+    deleteMessageReaction(db, data.messageId, data.userId, reaction);
+    return false;
+  }
+  if (existingReaction) {
+    deleteUserMessageReactions(db, data.messageId, data.userId);
+  }
+  createMessageReaction(db, {
+    message_id: data.messageId,
+    user_id: data.userId,
+    reaction
   });
   return true;
 }
