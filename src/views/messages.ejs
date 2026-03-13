@@ -458,6 +458,20 @@
               </a>
             <% }) %>
           </div>
+          <div class="messages-rail-foot">
+            <div class="messages-rail-links">
+              <% if (currentUser && (currentUser.role === "admin" || currentUser.role === "manager" || currentUser.role === "engineer")) { %>
+                <a href="/param-library">Parameters</a>
+              <% } %>
+              <% if (currentUser && currentUser.role === "admin") { %>
+                <a href="/admin">Admin</a>
+              <% } %>
+            </div>
+            <div class="messages-rail-links">
+              <a href="https://nikolaysemenov.ru" target="_blank" rel="noopener">nikolaysemenov.ru</a>
+              <a href="https://www.linkedin.com/in/nikolay-semenov/" target="_blank" rel="noopener">LinkedIn</a>
+            </div>
+          </div>
         </aside>
       <% } %>
     </div>
@@ -570,6 +584,30 @@
     const composerForm = threadBody?.closest('form');
     const activeRoomId = <%= activeRoom?.id || 'null' %>;
     let draftTimer = null;
+    const clearThreadQueryState = (options = {}) => {
+      const { keepHash = false } = options;
+      const url = new URL(window.location.href);
+      let changed = false;
+      ['message_id', 'edit_message_id'].forEach((key) => {
+        if (url.searchParams.has(key)) {
+          url.searchParams.delete(key);
+          changed = true;
+        }
+      });
+      if (!keepHash && url.hash) {
+        url.hash = '';
+        changed = true;
+      }
+      if (changed) {
+        const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+        window.history.replaceState({}, '', nextUrl);
+      }
+    };
+    const clearSelectedRows = () => {
+      document.querySelectorAll('.messages-bubble-row.is-selected').forEach((row) => {
+        row.classList.remove('is-selected');
+      });
+    };
 
     openGroupDialogBtn?.addEventListener('click', () => {
       groupDialog?.showModal();
@@ -671,6 +709,8 @@
       if (composeState instanceof HTMLElement) composeState.hidden = true;
       if (composeStateTitle) composeStateTitle.textContent = 'Replying to message';
       if (composeStateBody) composeStateBody.textContent = '';
+      clearThreadQueryState({ keepHash: true });
+      clearSelectedRows();
     };
 
     clearComposeStateBtn?.addEventListener('click', () => {
@@ -738,6 +778,10 @@
           scrollToMessage(selectedMessageId);
           window.setTimeout(() => scrollToMessage(selectedMessageId), 60);
         });
+        window.setTimeout(() => clearThreadQueryState({ keepHash: true }), 140);
+      }
+      if (isEditing) {
+        window.setTimeout(() => clearThreadQueryState({ keepHash: true }), 140);
       }
       if (!hasHashTarget && !hasSelectedMessage && !isEditing) {
         const scrollToLatest = () => {
@@ -759,8 +803,28 @@
         });
         window.addEventListener('load', scrollToLatest, { once: true });
       }
+
+      threadBodyWrap.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const row = target.closest('.messages-bubble-row.is-selected');
+        if (!row) return;
+        const interactive = target.closest('a, button, input, textarea, summary, form, details');
+        if (interactive) return;
+        row.classList.remove('is-selected');
+        clearThreadQueryState({ keepHash: true });
+      });
     }
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      if (addMemberDialog?.open) return;
+      if (groupDialog?.open) return;
+      clearComposeState();
+      clearSelectedRows();
+      clearThreadQueryState({ keepHash: true });
+    });
 
   })();
 </script>
-<%- include('partials/foot') %>
+<%- include('partials/foot', { hideSiteFooter: true }) %>

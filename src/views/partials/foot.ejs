@@ -1,21 +1,23 @@
-  <footer class="site-footer">
-    <div class="site-footer-inner">
-       <div class="footer-brand">
-      <% if (currentUser && (currentUser.role === "admin" || currentUser.role === "manager" || currentUser.role === "engineer")) { %>
-          <a href="/param-library">Parameters</a>
-        <% } %> &nbsp;
-        <% if (currentUser && currentUser.role === "admin") { %>
-          <a href="/admin">Admin</a>
-        <% } %>
-    
-  </div>
-
-      <div class="footer-links">
-        <a href="https://nikolaysemenov.ru" target="_blank" rel="noopener">nikolaysemenov.ru</a>
-        <a href="https://www.linkedin.com/in/nikolay-semenov/" target="_blank" rel="noopener">LinkedIn</a>
-       
-      </div>
+  <% if (typeof hideSiteFooter === 'undefined' || !hideSiteFooter) { %>
+    <footer class="site-footer">
+      <div class="site-footer-inner">
+         <div class="footer-brand">
+        <% if (currentUser && (currentUser.role === "admin" || currentUser.role === "manager" || currentUser.role === "engineer")) { %>
+            <a href="/param-library">Parameters</a>
+          <% } %> &nbsp;
+          <% if (currentUser && currentUser.role === "admin") { %>
+            <a href="/admin">Admin</a>
+          <% } %>
+      
     </div>
-  </footer>
+
+        <div class="footer-links">
+          <a href="https://nikolaysemenov.ru" target="_blank" rel="noopener">nikolaysemenov.ru</a>
+          <a href="https://www.linkedin.com/in/nikolay-semenov/" target="_blank" rel="noopener">LinkedIn</a>
+         
+        </div>
+      </div>
+    </footer>
+  <% } %>
 </body>
 </html>

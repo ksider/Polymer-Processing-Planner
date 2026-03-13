@@ -587,7 +587,7 @@ sub {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .messages-rail-head {
@@ -605,11 +605,38 @@ sub {
 }
 
 .messages-rail-body {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   min-height: 0;
   padding: 0.65rem;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 0.45rem;
+  overflow: auto;
+}
+
+.messages-rail-foot {
+  flex: 0 0 auto;
+  padding: 0.65rem 0.75rem 0.8rem;
+  border-top: 1px solid var(--border);
+  background: rgba(250, 246, 240, 0.96);
+  display: grid;
+  gap: 0.4rem;
+}
+
+.messages-rail-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.messages-rail-links a {
+  color: var(--slate);
+  text-decoration: none;
+}
+
+.messages-rail-links a:hover {
+  color: var(--accent);
 }
 
 .messages-notice-item {
