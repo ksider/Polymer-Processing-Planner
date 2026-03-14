@@ -181,9 +181,6 @@
                   <button class="icon-btn icon-only <%= messageFilter === 'attachments' ? 'is-active' : '' %>" type="submit" name="message_filter" value="attachments" title="Only attachments">
                     <span class="material-symbols-rounded">attach_file</span>
                   </button>
-                  <button class="icon-btn icon-only <%= messageFilter === 'system' ? 'is-active' : '' %>" type="submit" name="message_filter" value="system" title="Only system messages">
-                    <span class="material-symbols-rounded">notifications</span>
-                  </button>
                 </div>
               </form>
               <% if (activeRoomType === 'group') { %>

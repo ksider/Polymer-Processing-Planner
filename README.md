@@ -86,6 +86,7 @@ Create a `.env` file based on `.env.example` and set:
 7) Review analysis (charts + heatmap + 3D when possible).
 8) Generate and edit reports (multiple reports per experiment).
 9) Track Tasks on a kanban board inside each experiment.
+10) Use the internal messenger for direct chats, group chats, entity links, and system notifications.
 
 Planned: export data to CSV.
 
@@ -117,6 +118,31 @@ Planned: export data to CSV.
   - assigned entities list (entity + experiment links)
   - notifications feed with mark-read actions
 - Report signature is restricted to the experiment owner.
+
+## Messenger (Current UX)
+- Main page: `/messages`
+- Room model:
+  - direct chats
+  - group chats
+  - system notifications (shown separately in the right rail)
+- Current thread features:
+  - search in chat
+  - unread separator (`New messages`)
+  - per-room drafts
+  - reply to message with jump to referenced message
+  - pin/unpin messages
+  - edit own messages with edit history
+  - entity attachments in messages (`experiment`, `qualification_step`, `doe`, `report`)
+  - reactions (`1 user -> 1 reaction per message`)
+- Group chat management:
+  - create group chats
+  - add/remove participants
+  - mentions for participants
+- Notifications model:
+  - system notifications do not mix into ordinary chat rooms
+  - notifications live in a dedicated right-side column and in the global unread popover
+- Debug data:
+  - use `npm run seed:messages -- --reset` to recreate demo chats/messages
 
 ## Calendar (Current UX)
 - Two calendar surfaces are available:
@@ -219,6 +245,13 @@ Reference book (Amazon search):
 The current report plan lives at `report_plan` in the project root.
 
 ## Recent Changes (for handoff)
+- Internal messenger added and expanded:
+  - direct/group chats
+  - separate system notifications rail
+  - drafts, reply, pins, edit history
+  - entity attachments
+  - reactions with tooltip of reacting users
+  - generated avatars with per-user avatar settings
 - Machine library now supports parameter tokens in the format `%machineId:paramId%`.
   These tokens can be used inside qualification setup inputs and custom fields.
 - UI shows live previews for tokenized values; inputs keep the token, summaries display the resolved value.
