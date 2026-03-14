@@ -1102,7 +1102,7 @@ sub {
   height: 1.05rem;
   padding: 0 0.22rem;
   border-radius: 999px;
-  border: 1px solid #ddd1c1;
+  border: 0;
   background: rgba(255, 250, 243, 0.96);
   display: inline-flex;
   align-items: center;
@@ -1116,7 +1116,6 @@ sub {
 }
 
 .messages-reaction-summary-pill.is-active {
-  border-color: #2c7ea0;
   background: #ebf6fb;
 }
 
@@ -1137,7 +1136,7 @@ sub {
   transform: translate(-50%, -50%);
   width: 1.95rem;
   height: 1.95rem;
-  border: 1px solid #ddd1c1;
+  border: 0;
   background: rgba(248, 244, 237, 0.94);
   border-radius: 999px;
   display: inline-flex;
@@ -1178,7 +1177,7 @@ sub {
 }
 
 .messages-reaction-option {
-  border: 1px solid #ddd1c1;
+  border: 0;
   background: #fffaf3;
   border-radius: 999px;
   width: 1.15rem;
@@ -1194,11 +1193,9 @@ sub {
 
 .messages-reaction-option:hover {
   background: #fff;
-  border-color: #cdb79d;
 }
 
 .messages-reaction-option.is-active {
-  border-color: #2c7ea0;
   background: #ebf6fb;
 }
 
@@ -4822,6 +4819,13 @@ tr[data-mode="list"] .settings-range {
 
 .rail-tooltip.is-visible {
   opacity: 1;
+}
+
+.rail-tooltip.is-multiline {
+  white-space: pre-line;
+  max-width: 240px;
+  overflow: visible;
+  text-overflow: initial;
 }
 
 .notes-feed-scroll {

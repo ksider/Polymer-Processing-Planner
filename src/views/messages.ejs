@@ -423,7 +423,12 @@
                           <% reactionsList.forEach((reaction) => { %>
                             <form class="pure-form messages-reaction-summary-item" action="/messages/rooms/<%= activeRoom.id %>/messages/<%= msg.message_id %>/reactions/toggle" method="post">
                               <input type="hidden" name="reaction" value="<%= reaction.reaction %>">
-                              <button class="messages-reaction-summary-pill <%= reaction.reacted_by_current_user ? 'is-active' : '' %>" type="submit" title="<%= reaction.users.join(', ') %>">
+                              <button
+                                class="messages-reaction-summary-pill <%= reaction.reacted_by_current_user ? 'is-active' : '' %>"
+                                type="submit"
+                                title="<%= reaction.users.join(', ') %>"
+                                data-reaction-users='<%- JSON.stringify(reaction.users || []) %>'
+                              >
                                 <span class="messages-reaction-summary-emoji"><%= reaction.emoji %></span>
                                 <span class="messages-reaction-summary-count"><%= reaction.count %></span>
                               </button>
@@ -722,6 +727,7 @@
 
 <script>
   (() => {
+    let railTooltipEl = null;
     const users = [
       <% (users || []).forEach((user, index) => { %>
         {
@@ -772,6 +778,48 @@
         if (inputEl.contains(target) || listEl.contains(target)) return;
         listEl.hidden = true;
       });
+    };
+
+    const ensureRailTooltip = () => {
+      if (railTooltipEl && document.body.contains(railTooltipEl)) return railTooltipEl;
+      railTooltipEl = document.getElementById('railTooltip');
+      if (!railTooltipEl) {
+        railTooltipEl = document.createElement('div');
+        railTooltipEl.id = 'railTooltip';
+        railTooltipEl.className = 'rail-tooltip';
+        document.body.appendChild(railTooltipEl);
+      }
+      return railTooltipEl;
+    };
+
+    const bindRailTooltip = (el, text, options = {}) => {
+      if (!(el instanceof HTMLElement)) return;
+      const content = String(text || '').trim();
+      if (!content) return;
+      const tip = ensureRailTooltip();
+      const multiline = Boolean(options.multiline);
+      const showAt = (x, y) => {
+        tip.textContent = content;
+        tip.classList.toggle('is-multiline', multiline);
+        tip.classList.add('is-visible');
+        const rect = tip.getBoundingClientRect();
+        const left = Math.min(
+          window.innerWidth - rect.width - 8,
+          Math.max(8, x - rect.width - 14)
+        );
+        const top = Math.min(window.innerHeight - rect.height - 8, Math.max(8, y - rect.height / 2));
+        tip.style.left = `${left}px`;
+        tip.style.top = `${top}px`;
+      };
+      const hide = () => tip.classList.remove('is-visible');
+      el.addEventListener('mouseenter', (event) => showAt(event.clientX, event.clientY));
+      el.addEventListener('mousemove', (event) => showAt(event.clientX, event.clientY));
+      el.addEventListener('mouseleave', hide);
+      el.addEventListener('focus', () => {
+        const r = el.getBoundingClientRect();
+        showAt(r.left, r.top + r.height / 2);
+      });
+      el.addEventListener('blur', hide);
     };
 
     const openDirectInput = document.querySelector('[data-open-direct-input]');
@@ -1075,6 +1123,17 @@
         if (attachmentSubtitle) attachmentSubtitle.textContent = subtitle;
         entityAttachDialog?.close();
       });
+    });
+
+    document.querySelectorAll('.messages-reaction-summary-pill[data-reaction-users]').forEach((pill) => {
+      const raw = pill.getAttribute('data-reaction-users') || '[]';
+      let usersList = [];
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) usersList = parsed.map((item) => String(item || '').trim()).filter(Boolean);
+      } catch {}
+      if (usersList.length === 0) return;
+      bindRailTooltip(pill, usersList.join('\n'), { multiline: true });
     });
 
     const threadBodyWrap = document.querySelector('.messages-thread-body');
