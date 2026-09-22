@@ -228,6 +228,7 @@
                   <span class="material-symbols-rounded" aria-hidden="true">edit</span>
                 </button>
                 <form class="pure-form icon-action" action="/reports/<%= report.id %>/delete" method="post" onsubmit="return confirm('Delete this report?');">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                   <button class="icon-button danger" type="submit" title="Delete report">
                     <span class="material-symbols-rounded" aria-hidden="true">delete</span>
                   </button>

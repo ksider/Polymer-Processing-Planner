@@ -125,7 +125,17 @@ const publicPath = path.resolve(process.cwd(), "src", "public");
 
 app.set("view engine", "ejs");
 app.set("views", viewsPath);
-app.set("trust proxy", process.env.TRUST_PROXY === "true");
+// Trust only the explicitly configured number of reverse-proxy hops.
+// Never trust forwarded headers by default when the app is internet-facing.
+const configuredTrustProxy = String(process.env.TRUST_PROXY ?? "").trim().toLowerCase();
+const trustProxy = configuredTrustProxy === "true"
+  ? 1
+  : configuredTrustProxy === "false" || configuredTrustProxy === ""
+    ? false
+    : Number.isInteger(Number(configuredTrustProxy)) && Number(configuredTrustProxy) >= 0
+      ? Number(configuredTrustProxy)
+      : false;
+app.set("trust proxy", trustProxy);
 
 app.use(
   helmet({
