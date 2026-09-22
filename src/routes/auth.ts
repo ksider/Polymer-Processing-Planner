@@ -3,8 +3,8 @@ import rateLimit from "express-rate-limit";
 import passport from "passport";
 import bcrypt from "bcryptjs";
 import type { Db } from "../db.js";
-import { deleteOtherSessionsByUser, requestPasswordReset, updateUserPassword } from "../repos/users_repo.js";
-import { PASSWORD_CHANGE_LIMITER } from "../middleware/rate_limit.js";
+import { consumePasswordSetupToken, deleteOtherSessionsByUser, isPasswordSetupTokenValid, requestPasswordReset, updateUserPassword } from "../repos/users_repo.js";
+import { PASSWORD_CHANGE_LIMITER, PASSWORD_SETUP_LIMITER } from "../middleware/rate_limit.js";
 
 export function createAuthRouter(_db: Db) {
   const router = express.Router();
@@ -71,6 +71,31 @@ export function createAuthRouter(_db: Db) {
     updateUserPassword(_db, req.user.id, hash);
     if (req.sessionID) deleteOtherSessionsByUser(_db, req.user.id, req.sessionID);
     return res.redirect("/");
+  });
+
+  router.get("/set-password/:token", (req, res) => {
+    const token = String(req.params.token ?? "");
+    if (!isPasswordSetupTokenValid(_db, token)) {
+      return res.status(400).render("set_password", { title: "Set password", token: null, error: "This link is invalid or has expired." });
+    }
+    return res.render("set_password", { title: "Set password", token, error: null });
+  });
+
+  router.post("/set-password/:token", PASSWORD_SETUP_LIMITER, (req, res) => {
+    const token = String(req.params.token ?? "");
+    const password = String(req.body?.password ?? "");
+    const confirm = String(req.body?.confirm ?? "");
+    if (password.length < 12) {
+      return res.status(400).render("set_password", { title: "Set password", token, error: "Password must be at least 12 characters." });
+    }
+    if (password !== confirm) {
+      return res.status(400).render("set_password", { title: "Set password", token, error: "Passwords do not match." });
+    }
+    const userId = consumePasswordSetupToken(_db, token, bcrypt.hashSync(password, 12));
+    if (!userId) {
+      return res.status(400).render("set_password", { title: "Set password", token: null, error: "This link is invalid or has expired." });
+    }
+    return res.redirect("/auth/login?notice=password-set");
   });
 
   router.get("/request-reset", (_req, res) => {

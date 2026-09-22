@@ -65,11 +65,13 @@ Create a `.env` file based on `.env.example` and set:
 - `GOOGLE_CLIENT_SECRET`
 - `DB_PATH=/app/data/im_doe.sqlite` (production container)
 - `TRUST_PROXY=1` (one trusted local reverse proxy)
+- `APP_ORIGIN=https://planner.example.com` (only when SMTP email is enabled)
 
 ## Authentication
 - The first admin account is created on startup using `ADMIN_EMAIL` + `ADMIN_TEMP_PASSWORD`.
 - `ADMIN_TEMP_PASSWORD` is used only for initial seeding. Changing it later does not update an existing admin password.
 - After first login with the temp password, the admin must set a new password.
+- New-user invitations and administrator password resets use a one-time, 30-minute password-setup link. With no SMTP configured, the administrator copies this link once and sends it via a secure channel.
 - Passwords are stored as bcrypt hashes (not in plain text).
 - Roles: `admin`, `manager`, `engineer`, `operator`, `viewer`.
 - Access:

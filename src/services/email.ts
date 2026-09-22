@@ -22,9 +22,22 @@ export function isEmailConfigured(): boolean {
   return getEmailConfig() !== null;
 }
 
-export async function sendTempPasswordEmail(to: string, tempPassword: string) {
+function setupUrl(path: string): string | null {
+  const configuredOrigin = process.env.APP_ORIGIN?.trim();
+  if (!configuredOrigin) return null;
+  try {
+    const origin = new URL(configuredOrigin);
+    if (origin.protocol !== "https:" && process.env.NODE_ENV === "production") return null;
+    return new URL(path, origin.origin).toString();
+  } catch {
+    return null;
+  }
+}
+
+export async function sendPasswordSetupEmail(to: string, path: string) {
   const config = getEmailConfig();
-  if (!config) return false;
+  const url = setupUrl(path);
+  if (!config || !url) return false;
 
   const transporter = nodemailer.createTransport({
     host: config.host,
@@ -41,13 +54,13 @@ export async function sendTempPasswordEmail(to: string, tempPassword: string) {
     await transporter.sendMail({
       from: config.from,
       to,
-      subject: "Your temporary password",
-      text: `Temporary password: ${tempPassword}\nPlease change it after first login.`
+      subject: "Set your IM Planner password",
+      text: `Use this one-time link within 30 minutes to set your password:\n${url}`
     });
     return true;
   } catch (error) {
-    // Don't log the tempPassword in case of error
-    console.error("Failed to send temp password email:", error);
+    // Never log the setup link: it grants password-setting access.
+    console.error("Failed to send password setup email:", error);
     return false;
   }
 }

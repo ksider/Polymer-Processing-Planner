@@ -49,6 +49,14 @@ const PASSWORD_CHANGE_LIMITER = rateLimit({
   }
 });
 
+const PASSWORD_SETUP_LIMITER = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Too many password setup attempts. Please try again later."
+});
+
 // Admin action limiter - strict
 const ADMIN_ACTION_LIMITER = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -81,6 +89,7 @@ export {
   MODERATE_LIMITER,
   GLOBAL_LIMITER,
   PASSWORD_CHANGE_LIMITER,
+  PASSWORD_SETUP_LIMITER,
   ADMIN_ACTION_LIMITER,
   FILE_UPLOAD_LIMITER
 };

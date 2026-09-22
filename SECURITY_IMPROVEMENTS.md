@@ -72,7 +72,7 @@ curl -X POST http://localhost:3000/auth/login -d "email=test@example.com&passwor
 - Line 198: Removed `tempPassword` from JSON response
 - Added try/catch in email service to prevent password leakage in logs
 
-**Impact:** Temporary passwords are now only sent via email, never returned in responses or logged.
+**Impact:** Passwords are never returned in responses or logged. User onboarding and administrator resets now use a one-time, short-lived password-setup link; it is emailed when SMTP is configured or shown once to the administrator for secure out-of-band delivery.
 
 ---
 

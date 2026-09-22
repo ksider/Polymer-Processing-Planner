@@ -1,21 +1,19 @@
 import express from "express";
-import bcrypt from "bcryptjs";
-import crypto from "crypto";
 import type { Db } from "../db.js";
 import { ADMIN_ACTION_LIMITER, FILE_UPLOAD_LIMITER, createRateLimiter } from "../middleware/rate_limit.js";
 import { getAdminSettings, updateAllowedDomain, updateRequireHttps } from "../repos/admin_settings_repo.js";
 import { insertAudit } from "../repos/audit_repo.js";
 import {
   createUser,
+  createPasswordSetupToken,
   deleteSessionsByUser,
   deleteUser,
   findUserById,
   listUsers,
-  setTempPassword,
   setUserStatus,
   updateUser
 } from "../repos/users_repo.js";
-import { isEmailConfigured, sendTempPasswordEmail } from "../services/email.js";
+import { isEmailConfigured, sendPasswordSetupEmail } from "../services/email.js";
 import {
   listExperimentsWithMeta,
   updateExperimentOwner,
@@ -173,43 +171,34 @@ export function createAdminRouter(db: Db) {
       return res.redirect("/admin?error=Email required");
     }
 
-    if (!isEmailConfigured()) {
-      const message = "SMTP must be configured before creating a user with a temporary password.";
-      if (wantsJson(req)) return res.status(503).json({ ok: false, message });
-      return res.redirect(`/admin?error=${encodeURIComponent(message)}`);
-    }
-
-    const tempPassword = crypto.randomBytes(18).toString("base64url");
-    const passwordHash = bcrypt.hashSync(tempPassword, 12);
-
+    let userId: number | null = null;
     try {
-      const userId = createUser(db, {
+      userId = createUser(db, {
         email,
         name,
-        passwordHash,
+        passwordHash: null,
         role,
         status,
-        tempPassword: 1
+        tempPassword: 0
       });
-      const emailed = await sendTempPasswordEmail(email, tempPassword);
-      if (!emailed) {
-        deleteUser(db, userId);
-        const message = "User was not created because the temporary password email could not be delivered.";
-        if (wantsJson(req)) return res.status(502).json({ ok: false, message });
-        return res.redirect(`/admin?error=${encodeURIComponent(message)}`);
-      }
+      const setup = createPasswordSetupToken(db, userId);
+      const setupPath = `/auth/set-password/${encodeURIComponent(setup.token)}`;
+      const emailed = isEmailConfigured() && await sendPasswordSetupEmail(email, setupPath);
       insertAudit(db, {
         actorUserId: req.user?.id ?? null,
         action: "admin.user.create",
         targetUserId: userId,
         detailsJson: JSON.stringify({ email, name, role, status })
       });
-      const notice = "User created and temporary password email sent.";
+      const notice = emailed
+        ? "User created; a password setup link was emailed."
+        : "User created; copy the one-time password setup link.";
       if (wantsJson(req)) {
-        return res.json({ ok: true, message: notice });
+        return res.json({ ok: true, message: notice, setupPath: emailed ? null : setupPath, expiresAt: setup.expiresAt });
       }
       return res.redirect(`/admin?notice=${encodeURIComponent(notice)}`);
     } catch {
+      if (userId) deleteUser(db, userId);
       if (wantsJson(req)) {
         return res.status(400).json({ ok: false, message: "Failed to create user (maybe duplicate email)" });
       }
@@ -426,23 +415,9 @@ export function createAdminRouter(db: Db) {
       if (wantsJson(req)) return res.status(404).json({ ok: false, message: "User not found" });
       return res.redirect("/admin?error=User not found");
     }
-    if (!isEmailConfigured()) {
-      const message = "SMTP must be configured before resetting a password.";
-      if (wantsJson(req)) return res.status(503).json({ ok: false, message });
-      return res.redirect(`/admin?error=${encodeURIComponent(message)}`);
-    }
-
-    const tempPassword = crypto.randomBytes(18).toString("base64url");
-    const emailed = await sendTempPasswordEmail(user.email, tempPassword);
-    if (!emailed) {
-      const message = "Password was not reset because the temporary password email could not be delivered.";
-      if (wantsJson(req)) return res.status(502).json({ ok: false, message });
-      return res.redirect(`/admin?error=${encodeURIComponent(message)}`);
-    }
-
-    const passwordHash = bcrypt.hashSync(tempPassword, 12);
-    setTempPassword(db, id, passwordHash);
-    deleteSessionsByUser(db, id);
+    const setup = createPasswordSetupToken(db, id, true);
+    const setupPath = `/auth/set-password/${encodeURIComponent(setup.token)}`;
+    const emailed = isEmailConfigured() && await sendPasswordSetupEmail(user.email, setupPath);
 
     insertAudit(db, {
       actorUserId: req.user?.id ?? null,
@@ -451,10 +426,11 @@ export function createAdminRouter(db: Db) {
       detailsJson: null
     });
 
-    if (wantsJson(req)) {
-      return res.json({ ok: true, message: "Temporary password email sent." });
-    }
-    return res.redirect("/admin?notice=Temporary password email sent.");
+    const message = emailed
+      ? "Password reset link emailed; existing sessions were revoked."
+      : "Password reset link created; existing sessions were revoked.";
+    if (wantsJson(req)) return res.json({ ok: true, message, setupPath: emailed ? null : setupPath, expiresAt: setup.expiresAt });
+    return res.redirect(`/admin?notice=${encodeURIComponent(message)}`);
   });
 
   return router;

@@ -42,6 +42,17 @@ function initDb(db: Db) {
       created_at TEXT NOT NULL,
       last_login_at TEXT
     );
+    CREATE TABLE IF NOT EXISTS password_setup_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at TEXT NOT NULL,
+      consumed_at TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_password_setup_tokens_lookup
+      ON password_setup_tokens(token_hash, expires_at, consumed_at);
     CREATE TABLE IF NOT EXISTS admin_settings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       allowed_domain TEXT,

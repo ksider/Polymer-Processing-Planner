@@ -264,7 +264,7 @@
     <button class="pure-button" type="button" data-close>Close</button>
   </div>
   <div class="modal-body">
-    <form method="post" action="/admin/users" class="pure-form pure-form-stacked">
+    <form id="addUserForm" method="post" action="/admin/users" class="pure-form pure-form-stacked">
       <label for="new_user_name">Name</label>
       <input id="new_user_name" name="name" type="text" placeholder="User name">
       <label for="new_user_email">Email</label>
@@ -285,20 +285,71 @@
       </select>
       <button type="submit" class="pure-button pure-button-primary">Create</button>
     </form>
-    <p class="muted">If email is not configured, the temporary password will be shown after creation.</p>
+    <p class="muted">A one-time password setup link is emailed when SMTP is configured. Otherwise, copy it and send it through a secure channel.</p>
+  </div>
+</dialog>
+
+<dialog class="modal-frame" id="passwordSetupDialog">
+  <div class="modal-header">
+    <strong>Password setup link</strong>
+    <button class="pure-button" type="button" data-close>Close</button>
+  </div>
+  <div class="modal-body">
+    <p class="muted">This link is shown only now, expires in 30 minutes, and can be used once.</p>
+    <label for="passwordSetupLink">One-time link</label>
+    <input id="passwordSetupLink" type="text" readonly autocomplete="off" style="width:100%">
+    <button id="copyPasswordSetupLink" type="button" class="pure-button pure-button-primary">Copy link</button>
   </div>
 </dialog>
 
 <script nonce="<%= cspNonce %>">
   const settingsDialog = document.getElementById('settingsDialog');
   const addUserDialog = document.getElementById('addUserDialog');
+  const passwordSetupDialog = document.getElementById('passwordSetupDialog');
+  const passwordSetupLink = document.getElementById('passwordSetupLink');
   document.getElementById('openSettingsDialog')?.addEventListener('click', () => settingsDialog?.showModal());
   document.getElementById('openAddUserDialog')?.addEventListener('click', () => addUserDialog?.showModal());
   document.querySelectorAll('[data-close]').forEach((btn) => {
     btn.addEventListener('click', () => {
       settingsDialog?.close();
       addUserDialog?.close();
+      passwordSetupDialog?.close();
     });
+  });
+
+  const showPasswordSetupLink = (setupPath) => {
+    if (!setupPath || !passwordSetupLink) return;
+    passwordSetupLink.value = new URL(setupPath, window.location.origin).toString();
+    passwordSetupDialog?.showModal();
+    passwordSetupLink.focus();
+    passwordSetupLink.select();
+  };
+  document.getElementById('copyPasswordSetupLink')?.addEventListener('click', async () => {
+    if (!passwordSetupLink?.value) return;
+    await navigator.clipboard.writeText(passwordSetupLink.value);
+    showToast('One-time link copied.', 'success');
+  });
+  document.getElementById('addUserForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const resp = await fetch(form.action, {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'fetch' },
+      body: new URLSearchParams(new FormData(form))
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      showToast(data?.message || 'User creation failed.', 'error');
+      return;
+    }
+    addUserDialog?.close();
+    form.reset();
+    showToast(data?.message || 'User created.', 'success');
+    if (data?.setupPath) {
+      showPasswordSetupLink(data.setupPath);
+    } else {
+      window.location.reload();
+    }
   });
 
 
@@ -458,7 +509,8 @@
         return;
       }
       const data = await resp.json();
-      showToast(data?.message || 'Temporary password email sent.', 'success');
+      showToast(data?.message || 'Password reset link created.', 'success');
+      if (data?.setupPath) showPasswordSetupLink(data.setupPath);
     });
   });
   // Experiments tabs (active/archived).

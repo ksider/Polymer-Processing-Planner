@@ -20,6 +20,12 @@ before(() => {
   process.env.NODE_ENV = "test";
   process.env.ADMIN_EMAIL = "admin@example.com";
   process.env.ADMIN_TEMP_PASSWORD = "TempPass123!";
+  // Exercise the secure manual-link fallback instead of reaching an SMTP server.
+  process.env.SMTP_HOST = "";
+  process.env.SMTP_PORT = "";
+  process.env.SMTP_USER = "";
+  process.env.SMTP_PASS = "";
+  process.env.SMTP_FROM = "";
 });
 
 after(() => {
@@ -81,6 +87,57 @@ test("temp password flow and owner access", async () => {
     .type("form")
     .send({ email: "admin@example.com", password: "NewPassword123!", _csrf: secondLoginCsrf })
     .expect(302);
+
+  const invitationCsrf = await getCsrfToken(agent, "/admin");
+  const invitation = await agent
+    .post("/admin/users")
+    .set("X-Requested-With", "fetch")
+    .type("form")
+    .send({
+      email: "invited@example.com",
+      role: "viewer",
+      status: "ACTIVE",
+      _csrf: invitationCsrf
+    })
+    .expect(200);
+  assert.equal(invitation.body.ok, true);
+  assert.match(invitation.body.setupPath, /^\/auth\/set-password\/[A-Za-z0-9_-]{40,}$/);
+  assert.equal("tempPassword" in invitation.body, false);
+
+  const setupPath = String(invitation.body.setupPath);
+  const invitedAgent = request.agent(app);
+  const setupCsrf = await getCsrfToken(invitedAgent, setupPath);
+  await invitedAgent
+    .post(setupPath)
+    .type("form")
+    .send({ password: "InvitationPass123!", confirm: "InvitationPass123!", _csrf: setupCsrf })
+    .expect(302)
+    .expect("Location", "/auth/login?notice=password-set");
+
+  const reusedSetupCsrf = await getCsrfToken(invitedAgent, "/auth/login");
+  await invitedAgent
+    .post(setupPath)
+    .type("form")
+    .send({ password: "AnotherPass123!", confirm: "AnotherPass123!", _csrf: reusedSetupCsrf })
+    .expect(400);
+
+  const invitedLoginCsrf = await getCsrfToken(invitedAgent, "/auth/login");
+  await invitedAgent
+    .post("/auth/login")
+    .type("form")
+    .send({ email: "invited@example.com", password: "InvitationPass123!", _csrf: invitedLoginCsrf })
+    .expect(302);
+
+  const invitedUser = db.prepare("SELECT id FROM users WHERE email = ?").get("invited@example.com") as { id: number };
+  const resetCsrf = await getCsrfToken(agent, "/admin");
+  const reset = await agent
+    .post(`/admin/users/${invitedUser.id}/reset-password`)
+    .set("X-Requested-With", "fetch")
+    .type("form")
+    .send({ _csrf: resetCsrf })
+    .expect(200);
+  assert.match(reset.body.setupPath, /^\/auth\/set-password\/[A-Za-z0-9_-]{40,}$/);
+  await invitedAgent.get("/").expect(302).expect("Location", "/auth/login");
 
   const userId = createUser(db, {
     email: "user1@example.com",

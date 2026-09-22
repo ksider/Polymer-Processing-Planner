@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import type { Db } from "../db.js";
 
 export type UserRow = {
@@ -63,6 +64,62 @@ export function setTempPassword(db: Db, id: number, passwordHash: string) {
   ).run(passwordHash, id);
 }
 
+function hashSetupToken(token: string) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+export function createPasswordSetupToken(db: Db, userId: number, invalidateExistingPassword = false) {
+  const token = crypto.randomBytes(32).toString("base64url");
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 30 * 60 * 1000).toISOString();
+  const create = db.transaction(() => {
+    db.prepare("DELETE FROM password_setup_tokens WHERE user_id = ?").run(userId);
+    if (invalidateExistingPassword) {
+      // A reset immediately prevents continued use of a potentially compromised password.
+      db.prepare("UPDATE users SET password_hash = NULL, temp_password = 0 WHERE id = ?").run(userId);
+      deleteSessionsByUser(db, userId);
+    }
+    db.prepare(
+      `INSERT INTO password_setup_tokens (user_id, token_hash, expires_at, consumed_at, created_at)
+       VALUES (?, ?, ?, NULL, ?)`
+    ).run(userId, hashSetupToken(token), expiresAt, now.toISOString());
+  });
+  create();
+  return { token, expiresAt };
+}
+
+export function isPasswordSetupTokenValid(db: Db, token: string): boolean {
+  const row = db.prepare(
+    `SELECT id FROM password_setup_tokens
+     WHERE token_hash = ? AND consumed_at IS NULL AND expires_at > ?`
+  ).get(hashSetupToken(token), new Date().toISOString());
+  return Boolean(row);
+}
+
+export function consumePasswordSetupToken(db: Db, token: string, passwordHash: string): number | null {
+  const now = new Date().toISOString();
+  const consume = db.transaction(() => {
+    const row = db.prepare(
+      `SELECT id, user_id FROM password_setup_tokens
+       WHERE token_hash = ? AND consumed_at IS NULL AND expires_at > ?`
+    ).get(hashSetupToken(token), now) as { id: number; user_id: number } | undefined;
+    if (!row) return null;
+
+    const used = db.prepare(
+      `UPDATE password_setup_tokens SET consumed_at = ?
+       WHERE id = ? AND consumed_at IS NULL AND expires_at > ?`
+    ).run(now, row.id, now);
+    if (used.changes !== 1) return null;
+
+    updateUserPassword(db, row.user_id, passwordHash);
+    db.prepare("UPDATE users SET reset_requested_at = NULL WHERE id = ?").run(row.user_id);
+    deleteSessionsByUser(db, row.user_id);
+    db.prepare("DELETE FROM password_setup_tokens WHERE user_id = ? AND id <> ?").run(row.user_id, row.id);
+    return row.user_id;
+  });
+  return consume();
+}
+
 export function createUser(
   db: Db,
   {
@@ -72,7 +129,7 @@ export function createUser(
     role,
     status,
     tempPassword
-  }: { email: string; name: string | null; passwordHash: string; role: string | null; status: string; tempPassword: number }
+  }: { email: string; name: string | null; passwordHash: string | null; role: string | null; status: string; tempPassword: number }
 ) {
   const createdAt = new Date().toISOString();
   const result = db.prepare(
