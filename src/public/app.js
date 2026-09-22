@@ -535,7 +535,7 @@
         actions.className = "messages-popover-item-actions";
         const openLink = document.createElement("a");
         openLink.className = "pure-button button-sm";
-        openLink.href = String(item?.payload?.path || "/messages");
+        openLink.href = `/messages/${Number(item?.id || 0)}/open`;
         openLink.textContent = "Open";
         const readBtn = document.createElement("button");
         readBtn.className = "pure-button button-sm pure-button-secondary";

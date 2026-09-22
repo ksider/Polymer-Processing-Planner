@@ -4,6 +4,7 @@ import { listQualSteps, getQualStepById } from "../repos/qual_repo.js";
 import { getDoeStudy, listDoeStudies } from "../repos/doe_repo.js";
 import { getReportConfig, listReportConfigs } from "../repos/reports_repo.js";
 import { findUserById } from "../repos/users_repo.js";
+import { createNotification } from "../repos/notifications_repo.js";
 import {
   normalizeMessageBoxFolder,
   normalizeMessageKind,
@@ -540,16 +541,41 @@ export function sendSystemMessageFromActor(
   }
 ) {
   const kind = data.kind ?? "system";
-  const visibility = data.visibility ?? (data.recipient_user_ids.length > 1 ? "collective" : "direct");
-  return sendMessage(db, {
+  const actorId = Number(data.actor_user_id);
+  const normalizedActorId = Number.isFinite(actorId) && actorId > 0 ? actorId : null;
+  const recipients = normalizeRecipientIds(data.recipient_user_ids)
+    .filter((userId) => userId !== normalizedActorId);
+  const visibility = data.visibility ?? (recipients.length > 1 ? "collective" : "direct");
+  // A single-recipient technical event belongs to the person's system
+  // Notifications room, not a direct conversation with the person who caused
+  // it. This keeps the Messenger notification rail and its Open button useful.
+  const useSystemRoom = recipients.length === 1;
+  const result = sendMessage(db, {
     kind,
-    visibility,
-    sender_user_id: data.actor_user_id,
-    recipient_user_ids: data.recipient_user_ids,
+    visibility: useSystemRoom ? "direct" : visibility,
+    sender_user_id: useSystemRoom ? null : data.actor_user_id,
+    recipient_user_ids: recipients.length > 0 ? recipients : data.recipient_user_ids,
     subject: data.subject,
     body: data.body ?? null,
     payload: data.payload ?? null
   });
+  // Messenger is the conversation view; Notifications is the operational
+  // queue. Technical messages must be visible in both places.
+  const payloadJson = serializePayload(data.payload ?? null);
+  const syncNotification = db.transaction(() => {
+    for (const userId of recipients) {
+      createNotification(db, {
+        user_id: userId,
+        type: kind,
+        title: data.subject,
+        body: data.body ?? null,
+        payload_json: payloadJson,
+        message_id: result.messageId
+      });
+    }
+  });
+  syncNotification();
+  return result;
 }
 
 export function listByFolder(db: Db, userId: number, folder: MessageBoxFolder, limit = 50): MessageListItem[] {
@@ -577,6 +603,20 @@ export function countUnread(db: Db, userId: number): number {
 
 export function markRead(db: Db, userId: number, messageBoxId: number) {
   markMessageBoxRead(db, messageBoxId, userId);
+}
+
+export function markReadAndResolveTarget(db: Db, userId: number, messageBoxId: number): string | null {
+  const messageBox = getMessageBoxById(db, messageBoxId, userId);
+  if (!messageBox) return null;
+  const message = getMessageById(db, messageBox.message_id);
+  if (!message) return null;
+  markMessageBoxRead(db, messageBoxId, userId);
+  const path = parsePayload(message.payload_json)?.path;
+  if (typeof path === "string" && path.startsWith("/") && !path.startsWith("//")) return path;
+  if (message.chat_room_id) {
+    return `/messages?view=chat&room_id=${message.chat_room_id}&message_id=${message.id}#msg-${message.id}`;
+  }
+  return "/messages";
 }
 
 export function markAllRead(db: Db, userId: number, folder?: MessageBoxFolder) {

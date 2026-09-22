@@ -26,6 +26,7 @@ import {
   listUnreadForPopup,
   markDirectThreadRead,
   markRead,
+  markReadAndResolveTarget,
   deleteGroupRoom,
   removeRoomMember,
   restoreForUser,
@@ -184,10 +185,15 @@ export function createMessagesRouter(db: Db) {
         }
       }
     }
-    const systemMessages =
-      view === "chat" && systemRoom
-        ? listDirectThread(db, req.user.id, systemRoom.room_id, { limit: 100 })
-        : [];
+    // Technical events may name a human initiator, in which case they live in
+    // a direct room rather than the system room. The Notifications rail must
+    // include both forms, otherwise assignment events appear in the top bar
+    // but disappear from the Messenger notification history.
+    const systemMessages = view === "chat"
+      ? listByFolder(db, req.user.id, "inbox", 500)
+        .filter((message) => ["system", "assignment", "task"].includes(message.kind))
+        .slice(0, 100)
+      : [];
 
     const deletedItems = view === "deleted" ? listByFolder(db, req.user.id, "deleted", 500) : [];
     const attachEntityTree = req.user?.id
@@ -383,6 +389,13 @@ export function createMessagesRouter(db: Db) {
       // ignore invalid reaction toggle
     }
     return res.redirect(`/messages?view=chat&room_id=${roomId}&message_id=${messageId}`);
+  });
+
+  router.get("/messages/:id/open", (req, res) => {
+    if (!req.user?.id) return res.redirect("/auth/login");
+    const messageBoxId = Number(req.params.id);
+    if (!Number.isFinite(messageBoxId)) return res.redirect("/messages");
+    return res.redirect(markReadAndResolveTarget(db, req.user.id, messageBoxId) ?? "/messages");
   });
 
   router.post("/messages/:id/read", (req, res) => {

@@ -512,20 +512,20 @@
           <div class="messages-rail-head">
             <div>
               <h2 class="messages-rail-title">Notifications</h2>
-              <div class="small-note">System messages only</div>
+              <div class="small-note">Technical events from your work</div>
             </div>
             <% if (systemRoom) { %>
               <a class="pure-button button-sm" href="/messages?view=chat&room_id=<%= systemRoom.room_id %>">Open</a>
             <% } %>
           </div>
           <div class="messages-rail-body">
-            <% if (!systemRoom || !systemMessages || systemMessages.length === 0) { %>
-              <div class="small-note">No system notifications yet.</div>
+            <% if (!systemMessages || systemMessages.length === 0) { %>
+              <div class="small-note">No technical notifications yet.</div>
             <% } %>
             <% (systemMessages || []).forEach((msg) => { %>
               <a
                 class="messages-notice-item <%= msg.status === 'unread' ? 'is-unread' : '' %>"
-                href="/messages?view=chat&room_id=<%= systemRoom?.room_id || '' %>&message_id=<%= msg.message_id %>#msg-<%= msg.message_id %>"
+                href="/messages/<%= msg.id %>/open"
               >
                 <div class="messages-notice-title">
                   <strong><%- formatInline(msg.subject || 'Notification') %></strong>

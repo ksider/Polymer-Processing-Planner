@@ -333,6 +333,54 @@ test("only experiment owner can sign report", async () => {
   assert.ok(submittedReport.submitted_for_signature_at);
   assert.equal(submittedReport.submitted_by_user_id, ownerUserId);
   assert.match(String(submittedReport.signature_due_at), /^\d{4}-\d{2}-\d{2}$/);
+  const signerNotification = db.prepare(
+    `SELECT n.type, n.title, n.message_id, m.id AS linked_message_id
+     FROM notifications n
+     JOIN messages m ON m.id = n.message_id
+     WHERE n.user_id = ?
+       AND n.type = 'assignment'
+       AND n.title = ?
+     ORDER BY n.id DESC
+     LIMIT 1`
+  ).get(otherUserId, "You were assigned to Report: Configured workspace report") as {
+    type: string;
+    title: string;
+    message_id: number | null;
+    linked_message_id: number;
+  } | undefined;
+  assert.ok(signerNotification, "report assignment should also appear in Notifications");
+  assert.equal(signerNotification.message_id, signerNotification.linked_message_id);
+  const unreadNotifications = await otherAgent.get("/me/notifications/unread.json").expect(200);
+  const reportNotification = unreadNotifications.body.items.find((item: { id: number; title: string }) => (
+    item.title === "You were assigned to Report: Configured workspace report"
+  ));
+  assert.ok(reportNotification, "top-bar notification feed should include the report assignment");
+  const notificationReadCsrf = await getCsrfToken(otherAgent, "/me");
+  await otherAgent
+    .post(`/me/notifications/${reportNotification.id}/read.json`)
+    .type("form")
+    .send({ _csrf: notificationReadCsrf })
+    .expect(200);
+  const markedRead = db.prepare("SELECT status FROM notifications WHERE id = ?").get(reportNotification.id) as { status: string };
+  assert.equal(markedRead.status, "read");
+  const messenger = await otherAgent.get("/messages?view=chat").expect(200);
+  assert.match(messenger.text, /You were assigned to Report: Configured workspace report/);
+  const signerMessageBox = db.prepare(
+    `SELECT mb.id
+     FROM message_boxes mb
+     JOIN messages m ON m.id = mb.message_id
+     WHERE mb.user_id = ?
+       AND m.subject = ?
+     ORDER BY mb.id DESC
+     LIMIT 1`
+  ).get(otherUserId, "You were assigned to Report: Configured workspace report") as { id: number };
+  assert.match(messenger.text, new RegExp(`href="/messages/${signerMessageBox.id}/open"`));
+  await otherAgent
+    .get(`/messages/${signerMessageBox.id}/open`)
+    .expect(302)
+    .expect("Location", `/reports/${draftReportId}`);
+  const openedMessage = db.prepare("SELECT status FROM message_boxes WHERE id = ?").get(signerMessageBox.id) as { status: string };
+  assert.equal(openedMessage.status, "read");
   const signerTask = db.prepare("SELECT title, owner_user_id, due_at FROM tasks WHERE id = ?")
     .get(reportAssignmentTask.task_id) as { title: string; owner_user_id: number | null; due_at: string | null };
   assert.equal(signerTask.title, "Sign report: Configured workspace report");

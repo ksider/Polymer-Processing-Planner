@@ -195,6 +195,7 @@ function initDb(db: Db) {
       title TEXT NOT NULL,
       body TEXT,
       payload_json TEXT,
+      message_id INTEGER,
       status TEXT NOT NULL DEFAULT 'unread', -- unread | read | archived
       created_at TEXT NOT NULL,
       read_at TEXT,
@@ -835,6 +836,12 @@ function initDb(db: Db) {
   if (!hasColumn(db, "notifications", "read_at")) {
     db.exec("ALTER TABLE notifications ADD COLUMN read_at TEXT");
   }
+  if (!hasColumn(db, "notifications", "message_id")) {
+    db.exec("ALTER TABLE notifications ADD COLUMN message_id INTEGER");
+  }
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_message_user ON notifications(message_id, user_id) WHERE message_id IS NOT NULL"
+  );
   if (!hasColumn(db, "messages", "chat_room_id")) {
     db.exec("ALTER TABLE messages ADD COLUMN chat_room_id INTEGER");
   }
@@ -1040,6 +1047,58 @@ function initDb(db: Db) {
       }
     });
     migrateLegacyNotifications();
+  }
+  // Technical messages created after the messenger migration did not always
+  // receive a matching legacy notification. Backfill only inbox messages which
+  // are not yet represented in Notifications. A collective message needs one
+  // notification per recipient, hence the per-user message_id association
+  // instead of the historical one-to-one migration link.
+  const unlinkedTechnicalMessages = db.prepare(
+    `SELECT m.id as message_id, mb.user_id, m.kind, m.subject, m.body,
+            m.payload_json, mb.status, mb.created_at, mb.read_at, mb.deleted_at
+     FROM messages m
+     JOIN message_boxes mb ON mb.message_id = m.id AND mb.folder = 'inbox'
+     LEFT JOIN notification_message_links l ON l.message_id = m.id
+     LEFT JOIN notifications n ON n.message_id = m.id AND n.user_id = mb.user_id
+     WHERE l.message_id IS NULL
+       AND n.id IS NULL
+       AND m.kind IN ('system', 'assignment', 'task')
+     ORDER BY m.id`
+  ).all() as Array<{
+    message_id: number;
+    user_id: number;
+    kind: string;
+    subject: string;
+    body: string | null;
+    payload_json: string | null;
+    status: "unread" | "read";
+    created_at: string;
+    read_at: string | null;
+    deleted_at: string | null;
+  }>;
+  if (unlinkedTechnicalMessages.length > 0) {
+    const backfillTechnicalNotifications = db.transaction(() => {
+      const insertNotification = db.prepare(
+        `INSERT INTO notifications
+         (user_id, type, title, body, payload_json, message_id, status, created_at, read_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      for (const message of unlinkedTechnicalMessages) {
+        const status = message.deleted_at ? "archived" : message.status;
+        insertNotification.run(
+          message.user_id,
+          message.kind,
+          message.subject,
+          message.body,
+          message.payload_json,
+          message.message_id,
+          status,
+          message.created_at,
+          status === "unread" ? null : (message.read_at ?? message.created_at)
+        );
+      }
+    });
+    backfillTechnicalNotifications();
   }
   const messagesWithoutRoom = db
     .prepare(

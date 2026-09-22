@@ -7,6 +7,7 @@ export type NotificationRow = {
   title: string;
   body: string | null;
   payload_json: string | null;
+  message_id: number | null;
   status: "unread" | "read" | "archived";
   created_at: string;
   read_at: string | null;
@@ -20,16 +21,25 @@ export function createNotification(
     title: string;
     body?: string | null;
     payload_json?: string | null;
+    message_id?: number | null;
   }
 ): number {
   const now = new Date().toISOString();
   const result = db
     .prepare(
       `INSERT INTO notifications
-       (user_id, type, title, body, payload_json, status, created_at, read_at)
-       VALUES (?, ?, ?, ?, ?, 'unread', ?, NULL)`
+       (user_id, type, title, body, payload_json, message_id, status, created_at, read_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'unread', ?, NULL)`
     )
-    .run(data.user_id, data.type, data.title, data.body ?? null, data.payload_json ?? null, now);
+    .run(
+      data.user_id,
+      data.type,
+      data.title,
+      data.body ?? null,
+      data.payload_json ?? null,
+      data.message_id ?? null,
+      now
+    );
   return Number(result.lastInsertRowid);
 }
 
@@ -47,6 +57,19 @@ export function listNotificationsByUser(db: Db, userId: number, limit = 20): Not
        FROM notifications
        WHERE user_id = ?
          AND status != 'archived'
+       ORDER BY datetime(created_at) DESC, id DESC
+       LIMIT ?`
+    )
+    .all(userId, limit) as NotificationRow[];
+}
+
+export function listUnreadNotificationsByUser(db: Db, userId: number, limit = 20): NotificationRow[] {
+  return db
+    .prepare(
+      `SELECT *
+       FROM notifications
+       WHERE user_id = ?
+         AND status = 'unread'
        ORDER BY datetime(created_at) DESC, id DESC
        LIMIT ?`
     )

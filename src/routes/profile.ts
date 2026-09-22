@@ -17,7 +17,9 @@ import { computeTaskProgress } from "../services/tasks_service.js";
 import { listQualSummarySteps } from "../repos/qual_repo.js";
 import { listAssignedEntitiesForUser } from "../repos/entity_assignments_repo.js";
 import {
+  countUnreadNotifications,
   listNotificationsByUser,
+  listUnreadNotificationsByUser,
   markAllNotificationsRead,
   markNotificationRead
 } from "../repos/notifications_repo.js";
@@ -60,6 +62,19 @@ export function createProfileRouter(db: Db) {
       return { ...exp, status, statusLabel };
     });
 
+  const enrichNotification = <T extends { payload_json: string | null }>(notice: T) => {
+    let path = null as string | null;
+    if (notice.payload_json) {
+      try {
+        const payload = JSON.parse(notice.payload_json) as { path?: string };
+        if (payload.path) path = payload.path;
+      } catch {
+        path = null;
+      }
+    }
+    return { ...notice, path };
+  };
+
   const buildProfilePayload = (userId: number) => {
     const experiments = listExperimentsForOwnerWithMeta(db, userId, false);
     const tasks = listTasksForUser(db, userId);
@@ -98,18 +113,7 @@ export function createProfileRouter(db: Db) {
             : `/experiments/${item.experiment_id}/doe/${item.entity_id}?tab=design`;
       return { ...item, entityTitle, entityPath };
     });
-    const notifications = listNotificationsByUser(db, userId, 30).map((notice) => {
-      let path = null as string | null;
-      if (notice.payload_json) {
-        try {
-          const payload = JSON.parse(notice.payload_json) as { path?: string };
-          if (payload.path) path = payload.path;
-        } catch {
-          path = null;
-        }
-      }
-      return { ...notice, path };
-    });
+    const notifications = listNotificationsByUser(db, userId, 30).map(enrichNotification);
     return {
       experiments: enrich(experiments),
       tasks: tasksWithProgress,
@@ -287,10 +291,34 @@ export function createProfileRouter(db: Db) {
     return res.redirect("/me#notifications");
   });
 
+  router.get("/me/notifications/unread.json", (req, res) => {
+    if (!req.user?.id) return res.status(401).json({ error: "Unauthorized" });
+    const limit = Number(req.query.limit);
+    const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(50, limit)) : 12;
+    return res.json({
+      unread_count: countUnreadNotifications(db, req.user.id),
+      items: listUnreadNotificationsByUser(db, req.user.id, safeLimit).map(enrichNotification)
+    });
+  });
+
+  router.post("/me/notifications/:id/read.json", (req, res) => {
+    if (!req.user?.id) return res.status(401).json({ error: "Unauthorized" });
+    const notificationId = Number(req.params.id);
+    if (!Number.isFinite(notificationId)) return res.status(400).json({ error: "Invalid notification id" });
+    markNotificationRead(db, notificationId, req.user.id);
+    return res.json({ ok: true, unread_count: countUnreadNotifications(db, req.user.id) });
+  });
+
   router.post("/me/notifications/read-all", (req, res) => {
     if (!req.user?.id) return res.redirect("/auth/login");
     markAllNotificationsRead(db, req.user.id);
     return res.redirect("/me#notifications");
+  });
+
+  router.post("/me/notifications/read-all.json", (req, res) => {
+    if (!req.user?.id) return res.status(401).json({ error: "Unauthorized" });
+    markAllNotificationsRead(db, req.user.id);
+    return res.json({ ok: true, unread_count: countUnreadNotifications(db, req.user.id) });
   });
 
   return router;
