@@ -182,7 +182,7 @@
                     <% if (field.field_type === 'boolean') { %>
                       <input type="checkbox" data-field-id="<%= field.id %>" data-field-type="boolean" <%= val?.value_real === 1 ? 'checked' : '' %>>
                     <% } else if (field.field_type === 'text') { %>
-                      <input type="text" data-field-id="<%= field.id %>" data-field-type="text" value="<%- formatInline(val?.value_text || '') %>">
+                      <input type="text" data-field-id="<%= field.id %>" data-field-type="text" value="<%= val?.value_text || '' %>">
                     <% } else if (field.field_type === 'tag') { %>
                       <% let allowed = []; %>
                       <% if (field.allowed_values_json) { try { const parsed = JSON.parse(field.allowed_values_json); if (Array.isArray(parsed)) allowed = parsed; } catch {} } %>
@@ -323,7 +323,7 @@
                     <% if (def.field_type === 'boolean') { %>
                       <input type="checkbox" data-field-id="<%= customField?.id %>" data-field-type="boolean" <%= customVal === 1 ? 'checked' : '' %>>
                     <% } else if (def.field_type === 'text') { %>
-                      <input type="text" data-field-id="<%= customField?.id %>" data-field-type="text" value="<%- formatInline(customVal) %>">
+                      <input type="text" data-field-id="<%= customField?.id %>" data-field-type="text" value="<%= customVal %>">
                     <% } else { %>
                       <input type="number" step="any" data-field-id="<%= customField?.id %>" data-field-type="number" value="<%= customVal %>">
                     <% } %>
@@ -493,7 +493,7 @@
                     <% if (def.field_type === 'boolean') { %>
                       <input type="checkbox" data-field-id="<%= customField?.id %>" data-field-type="boolean" <%= customVal === 1 ? 'checked' : '' %>>
                     <% } else if (def.field_type === 'text') { %>
-                      <input type="text" data-field-id="<%= customField?.id %>" data-field-type="text" value="<%- formatInline(customVal) %>">
+                      <input type="text" data-field-id="<%= customField?.id %>" data-field-type="text" value="<%= customVal %>">
                     <% } else { %>
                       <input type="number" step="any" data-field-id="<%= customField?.id %>" data-field-type="number" value="<%= customVal %>">
                     <% } %>
@@ -505,7 +505,7 @@
             <% }); %>
             <% customPressureFields.forEach((field) => { %>
               <% const val = runValues3[String(field.id)]?.value_real ?? ''; %>
-              <tr data-pressure-row data-field-id="<%= field.id %>" data-label="<%- formatInline(field.label) %>" data-section-code="<%= field.code.replace(/^pressure_/, '').replace(/_bar$/, '') %>">
+              <tr data-pressure-row data-field-id="<%= field.id %>" data-label="<%= field.label %>" data-section-code="<%= field.code.replace(/^pressure_/, '').replace(/_bar$/, '') %>">
                 <td><%- formatInline(field.label) %></td>
                 <td><input type="number" step="any" data-field-id="<%= field.id %>" data-field-type="number" data-pressure-base value="<%= val %>"></td>
                 <% pressureFieldDefs.forEach((def) => { %>
@@ -516,7 +516,7 @@
                     <% if (def.field_type === 'boolean') { %>
                       <input type="checkbox" data-field-id="<%= customField?.id %>" data-field-type="boolean" <%= customVal === 1 ? 'checked' : '' %>>
                     <% } else if (def.field_type === 'text') { %>
-                      <input type="text" data-field-id="<%= customField?.id %>" data-field-type="text" value="<%- formatInline(customVal) %>">
+                      <input type="text" data-field-id="<%= customField?.id %>" data-field-type="text" value="<%= customVal %>">
                     <% } else { %>
                       <input type="number" step="any" data-field-id="<%= customField?.id %>" data-field-type="number" value="<%= customVal %>">
                     <% } %>
@@ -649,7 +649,7 @@
                     <% if (field.field_type === 'boolean') { %>
                       <input type="checkbox" data-field-id="<%= field.id %>" data-field-type="boolean" <%= val?.value_real === 1 ? 'checked' : '' %>>
                     <% } else if (field.field_type === 'text') { %>
-                      <input type="text" data-field-id="<%= field.id %>" data-field-type="text" value="<%- formatInline(val?.value_text || '') %>">
+                      <input type="text" data-field-id="<%= field.id %>" data-field-type="text" value="<%= val?.value_text || '' %>">
                     <% } else if (field.field_type === 'tag') { %>
                       <% let allowed = []; %>
                       <% if (field.allowed_values_json) { try { const parsed = JSON.parse(field.allowed_values_json); if (Array.isArray(parsed)) allowed = parsed; } catch {} } %>
@@ -836,7 +836,7 @@
                     <% if (field.field_type === 'boolean') { %>
                       <input type="checkbox" data-field-id="<%= field.id %>" data-field-type="boolean" <%= val?.value_real === 1 ? 'checked' : '' %>>
                     <% } else if (field.field_type === 'text') { %>
-                      <input type="text" data-field-id="<%= field.id %>" data-field-type="text" value="<%- formatInline(val?.value_text || '') %>">
+                      <input type="text" data-field-id="<%= field.id %>" data-field-type="text" value="<%= val?.value_text || '' %>">
                     <% } else if (field.field_type === 'tag') { %>
                       <% let allowed = []; %>
                       <% if (field.allowed_values_json) { try { const parsed = JSON.parse(field.allowed_values_json); if (Array.isArray(parsed)) allowed = parsed; } catch {} } %>
@@ -1006,7 +1006,7 @@
                     <% if (field.field_type === 'boolean') { %>
                       <input type="checkbox" data-field-id="<%= field.id %>" data-field-type="boolean" <%= val?.value_real === 1 ? 'checked' : '' %>>
                     <% } else if (field.field_type === 'text') { %>
-                      <input type="text" data-field-id="<%= field.id %>" data-field-type="text" value="<%- formatInline(val?.value_text || '') %>">
+                      <input type="text" data-field-id="<%= field.id %>" data-field-type="text" value="<%= val?.value_text || '' %>">
                     <% } else if (field.field_type === 'tag') { %>
                       <% let allowed = []; %>
                       <% if (field.allowed_values_json) { try { const parsed = JSON.parse(field.allowed_values_json); if (Array.isArray(parsed)) allowed = parsed; } catch {} } %>
@@ -1117,7 +1117,7 @@
           <% }); %>
         </tbody>
       </table>
-      <script>
+      <script nonce="<%= cspNonce %>">
         (() => {
           const inputs = Array.from(document.querySelectorAll('input[data-qual-list-due]'));
           inputs.forEach((input) => {
@@ -1164,7 +1164,7 @@
               <option
                 value="<%= param.id %>"
                 data-code="<%= param.code %>"
-                data-label="<%- formatInline(param.label) %>"
+                data-label="<%= param.label %>"
                 data-unit="<%= param.unit || '' %>"
                 data-type="<%= param.field_type %>"
               >
@@ -1190,7 +1190,7 @@
           <% cavityDefs.forEach((def) => { %>
             <tr data-cavity-field data-suffix="<%= def.suffix %>">
               <td><input data-field-code value="<%= def.suffix %>" readonly></td>
-              <td><input data-field-label value="<%- formatInline(def.label) %>"></td>
+              <td><input data-field-label value="<%= def.label %>"></td>
               <td>
                 <select data-field-type>
                   <option value="number" <%= def.field_type === 'number' ? 'selected' : '' %>>number</option>
@@ -1270,7 +1270,7 @@
               <option
                 value="<%= param.id %>"
                 data-code="<%= param.code %>"
-                data-label="<%- formatInline(param.label) %>"
+                data-label="<%= param.label %>"
                 data-unit="<%= param.unit || '' %>"
                 data-type="<%= param.field_type %>"
               >
@@ -1295,7 +1295,7 @@
           <% pressureColumnDefs.forEach((def) => { %>
             <tr data-pressure-field data-suffix="<%= def.suffix %>">
               <td><input data-field-code value="<%= def.suffix %>" readonly></td>
-              <td><input data-field-label value="<%- formatInline(def.label) %>"></td>
+              <td><input data-field-label value="<%= def.label %>"></td>
               <td>
                 <select data-field-type>
                   <option value="number" <%= def.field_type === 'number' ? 'selected' : '' %>>number</option>
@@ -1355,7 +1355,7 @@
               <option
                 value="<%= param.id %>"
                 data-code="<%= param.code %>"
-                data-label="<%- formatInline(param.label) %>"
+                data-label="<%= param.label %>"
                 data-unit="<%= param.unit || '' %>"
                 data-group="<%= param.group_label || '' %>"
                 data-type="<%= param.field_type %>"
@@ -1388,7 +1388,7 @@
             <tr data-field-id="<%= field.id %>" data-field-code="<%= field.code %>" <%= isLocked ? 'data-locked' : '' %>>
               <td><input type="checkbox" data-field-enabled <%= field.is_enabled ? 'checked' : '' %> <%= isLocked ? 'disabled' : '' %>></td>
               <td><input data-field-code value="<%= field.code %>" <%= isLocked ? 'readonly' : '' %>></td>
-              <td><input data-field-label value="<%- formatInline(field.label) %>" <%= isLocked ? 'readonly' : '' %>></td>
+              <td><input data-field-label value="<%= field.label %>" <%= isLocked ? 'readonly' : '' %>></td>
               <td>
                 <select data-field-type <%= isLocked ? 'disabled' : '' %>>
                   <option value="number" <%= field.field_type === 'number' ? 'selected' : '' %>>number</option>
@@ -1477,7 +1477,7 @@
         <select id="rheoLibrarySelect">
           <option value="">Select parameter…</option>
           <% globalParams.forEach((param) => { %>
-            <option value="<%= param.id %>" data-code="<%= param.code %>" data-label="<%- formatInline(param.label) %>" data-unit="<%= param.unit || '' %>"><%- formatInline(param.label) %> (<%= param.code %>)</option>
+            <option value="<%= param.id %>" data-code="<%= param.code %>" data-label="<%= param.label %>" data-unit="<%= param.unit || '' %>"><%- formatInline(param.label) %> (<%= param.code %>)</option>
           <% }); %>
         </select>
       </label>
@@ -1488,14 +1488,14 @@
     <div class="setup-field-list" id="rheoCustomFields">
       <% (settings.custom_fields || []).forEach((field) => { %>
         <div class="setup-field-row" data-custom-field data-field-id="<%= field.id %>">
-          <input type="text" data-custom-label value="<%- formatInline(field.label) %>" placeholder="Label">
-          <input type="text" data-custom-unit value="<%- formatInline(field.unit || '') %>" placeholder="Unit">
-          <input type="text" data-custom-value data-template-input value="<%- formatInline(field.value ?? '') %>" placeholder="Value">
+          <input type="text" data-custom-label value="<%= field.label %>" placeholder="Label">
+          <input type="text" data-custom-unit value="<%= field.unit || '' %>" placeholder="Unit">
+          <input type="text" data-custom-value data-template-input value="<%= field.value ?? '' %>" placeholder="Value">
           <div class="template-preview" data-template-preview></div>
           <button class="icon-button danger" type="button" data-remove-field title="Remove">
             <span class="material-symbols-rounded" aria-hidden="true">delete</span>
           </button>
-          <input type="hidden" data-custom-code value="<%- formatInline(field.code || '') %>">
+          <input type="hidden" data-custom-code value="<%= field.code || '' %>">
         </div>
       <% }); %>
     </div>
@@ -1506,17 +1506,17 @@
   </div>
 </dialog>
 
-<script src="/vendor/echarts/dist/echarts.min.js"></script>
-<script>
+<script nonce="<%= cspNonce %>" src="/vendor/echarts/dist/echarts.min.js"></script>
+<script nonce="<%= cspNonce %>">
   const dialog = document.getElementById('qualFieldDialog');
   const rheoSetupDialog = document.getElementById('rheoSetupDialog');
   const qualSettingsDialog = document.getElementById('qualSettingsDialog');
   const qualSettingsForm = document.getElementById('qualSettingsForm');
   const qualStepAssigneeInput = document.getElementById('qualStepAssigneeInput');
   const qualStepResponsibleLabel = document.getElementById('qualStepResponsibleLabel');
-  const qualAssignableUserById = new Map(<%- JSON.stringify((assignableUsers || []).map((user) => [String(user.id), user.name || user.email])) %>);
+  const qualAssignableUserById = new Map(<%- jsonForScript((assignableUsers || []).map((user) => [String(user.id), user.name || user.email])) %>);
   const openBtn = document.getElementById('openQualFields');
-  const machineParamMap = <%- JSON.stringify(machineParamMap || {}) %>;
+  const machineParamMap = <%- jsonForScript(machineParamMap || {}) %>;
   // Template tokens (%machineId:paramId%) are resolved in UI summaries while inputs keep the token.
   const applyTemplateMap = () => {
     window.IMPlanner?.setTemplateMap(machineParamMap);

@@ -6,5 +6,5 @@ const PORT = Number(process.env.PORT || 3000);
 
 app.listen(PORT, () => {
   // eslint-disable-next-line no-console
-  console.log(`IM-DOE Planner running on http://localhost:${PORT}`);
+  console.log(`IM-DOE Planner listening on port ${PORT}`);
 });

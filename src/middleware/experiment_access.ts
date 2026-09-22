@@ -46,7 +46,7 @@ export function ensureRunAccess(db: Db) {
   };
 }
 
-function canAccessExperiment(
+export function canAccessExperiment(
   db: Db,
   user: Express.User | undefined,
   experimentId: number,

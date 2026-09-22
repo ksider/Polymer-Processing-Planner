@@ -89,7 +89,7 @@
 </div>
 <%- include('partials/foot') %>
 
-<script>
+<script nonce="<%= cspNonce %>">
   document.querySelectorAll('.recipe-select-card').forEach((card) => {
     const input = card.querySelector('input[type="checkbox"]');
     if (!input) return;

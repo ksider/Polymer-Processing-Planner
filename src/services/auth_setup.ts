@@ -15,13 +15,15 @@ export function configureAuth(app: Express, db: Db) {
   }
 
   const settings = getAdminSettings(db);
-  // Always use secure cookies in production, regardless of require_https setting
-  // In development, respect require_https setting but also check NODE_ENV
-  const isProduction = process.env.NODE_ENV === "production";
-  const cookieSecure = isProduction || settings.require_https === 1;
+  // Internet-facing deployments must never issue a session cookie over HTTP.
+  // Only explicitly local development and test environments may use insecure
+  // cookies, so an omitted NODE_ENV fails closed instead of failing open.
+  const isLocalRuntime = ["development", "test"].includes(process.env.NODE_ENV ?? "");
+  const cookieSecure = !isLocalRuntime || settings.require_https === 1;
 
   app.use(
     session({
+      name: "implanner.sid",
       secret: sessionSecret,
       resave: false,
       saveUninitialized: false,
@@ -30,6 +32,8 @@ export function configureAuth(app: Express, db: Db) {
         httpOnly: true,
         sameSite: "lax",
         secure: cookieSecure,
+        path: "/",
+        priority: "high",
         // Set max age for session cookies (24 hours)
         maxAge: 24 * 60 * 60 * 1000
       }

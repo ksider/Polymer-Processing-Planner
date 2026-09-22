@@ -50,11 +50,11 @@
         <% } %>
         <% if (canSignReport) { %>
           <% if (reportConfig.signed_at) { %>
-            <form class="pure-form inline-form" action="/reports/<%= reportConfig.id %>/unsign" method="post" onsubmit="return confirm('Withdraw signature?');">
+            <form class="pure-form inline-form" action="/reports/<%= reportConfig.id %>/unsign" method="post" data-confirm="Withdraw signature?">
               <button class="pure-button" type="submit">Withdraw signature</button>
             </form>
           <% } else { %>
-            <form class="pure-form inline-form" action="/reports/<%= reportConfig.id %>/sign" method="post" onsubmit="return confirm('Sign this report?');">
+            <form class="pure-form inline-form" action="/reports/<%= reportConfig.id %>/sign" method="post" data-confirm="Sign this report?">
               <button class="pure-button pure-button-primary" type="submit">Sign report</button>
             </form>
           <% } %>
@@ -193,10 +193,10 @@
 </div>
 
 <% if (options.includeQualification && report.qualification) { %>
-  <script src="/vendor/echarts/dist/echarts.min.js"></script>
-  <script>
-    const rheoData = <%- JSON.stringify(report.qualification.charts.rheology) %>;
-    const windowData = <%- JSON.stringify(report.qualification.charts.processWindow) %>;
+  <script nonce="<%= cspNonce %>" src="/vendor/echarts/dist/echarts.min.js"></script>
+  <script nonce="<%= cspNonce %>">
+    const rheoData = <%- jsonForScript(report.qualification.charts.rheology) %>;
+    const windowData = <%- jsonForScript(report.qualification.charts.processWindow) %>;
     const rheoChart = echarts.init(document.getElementById('reportRheoChart'));
     const windowChart = echarts.init(document.getElementById('reportWindowChart'));
     const rheoSeries = rheoData

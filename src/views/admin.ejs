@@ -72,10 +72,6 @@
                       <span class="alert-dot" title="Reset requested"></span>
                     <% } %>
                   </button>
-                  <div class="reset-toast" hidden>
-                    <span class="reset-text"></span>
-                    <button type="button" class="reset-close">×</button>
-                  </div>
                 </form>
                 <% if (user.status === 'DISABLED') { %>
                   <form method="post" action="/admin/users/<%= user.id %>/unban" class="pure-form inline-form ajax-form">
@@ -95,7 +91,7 @@
                     <span class="material-symbols-rounded" aria-hidden="true">logout</span>
                   </button>
                 </form>
-                <form method="post" action="/admin/users/<%= user.id %>/delete" class="pure-form inline-form ajax-form" onsubmit="return confirm('Delete user?');">
+                <form method="post" action="/admin/users/<%= user.id %>/delete" class="pure-form inline-form ajax-form" data-confirm="Delete user?">
                   <button type="submit" class="icon-btn icon-only danger" title="Delete user">
                     <span class="material-symbols-rounded" aria-hidden="true">delete</span>
                   </button>
@@ -159,13 +155,13 @@
               </td>
               <td data-exp-status-cell>
                 <% if (exp.archived_at) { %>
-                  <form method="post" action="/admin/experiments/<%= exp.id %>/delete" class="pure-form inline-form ajax-form" data-exp-action="delete" onsubmit="return confirm('Delete this archived experiment? This cannot be undone.');">
+                  <form method="post" action="/admin/experiments/<%= exp.id %>/delete" class="pure-form inline-form ajax-form" data-exp-action="delete" data-confirm="Delete this archived experiment? This cannot be undone.">
                     <button type="submit" class="icon-btn icon-only danger" title="Delete permanently">
                       <span class="material-symbols-rounded" aria-hidden="true">delete</span>
                     </button>
                   </form>
                 <% } else { %>
-                  <form method="post" action="/experiments/<%= exp.id %>/archive" class="pure-form inline-form ajax-form" data-exp-action="archive" onsubmit="return confirm('Archive this experiment?');">
+                  <form method="post" action="/experiments/<%= exp.id %>/archive" class="pure-form inline-form ajax-form" data-exp-action="archive" data-confirm="Archive this experiment?">
                     <button type="submit" class="icon-btn icon-only warn" title="Archive">
                       <span class="material-symbols-rounded" aria-hidden="true">archive</span>
                     </button>
@@ -205,7 +201,7 @@
                   <input
                     type="text"
                     name="route_code"
-                    value="<%- formatInline(process.route_code || process.process_type_code || '') %>"
+                    value="<%= process.route_code || process.process_type_code || '' %>"
                     pattern="[a-z0-9][a-z0-9_-]*"
                     data-autosave="processSettingsForm-<%= process.id %>"
                     style="min-width: 140px;"
@@ -293,7 +289,7 @@
   </div>
 </dialog>
 
-<script>
+<script nonce="<%= cspNonce %>">
   const settingsDialog = document.getElementById('settingsDialog');
   const addUserDialog = document.getElementById('addUserDialog');
   document.getElementById('openSettingsDialog')?.addEventListener('click', () => settingsDialog?.showModal());
@@ -364,7 +360,14 @@
     if (!area) return;
     const toast = document.createElement('div');
     toast.className = `toast toast-${kind} toast-inline`;
-    toast.innerHTML = `<span>${message}</span><button type="button" class="toast-close" aria-label="Close">×</button>`;
+    const text = document.createElement('span');
+    text.textContent = message;
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'toast-close';
+    close.setAttribute('aria-label', 'Close');
+    close.textContent = '×';
+    toast.append(text, close);
     area.appendChild(toast);
     toast.querySelector('.toast-close')?.addEventListener('click', () => toast.remove());
     setTimeout(() => toast.remove(), 4000);
@@ -375,6 +378,7 @@
       if (form.dataset.ajaxBound === '1') return;
       form.dataset.ajaxBound = '1';
       form.addEventListener('submit', async (event) => {
+      if (event.defaultPrevented && form.dataset.confirm) return;
       event.preventDefault();
       const expAction = form.getAttribute('data-exp-action');
       const isExperiment = Boolean(expAction);
@@ -454,21 +458,9 @@
         return;
       }
       const data = await resp.json();
-      const toast = form.querySelector('.reset-toast');
-      const text = form.querySelector('.reset-text');
-      if (!toast || !text) return;
-      text.textContent = `Temp password: ${data.tempPassword}`;
-      toast.hidden = false;
-      showToast(data?.message || 'Temporary password generated', 'success');
+      showToast(data?.message || 'Temporary password email sent.', 'success');
     });
   });
-  document.querySelectorAll('.reset-close').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const toast = btn.closest('.reset-toast');
-      if (toast) toast.hidden = true;
-    });
-  });
-
   // Experiments tabs (active/archived).
   const expTabButtons = document.querySelectorAll('[data-exp-tab]');
   const buildArchiveForm = (experimentId) => {

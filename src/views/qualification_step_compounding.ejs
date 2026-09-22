@@ -194,9 +194,9 @@
                   <% } else if (field.field_type === 'tag') { %>
                     <% let selected = []; %>
                     <% if (value?.value_tags_json) { try { const parsed = JSON.parse(value.value_tags_json); if (Array.isArray(parsed)) selected = parsed.map(String); } catch {} } %>
-                    <input type="text" data-field-id="<%= field.id %>" data-field-type="tag" placeholder="a,b,c" value="<%- formatInline(selected.join(', ')) %>">
+                    <input type="text" data-field-id="<%= field.id %>" data-field-type="tag" placeholder="a,b,c" value="<%= selected.join(', ') %>">
                   <% } else { %>
-                    <input type="text" data-field-id="<%= field.id %>" data-field-type="text" value="<%- formatInline(value?.value_text || '') %>">
+                    <input type="text" data-field-id="<%= field.id %>" data-field-type="text" value="<%= value?.value_text || '' %>">
                   <% } %>
                 </td>
               <% }); %>
@@ -365,7 +365,7 @@
         <% fields.forEach((field) => { %>
           <tr data-field-row data-field-id="<%= field.id %>">
             <td><input data-field-code value="<%= field.code %>" <%= field.is_derived ? 'readonly' : '' %>></td>
-            <td><input data-field-label value="<%- formatInline(field.label) %>" <%= field.is_derived ? 'readonly' : '' %>></td>
+            <td><input data-field-label value="<%= field.label %>" <%= field.is_derived ? 'readonly' : '' %>></td>
             <td>
               <select data-field-type <%= field.is_derived ? 'disabled' : '' %>>
                 <option value="number" <%= field.field_type === 'number' ? 'selected' : '' %>>number</option>
@@ -421,20 +421,20 @@
   </div>
 </dialog>
 
-<script src="/vendor/echarts/dist/echarts.min.js"></script>
-<script>
+<script nonce="<%= cspNonce %>" src="/vendor/echarts/dist/echarts.min.js"></script>
+<script nonce="<%= cspNonce %>">
   (function () {
     const experimentId = <%= experimentId %>;
     const stepNumber = <%= step.step_number %>;
     const table = document.getElementById('compoundingRunsTable');
-    const fieldIdByCode = <%- JSON.stringify(Object.fromEntries(fields.map((field) => [field.code, field.id]))) %>;
+    const fieldIdByCode = <%- jsonForScript(Object.fromEntries(fields.map((field) => [field.code, field.id]))) %>;
     const qualSettingsDialog = document.getElementById('qualSettingsDialog');
     const qualSettingsForm = document.getElementById('qualSettingsForm');
     const step3SetupDialog = document.getElementById('step3SetupDialog');
     const step3SetupForm = document.getElementById('step3SetupForm');
     const qualStepAssigneeInput = document.getElementById('qualStepAssigneeInput');
     const qualStepResponsibleLabel = document.getElementById('qualStepResponsibleLabel');
-    const qualAssignableUserById = new Map(<%- JSON.stringify((assignableUsers || []).map((user) => [String(user.id), user.name || user.email])) %>);
+    const qualAssignableUserById = new Map(<%- jsonForScript((assignableUsers || []).map((user) => [String(user.id), user.name || user.email])) %>);
 
     const post = async (url, body) => {
       if (window.IMPlanner?.postForm) {

@@ -114,9 +114,9 @@
   </div>
 </div>
 
-<script src="/vendor/echarts/dist/echarts.min.js"></script>
+<script nonce="<%= cspNonce %>" src="/vendor/echarts/dist/echarts.min.js"></script>
 
-<script type="module">
+<script nonce="<%= cspNonce %>" type="module">
   import { Editor } from '@tiptap/core';
   import StarterKit from '@tiptap/starter-kit';
   import Underline from '@tiptap/extension-underline';
@@ -134,11 +134,11 @@
 
   // Seed data is produced on the server from the report content. This keeps the
   // editor structure stable and predictable.
-  const editorData = <%- JSON.stringify(editorData) %>;
+  const editorData = <%- jsonForScript(editorData) %>;
   const hasSavedDoc = <%= hasSavedDoc ? 'true' : 'false' %>;
-  const htmlSnapshot = <%- JSON.stringify(htmlSnapshot || '') %>;
-  const rheoData = <%- JSON.stringify(report.qualification?.charts.rheology || []) %>;
-  const windowData = <%- JSON.stringify(report.qualification?.charts.processWindow || {}) %>;
+  const htmlSnapshot = <%- jsonForScript(htmlSnapshot || '') %>;
+  const rheoData = <%- jsonForScript(report.qualification?.charts.rheology || []) %>;
+  const windowData = <%- jsonForScript(report.qualification?.charts.processWindow || {}) %>;
   const isSigned = <%= reportConfig?.signed_at ? 'true' : 'false' %>;
   const turndown = new TurndownService({
     headingStyle: 'atx',

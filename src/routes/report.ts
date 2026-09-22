@@ -7,7 +7,7 @@ import {
   buildOutputsCsv,
   buildReportEditorSeed
 } from "../services/report_service.js";
-import { htmlToMarkdown } from "../services/markdown_service.js";
+import { htmlToMarkdown, markdownToSafeHtml } from "../services/markdown_service.js";
 import {
   deleteReportConfig,
   getReportConfig,
@@ -35,13 +35,6 @@ const parseIdList = (raw: unknown) => {
     .map((item) => Number(item))
     .filter((val) => Number.isFinite(val));
 };
-
-const sanitizeHtmlForPrint = (html: string) =>
-  String(html || "")
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-    .replace(/\son\w+="[^"]*"/gi, "")
-    .replace(/\son\w+='[^']*'/gi, "")
-    .replace(/\s(href|src)\s*=\s*(['"])\s*javascript:[^'"]*\2/gi, "");
 
 export function createReportRouter(db: Db) {
   const router = express.Router();
@@ -181,7 +174,10 @@ export function createReportRouter(db: Db) {
     const config = getReportConfig(db, reportId);
     if (!config) return res.status(404).send("Report not found");
     const existingDoc = getReportDocument(db, reportId);
-    const htmlContent = sanitizeHtmlForPrint(existingDoc?.html_snapshot || "<p>Report content is empty.</p>");
+    // Never inject a saved editor HTML snapshot into the print document. The
+    // Markdown renderer only emits an explicit safe HTML subset.
+    const markdown = existingDoc?.content_md?.trim() || htmlToMarkdown(existingDoc?.html_snapshot ?? "");
+    const htmlContent = markdownToSafeHtml(markdown) || "<p>Report content is empty.</p>";
     res.render("report_editor_print", {
       reportConfig: config,
       htmlContent,

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import path from "path";
+import crypto from "crypto";
 import helmet from "helmet";
 import { openDb } from "./db.js";
 import { ensureSeedParams } from "./services/seed.js";
@@ -34,6 +35,7 @@ import { getExperiment } from "./repos/experiments_repo.js";
 
 export function createApp() {
   const app = express();
+  app.disable("x-powered-by");
   const db = openDb();
   ensureSeedParams(db);
   ensureAdminUser(db);
@@ -120,6 +122,14 @@ app.locals.avatarUrl = (userId: unknown) => {
   return Number.isFinite(id) && id > 0 ? `/avatars/${id}.svg` : "";
 };
 
+app.locals.jsonForScript = (value: unknown) =>
+  JSON.stringify(value ?? null)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+
 const viewsPath = path.resolve(process.cwd(), "src", "views");
 const publicPath = path.resolve(process.cwd(), "src", "public");
 
@@ -137,12 +147,24 @@ const trustProxy = configuredTrustProxy === "true"
       : false;
 app.set("trust proxy", trustProxy);
 
+app.use((_req, res, next) => {
+  res.locals.cspNonce = crypto.randomBytes(16).toString("base64");
+  next();
+});
+
 app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "https://api.dicebear.com", "https://cdn.jsdelivr.net", "https://esm.sh", "https://unpkg.com"],
+        scriptSrc: [
+          "'self'",
+          (_req, res) => `'nonce-${(res as express.Response).locals.cspNonce}'`,
+          "'strict-dynamic'",
+          "https://cdn.jsdelivr.net",
+          "https://esm.sh",
+          "https://unpkg.com"
+        ],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
         imgSrc: ["'self'", "data:", "https://api.dicebear.com", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
@@ -178,9 +200,11 @@ app.use((_req, res, next) => {
   next();
 });
 
-// Report editor payloads can include embedded images (base64), so default 100kb is too low.
-app.use(express.json({ limit: "15mb" }));
-app.use(express.urlencoded({ extended: true, limit: "15mb", parameterLimit: 100000 }));
+// Only the report editor needs a larger request body for locally embedded
+// charts. Keep every other endpoint on a much smaller, DoS-resistant limit.
+app.use("/reports/:reportId/editor", express.urlencoded({ extended: true, limit: "15mb", parameterLimit: 10 }));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb", parameterLimit: 1000 }));
 app.use(express.static(publicPath));
 app.use("/vendor", express.static(path.resolve(process.cwd(), "node_modules")));
 
@@ -197,6 +221,7 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use(requireCsrf);
 app.use("/auth", createAuthRouter(db));
 
 app.use((req, res, next) => {
@@ -214,7 +239,6 @@ app.use((req, res, next) => {
 });
 
 app.use(ensureAuthenticated);
-app.use(requireCsrf);
 app.use("/admin", ensureAdmin, createAdminRouter(db));
 app.use("/audit", createAuditRouter(db));
 app.use(createProfileRouter(db));

@@ -51,7 +51,7 @@ Open `http://localhost:3000`.
 │  ├─ public/                 # Frontend assets (app.css, app.js, illustrations)
 │  └─ tests/                  # Integration tests
 ├─ dist/                      # Compiled output (`npm run build`)
-├─ im_doe.sqlite              # Local SQLite database
+├─ data/im_doe.sqlite         # Runtime SQLite database (never commit it)
 ├─ plan.md                    # Product/feature roadmap
 └─ README.md
 ```
@@ -63,6 +63,8 @@ Create a `.env` file based on `.env.example` and set:
 - `ADMIN_TEMP_PASSWORD`
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
+- `DB_PATH=/app/data/im_doe.sqlite` (production container)
+- `TRUST_PROXY=1` (one trusted local reverse proxy)
 
 ## Authentication
 - The first admin account is created on startup using `ADMIN_EMAIL` + `ADMIN_TEMP_PASSWORD`.
@@ -288,7 +290,7 @@ Additive,3,,2,
 - Subsequent rows are components
 
 ## Notes
-- The SQLite database is `im_doe.sqlite` in this folder.
+- The SQLite database is runtime data and must be stored outside the image, for example `data/im_doe.sqlite`.
 - Custom input/output fields are stored in the flexible `param_definitions` and `run_values` tables.
 - SCREEN design is a sampled factorial (labeled in-app). For higher rigor, add a dedicated generator.
 

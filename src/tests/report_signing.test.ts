@@ -9,6 +9,7 @@ import { openDb } from "../db.js";
 import { createUser } from "../repos/users_repo.js";
 import { createExperimentWithDefaults } from "../services/experiments_service.js";
 import { createReportConfig } from "../repos/reports_repo.js";
+import { getCsrfToken } from "./csrf_test_helpers.js";
 
 let dbPath = "";
 
@@ -17,6 +18,7 @@ before(() => {
   dbPath = path.join(tempDir, "test.sqlite");
   process.env.DB_PATH = dbPath;
   process.env.SESSION_SECRET = "test-secret";
+  process.env.NODE_ENV = "test";
   process.env.ADMIN_EMAIL = "admin@example.com";
   process.env.ADMIN_TEMP_PASSWORD = "TempPass123!";
 });
@@ -68,14 +70,18 @@ test("only experiment owner can sign report", async () => {
   });
 
   const ownerAgent = request.agent(app);
+  const ownerLoginCsrf = await getCsrfToken(ownerAgent, "/auth/login");
   await ownerAgent
     .post("/auth/login")
     .type("form")
-    .send({ email: "owner@example.com", password: "OwnerPass123!" })
+    .send({ email: "owner@example.com", password: "OwnerPass123!", _csrf: ownerLoginCsrf })
     .expect(302);
 
+  const ownerSignCsrf = await getCsrfToken(ownerAgent, `/reports/${reportId}`);
   await ownerAgent
     .post(`/reports/${reportId}/sign`)
+    .type("form")
+    .send({ _csrf: ownerSignCsrf })
     .expect(302)
     .expect("Location", `/reports/${reportId}`);
 
@@ -88,14 +94,18 @@ test("only experiment owner can sign report", async () => {
   db.prepare("UPDATE report_configs SET signed_at = NULL, signed_by_user_id = NULL WHERE id = ?").run(reportId);
 
   const otherAgent = request.agent(app);
+  const otherLoginCsrf = await getCsrfToken(otherAgent, "/auth/login");
   await otherAgent
     .post("/auth/login")
     .type("form")
-    .send({ email: "other@example.com", password: "OtherPass123!" })
+    .send({ email: "other@example.com", password: "OtherPass123!", _csrf: otherLoginCsrf })
     .expect(302);
 
+  const otherSignCsrf = await getCsrfToken(otherAgent, "/");
   await otherAgent
     .post(`/reports/${reportId}/sign`)
+    .type("form")
+    .send({ _csrf: otherSignCsrf })
     .expect(403);
 
   const afterOtherAttempt = db

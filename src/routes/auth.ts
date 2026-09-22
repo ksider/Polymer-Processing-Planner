@@ -3,7 +3,8 @@ import rateLimit from "express-rate-limit";
 import passport from "passport";
 import bcrypt from "bcryptjs";
 import type { Db } from "../db.js";
-import { requestPasswordReset, updateUserPassword } from "../repos/users_repo.js";
+import { deleteOtherSessionsByUser, requestPasswordReset, updateUserPassword } from "../repos/users_repo.js";
+import { PASSWORD_CHANGE_LIMITER } from "../middleware/rate_limit.js";
 
 export function createAuthRouter(_db: Db) {
   const router = express.Router();
@@ -46,17 +47,17 @@ export function createAuthRouter(_db: Db) {
     return res.render("change_password", { title: "Change password", error: null });
   });
 
-  router.post("/change-password", (req, res) => {
+  router.post("/change-password", PASSWORD_CHANGE_LIMITER, (req, res) => {
     if (!req.isAuthenticated || !req.isAuthenticated() || !req.user) {
       return res.redirect("/auth/login");
     }
 
     const password = String(req.body?.password ?? "");
     const confirm = String(req.body?.confirm ?? "");
-    if (password.length < 8) {
+    if (password.length < 12) {
       return res.render("change_password", {
         title: "Change password",
-        error: "Password must be at least 8 characters."
+        error: "Password must be at least 12 characters."
       });
     }
     if (password !== confirm) {
@@ -68,6 +69,7 @@ export function createAuthRouter(_db: Db) {
 
     const hash = bcrypt.hashSync(password, 12);
     updateUserPassword(_db, req.user.id, hash);
+    if (req.sessionID) deleteOtherSessionsByUser(_db, req.user.id, req.sessionID);
     return res.redirect("/");
   });
 

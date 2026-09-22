@@ -2,6 +2,13 @@
   const root = (window.IMPlanner = window.IMPlanner || {});
 
   const normalizeText = (value) => String(value ?? "").trim();
+  const escapeHtml = (value) => String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+  root.escapeHtml = escapeHtml;
 
   // CSRF Protection
   const getCsrfToken = () => {
@@ -15,6 +22,60 @@
     const token = getCsrfToken();
     return token ? { 'X-CSRF-Token': token } : {};
   };
+
+  // Keep same-origin state-changing requests protected even when a page uses
+  // fetch directly instead of the IMPlanner request helpers. Never attach the
+  // token to cross-origin requests.
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = (input, init = {}) => {
+    const requestUrl = input instanceof Request ? input.url : String(input);
+    const method = String(init.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+    const isUnsafeMethod = !['GET', 'HEAD', 'OPTIONS'].includes(method);
+    let isSameOrigin = false;
+    try {
+      isSameOrigin = new URL(requestUrl, window.location.href).origin === window.location.origin;
+    } catch {
+      return nativeFetch(input, init);
+    }
+    if (!isUnsafeMethod || !isSameOrigin) return nativeFetch(input, init);
+
+    const headers = new Headers(input instanceof Request ? input.headers : undefined);
+    new Headers(init.headers || undefined).forEach((value, name) => headers.set(name, value));
+    const token = getCsrfToken();
+    if (token && !headers.has('X-CSRF-Token')) headers.set('X-CSRF-Token', token);
+    return nativeFetch(input, { ...init, headers });
+  };
+
+  const ensureFormCsrfToken = (form) => {
+    if (!(form instanceof HTMLFormElement)) return;
+    if (String(form.method || 'get').toLowerCase() !== 'post') return;
+    if (form.querySelector('input[name="_csrf"]')) return;
+    const token = getCsrfToken();
+    if (!token) return;
+    const field = document.createElement('input');
+    field.type = 'hidden';
+    field.name = '_csrf';
+    field.value = token;
+    field.dataset.csrfInjected = 'true';
+    form.appendChild(field);
+  };
+
+  // Forms may be rendered or created after the initial page load. A capture
+  // listener ensures the hidden token exists before the browser serializes a
+  // same-origin POST form, including forms that use FormData in submit handlers.
+  document.addEventListener('submit', (event) => ensureFormCsrfToken(event.target), true);
+  document.addEventListener('submit', (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement) || !form.dataset.confirm) return;
+    if (!window.confirm(form.dataset.confirm)) event.preventDefault();
+  }, true);
+  document.addEventListener('submit', (event) => {
+    const form = event.target;
+    if (form instanceof HTMLFormElement && form.dataset.clientOnlyForm === 'true') event.preventDefault();
+  }, true);
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('form').forEach(ensureFormCsrfToken);
+  });
 
   root.templateMap = {};
   root.setTemplateMap = (map) => {
@@ -615,9 +676,9 @@
       row.dataset.fieldId = data.id || `custom_${Date.now()}`;
       const codeToken = showMachineCode ? makeMachineToken(data.id) : "";
       row.innerHTML = `
-        <input type="text" data-custom-label value="${normalizeText(data.label)}" placeholder="Label">
-        <input type="text" data-custom-unit value="${normalizeText(data.unit)}" placeholder="Unit">
-        <input type="text" data-custom-value data-template-input value="${normalizeText(data.value)}" placeholder="Value">
+        <input type="text" data-custom-label value="${escapeHtml(normalizeText(data.label))}" placeholder="Label">
+        <input type="text" data-custom-unit value="${escapeHtml(normalizeText(data.unit))}" placeholder="Unit">
+        <input type="text" data-custom-value data-template-input value="${escapeHtml(normalizeText(data.value))}" placeholder="Value">
         <div class="template-preview" data-template-preview></div>
         ${
           showMachineCode
@@ -627,7 +688,7 @@
         <button class="icon-button danger" type="button" data-remove-field title="Remove">
           <span class="material-symbols-rounded" aria-hidden="true">delete</span>
         </button>
-        <input type="hidden" data-custom-code value="${normalizeText(data.code)}">
+        <input type="hidden" data-custom-code value="${escapeHtml(normalizeText(data.code))}">
       `;
       return row;
     };

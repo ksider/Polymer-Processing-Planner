@@ -102,3 +102,7 @@ export function deleteUser(db: Db, id: number) {
 export function deleteSessionsByUser(db: Db, id: number) {
   db.prepare("DELETE FROM sessions WHERE user_id = ?").run(id);
 }
+
+export function deleteOtherSessionsByUser(db: Db, id: number, currentSessionId: string) {
+  db.prepare("DELETE FROM sessions WHERE user_id = ? AND sid <> ?").run(id, currentSessionId);
+}

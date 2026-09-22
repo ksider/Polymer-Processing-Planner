@@ -54,7 +54,7 @@
       </div>
     </div>
 
-    <form class="pure-form" id="paramLibraryForm" autocomplete="off" onsubmit="return false;">
+    <form class="pure-form" id="paramLibraryForm" autocomplete="off" data-client-only-form="true">
       <table class="pure-table table-compact library-table">
         <thead>
           <tr>
@@ -82,7 +82,7 @@
               class="group-row group-<%= groupKey %>"
             >
               <td><input data-lib-code value="<%= param.code %>"></td>
-              <td><input data-lib-label value="<%- formatInline(param.label) %>"></td>
+              <td><input data-lib-label value="<%= param.label %>"></td>
               <td>
                 <span class="param-pill kind <%= param.field_kind === 'INPUT' ? 'kind-input' : 'kind-output' %>"><%= param.field_kind %></span>
                 <select data-lib-kind>
@@ -167,13 +167,20 @@
   </div>
 </dialog>
 
-<script>
+<script nonce="<%= cspNonce %>">
   const libraryBody = document.getElementById('paramLibraryBody');
   const openParamCreate = document.getElementById('openParamCreate');
   const createDialog = document.getElementById('paramCreateDialog');
   const createForm = document.getElementById('paramCreateForm');
   const searchInput = document.getElementById('paramSearch');
   let librarySaveTimer = null;
+
+  const escapeHtml = (value) => String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 
   const scheduleLibrarySave = (row) => {
     if (librarySaveTimer) clearTimeout(librarySaveTimer);
@@ -220,37 +227,39 @@
 
   const appendParamRow = (data) => {
     const row = document.createElement('tr');
+    const fieldKind = data.field_kind === 'OUTPUT' ? 'OUTPUT' : 'INPUT';
+    const fieldType = ['number', 'text', 'tag'].includes(data.field_type) ? data.field_type : 'text';
     const groupKey = (data.group_label || 'General').toLowerCase().replace(/[^a-z0-9]+/g, '-');
     row.dataset.paramId = data.id;
     row.dataset.paramLabel = data.label;
     row.dataset.paramCode = data.code;
     row.dataset.paramUnit = data.unit || '';
     row.dataset.paramGroup = groupKey;
-    row.dataset.paramKind = data.field_kind;
-    row.dataset.paramType = data.field_type;
+    row.dataset.paramKind = fieldKind;
+    row.dataset.paramType = fieldType;
     row.setAttribute('data-param-row', '');
     row.className = `group-row group-${groupKey}`;
     row.innerHTML = `
-      <td><input data-lib-code value="${data.code}"></td>
-      <td><input data-lib-label value="${data.label}"></td>
+      <td><input data-lib-code value="${escapeHtml(data.code)}"></td>
+      <td><input data-lib-label value="${escapeHtml(data.label)}"></td>
       <td>
-        <span class="param-pill kind ${data.field_kind === 'INPUT' ? 'kind-input' : 'kind-output'}">${data.field_kind}</span>
+        <span class="param-pill kind ${fieldKind === 'INPUT' ? 'kind-input' : 'kind-output'}">${fieldKind}</span>
         <select data-lib-kind>
-          <option value="INPUT" ${data.field_kind === 'INPUT' ? 'selected' : ''}>INPUT</option>
-          <option value="OUTPUT" ${data.field_kind === 'OUTPUT' ? 'selected' : ''}>OUTPUT</option>
+          <option value="INPUT" ${fieldKind === 'INPUT' ? 'selected' : ''}>INPUT</option>
+          <option value="OUTPUT" ${fieldKind === 'OUTPUT' ? 'selected' : ''}>OUTPUT</option>
         </select>
       </td>
       <td>
-        <span class="param-pill type type-${data.field_type}">${data.field_type}</span>
+        <span class="param-pill type type-${fieldType}">${fieldType}</span>
         <select data-lib-type>
-          <option value="number" ${data.field_type === 'number' ? 'selected' : ''}>number</option>
-          <option value="text" ${data.field_type === 'text' ? 'selected' : ''}>text</option>
-          <option value="tag" ${data.field_type === 'tag' ? 'selected' : ''}>tag</option>
+          <option value="number" ${fieldType === 'number' ? 'selected' : ''}>number</option>
+          <option value="text" ${fieldType === 'text' ? 'selected' : ''}>text</option>
+          <option value="tag" ${fieldType === 'tag' ? 'selected' : ''}>tag</option>
         </select>
       </td>
-      <td><input data-lib-unit value="${data.unit || ''}"></td>
-      <td><input data-lib-group value="${data.group_label || ''}"></td>
-      <td><input data-lib-allowed value="${data.allowed_values || ''}"></td>
+      <td><input data-lib-unit value="${escapeHtml(data.unit || '')}"></td>
+      <td><input data-lib-group value="${escapeHtml(data.group_label || '')}"></td>
+      <td><input data-lib-allowed value="${escapeHtml(data.allowed_values || '')}"></td>
       <td>
         <button class="icon-button danger" type="button" data-delete-param title="Delete">
           <span class="material-symbols-rounded" aria-hidden="true">delete</span>

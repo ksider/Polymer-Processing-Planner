@@ -209,13 +209,16 @@ function parseSettings(json: string | null): MachineSettings {
 
 export function createMachinesRouter(db: Db) {
   const router = express.Router();
+  const canManageMachines = (req: express.Request) =>
+    ["admin", "manager", "engineer"].includes(req.user?.role ?? "");
 
-  router.get("/machines", (_req, res) => {
+  router.get("/machines", (req, res) => {
     const machines = listMachinesForLibrary(db);
-    res.render("machine_library", { machines });
+    res.render("machine_library", { machines, canManageMachines: canManageMachines(req) });
   });
 
-  router.get("/machines/new", (_req, res) => {
+  router.get("/machines/new", (req, res) => {
+    if (!canManageMachines(req)) return res.status(403).send("Forbidden");
     res.render("machine_edit", {
       machine: null,
       settings: {},
@@ -225,6 +228,7 @@ export function createMachinesRouter(db: Db) {
   });
 
   router.get("/machines/:id", (req, res) => {
+    if (!canManageMachines(req)) return res.status(403).send("Forbidden");
     const id = Number(req.params.id);
     const machine = getMachine(db, id);
     if (!machine) return res.status(404).send("Machine not found");
@@ -264,6 +268,7 @@ export function createMachinesRouter(db: Db) {
   });
 
   router.post("/machines", (req, res) => {
+    if (!canManageMachines(req)) return res.status(403).send("Forbidden");
     const name = String(req.body.name || "").trim();
     if (!name) return res.status(400).send("Name required");
     const settings = buildSettings(req.body);
@@ -283,6 +288,7 @@ export function createMachinesRouter(db: Db) {
   });
 
   router.post("/machines/:id", (req, res) => {
+    if (!canManageMachines(req)) return res.status(403).send("Forbidden");
     const id = Number(req.params.id);
     const machine = getMachine(db, id);
     if (!machine) return res.status(404).send("Machine not found");
@@ -305,6 +311,7 @@ export function createMachinesRouter(db: Db) {
   });
 
   router.post("/machines/:id/delete", (req, res) => {
+    if (!canManageMachines(req)) return res.status(403).send("Forbidden");
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).send("Invalid id");
     deleteMachine(db, id);

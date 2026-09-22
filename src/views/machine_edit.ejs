@@ -165,11 +165,11 @@
 </div>
 <%- include('partials/foot') %>
 
-<script>
+<script nonce="<%= cspNonce %>">
   const listEl = document.getElementById('machineCustomFields');
   const addBtn = document.getElementById('addMachineCustomField');
   const hiddenInput = document.getElementById('machineCustomFieldsJson');
-  const initialFields = <%- JSON.stringify(machineParams || []) %>;
+  const initialFields = <%- jsonForScript(machineParams || []) %>;
 
   const updateHidden = () => {
     if (!hiddenInput || !listEl) return;

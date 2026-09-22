@@ -6,18 +6,15 @@ export function createHttpsRedirect(db: Db) {
   return (req: Request, res: Response, next: NextFunction) => {
     const settings = getAdminSettings(db);
     
-    // Always redirect to HTTPS in production
-    const isProduction = process.env.NODE_ENV === "production";
-    const requireHttps = isProduction || settings.require_https === 1;
+    // Only explicitly local development and test environments may serve HTTP.
+    // Treat a missing NODE_ENV as a secure deployment configuration.
+    const isLocalRuntime = ["development", "test"].includes(process.env.NODE_ENV ?? "");
+    const requireHttps = !isLocalRuntime || settings.require_https === 1;
     
     if (!requireHttps) return next();
     
     // Check if already HTTPS
     if (req.secure) return next();
-    
-    // Check for forwarded protocol (behind proxy)
-    const proto = req.headers["x-forwarded-proto"];
-    if (proto && String(proto).toLowerCase() === "https") return next();
     
     // Validate host header to prevent injection
     const host = req.headers.host;

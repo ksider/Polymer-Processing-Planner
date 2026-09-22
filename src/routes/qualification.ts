@@ -35,7 +35,7 @@ import {
 } from "../repos/params_repo.js";
 import { getMachine } from "../repos/machines_repo.js";
 import { listMachineParams } from "../repos/machine_params_repo.js";
-import { ensureExperimentAccess } from "../middleware/experiment_access.js";
+import { canAccessExperiment, ensureExperimentAccess } from "../middleware/experiment_access.js";
 import { listUsers, findUserById } from "../repos/users_repo.js";
 import { getEntityAssignment } from "../repos/entity_assignments_repo.js";
 import { canAssignEntityResponsibility } from "../services/entity_assignment_service.js";
@@ -46,6 +46,20 @@ function hasRole(req: express.Request, roles: string[]) {
 
 export function createQualificationRouter(db: Db) {
   const router = express.Router();
+
+  // Legacy qualification-run URLs are not nested under /experiments/:id, so
+  // apply the same experiment-level authorization explicitly.
+  const ensureQualRunAccess = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const runId = Number(req.params.id);
+    const run = getQualRun(db, runId);
+    if (!run) return res.status(404).send("Run not found");
+    const experiment = getExperiment(db, run.experiment_id);
+    if (!experiment) return res.status(404).send("Experiment not found");
+    if (!canAccessExperiment(db, req.user, run.experiment_id, experiment)) {
+      return res.status(403).send("Forbidden");
+    }
+    return next();
+  };
 
   router.use("/experiments/:id", ensureExperimentAccess(db));
 
@@ -253,7 +267,7 @@ export function createQualificationRouter(db: Db) {
     });
   });
 
-  router.get("/qual-runs/:id", (req, res) => {
+  router.get("/qual-runs/:id", ensureQualRunAccess, (req, res) => {
     const runId = Number(req.params.id);
     const run = getQualRun(db, runId);
     if (!run) return res.status(404).send("Run not found");
@@ -270,7 +284,7 @@ export function createQualificationRouter(db: Db) {
     });
   });
 
-  router.post("/qual-runs/:id/value", (req, res) => {
+  router.post("/qual-runs/:id/value", ensureQualRunAccess, (req, res) => {
     if (!hasRole(req, ["admin", "manager", "engineer", "operator"])) {
       return res.status(403).json({ error: "Forbidden" });
     }
@@ -290,7 +304,7 @@ export function createQualificationRouter(db: Db) {
     return res.json({ ok: true });
   });
 
-  router.post("/qual-runs/:id/flags", (req, res) => {
+  router.post("/qual-runs/:id/flags", ensureQualRunAccess, (req, res) => {
     if (!hasRole(req, ["admin", "manager", "engineer", "operator"])) {
       return res.status(403).json({ error: "Forbidden" });
     }
@@ -309,7 +323,7 @@ export function createQualificationRouter(db: Db) {
     return res.json({ ok: true });
   });
 
-  router.post("/qual-runs/:id/due-at", (req, res) => {
+  router.post("/qual-runs/:id/due-at", ensureQualRunAccess, (req, res) => {
     if (!hasRole(req, ["admin", "manager", "engineer", "operator"])) {
       return res.status(403).json({ error: "Forbidden" });
     }

@@ -4,7 +4,9 @@
   <div class="card">
     <div class="card-header">
       <h1 class="card-title">Machine Library</h1>
-      <a class="pure-button pure-button-primary" href="/machines/new">Add Machine</a>
+      <% if (canManageMachines) { %>
+        <a class="pure-button pure-button-primary" href="/machines/new">Add Machine</a>
+      <% } %>
     </div>
     <% if (!machines || machines.length === 0) { %>
       <p class="small-note">No machines yet.</p>
@@ -46,9 +48,11 @@
               <td><%= machine.injection_pressure_bar ? `${machine.injection_pressure_bar} bar` : '-' %></td>
               <td><%= machine.intensification_ratio ? `${machine.intensification_ratio}` : '-' %></td>
               <td>
-                <form action="/machines/<%= machine.id %>/delete" method="post">
-                  <button class="pure-button button-danger" type="submit">Delete</button>
-                </form>
+                <% if (canManageMachines) { %>
+                  <form action="/machines/<%= machine.id %>/delete" method="post">
+                    <button class="pure-button button-danger" type="submit">Delete</button>
+                  </form>
+                <% } %>
               </td>
             </tr>
           <% }); %>

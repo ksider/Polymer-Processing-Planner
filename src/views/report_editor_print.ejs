@@ -130,12 +130,12 @@
 <body>
   <div class="screen-note">Use "Save as PDF" in print dialog for selectable text.</div>
   <main class="page">
-    <h1 class="doc-title"><%- reportConfig?.name || 'Report' %></h1>
+    <h1 class="doc-title"><%= reportConfig?.name || 'Report' %></h1>
     <div class="doc-meta">Exported: <%= exportedAt %></div>
     <article class="doc-content"><%- htmlContent %></article>
   </main>
 
-  <script>
+  <script nonce="<%= cspNonce %>">
     window.addEventListener('load', () => {
       setTimeout(() => window.print(), 120);
     });

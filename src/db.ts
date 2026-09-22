@@ -4,7 +4,11 @@ import path from "path";
 export type Db = any;
 
 export function openDb(): Db {
-  const dbPath = path.resolve(process.cwd(), process.env.DB_PATH || "im_doe.sqlite");
+  const configuredDbPath = process.env.DB_PATH;
+  if (process.env.NODE_ENV === "production" && !configuredDbPath) {
+    throw new Error("DB_PATH is required in production.");
+  }
+  const dbPath = path.resolve(process.cwd(), configuredDbPath || "im_doe.sqlite");
   const db = new Database(dbPath);
   db.pragma("foreign_keys = ON");
   // Better read latency for local web app workloads.

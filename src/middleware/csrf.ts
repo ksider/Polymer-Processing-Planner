@@ -81,12 +81,15 @@ export function validateCsrfToken(req: Request): boolean {
   if (!requestToken) {
     return false;
   }
-  
+
+  const sessionBuffer = Buffer.from(sessionToken, "utf8");
+  const requestBuffer = Buffer.from(requestToken, "utf8");
+  if (sessionBuffer.length !== requestBuffer.length) {
+    return false;
+  }
+
   // Timing-safe comparison
-  return crypto.timingSafeEqual(
-    Buffer.from(sessionToken, "utf8"),
-    Buffer.from(requestToken, "utf8")
-  );
+  return crypto.timingSafeEqual(sessionBuffer, requestBuffer);
 }
 
 /**

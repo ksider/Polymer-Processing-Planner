@@ -190,6 +190,12 @@ export function listTaskAssignments(db: Db, taskId: number): TaskAssignmentRow[]
     .all(taskId) as TaskAssignmentRow[];
 }
 
+export function getTaskAssignment(db: Db, assignmentId: number): TaskAssignmentRow | undefined {
+  return db
+    .prepare("SELECT * FROM task_assignments WHERE id = ?")
+    .get(assignmentId) as TaskAssignmentRow | undefined;
+}
+
 export function createTaskAssignment(
   db: Db,
   data: { task_id: number; user_id: number; role?: string }

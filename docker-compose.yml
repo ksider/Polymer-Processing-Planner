@@ -5,7 +5,7 @@ services:
     build: .
     container_name: polymer-planner
     ports:
-      - "3000:3000" # Если порт занят, измени левое значение, например "8080:3000"
+      - "127.0.0.1:3000:3000" # Публикуйте сайт только через HTTPS reverse proxy.
     volumes:
       # ВАЖНО: Укажи здесь пути к папкам, где лежат БД и загрузки.
       # Формат: ./локальная_папка:/app/путь_в_контейнере
@@ -13,4 +13,8 @@ services:
       - ./uploads:/app/uploads # Папка для загруженных через multer файлов
     env_file:
       - .env # Подключение файла переменных окружения (если есть)
+    environment:
+      NODE_ENV: production
+      DB_PATH: /app/data/im_doe.sqlite
+      TRUST_PROXY: "1"
     restart: unless-stopped

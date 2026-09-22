@@ -75,7 +75,7 @@
             <td><%= new Date(exp.created_at).toLocaleDateString() %></td>
             <td>
               <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager')) { %>
-                <form class="pure-form" action="/experiments/<%= exp.id %>/archive" method="post" onsubmit="return confirm('Archive this experiment?');">
+                <form class="pure-form" action="/experiments/<%= exp.id %>/archive" method="post" data-confirm="Archive this experiment?">
                   <button class="pure-button" type="submit">Archive</button>
                 </form>
               <% } %>
@@ -87,7 +87,7 @@
   </div>
 
 </div>
-<script>
+<script nonce="<%= cspNonce %>">
   (() => {
     const processCards = Array.from(document.querySelectorAll('.process-card'));
     processCards.forEach((card) => {

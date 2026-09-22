@@ -224,7 +224,7 @@
                     <option
                       value="<%= param.id %>"
                       data-code="<%= param.code %>"
-                      data-label="<%- formatInline(param.label) %>"
+                      data-label="<%= param.label %>"
                       data-unit="<%= param.unit || '' %>"
                       data-group="<%= param.group_label || '' %>"
                       data-kind="<%= param.field_kind %>"
@@ -287,7 +287,7 @@
       </div>
     </dialog>
 
-    <script>
+    <script nonce="<%= cspNonce %>">
       const factorDialog = document.getElementById('factorDialog');
       const openFactorDialog = document.getElementById('openFactorDialog');
       if (openFactorDialog && factorDialog) {
@@ -425,6 +425,13 @@
         return str;
       }
 
+      const escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
       function updateFactorSummary() {
         const tbody = document.querySelector('[data-factor-summary-body]');
         if (!tbody) return;
@@ -459,15 +466,15 @@
           }
           const label = row.dataset.paramLabel || '';
           const unit = row.dataset.paramUnit || '';
-          const groupKey = row.dataset.groupKey || 'general';
+          const groupKey = /^[a-z0-9_-]+$/i.test(row.dataset.groupKey || '') ? row.dataset.groupKey : 'general';
 
           const tr = document.createElement('tr');
           tr.className = `row-active group-row group-${groupKey}`;
           tr.dataset.groupKey = groupKey;
           tr.innerHTML = `
-            <td>${label}</td>
-            <td><span class="badge">${mode}</span></td>
-            <td>${valuesText}${unit ? ` ${unit}` : ''}</td>
+            <td>${escapeHtml(label)}</td>
+            <td><span class="badge">${escapeHtml(mode)}</span></td>
+            <td>${escapeHtml(valuesText)}${unit ? ` ${escapeHtml(unit)}` : ''}</td>
           `;
           tbody.appendChild(tr);
         });
@@ -576,7 +583,7 @@
         if (formulaEl) formulaEl.textContent = formula;
         if (warningEl) {
           warningEl.style.display = warning ? '' : 'none';
-          warningEl.innerHTML = warning ? `<strong>${warning}</strong>` : '';
+          warningEl.textContent = warning;
         }
       }
 
@@ -673,7 +680,7 @@
         </tbody>
       </table>
     </div>
-    <script>
+    <script nonce="<%= cspNonce %>">
       (() => {
         const dueInputs = Array.from(document.querySelectorAll('input[data-run-due]'));
         dueInputs.forEach((input) => {
@@ -838,17 +845,17 @@
       </table>
     </div>
 
-    <script src="/vendor/echarts/dist/echarts.min.js"></script>
-    <script>
-      const summary = <%- JSON.stringify(analysis?.summary || []) %>;
-      const heatmap = <%- JSON.stringify(analysis?.heatmap || []) %>;
-      const scatter = <%- JSON.stringify(analysis?.scatter || []) %>;
-      const scatter3dData = <%- JSON.stringify(analysis?.scatter3d || []) %>;
-      const inputMeta = <%- JSON.stringify(activeInputParams.map((p) => ({ id: p.id, label: p.label, unit: p.unit || '' }))) %>;
-      const outputMeta = <%- JSON.stringify(outputNumericParams.map((p) => ({ id: p.id, label: p.label, unit: p.unit || '' }))) %>;
-      const selectedOutputId = <%- JSON.stringify(analysis?.outputParamId || null) %>;
-      const selectedXId = <%- JSON.stringify(analysis?.xParamId || null) %>;
-      const selectedYId = <%- JSON.stringify(analysis?.yParamId || null) %>;
+    <script nonce="<%= cspNonce %>" src="/vendor/echarts/dist/echarts.min.js"></script>
+    <script nonce="<%= cspNonce %>">
+      const summary = <%- jsonForScript(analysis?.summary || []) %>;
+      const heatmap = <%- jsonForScript(analysis?.heatmap || []) %>;
+      const scatter = <%- jsonForScript(analysis?.scatter || []) %>;
+      const scatter3dData = <%- jsonForScript(analysis?.scatter3d || []) %>;
+      const inputMeta = <%- jsonForScript(activeInputParams.map((p) => ({ id: p.id, label: p.label, unit: p.unit || '' }))) %>;
+      const outputMeta = <%- jsonForScript(outputNumericParams.map((p) => ({ id: p.id, label: p.label, unit: p.unit || '' }))) %>;
+      const selectedOutputId = <%- jsonForScript(analysis?.outputParamId || null) %>;
+      const selectedXId = <%- jsonForScript(analysis?.xParamId || null) %>;
+      const selectedYId = <%- jsonForScript(analysis?.yParamId || null) %>;
 
       const lineChart = echarts.init(document.getElementById('lineChart'));
       const finite = (value) => Number.isFinite(value);
@@ -1188,7 +1195,7 @@
   </div>
 </dialog>
 
-<script>
+<script nonce="<%= cspNonce %>">
   const measuredDialog = document.getElementById('measuredFieldsDialog');
   const openMeasuredDialog = document.getElementById('openMeasuredFieldsDialog');
   if (openMeasuredDialog && measuredDialog) {
@@ -1240,7 +1247,7 @@
   const tagValueChips = document.getElementById('tagValueChips');
   const tagValueInputs = document.getElementById('tagValueInputs');
   const noNumericNote = document.getElementById('noActiveNumericOutputs');
-  const initialTagValues = <%- JSON.stringify(analysis?.tagValues || []) %>;
+  const initialTagValues = <%- jsonForScript(analysis?.tagValues || []) %>;
 
   function setOptions(select, options, includeNone) {
     if (!select) return;
@@ -1302,8 +1309,14 @@
       const chip = document.createElement('span');
       chip.className = 'tag-chip tag-chip-remove';
       const label = tag === '__none__' ? 'No tags' : tag;
-      chip.innerHTML = `<span>${label}</span><button type="button" aria-label="Remove ${label}">×</button>`;
-      chip.querySelector('button').addEventListener('click', () => {
+      const text = document.createElement('span');
+      text.textContent = label;
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.setAttribute('aria-label', `Remove ${label}`);
+      remove.textContent = '×';
+      chip.append(text, remove);
+      remove.addEventListener('click', () => {
         selected.delete(tag);
         renderTagChips(selected);
       });
@@ -1390,19 +1403,22 @@
 
     const buildCustomRow = (field) => {
       const row = document.createElement('tr');
+      const fieldId = Number(field.id);
+      if (!Number.isFinite(fieldId)) return row;
       const allowedValues = Array.isArray(field.allowed_values) ? field.allowed_values : [];
       const allowedValueText = allowedValues.join(', ');
+      const fieldType = ['number', 'text', 'tag', 'boolean'].includes(field.field_type) ? field.field_type : 'text';
       row.innerHTML = `
         <td>
-          <input type="hidden" name="custom[${field.id}][is_active]" value="0">
-          <input type="checkbox" name="custom[${field.id}][is_active]" value="1" ${field.is_active ? 'checked' : ''} data-custom-active data-field-id="${field.id}">
+          <input type="hidden" name="custom[${fieldId}][is_active]" value="0">
+          <input type="checkbox" name="custom[${fieldId}][is_active]" value="1" ${field.is_active ? 'checked' : ''} data-custom-active data-field-id="${fieldId}">
         </td>
-        <td><input name="custom[${field.id}][label]" value="${field.label || ''}"></td>
-        <td><span class="badge">${field.field_type}</span></td>
-        <td><input name="custom[${field.id}][unit]" value="${field.unit || ''}"></td>
-        <td><input name="custom[${field.id}][group_label]" value="${field.group_label || ''}"></td>
+        <td><input name="custom[${fieldId}][label]" value="${escapeHtml(field.label || '')}"></td>
+        <td><span class="badge">${fieldType}</span></td>
+        <td><input name="custom[${fieldId}][unit]" value="${escapeHtml(field.unit || '')}"></td>
+        <td><input name="custom[${fieldId}][group_label]" value="${escapeHtml(field.group_label || '')}"></td>
         <td>
-          <input name="custom[${field.id}][allowed_values]" value="${allowedValueText}" ${field.field_type === 'tag' ? '' : 'disabled'}>
+          <input name="custom[${fieldId}][allowed_values]" value="${escapeHtml(allowedValueText)}" ${fieldType === 'tag' ? '' : 'disabled'}>
         </td>
       `;
       return row;
@@ -1495,7 +1511,7 @@
   <form class="pure-form" id="doeSettingsForm" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/name" method="post">
     <div class="modal-body">
       <label for="doeNameInput">DOE name</label>
-      <input id="doeNameInput" name="name" type="text" value="<%- formatInline(doe.name) %>" required>
+      <input id="doeNameInput" name="name" type="text" value="<%= doe.name %>" required>
       <% if (canAssignEntities) { %>
         <label for="doeAssigneeInput">Responsible</label>
         <select id="doeAssigneeInput" name="assignee_user_id">
@@ -1516,7 +1532,7 @@
   </form>
 </dialog>
 
-<script>
+<script nonce="<%= cspNonce %>">
   const doeNameDialog = document.getElementById('doeNameDialog');
   const doeSettingsForm = document.getElementById('doeSettingsForm');
   const doeNameInput = document.getElementById('doeNameInput');

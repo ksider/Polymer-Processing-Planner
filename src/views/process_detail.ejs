@@ -90,8 +90,8 @@
   </div>
 </div>
 <%- include('partials/foot') %>
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
-<script>
+<script nonce="<%= cspNonce %>" src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script nonce="<%= cspNonce %>">
   (() => {
     const host = document.getElementById('processCalendar');
     if (!host || !window.FullCalendar) return;

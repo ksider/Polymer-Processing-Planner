@@ -76,16 +76,28 @@ function sanitizeUrl(raw: string): string {
   return "#";
 }
 
+function sanitizeImageUrl(raw: string): string {
+  const value = String(raw || "").trim();
+  if (!value) return "";
+  if (value.startsWith("/")) return value;
+  if (/^data:image\/(png|jpeg|gif|webp);base64,[a-z0-9+/=]+$/i.test(value)) return value;
+  return "";
+}
+
 function renderInline(text: string): string {
   let out = escapeHtml(text);
   out = out.replace(/&lt;(\/?)(sub|sup|b|strong|i|em|u|s|strike|small|mark|code)&gt;/gi, "<$1$2>");
+  out = out.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_m, alt: string, src: string) => {
+    const safe = sanitizeImageUrl(src);
+    return safe ? `<img src="${escapeHtml(safe)}" alt="${alt}">` : "";
+  });
   out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
   out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   out = out.replace(/\*([^*]+)\*/g, "<em>$1</em>");
   out = out.replace(/~~([^~]+)~~/g, "<s>$1</s>");
   out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label: string, href: string) => {
     const safe = escapeHtml(sanitizeUrl(href));
-    return `<a href="${safe}" target="_blank" rel="noopener">${label}</a>`;
+    return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${label}</a>`;
   });
   return out;
 }

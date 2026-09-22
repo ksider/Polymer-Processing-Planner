@@ -424,7 +424,7 @@
                                 class="messages-reaction-summary-pill <%= reaction.reacted_by_current_user ? 'is-active' : '' %>"
                                 type="submit"
                                 title="<%= reaction.users.join(', ') %>"
-                                data-reaction-users='<%- JSON.stringify(reaction.users || []) %>'
+                                data-reaction-users='<%= JSON.stringify(reaction.users || []) %>'
                               >
                                 <span class="messages-reaction-summary-emoji"><%= reaction.emoji %></span>
                                 <span class="messages-reaction-summary-count"><%= reaction.count %></span>
@@ -641,8 +641,8 @@
               data-attach-select
               data-entity-type="<%= entry.experiment.entity_type %>"
               data-entity-id="<%= entry.experiment.entity_id %>"
-              data-entity-title="<%- entry.experiment.title %>"
-              data-entity-subtitle="<%- entry.experiment.badge || entry.experiment.entity_type %><%= entry.experiment.subtitle ? ` · ${entry.experiment.subtitle}` : '' %>"
+              data-entity-title="<%= entry.experiment.title %>"
+              data-entity-subtitle="<%= [entry.experiment.badge || entry.experiment.entity_type, entry.experiment.subtitle].filter(Boolean).join(' · ') %>"
             >
               <span class="material-symbols-rounded">add_link</span>
               <span>Add</span>
@@ -663,7 +663,7 @@
                         <% } %>
                       </div>
                     </div>
-                    <button class="icon-btn" type="button" data-attach-select data-entity-type="<%= item.entity_type %>" data-entity-id="<%= item.entity_id %>" data-entity-title="<%- item.title %>" data-entity-subtitle="<%- item.badge || item.entity_type %><%= item.subtitle ? ` · ${item.subtitle}` : '' %>">
+                    <button class="icon-btn" type="button" data-attach-select data-entity-type="<%= item.entity_type %>" data-entity-id="<%= item.entity_id %>" data-entity-title="<%= item.title %>" data-entity-subtitle="<%= [item.badge || item.entity_type, item.subtitle].filter(Boolean).join(' · ') %>">
                       <span class="material-symbols-rounded">add_link</span>
                       <span>Add</span>
                     </button>
@@ -685,7 +685,7 @@
                         <% } %>
                       </div>
                     </div>
-                    <button class="icon-btn" type="button" data-attach-select data-entity-type="<%= item.entity_type %>" data-entity-id="<%= item.entity_id %>" data-entity-title="<%- item.title %>" data-entity-subtitle="<%- item.badge || item.entity_type %><%= item.subtitle ? ` · ${item.subtitle}` : '' %>">
+                    <button class="icon-btn" type="button" data-attach-select data-entity-type="<%= item.entity_type %>" data-entity-id="<%= item.entity_id %>" data-entity-title="<%= item.title %>" data-entity-subtitle="<%= [item.badge || item.entity_type, item.subtitle].filter(Boolean).join(' · ') %>">
                       <span class="material-symbols-rounded">add_link</span>
                       <span>Add</span>
                     </button>
@@ -707,7 +707,7 @@
                         <% } %>
                       </div>
                     </div>
-                    <button class="icon-btn" type="button" data-attach-select data-entity-type="<%= item.entity_type %>" data-entity-id="<%= item.entity_id %>" data-entity-title="<%- item.title %>" data-entity-subtitle="<%- item.badge || item.entity_type %><%= item.subtitle ? ` · ${item.subtitle}` : '' %>">
+                    <button class="icon-btn" type="button" data-attach-select data-entity-type="<%= item.entity_type %>" data-entity-id="<%= item.entity_id %>" data-entity-title="<%= item.title %>" data-entity-subtitle="<%= [item.badge || item.entity_type, item.subtitle].filter(Boolean).join(' · ') %>">
                       <span class="material-symbols-rounded">add_link</span>
                       <span>Add</span>
                     </button>
@@ -722,15 +722,15 @@
   </div>
 </dialog>
 
-<script>
+<script nonce="<%= cspNonce %>">
   (() => {
     let railTooltipEl = null;
     const users = [
       <% (users || []).forEach((user, index) => { %>
         {
           id: <%= user.id %>,
-          name: <%- JSON.stringify(user.name || '') %>,
-          email: <%- JSON.stringify(user.email || '') %>
+          name: <%- jsonForScript(user.name || '') %>,
+          email: <%- jsonForScript(user.email || '') %>
         }<%= index < (users || []).length - 1 ? ',' : '' %>
       <% }) %>
     ];
@@ -761,7 +761,11 @@
           const btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'messages-user-suggest-item';
-          btn.innerHTML = `<strong>${user.name || user.email}</strong><span>${user.email}</span>`;
+          const name = document.createElement('strong');
+          name.textContent = String(user.name || user.email || 'Unknown user');
+          const email = document.createElement('span');
+          email.textContent = String(user.email || '');
+          btn.append(name, email);
           btn.addEventListener('click', () => onPick(user));
           listEl.appendChild(btn);
         });
@@ -935,7 +939,9 @@
       selected.forEach((user) => {
         const chip = document.createElement('span');
         chip.className = 'messages-recipient-chip';
-        chip.innerHTML = `<span>${user.name || user.email}</span>`;
+        const label = document.createElement('span');
+        label.textContent = user.name || user.email;
+        chip.appendChild(label);
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'messages-recipient-chip-remove';

@@ -1,6 +1,6 @@
 import express from "express";
 import type { Db } from "../db.js";
-import { ensureExperimentAccess } from "../middleware/experiment_access.js";
+import { canAccessExperiment, ensureExperimentAccess } from "../middleware/experiment_access.js";
 import { requireTaskManager, requireTaskOperator, requireTaskRead } from "../middleware/task_permissions.js";
 import {
   createTask,
@@ -13,6 +13,7 @@ import {
   type TaskEntityRow,
   type TaskStatus,
   getTask,
+  getTaskAssignment,
   listTaskAssignments,
   listTaskEntities,
   listTasksByExperiment,
@@ -22,7 +23,7 @@ import {
 import { computeTaskProgress, suggestTaskStatusWithRules, getDefaultEntityWeight } from "../services/tasks_service.js";
 import { listTasksForUser } from "../repos/tasks_read_repo.js";
 import { findUserById } from "../repos/users_repo.js";
-import { listQualSummarySteps } from "../repos/qual_repo.js";
+import { getQualStepById, listQualSummarySteps } from "../repos/qual_repo.js";
 import { getQualificationStepName } from "../services/qualification_service.js";
 import { getExperiment } from "../repos/experiments_repo.js";
 import { getDoeStudy } from "../repos/doe_repo.js";
@@ -31,6 +32,50 @@ import { isProcessOwner } from "../repos/processes_repo.js";
 
 export function createTasksRouter(db: Db) {
   const router = express.Router();
+
+  const ensureTaskAccess = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const taskId = Number(req.params.id);
+    const task = getTask(db, taskId);
+    if (!task) return res.status(404).json({ error: "Task not found" });
+    const experiment = getExperiment(db, task.experiment_id);
+    if (!experiment) return res.status(404).json({ error: "Experiment not found" });
+
+    const isAssigned = Boolean(req.user?.id) && listTaskAssignments(db, taskId).some(
+      (assignment) => assignment.user_id === req.user?.id
+    );
+    if (isAssigned || canAccessExperiment(db, req.user, task.experiment_id, experiment)) return next();
+    return res.status(403).json({ error: "Forbidden" });
+  };
+
+  const getOwnedTaskEntity = (req: express.Request, res: express.Response) => {
+    const taskId = Number(req.params.id);
+    const entityId = Number(req.params.entityId ?? req.body?.entity_id);
+    if (!Number.isFinite(taskId) || !Number.isFinite(entityId)) {
+      res.status(400).json({ error: "Invalid entity" });
+      return null;
+    }
+    const entity = getTaskEntity(db, entityId);
+    if (!entity || entity.task_id !== taskId) {
+      res.status(404).json({ error: "Entity not found" });
+      return null;
+    }
+    return entity;
+  };
+
+  const entityBelongsToExperiment = (entityType: string, entityId: number, experimentId: number) => {
+    if (entityType === "qualification_step") {
+      return getQualStepById(db, entityId)?.experiment_id === experimentId;
+    }
+    if (entityType === "doe") {
+      return getDoeStudy(db, entityId)?.experiment_id === experimentId;
+    }
+    if (entityType === "report") {
+      return getReportConfig(db, entityId)?.experiment_id === experimentId;
+    }
+    return false;
+  };
+
+  router.use("/tasks/:id", ensureTaskAccess);
 
   // List tasks for experiment.
   router.get("/experiments/:id/tasks", requireTaskRead, ensureExperimentAccess(db), (req, res) => {
@@ -157,21 +202,28 @@ export function createTasksRouter(db: Db) {
   // Add entity to task.
   router.post("/tasks/:id/entities", requireTaskManager, (req, res) => {
     const taskId = Number(req.params.id);
+    const task = getTask(db, taskId);
+    if (!task) return res.status(404).json({ error: "Task not found" });
     if (!Number.isFinite(taskId)) return res.status(400).json({ error: "Invalid task" });
     const entityType = String(req.body?.entity_type ?? "");
     const entityId = Number(req.body?.entity_id);
-    if (!entityType || !Number.isFinite(entityId)) {
+    if (!entityBelongsToExperiment(entityType, entityId, task.experiment_id)) {
       return res.status(400).json({ error: "Invalid entity" });
     }
-    const weight = req.body?.weight ? Number(req.body.weight) : getDefaultEntityWeight(entityType, entityId);
-    const progressMode = req.body?.progress_mode ? String(req.body.progress_mode) : "toggle";
+    const requestedWeight = req.body?.weight == null || req.body.weight === ""
+      ? getDefaultEntityWeight(entityType, entityId)
+      : Number(req.body.weight);
+    if (!Number.isFinite(requestedWeight) || requestedWeight < 0 || requestedWeight > 10000) {
+      return res.status(400).json({ error: "Invalid weight" });
+    }
+    const progressMode = req.body?.progress_mode === "milestone" ? "milestone" : "toggle";
     const signatureRequired = req.body?.signature_required ? 1 : 0;
     const entityIdCreated = createTaskEntity(db, {
       task_id: taskId,
       entity_type: entityType as "qualification_step" | "doe" | "report",
       entity_id: entityId,
       label: req.body?.label ? String(req.body.label) : null,
-      weight,
+      weight: requestedWeight,
       progress_mode: progressMode as "toggle" | "milestone",
       signature_required: signatureRequired
     });
@@ -180,8 +232,9 @@ export function createTasksRouter(db: Db) {
 
   // Update entity progress or weight.
   router.post("/tasks/:id/entities/:entityId", requireTaskOperator, (req, res) => {
-    const entityId = Number(req.params.entityId);
-    if (!Number.isFinite(entityId)) return res.status(400).json({ error: "Invalid entity" });
+    const entity = getOwnedTaskEntity(req, res);
+    if (!entity) return;
+    const entityId = entity.id;
     const updates: Record<string, unknown> = {};
     if (req.body?.status !== undefined) {
       const status = toTaskStatus(req.body.status);
@@ -192,14 +245,18 @@ export function createTasksRouter(db: Db) {
       const rawWeight = String(req.body?.weight ?? "").trim();
       if (rawWeight) {
         const weight = Number(rawWeight);
-        if (!Number.isFinite(weight)) {
+        if (!Number.isFinite(weight) || weight < 0 || weight > 10000) {
           return res.status(400).json({ error: "Invalid weight" });
         }
         updates.weight = weight;
       }
     }
     if (req.body?.progress_mode !== undefined) {
-      updates.progress_mode = String(req.body.progress_mode);
+      const progressMode = String(req.body.progress_mode);
+      if (progressMode !== "toggle" && progressMode !== "milestone") {
+        return res.status(400).json({ error: "Invalid progress mode" });
+      }
+      updates.progress_mode = progressMode;
     }
     if (Object.keys(updates).length === 0) {
       return res.json({ ok: true });
@@ -210,9 +267,9 @@ export function createTasksRouter(db: Db) {
 
   // Remove entity.
   router.post("/tasks/:id/entities/:entityId/delete", requireTaskManager, (req, res) => {
-    const entityId = Number(req.params.entityId);
-    if (!Number.isFinite(entityId)) return res.status(400).json({ error: "Invalid entity" });
-    deleteTaskEntity(db, entityId);
+    const entity = getOwnedTaskEntity(req, res);
+    if (!entity) return;
+    deleteTaskEntity(db, entity.id);
     res.json({ ok: true });
   });
 
@@ -223,23 +280,26 @@ export function createTasksRouter(db: Db) {
     if (!Number.isFinite(taskId) || !Number.isFinite(userId)) {
       return res.status(400).json({ error: "Invalid assignment" });
     }
+    const user = findUserById(db, userId);
+    if (!user || user.status !== "ACTIVE") return res.status(400).json({ error: "Invalid user" });
     const assignmentId = createTaskAssignment(db, { task_id: taskId, user_id: userId, role: "operator" });
     res.json({ id: assignmentId });
   });
 
   router.post("/tasks/:id/assign/:assignmentId/delete", requireTaskManager, (req, res) => {
+    const taskId = Number(req.params.id);
     const assignmentId = Number(req.params.assignmentId);
     if (!Number.isFinite(assignmentId)) return res.status(400).json({ error: "Invalid assignment" });
+    const assignment = getTaskAssignment(db, assignmentId);
+    if (!assignment || assignment.task_id !== taskId) return res.status(404).json({ error: "Assignment not found" });
     deleteTaskAssignment(db, assignmentId);
     res.json({ ok: true });
   });
 
   // Sign report entity (manager/engineer).
   router.post("/tasks/:id/sign", requireTaskManager, (req, res) => {
-    const entityId = Number(req.body?.entity_id);
-    if (!Number.isFinite(entityId)) return res.status(400).json({ error: "Invalid entity" });
-    const entity = getTaskEntity(db, entityId);
-    if (!entity) return res.status(404).json({ error: "Entity not found" });
+    const entity = getOwnedTaskEntity(req, res);
+    if (!entity) return;
     if (entity.entity_type === "report") {
       const task = getTask(db, entity.task_id);
       const experiment = task ? getExperiment(db, task.experiment_id) : null;
@@ -247,7 +307,7 @@ export function createTasksRouter(db: Db) {
         return res.status(403).json({ error: "Only experiment owner can sign report entities." });
       }
     }
-    updateTaskEntity(db, entityId, {
+    updateTaskEntity(db, entity.id, {
       signature_required: 1,
       signature_user_id: req.user?.id ?? null,
       signature_at: new Date().toISOString()

@@ -35,7 +35,7 @@
       <div class="recipes-list-toolbar">
         <input type="search" class="recipe-search" placeholder="Search recipes..." data-recipe-search>
         <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager')) { %>
-          <form class="pure-form inline-form" action="/recipes/clear" method="post" onsubmit="return confirm('Delete all imported recipes?');">
+          <form class="pure-form inline-form" action="/recipes/clear" method="post" data-confirm="Delete all imported recipes?">
             <button class="icon-btn danger" type="submit" title="Delete All Recipes">Delete All</button>
           </form>
         <% } %>
@@ -79,7 +79,7 @@
                 </button>
               <% } %>
               <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager')) { %>
-                <form class="pure-form inline-form" action="/recipes/<%= recipe.id %>/delete" method="post" onsubmit="return confirm('Archive this recipe?');">
+                <form class="pure-form inline-form" action="/recipes/<%= recipe.id %>/delete" method="post" data-confirm="Archive this recipe?">
                   <button class="icon-btn icon-only danger" type="submit" title="Archive recipe" aria-label="Archive recipe">
                     <span class="material-symbols-rounded" aria-hidden="true">delete</span>
                   </button>
@@ -128,7 +128,7 @@
 </dialog>
 <%- include('partials/foot') %>
 
-<script>
+<script nonce="<%= cspNonce %>">
   const searchInput = document.querySelector('[data-recipe-search]');
   if (searchInput) {
     searchInput.addEventListener('input', (event) => {

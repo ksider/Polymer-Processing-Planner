@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  planner:
+    image: ghcr.io/ksider/polymer-planner:latest
+    container_name: polymer-planner
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DB_PATH: /app/data/im_doe.sqlite
+      TRUST_PROXY: "1"
+    volumes:
+      - planner_data:/app/data
+      - planner_uploads:/app/uploads
+    restart: unless-stopped
+
+volumes:
+  planner_data:
+  planner_uploads:

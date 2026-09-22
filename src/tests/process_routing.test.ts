@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import request from "supertest";
 import { openDb } from "../db.js";
 import { createUser } from "../repos/users_repo.js";
+import { getCsrfToken } from "./csrf_test_helpers.js";
 
 let dbPath = "";
 
@@ -15,6 +16,7 @@ before(() => {
   dbPath = path.join(tempDir, "test.sqlite");
   process.env.DB_PATH = dbPath;
   process.env.SESSION_SECRET = "test-secret";
+  process.env.NODE_ENV = "test";
   process.env.ADMIN_EMAIL = "admin@example.com";
   process.env.ADMIN_TEMP_PASSWORD = "TempPass123!";
 });
@@ -35,16 +37,18 @@ test("process routing, route_code settings and process-owner access", async () =
   const db = openDb();
 
   const adminAgent = request.agent(app);
+  const adminLoginCsrf = await getCsrfToken(adminAgent, "/auth/login");
   await adminAgent
     .post("/auth/login")
     .type("form")
-    .send({ email: "admin@example.com", password: "TempPass123!" })
+    .send({ email: "admin@example.com", password: "TempPass123!", _csrf: adminLoginCsrf })
     .expect(302);
 
+  const passwordCsrf = await getCsrfToken(adminAgent, "/auth/change-password");
   await adminAgent
     .post("/auth/change-password")
     .type("form")
-    .send({ password: "NewPass123!", confirm: "NewPass123!" })
+    .send({ password: "NewPassword123!", confirm: "NewPassword123!", _csrf: passwordCsrf })
     .expect(302)
     .expect("Location", "/");
 
@@ -64,12 +68,14 @@ test("process routing, route_code settings and process-owner access", async () =
   assert.ok(processRow.id > 0);
   assert.equal(processRow.route_code, "injection");
 
+  const experimentCsrf = await getCsrfToken(adminAgent, "/");
   await adminAgent
     .post("/experiments")
     .type("form")
     .send({
       name: "Routing smoke",
-      process_id: String(processRow.id)
+      process_id: String(processRow.id),
+      _csrf: experimentCsrf
     })
     .expect(302);
 
@@ -87,10 +93,11 @@ test("process routing, route_code settings and process-owner access", async () =
     .expect("Location", `/injection/${experiment.id}`);
 
   // Reserved route code should be rejected.
+  const processSettingsCsrf = await getCsrfToken(adminAgent, "/admin");
   await adminAgent
     .post(`/processes/${processRow.id}/settings`)
     .type("form")
-    .send({ route_code: "reports", owner_user_id: "" })
+    .send({ route_code: "reports", owner_user_id: "", _csrf: processSettingsCsrf })
     .expect(400);
 
   const processOwnerId = createUser(db, {
@@ -106,7 +113,7 @@ test("process routing, route_code settings and process-owner access", async () =
   await adminAgent
     .post(`/processes/${processRow.id}/settings`)
     .type("form")
-    .send({ route_code: "extrusion", owner_user_id: String(processOwnerId) })
+    .send({ route_code: "extrusion", owner_user_id: String(processOwnerId), _csrf: processSettingsCsrf })
     .expect(302)
     .expect("Location", "/extrusion");
 
@@ -114,10 +121,11 @@ test("process routing, route_code settings and process-owner access", async () =
   await adminAgent.get(`/extrusion/${experiment.id}`).expect(200);
 
   const processOwnerAgent = request.agent(app);
+  const processOwnerLoginCsrf = await getCsrfToken(processOwnerAgent, "/auth/login");
   await processOwnerAgent
     .post("/auth/login")
     .type("form")
-    .send({ email: "process-owner@example.com", password: "OwnerPass123!" })
+    .send({ email: "process-owner@example.com", password: "OwnerPass123!", _csrf: processOwnerLoginCsrf })
     .expect(302);
 
   await processOwnerAgent.get(`/extrusion/${experiment.id}`).expect(200);

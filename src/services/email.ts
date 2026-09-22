@@ -18,6 +18,10 @@ function getEmailConfig(): EmailConfig | null {
   return { host, port, user, pass, from };
 }
 
+export function isEmailConfigured(): boolean {
+  return getEmailConfig() !== null;
+}
+
 export async function sendTempPasswordEmail(to: string, tempPassword: string) {
   const config = getEmailConfig();
   if (!config) return false;
@@ -26,6 +30,7 @@ export async function sendTempPasswordEmail(to: string, tempPassword: string) {
     host: config.host,
     port: config.port,
     secure: config.port === 465,
+    requireTLS: config.port !== 465,
     auth: {
       user: config.user,
       pass: config.pass

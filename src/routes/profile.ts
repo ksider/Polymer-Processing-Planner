@@ -4,6 +4,7 @@ import type { Db } from "../db.js";
 import { PASSWORD_CHANGE_LIMITER } from "../middleware/rate_limit.js";
 import {
   findUserById,
+  deleteOtherSessionsByUser,
   getUserPasswordHash,
   updateUserAvatarStyle,
   updateUserName,
@@ -113,7 +114,7 @@ export function createProfileRouter(db: Db) {
     };
   };
 
-  router.get("/avatars/:id.svg", async (req, res) => {
+  router.get("/avatars/:id.svg", (req, res) => {
     if (!req.user?.id) return res.status(401).send("Unauthorized");
     const userId = Number(req.params.id);
     if (!Number.isFinite(userId) || userId <= 0) return res.status(400).send("Invalid user id");
@@ -167,17 +168,9 @@ export function createProfileRouter(db: Db) {
       : buildAvatarRedirectUrl(user);
 
     res.set("Cache-Control", "private, no-store");
-    try {
-      const avatarResponse = await fetch(avatarUrl);
-      if (!avatarResponse.ok) {
-        return res.status(502).send("Unable to generate avatar");
-      }
-      const avatarSvg = await avatarResponse.text();
-      res.type("image/svg+xml; charset=utf-8");
-      return res.send(avatarSvg);
-    } catch {
-      return res.status(502).send("Unable to generate avatar");
-    }
+    // Redirecting keeps third-party SVG markup on its original origin. Do not
+    // proxy it into this application's origin where it could become active.
+    return res.redirect(302, avatarUrl);
   });
 
   router.get("/me", (req, res) => {
@@ -256,19 +249,20 @@ export function createProfileRouter(db: Db) {
         notice: null
       });
     }
-    if (next.length < 8 || next !== confirm) {
+    if (next.length < 12 || next !== confirm) {
       const data = buildProfilePayload(req.user.id);
       return res.render("profile", {
         title: "Profile",
         ...data,
         currentAvatarStyle: getAvatarStyle(avatarUserFromRequest(req.user)),
         avatarStyleOptions: AVATAR_STYLE_OPTIONS,
-        error: "New password must be at least 8 characters and match confirmation.",
+        error: "New password must be at least 12 characters and match confirmation.",
         notice: null
       });
     }
     const hash = bcrypt.hashSync(next, 12);
     updateUserPassword(db, req.user.id, hash);
+    if (req.sessionID) deleteOtherSessionsByUser(db, req.user.id, req.sessionID);
     const data = buildProfilePayload(req.user.id);
     return res.render("profile", {
       title: "Profile",
