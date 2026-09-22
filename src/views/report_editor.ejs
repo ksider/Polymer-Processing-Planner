@@ -55,6 +55,12 @@
 
     <section class="report-document-pane" aria-label="Report document">
     <div class="editor-toolbar" id="editorToolbar">
+      <div class="editor-toolbar-tabs" role="tablist" aria-label="Document tools">
+        <button class="editor-toolbar-tab is-active" type="button" role="tab" aria-selected="true" data-toolbar-tab-button="font">Font</button>
+        <button class="editor-toolbar-tab" type="button" role="tab" aria-selected="false" data-toolbar-tab-button="text">Text</button>
+        <button class="editor-toolbar-tab" type="button" role="tab" aria-selected="false" data-toolbar-tab-button="insert">Insert</button>
+        <button class="editor-toolbar-tab" type="button" role="tab" aria-selected="false" data-toolbar-tab-button="table">Tables</button>
+      </div>
       <button class="pure-button button-sm icon-only" type="button" data-cmd="undo" title="Undo"><span class="material-symbols-rounded">undo</span></button>
       <button class="pure-button button-sm icon-only" type="button" data-cmd="redo" title="Redo"><span class="material-symbols-rounded">redo</span></button>
       <span class="toolbar-sep" aria-hidden="true"></span>
@@ -206,6 +212,34 @@
   const documentToolbarSlot = document.getElementById('documentToolbarSlot');
   const editorToolbar = document.getElementById('editorToolbar');
   if (documentToolbarSlot && editorToolbar) documentToolbarSlot.appendChild(editorToolbar);
+
+  const toolbarTabButtons = document.querySelectorAll('[data-toolbar-tab-button]');
+  const toolbarControls = editorToolbar
+    ? Array.from(editorToolbar.children).filter((child) => !child.classList.contains('editor-toolbar-tabs'))
+    : [];
+  toolbarControls.forEach((control, index) => {
+    if (index <= 2) control.dataset.toolbarTab = 'history';
+    else if (index === 19 || index === 31) control.dataset.toolbarTab = 'none';
+    else if (index <= 18) control.dataset.toolbarTab = 'font';
+    else if (index <= 31) control.dataset.toolbarTab = 'text';
+    else if (index <= 34) control.dataset.toolbarTab = 'insert';
+    else control.dataset.toolbarTab = 'table';
+  });
+  const setToolbarTab = (tab) => {
+    toolbarControls.forEach((control) => {
+      control.hidden = !['history', tab].includes(control.dataset.toolbarTab || 'none');
+    });
+    toolbarTabButtons.forEach((button) => {
+      const active = button.dataset.toolbarTabButton === tab;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-selected', String(active));
+      button.tabIndex = active ? 0 : -1;
+    });
+  };
+  toolbarTabButtons.forEach((button) => {
+    button.addEventListener('click', () => setToolbarTab(button.dataset.toolbarTabButton || 'font'));
+  });
+  setToolbarTab('font');
 
   const setSourcesOpen = (open) => {
     reportWorkspace?.classList.toggle('sources-open', open);

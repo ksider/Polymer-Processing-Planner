@@ -4138,6 +4138,55 @@ textarea {
   scrollbar-width: thin;
 }
 
+.editor-toolbar-tabs {
+  display: inline-flex;
+  order: 2;
+  flex: 0 0 auto;
+  align-self: stretch;
+  align-items: center;
+  gap: 0.1rem;
+  padding-right: 0.35rem;
+  border-right: 1px solid var(--border);
+}
+
+.editor-toolbar-tab {
+  min-height: 34px;
+  padding: 0.3rem 0.5rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--slate);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.editor-toolbar-tab:hover,
+.editor-toolbar-tab:focus-visible {
+  background: #eee9e1;
+  color: var(--ink);
+  outline: none;
+}
+
+.editor-toolbar-tab.is-active {
+  background: #fff;
+  color: var(--accent);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.document-toolbar-slot .editor-toolbar > [hidden] {
+  display: none !important;
+}
+
+.document-toolbar-slot .editor-toolbar > [data-toolbar-tab="history"] {
+  order: 1;
+}
+
+.document-toolbar-slot .editor-toolbar > [data-toolbar-tab]:not([data-toolbar-tab="history"]) {
+  order: 3;
+}
+
 .document-toolbar-slot .toolbar-sep {
   flex: 0 0 1px;
   min-height: 28px;
