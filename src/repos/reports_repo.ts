@@ -5,6 +5,17 @@ type ReportConfigRow = {
   experiment_id: number;
   name: string;
   executors: string | null;
+  description: string | null;
+  author_user_id: number | null;
+  responsible_user_id: number | null;
+  due_at: string | null;
+  submitted_for_signature_at: string | null;
+  submitted_by_user_id: number | null;
+  signature_due_at: string | null;
+  signature_sla_days: number;
+  report_number: string | null;
+  report_type: "QUALIFICATION" | "DOE" | "COMBINED";
+  template_code: string;
   include_json: string | null;
   doe_ids_json: string | null;
   created_at: string;
@@ -26,22 +37,79 @@ export function getReportConfig(db: Db, reportId: number): ReportConfigRow | nul
 export function createReportConfig(
   db: Db,
   data: Pick<ReportConfigRow, "experiment_id" | "name" | "executors" | "include_json" | "doe_ids_json">
+    & Partial<Pick<ReportConfigRow, "description" | "author_user_id" | "responsible_user_id" | "due_at" | "report_type" | "template_code">>
 ): number {
   const result = db
     .prepare(
       `
-      INSERT INTO report_configs (experiment_id, name, executors, include_json, doe_ids_json, created_at)
-      VALUES (?, ?, ?, ?, ?, datetime('now'))
+      INSERT INTO report_configs (experiment_id, name, executors, description, author_user_id, responsible_user_id, due_at, report_type, template_code, include_json, doe_ids_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       `
     )
     .run(
       data.experiment_id,
       data.name,
       data.executors,
+      data.description ?? null,
+      data.author_user_id ?? null,
+      data.responsible_user_id ?? null,
+      data.due_at ?? null,
+      data.report_type ?? "COMBINED",
+      data.template_code ?? "standard-combined",
       data.include_json,
       data.doe_ids_json
     );
   return Number(result.lastInsertRowid);
+}
+
+export function updateReportSetup(
+  db: Db,
+  reportId: number,
+  data: Pick<ReportConfigRow, "name" | "description" | "author_user_id" | "responsible_user_id" | "due_at" | "report_number" | "report_type" | "template_code" | "signature_sla_days">
+) {
+  db.prepare(
+    `UPDATE report_configs
+     SET name = ?, description = ?, author_user_id = ?, responsible_user_id = ?, due_at = ?, report_number = ?, report_type = ?, template_code = ?, signature_sla_days = ?
+     WHERE id = ?`
+  ).run(
+    data.name,
+    data.description,
+    data.author_user_id,
+    data.responsible_user_id,
+    data.due_at,
+    data.report_number,
+    data.report_type,
+    data.template_code,
+    data.signature_sla_days,
+    reportId
+  );
+}
+
+export function submitReportForSignature(db: Db, reportId: number, submittedByUserId: number, signatureDueAt: string) {
+  db.prepare(
+    `UPDATE report_configs
+     SET submitted_for_signature_at = datetime('now'), submitted_by_user_id = ?, signature_due_at = ?
+     WHERE id = ?`
+  ).run(submittedByUserId, signatureDueAt, reportId);
+}
+
+export function clearReportSignatureSubmission(db: Db, reportId: number) {
+  db.prepare(
+    `UPDATE report_configs
+     SET submitted_for_signature_at = NULL, submitted_by_user_id = NULL, signature_due_at = NULL
+     WHERE id = ?`
+  ).run(reportId);
+}
+
+export function updateReportNumber(db: Db, reportId: number, reportNumber: string) {
+  db.prepare("UPDATE report_configs SET report_number = ? WHERE id = ?").run(reportNumber, reportId);
+}
+
+export function isReportNumberInUse(db: Db, reportNumber: string, exceptReportId: number) {
+  const row = db.prepare(
+    "SELECT 1 as ok FROM report_configs WHERE report_number = ? AND id <> ? LIMIT 1"
+  ).get(reportNumber, exceptReportId) as { ok: number } | undefined;
+  return Boolean(row?.ok);
 }
 
 export function deleteReportConfig(db: Db, reportId: number) {

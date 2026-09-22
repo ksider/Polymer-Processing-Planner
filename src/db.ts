@@ -486,10 +486,24 @@ function initDb(db: Db) {
       experiment_id INTEGER NOT NULL,
       name TEXT NOT NULL,
       executors TEXT,
+      description TEXT,
+      author_user_id INTEGER,
+      responsible_user_id INTEGER,
+      due_at TEXT,
+      submitted_for_signature_at TEXT,
+      submitted_by_user_id INTEGER,
+      signature_due_at TEXT,
+      signature_sla_days INTEGER NOT NULL DEFAULT 2,
+      report_number TEXT,
+      report_type TEXT NOT NULL DEFAULT 'COMBINED',
+      template_code TEXT NOT NULL DEFAULT 'standard-combined',
       include_json TEXT,
       doe_ids_json TEXT,
       created_at TEXT NOT NULL,
-      FOREIGN KEY (experiment_id) REFERENCES experiments(id) ON DELETE CASCADE
+      FOREIGN KEY (experiment_id) REFERENCES experiments(id) ON DELETE CASCADE,
+      FOREIGN KEY (author_user_id) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (responsible_user_id) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (submitted_by_user_id) REFERENCES users(id) ON DELETE SET NULL
     );
     CREATE TABLE IF NOT EXISTS report_documents (
       report_id INTEGER PRIMARY KEY,
@@ -775,6 +789,39 @@ function initDb(db: Db) {
   }
   if (!hasColumn(db, "report_configs", "signed_by_user_id")) {
     db.exec("ALTER TABLE report_configs ADD COLUMN signed_by_user_id INTEGER");
+  }
+  if (!hasColumn(db, "report_configs", "description")) {
+    db.exec("ALTER TABLE report_configs ADD COLUMN description TEXT");
+  }
+  if (!hasColumn(db, "report_configs", "author_user_id")) {
+    db.exec("ALTER TABLE report_configs ADD COLUMN author_user_id INTEGER");
+  }
+  if (!hasColumn(db, "report_configs", "responsible_user_id")) {
+    db.exec("ALTER TABLE report_configs ADD COLUMN responsible_user_id INTEGER");
+  }
+  if (!hasColumn(db, "report_configs", "due_at")) {
+    db.exec("ALTER TABLE report_configs ADD COLUMN due_at TEXT");
+  }
+  if (!hasColumn(db, "report_configs", "submitted_for_signature_at")) {
+    db.exec("ALTER TABLE report_configs ADD COLUMN submitted_for_signature_at TEXT");
+  }
+  if (!hasColumn(db, "report_configs", "submitted_by_user_id")) {
+    db.exec("ALTER TABLE report_configs ADD COLUMN submitted_by_user_id INTEGER");
+  }
+  if (!hasColumn(db, "report_configs", "signature_due_at")) {
+    db.exec("ALTER TABLE report_configs ADD COLUMN signature_due_at TEXT");
+  }
+  if (!hasColumn(db, "report_configs", "signature_sla_days")) {
+    db.exec("ALTER TABLE report_configs ADD COLUMN signature_sla_days INTEGER NOT NULL DEFAULT 2");
+  }
+  if (!hasColumn(db, "report_configs", "report_number")) {
+    db.exec("ALTER TABLE report_configs ADD COLUMN report_number TEXT");
+  }
+  if (!hasColumn(db, "report_configs", "report_type")) {
+    db.exec("ALTER TABLE report_configs ADD COLUMN report_type TEXT NOT NULL DEFAULT 'COMBINED'");
+  }
+  if (!hasColumn(db, "report_configs", "template_code")) {
+    db.exec("ALTER TABLE report_configs ADD COLUMN template_code TEXT NOT NULL DEFAULT 'standard-combined'");
   }
   if (!hasColumn(db, "entity_assignments", "status")) {
     db.exec("ALTER TABLE entity_assignments ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");

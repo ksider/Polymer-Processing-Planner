@@ -1,11 +1,23 @@
 import type { Db } from "../db.js";
 import { getExperiment, getExperimentRecipes } from "../repos/experiments_repo.js";
 import { listQualSummaries, listQualRuns, listQualRunValues, listQualFields, listQualSteps, getQualStep } from "../repos/qual_repo.js";
-import { listDoeStudies } from "../repos/doe_repo.js";
+import { getDoeStudy, listDoeStudies } from "../repos/doe_repo.js";
 import { listRuns, listRunValues } from "../repos/runs_repo.js";
 import { listParamConfigs, listParamDefinitions, listParamDefinitionsByKind } from "../repos/params_repo.js";
 import { getRecipe, getRecipeComponents } from "../repos/recipes_repo.js";
 import { getMachine } from "../repos/machines_repo.js";
+import { listActiveAnalysisFields, listAnalysisRunValuesByRunIds } from "../repos/analysis_repo.js";
+import {
+  buildRegressionAnalysis,
+  filterRuns,
+  loadRuns,
+  summarizeByFactorAnalysis,
+  summarizeHeatmapAnalysis,
+  type AnalysisValueRow,
+  type RunRow
+} from "./analysis_service.js";
+import { mean, sd } from "../domain/stats.js";
+import { findUserById } from "../repos/users_repo.js";
 
 type ReportOptions = {
   includeQualification: boolean;
@@ -80,7 +92,7 @@ type ReportWorkspaceSourceRow = { label: string; value: string };
 
 type ReportWorkspaceSource = {
   id: string;
-  kind: "value" | "recipe" | "branch" | "results" | "run" | "chart";
+  kind: "value" | "recipe" | "branch" | "results" | "run" | "chart" | "doe-analysis" | "doe-runs";
   label: string;
   value?: string | null;
   description?: string | null;
@@ -90,6 +102,8 @@ type ReportWorkspaceSource = {
   runUrl?: string;
   chartType?: "rheology" | "process-window" | "run-series";
   chartData?: { categories: string[]; values: Array<number | null>; unit: string | null };
+  studyId?: number;
+  runCount?: number;
 };
 
 type ReportWorkspaceSourceGroup = {
@@ -411,15 +425,333 @@ export function buildReportWorkspaceSources(db: Db, report: ReportData): ReportW
     }] : [];
   });
 
+  // DOE runs deliberately remain behind a paginated endpoint. The catalogue
+  // only carries study metadata, so a large design cannot make the editor or
+  // its right-hand source rail slow to render.
+  const doeItems: ReportWorkspaceSource[] = listDoeStudies(db, report.experiment.id).map((study) => {
+    const runCount = listRuns(db, study.id).length;
+    return {
+      id: `doe-study-${study.id}`,
+      kind: "branch",
+      label: study.name,
+      children: [
+        {
+          id: `doe-study-${study.id}-analysis`,
+          kind: "doe-analysis",
+          label: "Analysis",
+          studyId: study.id,
+          runCount
+        },
+        {
+          id: `doe-study-${study.id}-runs`,
+          kind: "doe-runs",
+          label: `Runs (${runCount})`,
+          studyId: study.id,
+          runCount
+        }
+      ]
+    };
+  });
+
   return [
     { id: "experiment", label: "Experiment", icon: "science", items: experimentItems },
     { id: "machine", label: "Machine", icon: "precision_manufacturing", items: machineItems },
     { id: "recipes", label: "Recipes", icon: "category", items: recipeItems },
-    { id: "qualification", label: "Qualification", icon: "biotech", items: qualificationItems }
+    { id: "qualification", label: "Qualification", icon: "biotech", items: qualificationItems },
+    { id: "doe", label: "DOE", icon: "query_stats", items: doeItems }
   ].filter((group) => group.items.length > 0);
 }
 
-export function buildReportWorkspaceOutline() {
+type DoeAnalysisMode = "overall" | "factor" | "matrix" | "regression";
+
+type DoeAnalysisField = { id: number; label: string; unit: string | null };
+type DoeAnalysisFactor = { id: number; label: string; unit: string | null };
+
+const formatDoeNumber = (value: number | null | undefined) => {
+  if (value == null || !Number.isFinite(value)) return "–";
+  return Number(value.toFixed(5)).toString();
+};
+
+const buildAnalysisValueMapWithFallback = (
+  runs: RunRow[],
+  analysisValues: AnalysisValueRow[],
+  fields: Array<{ id: number; code: string }>,
+  params: Array<{ id: number; code: string }>
+) => {
+  const map = new Map<string, AnalysisValueRow>();
+  analysisValues.forEach((row) => map.set(`${row.run_id}:${row.field_id}`, row));
+  const paramIdByCode = new Map(params.map((param) => [param.code, param.id]));
+  fields.forEach((field) => {
+    const paramId = paramIdByCode.get(field.code);
+    if (!paramId) return;
+    runs.forEach((run) => {
+      const key = `${run.id}:${field.id}`;
+      const value = run.values[paramId];
+      if (!map.has(key) && value != null) {
+        map.set(key, {
+          run_id: run.id,
+          field_id: field.id,
+          value_real: value,
+          value_text: null,
+          value_tags_json: null
+        });
+      }
+    });
+  });
+  return map;
+};
+
+const getDoeAnalysisContext = (db: Db, experimentId: number, doeId: number) => {
+  const study = getDoeStudy(db, doeId);
+  if (!study || study.experiment_id !== experimentId) return null;
+  const params = listParamDefinitions(db, experimentId);
+  const configs = listParamConfigs(db, experimentId, doeId);
+  const activeParamIds = new Set(configs.filter((config) => config.active === 1).map((config) => config.param_def_id));
+  const factors: DoeAnalysisFactor[] = params
+    .filter((param) => param.field_kind === "INPUT" && param.field_type === "number" && activeParamIds.has(param.id))
+    .map((param) => ({ id: param.id, label: param.label, unit: param.unit }));
+  const outputFields = listActiveAnalysisFields(db, doeId)
+    .filter((field) => field.field_type === "number")
+    .map((field) => ({ id: field.id, label: field.label, unit: field.unit, code: field.code }));
+  return { study, params, factors, outputFields };
+};
+
+export function buildDoeReportAnalysis(
+  db: Db,
+  experimentId: number,
+  doeId: number,
+  requestedMode: string | undefined,
+  requestedOutputId: number,
+  requestedFactorId: number,
+  requestedSecondFactorId: number
+) {
+  const context = getDoeAnalysisContext(db, experimentId, doeId);
+  if (!context) return null;
+  const validModes: DoeAnalysisMode[] = ["overall", "factor", "matrix", "regression"];
+  const mode = validModes.includes(requestedMode as DoeAnalysisMode)
+    ? requestedMode as DoeAnalysisMode
+    : "overall";
+  const output = context.outputFields.find((field) => field.id === requestedOutputId) ?? context.outputFields[0] ?? null;
+  const factor = context.factors.find((item) => item.id === requestedFactorId) ?? context.factors[0] ?? null;
+  const secondFactor = context.factors.find((item) => item.id === requestedSecondFactorId && item.id !== factor?.id)
+    ?? context.factors.find((item) => item.id !== factor?.id)
+    ?? null;
+
+  const options = {
+    study: { id: context.study.id, name: context.study.name },
+    outputs: context.outputFields.map(({ id, label, unit }) => ({ id, label, unit })),
+    factors: context.factors,
+    selected: {
+      mode,
+      outputId: output?.id ?? null,
+      factorId: factor?.id ?? null,
+      secondFactorId: secondFactor?.id ?? null
+    }
+  };
+
+  if (!output) {
+    return {
+      ...options,
+      analysis: { title: "Analysis", columns: [], rows: [], message: "No active numeric analysis fields in this DOE study.", chart: null }
+    };
+  }
+
+  if (mode === "factor" && !factor) {
+    return {
+      ...options,
+      analysis: { title: `${output.label}: by factor`, columns: [], rows: [], message: "Add an active numeric input factor to compare this output.", chart: null }
+    };
+  }
+
+  if (mode === "matrix" && (!factor || !secondFactor)) {
+    return {
+      ...options,
+      analysis: { title: `${output.label}: factor matrix`, columns: [], rows: [], message: "Add two active numeric input factors for a factor matrix.", chart: null }
+    };
+  }
+
+  if (mode === "regression" && !factor) {
+    return {
+      ...options,
+      analysis: { title: `${output.label}: linear model`, columns: [], rows: [], message: "Add an active numeric input factor for a linear model.", chart: null }
+    };
+  }
+
+  const allRuns = loadRuns(db, doeId);
+  const includedRuns = filterRuns(allRuns, {});
+  const fields = listActiveAnalysisFields(db, doeId);
+  const analysisValues = listAnalysisRunValuesByRunIds(db, allRuns.map((run) => run.id));
+  const values = buildAnalysisValueMapWithFallback(allRuns, analysisValues, fields, context.params);
+  const outputValues = includedRuns
+    .map((run) => values.get(`${run.id}:${output.id}`)?.value_real ?? null)
+    .filter((value): value is number => value != null && Number.isFinite(value));
+  const unitSuffix = output.unit ? ` (${output.unit})` : "";
+
+  if (mode === "factor" && factor) {
+    const summary = summarizeByFactorAnalysis(includedRuns, values, output.id, factor.id);
+    return {
+      ...options,
+      analysis: {
+        title: `${output.label} by ${factor.label}`,
+        columns: [factor.label + (factor.unit ? ` (${factor.unit})` : ""), `Mean${unitSuffix}`, `SD${unitSuffix}`, "n"],
+        rows: summary.map((row) => [formatDoeNumber(row.factor), formatDoeNumber(row.mean), formatDoeNumber(row.sd), String(row.n)]),
+        message: summary.length ? null : "No completed values are available for this comparison.",
+        chart: summary.length ? {
+          type: "line",
+          title: `${output.label} by ${factor.label}`,
+          categories: summary.map((row) => formatDoeNumber(row.factor)),
+          values: summary.map((row) => row.mean),
+          unit: output.unit
+        } : null
+      }
+    };
+  }
+
+  if (mode === "matrix" && factor && secondFactor) {
+    const cells = summarizeHeatmapAnalysis(includedRuns, values, output.id, factor.id, secondFactor.id);
+    const xValues = Array.from(new Set(cells.map((cell) => formatDoeNumber(cell.x))));
+    const yValues = Array.from(new Set(cells.map((cell) => formatDoeNumber(cell.y))));
+    return {
+      ...options,
+      analysis: {
+        title: `${output.label}: ${factor.label} × ${secondFactor.label}`,
+        columns: [factor.label + (factor.unit ? ` (${factor.unit})` : ""), secondFactor.label + (secondFactor.unit ? ` (${secondFactor.unit})` : ""), `Mean${unitSuffix}`, `SD${unitSuffix}`, "n"],
+        rows: cells.map((cell) => [formatDoeNumber(cell.x), formatDoeNumber(cell.y), formatDoeNumber(cell.mean), formatDoeNumber(cell.sd), String(cell.n)]),
+        message: cells.length ? null : "No completed values are available for this factor matrix.",
+        chart: cells.length ? {
+          type: "heatmap",
+          title: `${output.label}: ${factor.label} × ${secondFactor.label}`,
+          xLabel: factor.label,
+          yLabel: secondFactor.label,
+          xValues,
+          yValues,
+          values: cells.map((cell) => [xValues.indexOf(formatDoeNumber(cell.x)), yValues.indexOf(formatDoeNumber(cell.y)), cell.mean]),
+          unit: output.unit
+        } : null
+      }
+    };
+  }
+
+  if (mode === "regression" && factor) {
+    const regressionFactors = [factor, ...(secondFactor ? [secondFactor] : [])]
+      .map((selectedFactor) => context.params.find((param) => param.id === selectedFactor.id))
+      .filter((param): param is NonNullable<typeof param> => Boolean(param));
+    const regression = buildRegressionAnalysis(includedRuns, values, output.id, regressionFactors);
+    const labels = ["Intercept", ...regressionFactors.map((item) => item.label)];
+    const rows = regression.coefficients.map((coefficient, index) => [labels[index] ?? `β${index}`, formatDoeNumber(coefficient)]);
+    return {
+      ...options,
+      analysis: {
+        title: `${output.label}: linear model`,
+        columns: ["Term", "Coefficient"],
+        rows: [...rows, ["R²", formatDoeNumber(regression.r2)]],
+        message: regression.coefficients.length ? null : `At least ${regressionFactors.length + 2} complete runs are required for this model.`,
+        chart: regression.coefficients.length ? {
+          type: "bar",
+          title: `${output.label}: model coefficients`,
+          categories: labels.slice(1),
+          values: regression.coefficients.slice(1),
+          unit: output.unit
+        } : null
+      }
+    };
+  }
+
+  return {
+    ...options,
+    analysis: {
+      title: `${output.label}: overall result`,
+      columns: ["Metric", `Value${unitSuffix}`],
+      rows: [
+        ["Complete runs", String(outputValues.length)],
+        ["Mean", formatDoeNumber(mean(outputValues))],
+        ["Standard deviation", formatDoeNumber(sd(outputValues))],
+        ["Minimum", formatDoeNumber(outputValues.length ? Math.min(...outputValues) : null)],
+        ["Maximum", formatDoeNumber(outputValues.length ? Math.max(...outputValues) : null)]
+      ],
+      message: outputValues.length ? null : "No completed values are available for this output.",
+      chart: null
+    }
+  };
+}
+
+const displayRunValue = (
+  value: { value_real: number | null; value_text: string | null; value_tags_json: string | null } | undefined,
+  unit: string | null
+) => {
+  if (!value) return "–";
+  if (value.value_text?.trim()) return value.value_text.trim();
+  if (value.value_tags_json) {
+    try {
+      const parsed = JSON.parse(value.value_tags_json);
+      if (Array.isArray(parsed)) return parsed.map(String).join(", ") || "–";
+    } catch {
+      return value.value_tags_json;
+    }
+  }
+  return value.value_real == null ? "–" : `${formatDoeNumber(value.value_real)}${unit ? ` ${unit}` : ""}`;
+};
+
+export function buildDoeReportRunsPage(
+  db: Db,
+  experimentId: number,
+  doeId: number,
+  requestedPage: number,
+  requestedPageSize: number
+) {
+  const context = getDoeAnalysisContext(db, experimentId, doeId);
+  if (!context) return null;
+  const pageSize = Math.min(Math.max(Number.isFinite(requestedPageSize) ? Math.floor(requestedPageSize) : 25, 10), 50);
+  const allRuns = listRuns(db, doeId);
+  const total = allRuns.length;
+  const pageCount = Math.max(Math.ceil(total / pageSize), 1);
+  const page = Math.min(Math.max(Number.isFinite(requestedPage) ? Math.floor(requestedPage) : 1, 1), pageCount);
+  const runs = allRuns.slice((page - 1) * pageSize, page * pageSize);
+  const analysisFields = listActiveAnalysisFields(db, doeId);
+  const paramIdByCode = new Map(context.params.map((param) => [param.code, param.id]));
+  const analysisFieldById = new Map(analysisFields.map((field) => [field.id, field]));
+  const fields = [
+    ...context.factors.map((field) => ({ key: `input-${field.id}`, label: field.label, unit: field.unit, type: "input" as const, id: field.id })),
+    ...analysisFields.map((field) => ({ key: `analysis-${field.id}`, label: field.label, unit: field.unit, type: "analysis" as const, id: field.id }))
+  ];
+  const analysisValues = listAnalysisRunValuesByRunIds(db, runs.map((run) => run.id));
+  const analysisMap = new Map(analysisValues.map((value) => [`${value.run_id}:${value.field_id}`, value]));
+
+  return {
+    study: { id: context.study.id, name: context.study.name },
+    fields: fields.map(({ key, label, unit }) => ({ key, label, unit })),
+    page,
+    pageSize,
+    pageCount,
+    total,
+    runs: runs.map((run) => {
+      const owner = run.owner_user_id ? findUserById(db, run.owner_user_id) : null;
+      const runValues = new Map(listRunValues(db, run.id).map((value) => [value.param_def_id, value]));
+      return {
+        id: run.id,
+        code: run.run_code,
+        done: run.done === 1,
+        excluded: run.exclude_from_analysis === 1,
+        responsible: owner?.name?.trim() || owner?.email || "Not assigned",
+        url: `/experiments/${experimentId}/runs/${run.id}`,
+        values: Object.fromEntries(fields.map((field) => [
+          field.key,
+          field.type === "input"
+            ? displayRunValue(runValues.get(field.id), field.unit)
+            : displayRunValue(
+              analysisMap.get(`${run.id}:${field.id}`)
+                ?? runValues.get(paramIdByCode.get(analysisFieldById.get(field.id)?.code ?? "") ?? -1),
+              field.unit
+            )
+        ]))
+      };
+    })
+  };
+}
+
+export type ReportTemplateType = "QUALIFICATION" | "DOE" | "COMBINED";
+
+export function buildReportWorkspaceOutline(reportType: ReportTemplateType = "COMBINED") {
   const paragraph = () => ({ type: "paragraph" });
   const heading = (text: string, level: 2 | 3) => ({
     type: "heading",
@@ -427,6 +759,20 @@ export function buildReportWorkspaceOutline() {
     content: [{ type: "text", text }]
   });
 
+  const qualification = [
+    heading("3. Qualification", 2),
+    heading("Test summary", 3),
+    paragraph(),
+    heading("Recommended process window", 3),
+    paragraph()
+  ];
+  const doe = [
+    heading(reportType === "DOE" ? "3. DOE studies" : "4. DOE studies", 2),
+    heading("Study design", 3),
+    paragraph(),
+    heading("Results", 3),
+    paragraph()
+  ];
   return {
     type: "doc",
     content: [
@@ -437,23 +783,15 @@ export function buildReportWorkspaceOutline() {
       paragraph(),
       heading("Recipe", 3),
       paragraph(),
-      heading("3. Qualification", 2),
-      heading("Test summary", 3),
-      paragraph(),
-      heading("Recommended process window", 3),
-      paragraph(),
-      heading("4. DOE studies", 2),
-      heading("Study design", 3),
-      paragraph(),
-      heading("Results", 3),
-      paragraph(),
-      heading("5. Conclusions", 2),
+      ...(reportType === "DOE" ? [] : qualification),
+      ...(reportType === "QUALIFICATION" ? [] : doe),
+      heading(reportType === "COMBINED" ? "5. Conclusions" : "4. Conclusions", 2),
       paragraph()
     ]
   };
 }
 
-export function buildReportWorkspaceOutlineMarkdown() {
+export function buildReportWorkspaceOutlineMarkdown(reportType: ReportTemplateType = "COMBINED") {
   return [
     "## 1. Objective",
     "",
@@ -463,19 +801,9 @@ export function buildReportWorkspaceOutlineMarkdown() {
     "",
     "### Recipe",
     "",
-    "## 3. Qualification",
-    "",
-    "### Test summary",
-    "",
-    "### Recommended process window",
-    "",
-    "## 4. DOE studies",
-    "",
-    "### Study design",
-    "",
-    "### Results",
-    "",
-    "## 5. Conclusions"
+    ...(reportType === "DOE" ? [] : ["## 3. Qualification", "", "### Test summary", "", "### Recommended process window", ""]),
+    ...(reportType === "QUALIFICATION" ? [] : [`## ${reportType === "DOE" ? "3" : "4"}. DOE studies`, "", "### Study design", "", "### Results", ""]),
+    `## ${reportType === "COMBINED" ? "5" : "4"}. Conclusions`
   ].join("\n");
 }
 

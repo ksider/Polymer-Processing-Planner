@@ -2,51 +2,181 @@
 <%- include('partials/nav') %>
 <div class="container">
   <div class="card">
+    <% const reportSetupEditable = typeof canEditReportSetup !== 'undefined' && canEditReportSetup; %>
     <div class="card-header">
       <a class="back-link" href="<%= experimentPath(report.experiment.id) %>" aria-label="Back to experiment">
         <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
       </a>
       <div>
-        <h1 class="card-title">Experiment Report #<%= report.experiment.id %></h1>
+        <h1 class="card-title">Report setup #<%= report.experiment.id %></h1>
         <div class="small-note"><%- formatInline(report.experiment.name) %></div>
       </div>
       <% if (typeof reportConfig !== 'undefined' && reportConfig) { %>
         <div class="section-actions">
           <% if (reportConfig.signed_at) { %>
             <span class="status-pill status-done">Signed</span>
+          <% } else if (reportConfig.submitted_for_signature_at) { %>
+            <span class="status-pill status-progress">Awaiting signature</span>
           <% } %>
         </div>
       <% } %>
     </div>
-    <div class="report-meta">
-      <div>
-        <div class="small-note">Executors</div>
-        <div><strong><%- formatInline(report.executors || '-') %></strong></div>
-      </div>
-      <div>
-        <div class="small-note">Machine</div>
-        <div><strong><%- formatInline(report.machineName || '-') %></strong></div>
-      </div>
-      <% if (reportConfig && reportConfig.signed_at) { %>
-        <div>
-          <div class="small-note">Signed by</div>
-          <div>
-            <strong><%- formatInline((signer?.name || signer?.email || '-') ) %></strong>
-            <div class="small-note"><%= new Date(reportConfig.signed_at).toLocaleString() %></div>
+    <% if (reportSetupEditable) { %>
+      <% const reportSetupManager = typeof canManageReportSetup !== 'undefined' && canManageReportSetup; %>
+      <form class="pure-form form-grid report-setup-form" action="/reports/<%= reportConfig.id %>/setup" method="post">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <fieldset class="report-setup-group form-wide">
+          <legend>Document</legend>
+          <div class="report-setup-fields report-setup-fields-document">
+            <div class="report-title-field">
+              <label for="reportSetupName">Report title</label>
+              <input id="reportSetupName" name="name" type="text" maxlength="160" required value="<%= reportConfig.name %>">
+            </div>
+            <div>
+              <label for="reportNumber">Report number</label>
+              <input id="reportNumber" name="report_number" type="text" maxlength="64" required <%= reportSetupManager ? '' : 'disabled' %> value="<%= reportConfig.report_number || `RPT-${String(reportConfig.created_at || '').slice(0, 10).replace(/-/g, '')}-${String(reportConfig.id).padStart(4, '0')}` %>">
+              <% if (!reportSetupManager) { %><input type="hidden" name="report_number" value="<%= reportConfig.report_number || `RPT-${reportConfig.id}` %>"><% } %>
+            </div>
+            <div>
+              <label for="reportType">Type and template</label>
+              <select id="reportType" name="report_type" <%= reportSetupManager ? '' : 'disabled' %>>
+                <option value="QUALIFICATION" <%= reportConfig.report_type === 'QUALIFICATION' ? 'selected' : '' %>>Qualification — standard template</option>
+                <option value="DOE" <%= reportConfig.report_type === 'DOE' ? 'selected' : '' %>>DOE — standard template</option>
+                <option value="COMBINED" <%= reportConfig.report_type === 'COMBINED' ? 'selected' : '' %>>Combined — standard template</option>
+              </select>
+              <% if (!reportSetupManager) { %><input type="hidden" name="report_type" value="<%= reportConfig.report_type %>"><% } %>
+            </div>
           </div>
+        </fieldset>
+        <fieldset class="report-setup-group form-wide">
+          <legend>Roles and approval</legend>
+          <div class="report-setup-fields">
+            <div>
+              <label for="reportAuthor">Author — prepares the report</label>
+              <select id="reportAuthor" name="author_user_id" <%= reportSetupManager ? '' : 'disabled' %>>
+                <% if (!reportSetupManager && reportConfig.author_user_id) { %>
+                  <option value="<%= reportConfig.author_user_id %>" selected><%= author?.name || author?.email || 'Assigned author' %></option>
+                <% } else { %>
+                  <option value="">Not assigned</option>
+                  <% assignableUsers.forEach((user) => { %>
+                    <option value="<%= user.id %>" <%= reportConfig.author_user_id === user.id ? 'selected' : '' %>><%= user.name || user.email %></option>
+                  <% }); %>
+                <% } %>
+              </select>
+              <% if (!reportSetupManager) { %><input type="hidden" name="author_user_id" value="<%= reportConfig.author_user_id || '' %>"><% } %>
+            </div>
+            <div>
+              <label for="reportResponsible">Responsible signer</label>
+              <select id="reportResponsible" name="responsible_user_id" <%= reportSetupManager ? '' : 'disabled' %>>
+                <% if (!reportSetupManager && reportConfig.responsible_user_id) { %>
+                  <option value="<%= reportConfig.responsible_user_id %>" selected><%= responsible?.name || responsible?.email || 'Assigned signer' %></option>
+                <% } else { %>
+                  <option value="">Not assigned</option>
+                  <% assignableUsers.forEach((user) => { %>
+                    <option value="<%= user.id %>" <%= reportConfig.responsible_user_id === user.id ? 'selected' : '' %>><%= user.name || user.email %></option>
+                  <% }); %>
+                <% } %>
+              </select>
+              <% if (!reportSetupManager) { %><input type="hidden" name="responsible_user_id" value="<%= reportConfig.responsible_user_id || '' %>"><% } %>
+            </div>
+          </div>
+        </fieldset>
+        <fieldset class="report-setup-group form-wide">
+          <legend>Dates</legend>
+          <div class="report-setup-fields">
+            <div>
+              <label for="reportDueAt">Author due date</label>
+              <input id="reportDueAt" name="due_at" type="date" <%= reportSetupManager ? '' : 'disabled' %> value="<%= reportConfig.due_at || '' %>">
+              <% if (!reportSetupManager) { %><input type="hidden" name="due_at" value="<%= reportConfig.due_at || '' %>"><% } %>
+            </div>
+            <div>
+              <label for="signatureSlaDays">Signature SLA</label>
+              <div class="report-sla-field">
+                <input id="signatureSlaDays" name="signature_sla_days" type="number" min="0" max="30" required <%= reportSetupManager ? '' : 'disabled' %> value="<%= reportConfig.signature_sla_days %>">
+                <% if (!reportSetupManager) { %><input type="hidden" name="signature_sla_days" value="<%= reportConfig.signature_sla_days %>"><% } %>
+                <span>calendar days after sending</span>
+              </div>
+            </div>
+          </div>
+        </fieldset>
+        <fieldset class="report-setup-group form-wide">
+          <legend>Report brief</legend>
+          <label for="reportSetupDescription">Description</label>
+          <textarea id="reportSetupDescription" name="description" rows="4" maxlength="4000" placeholder="Purpose, scope or notes for this report"><%= reportDescription %></textarea>
+        </fieldset>
+        <div class="section-actions form-wide">
+          <button class="pure-button pure-button-primary" type="submit">Save setup</button>
         </div>
-      <% } %>
-    </div>
-    <div class="report-description">
-      <div class="small-note">Description</div>
-      <div><%- formatInline(report.experiment.notes || '-') %></div>
-    </div>
+      </form>
+    <% } else if (typeof reportConfig !== 'undefined' && reportConfig) { %>
+      <div class="report-meta">
+        <div>
+          <div class="small-note">Author</div>
+          <div><strong><%- formatInline(author?.name || author?.email || '-') %></strong></div>
+        </div>
+        <div>
+          <div class="small-note">Responsible</div>
+          <div><strong><%- formatInline(responsible?.name || responsible?.email || '-') %></strong></div>
+        </div>
+        <div>
+          <div class="small-note">Due date</div>
+          <div><strong><%= reportConfig.due_at || '-' %></strong></div>
+        </div>
+        <div>
+          <div class="small-note">Signature due</div>
+          <div><strong><%= reportConfig.signature_due_at || '-' %></strong></div>
+        </div>
+      </div>
+      <div class="report-description">
+        <div class="small-note">Description</div>
+        <div><%- formatInline(reportDescription || '-') %></div>
+      </div>
+    <% } %>
+    <% if (reportSetupEditable) { %>
+      <div class="report-meta report-setup-summary">
+        <% const currentTaskOwner = reportConfig.submitted_for_signature_at ? responsible : author; %>
+        <div><span class="small-note">Current task owner</span><strong><%- formatInline(currentTaskOwner?.name || currentTaskOwner?.email || '-') %></strong></div>
+        <div><span class="small-note">Responsible signer</span><strong><%- formatInline(responsible?.name || responsible?.email || '-') %></strong></div>
+        <div><span class="small-note">Due date</span><strong><%= reportConfig.due_at || '-' %></strong></div>
+        <div><span class="small-note">Signature due</span><strong><%= reportConfig.signature_due_at || 'Calculated when sent' %></strong></div>
+      </div>
+    <% } %>
     <% if (typeof reportConfig !== 'undefined' && reportConfig) { %>
+      <% if (typeof canOpenTextEditor !== 'undefined' && canOpenTextEditor) { %>
+        <section class="report-editor-entry" aria-labelledby="reportEditorEntryTitle">
+          <div>
+            <div class="report-editor-step">Next step</div>
+            <h2 id="reportEditorEntryTitle">Write the report</h2>
+            <p>Use the structured outline, add research data and prepare the document for signature.</p>
+          </div>
+          <a class="pure-button pure-button-primary report-editor-entry-button" href="/reports/<%= reportConfig.id %>/editor">
+            <span class="material-symbols-rounded" aria-hidden="true">edit_note</span>
+            Open text editor
+          </a>
+        </section>
+      <% } %>
+      <% if (typeof canSubmitForSignature !== 'undefined' && canSubmitForSignature) { %>
+        <section class="report-signature-entry" aria-labelledby="reportSignatureEntryTitle">
+          <div>
+            <div class="report-editor-step">Final step</div>
+            <h2 id="reportSignatureEntryTitle">Send for signature</h2>
+            <p>The writing task will be completed and reassigned to the responsible signer. The signature deadline is calculated from the SLA in setup.</p>
+          </div>
+          <form class="pure-form" action="/reports/<%= reportConfig.id %>/submit-for-signature" method="post" data-confirm="Send this report to the responsible signer?">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button class="pure-button pure-button-primary report-editor-entry-button" type="submit">
+              <span class="material-symbols-rounded" aria-hidden="true">draw</span>
+              Send for signature
+            </button>
+          </form>
+        </section>
+      <% } %>
       <div class="section-actions" style="margin-top: 0.75rem;">
-        <% if (!reportConfig.signed_at) { %>
-          <a class="pure-button pure-button-secondary" href="/reports/<%= reportConfig.id %>/editor">Edit text</a>
-        <% } else { %>
-          <a class="pure-button pure-button-secondary" href="/reports/<%= reportConfig.id %>/editor">Text version</a>
+        <% if (typeof canRecallSignatureSubmission !== 'undefined' && canRecallSignatureSubmission) { %>
+          <form class="pure-form inline-form" action="/reports/<%= reportConfig.id %>/recall-from-signature" method="post" data-confirm="Return this report to the author for revision?">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button class="pure-button" type="submit">Return to author</button>
+          </form>
         <% } %>
         <% if (canSignReport) { %>
           <% if (reportConfig.signed_at) { %>

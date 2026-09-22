@@ -87,11 +87,15 @@ export function createProfileRouter(db: Db) {
       const entityTitle =
         item.entity_type === "qualification_step"
           ? `Qualification Step ${item.step_number ?? "?"}`
-          : item.doe_name || `DOE #${item.entity_id}`;
+          : item.entity_type === "report"
+            ? item.report_name || `Report #${item.entity_id}`
+            : item.doe_name || `DOE #${item.entity_id}`;
       const entityPath =
         item.entity_type === "qualification_step"
           ? `/experiments/${item.experiment_id}/qualification/${item.step_number ?? 1}`
-          : `/experiments/${item.experiment_id}/doe/${item.entity_id}?tab=design`;
+          : item.entity_type === "report"
+            ? `/reports/${item.entity_id}`
+            : `/experiments/${item.experiment_id}/doe/${item.entity_id}?tab=design`;
       return { ...item, entityTitle, entityPath };
     });
     const notifications = listNotificationsByUser(db, userId, 30).map((notice) => {

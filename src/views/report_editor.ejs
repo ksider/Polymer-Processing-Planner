@@ -22,6 +22,7 @@
         </summary>
         <div class="workspace-overflow-actions">
           <button class="pure-button pure-button-secondary" type="button" id="printReport">Export PDF</button>
+          <button class="pure-button pure-button-secondary" type="button" id="exportDocx">Export DOCX</button>
           <button class="pure-button pure-button-primary" type="button" id="saveReport">Save</button>
         </div>
       </details>
@@ -124,16 +125,7 @@
       <span class="toolbar-sep" aria-hidden="true"></span>
       <button class="pure-button button-sm icon-only" type="button" data-cmd="link" title="Link"><span class="material-symbols-rounded">link</span></button>
       <button class="pure-button button-sm icon-only" type="button" data-cmd="image" title="Image"><span class="material-symbols-rounded">image</span></button>
-      <div class="image-tools toolbar-conditional" id="imageToolsGroup" title="Image tools">
-        <button class="pure-button button-sm image-op" type="button" data-cmd="image-width-25" title="Image width 25%">25%</button>
-        <button class="pure-button button-sm image-op" type="button" data-cmd="image-width-50" title="Image width 50%">50%</button>
-        <button class="pure-button button-sm image-op" type="button" data-cmd="image-width-75" title="Image width 75%">75%</button>
-        <button class="pure-button button-sm image-op" type="button" data-cmd="image-width-100" title="Image width 100%">100%</button>
-        <button class="pure-button button-sm image-op" type="button" data-cmd="image-align-left" title="Align image left">L</button>
-        <button class="pure-button button-sm image-op" type="button" data-cmd="image-align-center" title="Align image center">C</button>
-        <button class="pure-button button-sm image-op" type="button" data-cmd="image-align-right" title="Align image right">R</button>
-        <button class="pure-button button-sm image-op danger" type="button" data-cmd="image-delete" title="Delete image">Del</button>
-      </div>
+      <div class="toolbar-image-placeholder" id="imageToolsGroup" hidden aria-hidden="true"></div>
       <div class="table-tools" title="Table tools">
         <button class="pure-button button-sm icon-only" type="button" id="tablePickerToggle" title="Insert table">
           <span class="material-symbols-rounded">table</span>
@@ -150,6 +142,18 @@
           <button class="pure-button button-sm table-op danger" type="button" data-cmd="table-del" title="Delete table">Del</button>
         </div>
       </div>
+    </div>
+    <div class="image-tools image-context-bar toolbar-conditional" id="imageContextBar" title="Selected image">
+      <label class="image-size-control" for="imageWidthRange" title="Image width">
+        <span>Width</span>
+        <input id="imageWidthRange" type="range" min="20" max="100" step="5" value="80">
+        <output id="imageWidthValue" for="imageWidthRange">80%</output>
+      </label>
+      <button class="pure-button button-sm image-op" type="button" data-cmd="image-width-100" title="Fit to text width">Fit</button>
+      <button class="pure-button button-sm image-op" type="button" data-cmd="image-align-left" title="Align image left">L</button>
+      <button class="pure-button button-sm image-op" type="button" data-cmd="image-align-center" title="Align image center">C</button>
+      <button class="pure-button button-sm image-op" type="button" data-cmd="image-align-right" title="Align image right">R</button>
+      <button class="pure-button button-sm image-op danger" type="button" data-cmd="image-delete" title="Delete image">Del</button>
     </div>
     <div id="editorRoot" class="editor-surface"></div>
     <div class="save-status small-note" id="saveStatus"></div>
@@ -169,6 +173,66 @@
     <button class="pure-button" type="button" data-source-insert="table">Insert table</button>
     <button class="pure-button pure-button-primary" type="button" data-source-insert="section">Insert section</button>
     <button class="pure-button pure-button-primary" type="button" data-source-insert="figure">Insert figure</button>
+  </div>
+</dialog>
+
+<dialog class="modal-frame doe-analysis-dialog" id="doeAnalysisDialog">
+  <div class="modal-header">
+    <div>
+      <span class="workspace-eyebrow">DOE analysis</span>
+      <strong id="doeAnalysisTitle">Analysis</strong>
+    </div>
+    <button class="pure-button" type="button" id="closeDoeAnalysis">Close</button>
+  </div>
+  <div class="modal-body doe-dialog-body">
+    <div class="doe-analysis-controls">
+      <label>View
+        <select id="doeAnalysisMode">
+          <option value="overall">Overall summary</option>
+          <option value="factor">By factor</option>
+          <option value="matrix">Factor matrix</option>
+          <option value="regression">Linear model</option>
+        </select>
+      </label>
+      <label>Output
+        <select id="doeAnalysisOutput"></select>
+      </label>
+      <label id="doeAnalysisFactorField">Factor
+        <select id="doeAnalysisFactor"></select>
+      </label>
+      <label id="doeAnalysisSecondFactorField">Second factor
+        <select id="doeAnalysisSecondFactor"></select>
+      </label>
+    </div>
+    <p class="small-note" id="doeAnalysisMessage" hidden></p>
+    <div class="doe-table-scroll" id="doeAnalysisTable"></div>
+  </div>
+  <div class="modal-footer source-preview-actions">
+    <button class="pure-button" type="button" id="insertDoeAnalysisTable">Insert table</button>
+    <button class="pure-button pure-button-primary" type="button" id="insertDoeAnalysisSection">Insert section</button>
+    <button class="pure-button pure-button-primary" type="button" id="insertDoeAnalysisChart">Insert chart</button>
+  </div>
+</dialog>
+
+<dialog class="modal-frame doe-runs-dialog" id="doeRunsDialog">
+  <div class="modal-header">
+    <div>
+      <span class="workspace-eyebrow">DOE run data</span>
+      <strong id="doeRunsTitle">Runs</strong>
+    </div>
+    <button class="pure-button" type="button" id="closeDoeRuns">Close</button>
+  </div>
+  <div class="modal-body doe-dialog-body">
+    <p class="small-note" id="doeRunsMeta"></p>
+    <div class="doe-table-scroll" id="doeRunsTable"></div>
+  </div>
+  <div class="modal-footer doe-runs-footer">
+    <div class="doe-runs-pagination">
+      <button class="pure-button" type="button" id="doeRunsPrevious">Previous</button>
+      <span class="small-note" id="doeRunsPage">Page 1</span>
+      <button class="pure-button" type="button" id="doeRunsNext">Next</button>
+    </div>
+    <button class="pure-button pure-button-primary" type="button" id="insertDoeRunReferences">Insert selected runs</button>
   </div>
 </dialog>
 
@@ -218,7 +282,9 @@
     ? Array.from(editorToolbar.children).filter((child) => !child.classList.contains('editor-toolbar-tabs'))
     : [];
   toolbarControls.forEach((control, index) => {
-    if (index <= 2) control.dataset.toolbarTab = 'history';
+    if (control.classList.contains('toolbar-image-placeholder')) control.dataset.toolbarTab = 'none';
+    else if (control.classList.contains('table-tools')) control.dataset.toolbarTab = 'table';
+    else if (index <= 2) control.dataset.toolbarTab = 'history';
     else if (index === 19 || index === 31) control.dataset.toolbarTab = 'none';
     else if (index <= 18) control.dataset.toolbarTab = 'font';
     else if (index <= 31) control.dataset.toolbarTab = 'text';
@@ -259,19 +325,30 @@
   syncWorkspaceHeight();
   window.addEventListener('resize', syncWorkspaceHeight);
 
+  const normalizeImageWidth = (rawWidth) => {
+    const parsed = Number.parseFloat(String(rawWidth ?? ''));
+    if (!Number.isFinite(parsed)) return '80%';
+    return `${Math.min(100, Math.max(20, Math.round(parsed / 5) * 5))}%`;
+  };
+
   const ReportImage = Image.extend({
     addAttributes() {
       return {
         ...this.parent?.(),
         width: {
-          default: null,
-          parseHTML: (element) => element.getAttribute('data-width'),
-          renderHTML: (attributes) => (attributes.width ? { 'data-width': attributes.width } : {})
+          default: '80%',
+          parseHTML: (element) => normalizeImageWidth(element.getAttribute('data-width') || element.style.width),
+          renderHTML: (attributes) => {
+            const width = normalizeImageWidth(attributes.width);
+            return { 'data-width': width, style: `width: ${width};` };
+          }
         },
         align: {
-          default: null,
-          parseHTML: (element) => element.getAttribute('data-align'),
-          renderHTML: (attributes) => (attributes.align ? { 'data-align': attributes.align } : {})
+          default: 'center',
+          parseHTML: (element) => ['left', 'center', 'right'].includes(element.getAttribute('data-align') || '')
+            ? element.getAttribute('data-align')
+            : 'center',
+          renderHTML: (attributes) => ({ 'data-align': attributes.align || 'center' })
         }
       };
     }
@@ -510,7 +587,33 @@
   const sourcePreviewDialog = document.getElementById('sourcePreviewDialog');
   const sourcePreviewTitle = document.getElementById('sourcePreviewTitle');
   const sourcePreviewBody = document.getElementById('sourcePreviewBody');
+  const reportId = <%= Number(reportConfig.id) %>;
+  const doeAnalysisDialog = document.getElementById('doeAnalysisDialog');
+  const doeAnalysisTitle = document.getElementById('doeAnalysisTitle');
+  const doeAnalysisMode = document.getElementById('doeAnalysisMode');
+  const doeAnalysisOutput = document.getElementById('doeAnalysisOutput');
+  const doeAnalysisFactor = document.getElementById('doeAnalysisFactor');
+  const doeAnalysisSecondFactor = document.getElementById('doeAnalysisSecondFactor');
+  const doeAnalysisFactorField = document.getElementById('doeAnalysisFactorField');
+  const doeAnalysisSecondFactorField = document.getElementById('doeAnalysisSecondFactorField');
+  const doeAnalysisMessage = document.getElementById('doeAnalysisMessage');
+  const doeAnalysisTable = document.getElementById('doeAnalysisTable');
+  const insertDoeAnalysisTable = document.getElementById('insertDoeAnalysisTable');
+  const insertDoeAnalysisSection = document.getElementById('insertDoeAnalysisSection');
+  const insertDoeAnalysisChart = document.getElementById('insertDoeAnalysisChart');
+  const doeRunsDialog = document.getElementById('doeRunsDialog');
+  const doeRunsTitle = document.getElementById('doeRunsTitle');
+  const doeRunsMeta = document.getElementById('doeRunsMeta');
+  const doeRunsTable = document.getElementById('doeRunsTable');
+  const doeRunsPrevious = document.getElementById('doeRunsPrevious');
+  const doeRunsNext = document.getElementById('doeRunsNext');
+  const doeRunsPage = document.getElementById('doeRunsPage');
+  const insertDoeRunReferences = document.getElementById('insertDoeRunReferences');
   let selectedSource = null;
+  let selectedDoeStudyId = null;
+  let doeAnalysisData = null;
+  let doeRunsData = null;
+  const selectedDoeRuns = new Map();
 
   const sourceText = (value) => String(value ?? '').trim();
   const makeTextNode = (text) => ({ type: 'text', text: sourceText(text) });
@@ -560,6 +663,16 @@
       }))
     ]
   });
+  const makeDataTable = (columns, rows) => ({
+    type: 'table',
+    content: [
+      { type: 'tableRow', content: (columns || []).map((value) => ({ type: 'tableHeader', content: [makeParagraphNode(value)] })) },
+      ...(rows || []).map((row) => ({
+        type: 'tableRow',
+        content: row.map((value) => ({ type: 'tableCell', content: [makeParagraphNode(value)] }))
+      }))
+    ]
+  });
   const makeRunReference = (source, addObservation) => {
     const reference = {
       type: 'paragraph',
@@ -574,6 +687,219 @@
       ...(source.rows?.length ? [makeRowsTable(source.rows)] : []),
       ...(addObservation ? [makeParagraphNode('Test observation / artifact: ')] : [])
     ];
+  };
+
+  const makeDoeRunReference = (run, fields) => {
+    const reference = {
+      type: 'paragraph',
+      content: [{
+        type: 'text',
+        text: `DOE run: ${run.code}`,
+        marks: [{ type: 'link', attrs: { href: run.url, target: '_blank', rel: 'noopener noreferrer' } }]
+      }]
+    };
+    const rows = [
+      { label: 'Responsible', value: run.responsible },
+      { label: 'Status', value: run.excluded ? 'Excluded from analysis' : run.done ? 'Done' : 'In progress' },
+      ...(fields || []).map((field) => ({ label: field.unit ? `${field.label} (${field.unit})` : field.label, value: run.values?.[field.key] || '–' }))
+    ];
+    return [reference, makeRowsTable(rows), makeParagraphNode('Run observation / error / artifact: ')];
+  };
+
+  const buildDoeAnalysisOption = (chart) => {
+    if (chart?.type === 'heatmap') {
+      const values = (chart.values || []).map((value) => value[2]).filter((value) => Number.isFinite(value));
+      return {
+        title: { text: chart.title, left: 'center', textStyle: { fontSize: 14 } },
+        grid: { left: 70, right: 90, top: 50, bottom: 70, containLabel: true },
+        xAxis: { type: 'category', name: chart.xLabel || '', data: chart.xValues || [] },
+        yAxis: { type: 'category', name: chart.yLabel || '', data: chart.yValues || [] },
+        visualMap: { min: values.length ? Math.min(...values) : 0, max: values.length ? Math.max(...values) : 1, calculable: true, orient: 'vertical', right: 8, top: 'middle' },
+        series: [{ type: 'heatmap', data: chart.values || [], label: { show: true } }]
+      };
+    }
+    return {
+      title: { text: chart?.title || 'DOE analysis', left: 'center', textStyle: { fontSize: 14 } },
+      grid: { left: 65, right: 30, top: 50, bottom: 75, containLabel: true },
+      xAxis: { type: 'category', data: chart?.categories || [], axisLabel: { rotate: 32 } },
+      yAxis: { type: 'value', name: chart?.unit || '' },
+      series: [{ type: chart?.type === 'bar' ? 'bar' : 'line', symbol: 'circle', data: chart?.values || [] }]
+    };
+  };
+
+  const makePreviewTable = (columns, rows, emptyText) => {
+    const fragment = document.createDocumentFragment();
+    if (!rows?.length) {
+      const empty = document.createElement('p');
+      empty.className = 'small-note';
+      empty.textContent = emptyText || 'No data available.';
+      fragment.appendChild(empty);
+      return fragment;
+    }
+    const table = document.createElement('table');
+    table.className = 'pure-table table-compact source-preview-table';
+    const head = table.createTHead().insertRow();
+    (columns || []).forEach((label) => {
+      const cell = document.createElement('th');
+      cell.textContent = label;
+      head.appendChild(cell);
+    });
+    const body = table.createTBody();
+    rows.forEach((values) => {
+      const row = body.insertRow();
+      values.forEach((value) => {
+        const cell = row.insertCell();
+        cell.textContent = sourceText(value) || '–';
+      });
+    });
+    fragment.appendChild(table);
+    return fragment;
+  };
+
+  const setSelectOptions = (select, options, selectedId) => {
+    if (!(select instanceof HTMLSelectElement)) return;
+    select.replaceChildren();
+    (options || []).forEach((optionData) => {
+      const option = document.createElement('option');
+      option.value = String(optionData.id);
+      option.textContent = optionData.unit ? `${optionData.label} (${optionData.unit})` : optionData.label;
+      select.appendChild(option);
+    });
+    if (selectedId != null) select.value = String(selectedId);
+  };
+
+  const setDoeAnalysisLoading = (message) => {
+    if (doeAnalysisTable) doeAnalysisTable.replaceChildren();
+    if (doeAnalysisMessage) {
+      doeAnalysisMessage.hidden = false;
+      doeAnalysisMessage.textContent = message;
+    }
+  };
+
+  const renderDoeAnalysis = (data) => {
+    doeAnalysisData = data;
+    if (doeAnalysisTitle) doeAnalysisTitle.textContent = data?.study?.name || 'DOE analysis';
+    setSelectOptions(doeAnalysisOutput, data?.outputs, data?.selected?.outputId);
+    setSelectOptions(doeAnalysisFactor, data?.factors, data?.selected?.factorId);
+    setSelectOptions(doeAnalysisSecondFactor, data?.factors, data?.selected?.secondFactorId);
+    if (doeAnalysisMode instanceof HTMLSelectElement && data?.selected?.mode) doeAnalysisMode.value = data.selected.mode;
+    const mode = data?.selected?.mode || 'overall';
+    if (doeAnalysisFactorField) doeAnalysisFactorField.hidden = mode === 'overall';
+    if (doeAnalysisSecondFactorField) doeAnalysisSecondFactorField.hidden = mode !== 'matrix' && mode !== 'regression';
+    const noOutputs = !(data?.outputs || []).length;
+    [doeAnalysisMode, doeAnalysisOutput, doeAnalysisFactor, doeAnalysisSecondFactor].forEach((control) => {
+      if (control instanceof HTMLSelectElement) control.disabled = noOutputs;
+    });
+    const analysis = data?.analysis;
+    if (doeAnalysisMessage) {
+      doeAnalysisMessage.hidden = !analysis?.message;
+      doeAnalysisMessage.textContent = analysis?.message || '';
+    }
+    if (doeAnalysisTable) {
+      doeAnalysisTable.replaceChildren(makePreviewTable(analysis?.columns, analysis?.rows, analysis?.message));
+    }
+    if (insertDoeAnalysisTable instanceof HTMLButtonElement) insertDoeAnalysisTable.disabled = isSigned || !analysis?.rows?.length;
+    if (insertDoeAnalysisSection instanceof HTMLButtonElement) insertDoeAnalysisSection.disabled = isSigned || !analysis?.rows?.length;
+    if (insertDoeAnalysisChart instanceof HTMLButtonElement) {
+      insertDoeAnalysisChart.hidden = !analysis?.chart;
+      insertDoeAnalysisChart.disabled = isSigned || !analysis?.chart;
+    }
+  };
+
+  const loadDoeAnalysis = async () => {
+    if (!selectedDoeStudyId) return;
+    setDoeAnalysisLoading('Loading analysis…');
+    const params = new URLSearchParams({
+      mode: sourceText(doeAnalysisMode?.value) || 'overall',
+      output: sourceText(doeAnalysisOutput?.value),
+      factor: sourceText(doeAnalysisFactor?.value),
+      second_factor: sourceText(doeAnalysisSecondFactor?.value)
+    });
+    try {
+      const response = await fetch(`/reports/${reportId}/sources/doe/${selectedDoeStudyId}/analysis?${params}`);
+      if (!response.ok) throw new Error('Analysis is unavailable.');
+      renderDoeAnalysis(await response.json());
+    } catch (error) {
+      setDoeAnalysisLoading(error instanceof Error ? error.message : 'Analysis is unavailable.');
+    }
+  };
+
+  const renderDoeRuns = (data) => {
+    doeRunsData = data;
+    if (doeRunsTitle) doeRunsTitle.textContent = data?.study?.name || 'DOE runs';
+    if (doeRunsMeta) doeRunsMeta.textContent = `${data?.total || 0} runs · data and responsible person`;
+    if (doeRunsTable) {
+      doeRunsTable.replaceChildren();
+      if (!data?.runs?.length) {
+        const empty = document.createElement('p');
+        empty.className = 'small-note';
+        empty.textContent = 'No runs in this study.';
+        doeRunsTable.appendChild(empty);
+      } else {
+        const table = document.createElement('table');
+        table.className = 'pure-table table-compact source-preview-table doe-runs-table';
+        const head = table.createTHead().insertRow();
+        ['', 'Run', 'Responsible', 'Status', ...(data.fields || []).map((field) => field.unit ? `${field.label} (${field.unit})` : field.label)].forEach((label) => {
+          const cell = document.createElement('th');
+          cell.textContent = label;
+          head.appendChild(cell);
+        });
+        const body = table.createTBody();
+        data.runs.forEach((run) => {
+          const row = body.insertRow();
+          const selection = document.createElement('input');
+          selection.type = 'checkbox';
+          selection.checked = selectedDoeRuns.has(run.id);
+          selection.setAttribute('aria-label', `Select ${run.code}`);
+          selection.addEventListener('change', () => {
+            if (selection.checked) selectedDoeRuns.set(run.id, run);
+            else selectedDoeRuns.delete(run.id);
+            if (insertDoeRunReferences instanceof HTMLButtonElement) insertDoeRunReferences.disabled = isSigned || selectedDoeRuns.size === 0;
+          });
+          row.insertCell().appendChild(selection);
+          const runLink = document.createElement('a');
+          runLink.href = run.url;
+          runLink.target = '_blank';
+          runLink.rel = 'noopener noreferrer';
+          runLink.textContent = run.code;
+          row.insertCell().appendChild(runLink);
+          row.insertCell().textContent = run.responsible;
+          row.insertCell().textContent = run.excluded ? 'Excluded' : run.done ? 'Done' : 'In progress';
+          (data.fields || []).forEach((field) => {
+            row.insertCell().textContent = run.values?.[field.key] || '–';
+          });
+        });
+        doeRunsTable.appendChild(table);
+      }
+    }
+    if (doeRunsPage) doeRunsPage.textContent = `Page ${data?.page || 1} of ${data?.pageCount || 1}`;
+    if (doeRunsPrevious instanceof HTMLButtonElement) doeRunsPrevious.disabled = !data || data.page <= 1;
+    if (doeRunsNext instanceof HTMLButtonElement) doeRunsNext.disabled = !data || data.page >= data.pageCount;
+    if (insertDoeRunReferences instanceof HTMLButtonElement) insertDoeRunReferences.disabled = isSigned || selectedDoeRuns.size === 0;
+  };
+
+  const loadDoeRuns = async (page = 1) => {
+    if (!selectedDoeStudyId) return;
+    if (doeRunsTable) {
+      doeRunsTable.replaceChildren();
+      const loading = document.createElement('p');
+      loading.className = 'small-note';
+      loading.textContent = 'Loading runs…';
+      doeRunsTable.appendChild(loading);
+    }
+    try {
+      const response = await fetch(`/reports/${reportId}/sources/doe/${selectedDoeStudyId}/runs?page=${page}&page_size=25`);
+      if (!response.ok) throw new Error('Run data is unavailable.');
+      renderDoeRuns(await response.json());
+    } catch (error) {
+      if (doeRunsTable) {
+        doeRunsTable.replaceChildren();
+        const message = document.createElement('p');
+        message.className = 'small-note';
+        message.textContent = error instanceof Error ? error.message : 'Run data is unavailable.';
+        doeRunsTable.appendChild(message);
+      }
+    }
   };
 
   const renderSourcePreview = (source) => {
@@ -656,6 +982,22 @@
   };
 
   const openSourcePreview = (source) => {
+    if (source.kind === 'doe-analysis') {
+      selectedDoeStudyId = source.studyId;
+      doeAnalysisData = null;
+      if (doeAnalysisMode instanceof HTMLSelectElement) doeAnalysisMode.value = 'overall';
+      if (doeAnalysisDialog instanceof HTMLDialogElement) doeAnalysisDialog.showModal();
+      loadDoeAnalysis();
+      return;
+    }
+    if (source.kind === 'doe-runs') {
+      selectedDoeStudyId = source.studyId;
+      selectedDoeRuns.clear();
+      doeRunsData = null;
+      if (doeRunsDialog instanceof HTMLDialogElement) doeRunsDialog.showModal();
+      loadDoeRuns(1);
+      return;
+    }
     selectedSource = source;
     renderSourcePreview(source);
     if (sourcePreviewDialog instanceof HTMLDialogElement) sourcePreviewDialog.showModal();
@@ -691,7 +1033,11 @@
         const name = document.createElement('strong');
         name.textContent = source.label;
         const detail = document.createElement('small');
-        detail.textContent = source.kind === 'run' ? 'Run result and reference' : source.kind === 'chart' ? 'Preview and insert figure' : source.kind === 'results' ? 'Preview and insert results' : source.kind === 'recipe' ? `${source.components?.length || 0} components` : 'Preview and insert';
+        detail.textContent = source.kind === 'doe-analysis'
+          ? 'Choose a calculation and insert the result'
+          : source.kind === 'doe-runs'
+            ? `${source.runCount || 0} runs · data and responsible person`
+            : source.kind === 'run' ? 'Run result and reference' : source.kind === 'chart' ? 'Preview and insert figure' : source.kind === 'results' ? 'Preview and insert results' : source.kind === 'recipe' ? `${source.components?.length || 0} components` : 'Preview and insert';
         button.append(name, detail);
         button.addEventListener('click', () => openSourcePreview(source));
         parent.appendChild(button);
@@ -723,6 +1069,49 @@
 
   document.getElementById('closeSourcePreview')?.addEventListener('click', () => {
     if (sourcePreviewDialog instanceof HTMLDialogElement) sourcePreviewDialog.close();
+  });
+
+  document.getElementById('closeDoeAnalysis')?.addEventListener('click', () => {
+    if (doeAnalysisDialog instanceof HTMLDialogElement) doeAnalysisDialog.close();
+  });
+  document.getElementById('closeDoeRuns')?.addEventListener('click', () => {
+    if (doeRunsDialog instanceof HTMLDialogElement) doeRunsDialog.close();
+  });
+  [doeAnalysisMode, doeAnalysisOutput, doeAnalysisFactor, doeAnalysisSecondFactor].forEach((control) => {
+    control?.addEventListener('change', loadDoeAnalysis);
+  });
+  doeRunsPrevious?.addEventListener('click', () => loadDoeRuns(Math.max((doeRunsData?.page || 1) - 1, 1)));
+  doeRunsNext?.addEventListener('click', () => loadDoeRuns((doeRunsData?.page || 1) + 1));
+
+  const insertDoeAnalysis = (kind) => {
+    const analysis = doeAnalysisData?.analysis;
+    if (!analysis || isSigned) return;
+    let content = [];
+    if (kind === 'chart' && analysis.chart) {
+      const imageUrl = renderChartImage(() => buildDoeAnalysisOption(analysis.chart));
+      content = [
+        makeHeadingNode(`${doeAnalysisData.study.name} — ${analysis.title}`),
+        { type: 'image', attrs: { src: imageUrl, alt: analysis.title, title: null } },
+        makeParagraphNode(analysis.title)
+      ];
+    } else if (analysis.rows?.length) {
+      const table = makeDataTable(analysis.columns, analysis.rows);
+      content = kind === 'section'
+        ? [makeHeadingNode(`${doeAnalysisData.study.name} — ${analysis.title}`), table]
+        : [table];
+    }
+    if (content.length) editor.chain().focus().insertContent(content).run();
+    if (doeAnalysisDialog instanceof HTMLDialogElement) doeAnalysisDialog.close();
+  };
+  insertDoeAnalysisTable?.addEventListener('click', () => insertDoeAnalysis('table'));
+  insertDoeAnalysisSection?.addEventListener('click', () => insertDoeAnalysis('section'));
+  insertDoeAnalysisChart?.addEventListener('click', () => insertDoeAnalysis('chart'));
+  insertDoeRunReferences?.addEventListener('click', () => {
+    if (isSigned || !selectedDoeRuns.size || !doeRunsData) return;
+    const content = [makeHeadingNode(`${doeRunsData.study.name} — selected runs`)];
+    selectedDoeRuns.forEach((run) => content.push(...makeDoeRunReference(run, doeRunsData.fields)));
+    editor.chain().focus().insertContent(content).run();
+    if (doeRunsDialog instanceof HTMLDialogElement) doeRunsDialog.close();
   });
 
   document.querySelectorAll('[data-source-insert]').forEach((button) => {
@@ -808,7 +1197,7 @@
     if (command === 'image') {
       const src = window.prompt('Image URL');
       if (!src) return;
-      chain.setImage({ src: src.trim() }).run();
+      chain.setImage({ src: src.trim(), width: '80%', align: 'center' }).run();
     }
     if (command === 'image-width-25') chain.updateAttributes('image', { width: '25%' }).run();
     if (command === 'image-width-50') chain.updateAttributes('image', { width: '50%' }).run();
@@ -820,7 +1209,7 @@
     if (command === 'image-delete' && editor.isActive('image')) chain.deleteSelection().run();
   };
 
-  document.querySelectorAll('#editorToolbar [data-cmd]').forEach((button) => {
+  document.querySelectorAll('#editorToolbar [data-cmd], #imageContextBar [data-cmd]').forEach((button) => {
     button.addEventListener('click', () => execCommand(button.dataset.cmd || ''));
   });
 
@@ -972,7 +1361,9 @@
   const tablePickerGrid = document.getElementById('tablePickerGrid');
   const tablePickerLabel = document.getElementById('tablePickerLabel');
   const tablePickerToggle = document.getElementById('tablePickerToggle');
-  const imageToolsGroup = document.getElementById('imageToolsGroup');
+  const imageContextBar = document.getElementById('imageContextBar');
+  const imageWidthRange = document.getElementById('imageWidthRange');
+  const imageWidthValue = document.getElementById('imageWidthValue');
   const tableOpsGroup = document.getElementById('tableOpsGroup');
   const pickerRows = 10;
   const pickerCols = 10;
@@ -1038,9 +1429,22 @@
   const syncContextToolsVisibility = () => {
     const imageActive = editor.isActive('image');
     const tableActive = editor.isActive('table');
-    imageToolsGroup?.classList.toggle('is-visible', imageActive);
+    imageContextBar?.classList.toggle('is-visible', imageActive);
     tableOpsGroup?.classList.toggle('is-visible', tableActive);
+    if (imageActive) {
+      const width = normalizeImageWidth(editor.getAttributes('image').width);
+      const numericWidth = Number.parseInt(width, 10);
+      if (imageWidthRange instanceof HTMLInputElement) imageWidthRange.value = String(numericWidth);
+      if (imageWidthValue) imageWidthValue.textContent = width;
+    }
   };
+
+  imageWidthRange?.addEventListener('input', () => {
+    if (isSigned || !editor.isActive('image') || !(imageWidthRange instanceof HTMLInputElement)) return;
+    const width = normalizeImageWidth(imageWidthRange.value);
+    editor.chain().focus().updateAttributes('image', { width }).run();
+    if (imageWidthValue) imageWidthValue.textContent = width;
+  });
 
   if (isSigned) {
     document.getElementById('editorToolbar')?.classList.add('is-disabled');
@@ -1184,6 +1588,26 @@
         exportPdfBtn.textContent = 'Export PDF';
       }
     }
+  });
+
+  const exportDocxBtn = document.getElementById('exportDocx');
+  exportDocxBtn?.addEventListener('click', async () => {
+    if (!isSigned) {
+      await persistEditor(false);
+    }
+    if (exportDocxBtn instanceof HTMLButtonElement) {
+      exportDocxBtn.disabled = true;
+      exportDocxBtn.textContent = 'Preparing...';
+    }
+    saveStatus.textContent = 'Preparing DOCX...';
+    window.location.assign(`/reports/<%= reportConfig.id %>/export.docx?ts=${Date.now()}`);
+    window.setTimeout(() => {
+      if (exportDocxBtn instanceof HTMLButtonElement) {
+        exportDocxBtn.disabled = false;
+        exportDocxBtn.textContent = 'Export DOCX';
+      }
+      saveStatus.textContent = 'DOCX download started';
+    }, 900);
   });
 </script>
 <%- include('partials/foot') %>

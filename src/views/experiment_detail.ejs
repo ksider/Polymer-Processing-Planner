@@ -188,7 +188,7 @@
         </button>
       <% } %>
     </div>
-    <p class="small-note">Generate report variants for this experiment (qualification/DOE/outputs).</p>
+    <p class="small-note">Open the report setup first, then continue to the text editor.</p>
     <div class="section-list">
       <% if (!reports || reports.length === 0) { %>
         <div class="small-note">No reports yet. Create one.</div>
@@ -197,11 +197,11 @@
         %>
           <div class="section-row">
             <div>
-              <a class="section-title" href="/reports/<%= report.id %>/editor"><strong><%- formatInline(report.name) %></strong></a>
+              <a class="section-title" href="/reports/<%= report.id %>"><strong><%- formatInline(report.name) %></strong></a>
               <div class="small-note">Created: <%= new Date(report.created_at).toLocaleString() %></div>
             </div>
             <div class="section-actions">
-              <a class="pure-button pure-button-secondary" href="/reports/<%= report.id %>/editor">Open workspace</a>
+              <a class="pure-button pure-button-secondary" href="/reports/<%= report.id %>">Open report setup</a>
               <% if (report.signed_at) { %>
                 <span class="status-pill status-done">Signed</span>
               <% } %>
@@ -431,13 +431,21 @@
         <label for="reportExecutors">Executors</label>
         <input id="reportExecutors" name="executors" type="text" placeholder="e.g. Ivan Petrov, Anna Lee" data-default-executors="<%= ownerName || '' %>">
       </div>
+      <div>
+        <label for="reportTypeCreate">Type and template</label>
+        <select id="reportTypeCreate" name="report_type">
+          <option value="COMBINED">Combined — standard template</option>
+          <option value="QUALIFICATION">Qualification — standard template</option>
+          <option value="DOE">DOE — standard template</option>
+        </select>
+      </div>
       <p class="small-note report-create-note">
-        The report opens as a blank workspace. Select and insert research data from the source panel as you write.
+        The report starts with a document outline. After creation, review its setup and then select research data in the text editor.
       </p>
     </form>
   </div>
   <div class="modal-footer">
-    <button class="pure-button pure-button-primary" type="button" id="generateReportBtn">Create workspace</button>
+    <button class="pure-button pure-button-primary" type="button" id="generateReportBtn">Create report</button>
   </div>
 </dialog>
 

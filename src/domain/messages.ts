@@ -10,7 +10,7 @@ export type MessageVisibility = (typeof MESSAGE_VISIBILITY)[number];
 export const MESSAGE_KIND = ["system", "assignment", "task", "manual"] as const;
 export type MessageKind = (typeof MESSAGE_KIND)[number];
 
-export const MESSAGE_SOURCE_ENTITY = ["task", "assignment", "experiment", "qualification_step", "doe"] as const;
+export const MESSAGE_SOURCE_ENTITY = ["task", "assignment", "experiment", "qualification_step", "doe", "report"] as const;
 export type MessageSourceEntity = (typeof MESSAGE_SOURCE_ENTITY)[number];
 
 export type MessageAttachmentEntityType = "experiment" | "qualification_step" | "doe" | "report";

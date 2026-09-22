@@ -1,6 +1,6 @@
 import type { Db } from "../db.js";
 
-export type EntityAssignmentType = "qualification_step" | "doe";
+export type EntityAssignmentType = "qualification_step" | "doe" | "report";
 
 export type EntityAssignmentRow = {
   id: number;
@@ -22,6 +22,7 @@ export type UserAssignedEntityRow = {
   entity_id: number;
   step_number: number | null;
   doe_name: string | null;
+  report_name: string | null;
   assigned_by_user_id: number | null;
   assigned_by_name: string | null;
   assigned_by_email: string | null;
@@ -105,6 +106,7 @@ export function listAssignedEntitiesForUser(db: Db, userId: number): UserAssigne
          ea.entity_id,
          qs.step_number as step_number,
          ds.name as doe_name,
+         rc.name as report_name,
          ea.assigned_by_user_id,
          ab.name as assigned_by_name,
          ab.email as assigned_by_email,
@@ -114,6 +116,7 @@ export function listAssignedEntitiesForUser(db: Db, userId: number): UserAssigne
        JOIN experiments e ON e.id = ea.experiment_id
        LEFT JOIN qual_steps qs ON ea.entity_type = 'qualification_step' AND qs.id = ea.entity_id
        LEFT JOIN doe_studies ds ON ea.entity_type = 'doe' AND ds.id = ea.entity_id
+       LEFT JOIN report_configs rc ON ea.entity_type = 'report' AND rc.id = ea.entity_id
        LEFT JOIN users ab ON ab.id = ea.assigned_by_user_id
        WHERE ea.assignee_user_id = ?
          AND ea.status = 'active'

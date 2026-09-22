@@ -45,6 +45,7 @@ import {
   getReportConfig,
   listReportConfigs,
   updateReportConfig,
+  updateReportNumber,
   upsertReportDocument
 } from "../repos/reports_repo.js";
 import {
@@ -386,8 +387,13 @@ export function createExperimentsRouter(db: Db) {
   router.post("/experiments/:id/reports", (req, res) => {
     const experimentId = Number(req.params.id);
     if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
+    const experiment = getExperiment(db, experimentId);
+    if (!experiment) return res.status(404).send("Experiment not found");
     const nameRaw = String(req.body.name || "").trim();
     const executors = String(req.body.executors || "").trim() || null;
+    const reportTypeRaw = String(req.body.report_type || "COMBINED").toUpperCase();
+    const reportType = reportTypeRaw === "QUALIFICATION" || reportTypeRaw === "DOE" ? reportTypeRaw : "COMBINED";
+    const templateCode = `standard-${reportType.toLowerCase()}`;
     const include = Array.isArray(req.body.include)
       ? req.body.include.map((val: unknown) => String(val))
       : req.body.include
@@ -404,15 +410,36 @@ export function createExperimentsRouter(db: Db) {
       experiment_id: experimentId,
       name,
       executors,
+      // A report owns its own copy from this point on. Starting it from the
+      // experiment description gives the author useful context without later
+      // coupling changes in the report back to the experiment.
+      description: experiment.notes?.trim() || null,
+      author_user_id: req.user?.id ?? null,
+      report_type: reportType,
+      template_code: templateCode,
       include_json: include.length ? JSON.stringify(include) : JSON.stringify([]),
       doe_ids_json: doeIds.length ? JSON.stringify(doeIds) : JSON.stringify([])
     });
+    const draftDateCode = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    updateReportNumber(db, reportId, `RPT-${draftDateCode}-${String(reportId).padStart(4, "0")}`);
     // A report starts with an editable structural outline. Report authors
     // choose the research data to bring into those sections from the workspace.
-    const outlineDocument = JSON.stringify(buildReportWorkspaceOutline());
-    const outlineMarkdown = buildReportWorkspaceOutlineMarkdown();
+    const outlineDocument = JSON.stringify(buildReportWorkspaceOutline(reportType));
+    const outlineMarkdown = buildReportWorkspaceOutlineMarkdown(reportType);
     upsertReportDocument(db, reportId, outlineDocument, null, outlineMarkdown, "tiptap", 1);
-    res.json({ id: reportId, url: `/reports/${reportId}/editor` });
+    if (req.user?.id) {
+      assignEntityResponsibility(db, {
+        experimentId,
+        entityType: "report",
+        entityId: reportId,
+        assigneeUserId: req.user.id,
+        assignedByUserId: req.user.id,
+        experimentName: experiment.name,
+        taskTitle: `Write report: ${name}`,
+        taskDescription: experiment.notes?.trim() || null
+      });
+    }
+    res.json({ id: reportId, url: `/reports/${reportId}` });
   });
 
   router.post("/experiments/:id/reports/:reportId", (req, res) => {
@@ -448,7 +475,7 @@ export function createExperimentsRouter(db: Db) {
       include_json: include.length ? JSON.stringify(include) : (existing.include_json ?? JSON.stringify([])),
       doe_ids_json: doeIds.length ? JSON.stringify(doeIds) : (existing.doe_ids_json ?? JSON.stringify([]))
     });
-    res.json({ id: reportId, url: `/reports/${reportId}/editor` });
+    res.json({ id: reportId, url: `/reports/${reportId}` });
   });
 
   router.post("/experiments/:id/doe/:doeId/clone", (req, res) => {
