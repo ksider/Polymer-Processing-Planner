@@ -6,6 +6,10 @@ import {
   createCustomParam,
   generateRuns
 } from "../services/experiments_service.js";
+import {
+  buildReportWorkspaceOutline,
+  buildReportWorkspaceOutlineMarkdown
+} from "../services/report_service.js";
 import { ensureQualificationDefaults, getQualificationStepsForExperiment } from "../services/qualification_service.js";
 import { listRecipes, getRecipeComponents } from "../repos/recipes_repo.js";
 import {
@@ -36,7 +40,13 @@ import {
 } from "../repos/doe_repo.js";
 import { listQualSummaries } from "../repos/qual_repo.js";
 import { listQualSteps } from "../repos/qual_repo.js";
-import { createReportConfig, listReportConfigs, updateReportConfig, getReportConfig } from "../repos/reports_repo.js";
+import {
+  createReportConfig,
+  getReportConfig,
+  listReportConfigs,
+  updateReportConfig,
+  upsertReportDocument
+} from "../repos/reports_repo.js";
 import {
   listParamDefinitions,
   listParamDefinitionsByKind,
@@ -397,7 +407,12 @@ export function createExperimentsRouter(db: Db) {
       include_json: include.length ? JSON.stringify(include) : JSON.stringify([]),
       doe_ids_json: doeIds.length ? JSON.stringify(doeIds) : JSON.stringify([])
     });
-    res.json({ id: reportId, url: `/reports/${reportId}` });
+    // A report starts with an editable structural outline. Report authors
+    // choose the research data to bring into those sections from the workspace.
+    const outlineDocument = JSON.stringify(buildReportWorkspaceOutline());
+    const outlineMarkdown = buildReportWorkspaceOutlineMarkdown();
+    upsertReportDocument(db, reportId, outlineDocument, null, outlineMarkdown, "tiptap", 1);
+    res.json({ id: reportId, url: `/reports/${reportId}/editor` });
   });
 
   router.post("/experiments/:id/reports/:reportId", (req, res) => {
@@ -427,10 +442,13 @@ export function createExperimentsRouter(db: Db) {
     updateReportConfig(db, reportId, {
       name,
       executors,
-      include_json: include.length ? JSON.stringify(include) : JSON.stringify([]),
-      doe_ids_json: doeIds.length ? JSON.stringify(doeIds) : JSON.stringify([])
+      // The report workspace no longer changes a report's source scope through
+      // creation-form checkboxes. Preserve legacy settings until the catalogue
+      // is connected in a following increment.
+      include_json: include.length ? JSON.stringify(include) : (existing.include_json ?? JSON.stringify([])),
+      doe_ids_json: doeIds.length ? JSON.stringify(doeIds) : (existing.doe_ids_json ?? JSON.stringify([]))
     });
-    res.json({ id: reportId, url: `/reports/${reportId}` });
+    res.json({ id: reportId, url: `/reports/${reportId}/editor` });
   });
 
   router.post("/experiments/:id/doe/:doeId/clone", (req, res) => {

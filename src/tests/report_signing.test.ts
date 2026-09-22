@@ -77,11 +77,37 @@ test("only experiment owner can sign report", async () => {
     .send({ email: "owner@example.com", password: "OwnerPass123!", _csrf: ownerLoginCsrf })
     .expect(302);
 
-  const ownerSignCsrf = await getCsrfToken(ownerAgent, `/reports/${reportId}`);
+  const createReportCsrf = await getCsrfToken(ownerAgent, `/reports/${reportId}`);
+  const createResponse = await ownerAgent
+    .post(`/experiments/${experimentId}/reports`)
+    .type("form")
+    .send({ name: "Blank workspace", _csrf: createReportCsrf })
+    .expect(200);
+  const draftReportId = Number(createResponse.body.id);
+  assert.ok(Number.isFinite(draftReportId));
+  assert.equal(createResponse.body.url, `/reports/${draftReportId}/editor`);
+
+  const draftDocument = db
+    .prepare("SELECT content_json, html_snapshot FROM report_documents WHERE report_id = ?")
+    .get(draftReportId) as { content_json: string; html_snapshot: string | null } | undefined;
+  const outline = JSON.parse(draftDocument?.content_json ?? "null") as {
+    type?: string;
+    content?: Array<{ type?: string; content?: Array<{ text?: string }> }>;
+  };
+  assert.equal(outline.type, "doc");
+  assert.equal(outline.content?.[0]?.content?.[0]?.text, "1. Objective");
+  assert.equal(outline.content?.[3]?.content?.[0]?.text, "Machine");
+  assert.equal(draftDocument?.html_snapshot, null);
+
+  const workspace = await ownerAgent.get(`/reports/${draftReportId}/editor`).expect(200);
+  assert.match(workspace.text, /report-workspace/);
+  assert.match(workspace.text, /Research data/);
+  assert.match(workspace.text, /sourcePreviewDialog/);
+
   await ownerAgent
     .post(`/reports/${reportId}/sign`)
     .type("form")
-    .send({ _csrf: ownerSignCsrf })
+    .send({ _csrf: createReportCsrf })
     .expect(302)
     .expect("Location", `/reports/${reportId}`);
 

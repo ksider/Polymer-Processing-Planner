@@ -1,6 +1,6 @@
 import type { Db } from "../db.js";
 import { getExperiment, getExperimentRecipes } from "../repos/experiments_repo.js";
-import { listQualSummaries, listQualRuns, listQualRunValues, listQualFields, getQualStep } from "../repos/qual_repo.js";
+import { listQualSummaries, listQualRuns, listQualRunValues, listQualFields, listQualSteps, getQualStep } from "../repos/qual_repo.js";
 import { listDoeStudies } from "../repos/doe_repo.js";
 import { listRuns, listRunValues } from "../repos/runs_repo.js";
 import { listParamConfigs, listParamDefinitions, listParamDefinitionsByKind } from "../repos/params_repo.js";
@@ -74,6 +74,29 @@ type ReportData = {
     label: string;
     unit: string | null;
   }>;
+};
+
+type ReportWorkspaceSourceRow = { label: string; value: string };
+
+type ReportWorkspaceSource = {
+  id: string;
+  kind: "value" | "recipe" | "branch" | "results" | "run" | "chart";
+  label: string;
+  value?: string | null;
+  description?: string | null;
+  components?: Array<{ component_name: string; phr: number }>;
+  rows?: ReportWorkspaceSourceRow[];
+  children?: ReportWorkspaceSource[];
+  runUrl?: string;
+  chartType?: "rheology" | "process-window" | "run-series";
+  chartData?: { categories: string[]; values: Array<number | null>; unit: string | null };
+};
+
+type ReportWorkspaceSourceGroup = {
+  id: string;
+  label: string;
+  icon: string;
+  items: ReportWorkspaceSource[];
 };
 
 const parseSummary = (summaryJson: string | null) => {
@@ -273,6 +296,189 @@ export function buildReport(db: Db, experimentId: number, options: ReportOptions
   return data;
 }
 
+/**
+ * The initial workspace catalogue deliberately stays compact. It exposes
+ * stable, structured experiment data while the larger qualification and DOE
+ * catalogues are moved behind access-scoped endpoints in later increments.
+ */
+export function buildReportWorkspaceSources(db: Db, report: ReportData): ReportWorkspaceSourceGroup[] {
+  const experimentItems: ReportWorkspaceSource[] = [
+    {
+      id: "experiment-name",
+      kind: "value",
+      label: "Experiment name",
+      value: report.experiment.name
+    }
+  ];
+  if (report.experiment.notes?.trim()) {
+    experimentItems.push({
+      id: "experiment-description",
+      kind: "value",
+      label: "Description",
+      value: report.experiment.notes
+    });
+  }
+
+  const machineItems: ReportWorkspaceSource[] = report.machineName
+    ? [{ id: "machine-name", kind: "value", label: "Machine", value: report.machineName }]
+    : [];
+
+  const recipeItems: ReportWorkspaceSource[] = report.recipes.map((recipe) => ({
+    id: `recipe-${recipe.id}`,
+    kind: "recipe",
+    label: recipe.name,
+    description: recipe.description,
+    components: recipe.components
+  }));
+
+  const qualificationItems: ReportWorkspaceSource[] = listQualSteps(db, report.experiment.id).flatMap((step) => {
+    const fields = listQualFields(db, step.id).filter((field) => field.is_enabled === 1);
+    const summary = listQualSummaries(db, report.experiment.id).find((item) => item.step_number === step.step_number);
+    const children: ReportWorkspaceSource[] = [];
+    const parsedSummary = parseSummary(summary?.summary_json ?? null);
+    if (parsedSummary) {
+      const rows = Object.entries(parsedSummary)
+        .filter(([key, value]) => !["experiment_id", "step_number"].includes(key) && value != null)
+        .slice(0, 16)
+        .map(([key, value]) => ({ label: key.replace(/_/g, " "), value: String(value) }));
+      if (rows.length) children.push({
+        id: `qualification-step-${step.step_number}-results`,
+        kind: "results",
+        label: "Results",
+        rows
+      });
+    }
+
+    const runs = listQualRuns(db, step.id)
+      .filter((run) => run.done || listQualRunValues(db, run.id).length > 0)
+      .slice(0, 30);
+    if (runs.length) {
+      children.push({
+        id: `qualification-step-${step.step_number}-runs`,
+        kind: "branch",
+        label: `Runs (${runs.length})`,
+        children: runs.map((run) => {
+          const values = new Map(listQualRunValues(db, run.id).map((value) => [value.field_id, value]));
+          const rows = fields.flatMap((field) => {
+            const value = values.get(field.id);
+            const raw = value?.value_text ?? value?.value_real ?? value?.value_tags_json;
+            if (raw == null || raw === "") return [];
+            return [{ label: field.label, value: `${raw}${field.unit ? ` ${field.unit}` : ""}` }];
+          });
+          return {
+            id: `qualification-run-${run.id}`,
+            kind: "run",
+            label: run.run_code,
+            rows,
+            runUrl: `/qual-runs/${run.id}`
+          };
+        })
+      });
+    }
+
+    // Every step can expose its measured numeric fields as a run-series chart.
+    // This keeps the catalogue useful beyond the specialised rheology/window
+    // figures without assuming that fields from different units are comparable.
+    const numericFields = fields.filter((field) => field.field_type === "number").slice(0, 4);
+    numericFields.forEach((field) => {
+      const categories = runs.map((run) => run.run_code);
+      const values = runs.map((run) => listQualRunValues(db, run.id)
+        .find((value) => value.field_id === field.id)?.value_real ?? null);
+      if (values.some((value) => value != null)) {
+        children.push({
+          id: `qualification-step-${step.step_number}-field-${field.id}-chart`,
+          kind: "chart",
+          label: `${field.label} by run`,
+          chartType: "run-series",
+          chartData: { categories, values, unit: field.unit }
+        });
+      }
+    });
+
+    if (step.step_number === 1 && report.qualification?.charts.rheology.some(Boolean)) {
+      children.push({ id: "qualification-rheology-chart", kind: "chart", label: "Rheology curve", chartType: "rheology" });
+    }
+    const processWindow = report.qualification?.charts.processWindow;
+    if (step.step_number === 4 && processWindow && (processWindow.good.length || processWindow.defect.length || processWindow.window?.length)) {
+      children.push({ id: "qualification-process-window-chart", kind: "chart", label: "Process window", chartType: "process-window" });
+    }
+
+    return children.length ? [{
+      id: `qualification-step-${step.step_number}`,
+      kind: "branch",
+      label: `Step ${step.step_number}`,
+      children
+    }] : [];
+  });
+
+  return [
+    { id: "experiment", label: "Experiment", icon: "science", items: experimentItems },
+    { id: "machine", label: "Machine", icon: "precision_manufacturing", items: machineItems },
+    { id: "recipes", label: "Recipes", icon: "category", items: recipeItems },
+    { id: "qualification", label: "Qualification", icon: "biotech", items: qualificationItems }
+  ].filter((group) => group.items.length > 0);
+}
+
+export function buildReportWorkspaceOutline() {
+  const paragraph = () => ({ type: "paragraph" });
+  const heading = (text: string, level: 2 | 3) => ({
+    type: "heading",
+    attrs: { level },
+    content: [{ type: "text", text }]
+  });
+
+  return {
+    type: "doc",
+    content: [
+      heading("1. Objective", 2),
+      paragraph(),
+      heading("2. Materials and equipment", 2),
+      heading("Machine", 3),
+      paragraph(),
+      heading("Recipe", 3),
+      paragraph(),
+      heading("3. Qualification", 2),
+      heading("Test summary", 3),
+      paragraph(),
+      heading("Recommended process window", 3),
+      paragraph(),
+      heading("4. DOE studies", 2),
+      heading("Study design", 3),
+      paragraph(),
+      heading("Results", 3),
+      paragraph(),
+      heading("5. Conclusions", 2),
+      paragraph()
+    ]
+  };
+}
+
+export function buildReportWorkspaceOutlineMarkdown() {
+  return [
+    "## 1. Objective",
+    "",
+    "## 2. Materials and equipment",
+    "",
+    "### Machine",
+    "",
+    "### Recipe",
+    "",
+    "## 3. Qualification",
+    "",
+    "### Test summary",
+    "",
+    "### Recommended process window",
+    "",
+    "## 4. DOE studies",
+    "",
+    "### Study design",
+    "",
+    "### Results",
+    "",
+    "## 5. Conclusions"
+  ].join("\n");
+}
+
 export function buildQualificationCsv(data: ReportData) {
   const q = data.qualification;
   if (!q) return "";
@@ -427,4 +633,4 @@ export function buildReportEditorSeed(
   };
 }
 
-export type { ReportOptions, ReportData };
+export type { ReportOptions, ReportData, ReportWorkspaceSourceGroup };

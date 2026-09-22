@@ -194,22 +194,14 @@
         <div class="small-note">No reports yet. Create one.</div>
       <% } else { %>
         <% reports.forEach((report) => { 
-             let includeList = [];
-             let doeList = [];
-             if (report.include_json) {
-               try { includeList = JSON.parse(report.include_json); } catch {}
-             }
-             if (report.doe_ids_json) {
-               try { doeList = JSON.parse(report.doe_ids_json); } catch {}
-             }
         %>
           <div class="section-row">
             <div>
-              <a class="section-title" href="/reports/<%= report.id %>"><strong><%- formatInline(report.name) %></strong></a>
+              <a class="section-title" href="/reports/<%= report.id %>/editor"><strong><%- formatInline(report.name) %></strong></a>
               <div class="small-note">Created: <%= new Date(report.created_at).toLocaleString() %></div>
             </div>
             <div class="section-actions">
-              <a class="pure-button pure-button-secondary" href="/reports/<%= report.id %>">Open</a>
+              <a class="pure-button pure-button-secondary" href="/reports/<%= report.id %>/editor">Open workspace</a>
               <% if (report.signed_at) { %>
                 <span class="status-pill status-done">Signed</span>
               <% } %>
@@ -222,8 +214,6 @@
                   data-report-id="<%= report.id %>"
                   data-report-name="<%= report.name %>"
                   data-report-executors="<%= report.executors || '' %>"
-                  data-report-include="<%= JSON.stringify(includeList) %>"
-                  data-report-doe="<%= JSON.stringify(doeList) %>"
                 >
                   <span class="material-symbols-rounded" aria-hidden="true">edit</span>
                 </button>
@@ -428,7 +418,7 @@
 
 <dialog class="modal-frame" id="reportDialog">
   <div class="modal-header">
-    <strong>Generate Report</strong>
+    <strong>Create report</strong>
     <button class="pure-button" type="button" data-close>Close</button>
   </div>
   <div class="modal-body">
@@ -441,49 +431,13 @@
         <label for="reportExecutors">Executors</label>
         <input id="reportExecutors" name="executors" type="text" placeholder="e.g. Ivan Petrov, Anna Lee" data-default-executors="<%= ownerName || '' %>">
       </div>
-      <div>
-        <div class="small-note">Include sections</div>
-        <div class="form-row">
-          <label class="toggle">
-            <input type="checkbox" name="include" value="qualification" checked>
-            <span class="track"></span>
-            <span>Qualification (<%= (qualificationCards || []).length %> steps)</span>
-          </label>
-          <label class="toggle">
-            <input type="checkbox" name="include" value="doe" id="includeDoeToggle">
-            <span class="track"></span>
-            <span>DOE</span>
-          </label>
-          <label class="toggle">
-            <input type="checkbox" name="include" value="outputs">
-            <span class="track"></span>
-            <span>Outputs</span>
-          </label>
-          <label class="toggle">
-            <input type="checkbox" name="include" value="defects">
-            <span class="track"></span>
-            <span>Defects</span>
-          </label>
-          <label class="toggle">
-            <input type="checkbox" name="include" value="raw">
-            <span class="track"></span>
-            <span>Raw runs</span>
-          </label>
-        </div>
-      </div>
-      <div id="doePicker" style="display: none;">
-        <label for="reportDoe">DOE studies</label>
-        <select id="reportDoe" name="doe_ids" multiple size="4">
-          <% doeStudies.forEach((study) => { %>
-            <option value="<%= study.id %>"><%- formatInline(study.name) %> (<%= study.design_type %>)</option>
-          <% }); %>
-        </select>
-        <div class="small-note">Select one or more DOE studies to include.</div>
-      </div>
+      <p class="small-note report-create-note">
+        The report opens as a blank workspace. Select and insert research data from the source panel as you write.
+      </p>
     </form>
   </div>
   <div class="modal-footer">
-    <button class="pure-button pure-button-primary" type="button" id="generateReportBtn">Generate</button>
+    <button class="pure-button pure-button-primary" type="button" id="generateReportBtn">Create workspace</button>
   </div>
 </dialog>
 
@@ -902,46 +856,17 @@
     });
   });
 
-  const includeDoeToggle = document.getElementById('includeDoeToggle');
-  const doePicker = document.getElementById('doePicker');
-  includeDoeToggle?.addEventListener('change', (event) => {
-    doePicker.style.display = event.target.checked ? 'block' : 'none';
-  });
-
   const reportForm = document.getElementById('reportForm');
   const reportName = document.getElementById('reportName');
   const reportExecutors = document.getElementById('reportExecutors');
-  const reportDoe = document.getElementById('reportDoe');
   let editingReportId = null;
-
-  const parseJsonArray = (raw) => {
-    if (!raw) return [];
-    try {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  };
 
   document.querySelectorAll('[data-report-edit]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const include = parseJsonArray(btn.dataset.reportInclude);
-      const doe = parseJsonArray(btn.dataset.reportDoe);
       editingReportId = btn.dataset.reportId || null;
       reportName.value = btn.dataset.reportName || '';
       const currentExecutors = btn.dataset.reportExecutors || '';
       reportExecutors.value = currentExecutors || reportExecutors.dataset.defaultExecutors || '';
-      reportForm.querySelectorAll('input[name="include"]').forEach((input) => {
-        input.checked = include.includes(input.value);
-      });
-      includeDoeToggle.checked = include.includes('doe');
-      doePicker.style.display = includeDoeToggle.checked ? 'block' : 'none';
-      if (reportDoe) {
-        Array.from(reportDoe.options).forEach((opt) => {
-          opt.selected = doe.map(String).includes(opt.value);
-        });
-      }
       reportDialog?.showModal();
     });
   });
@@ -955,21 +880,16 @@
   reportDialog?.addEventListener('close', () => {
     editingReportId = null;
     reportForm.reset();
-    doePicker.style.display = 'none';
   });
   const generateReportBtn = document.getElementById('generateReportBtn');
   generateReportBtn?.addEventListener('click', async () => {
     if (!reportForm) return;
     const formData = new FormData(reportForm);
-    const includes = formData.getAll('include').map((val) => String(val));
     const name = String(formData.get('name') || '').trim();
     const executors = String(formData.get('executors') || '').trim();
-    const doeIds = formData.getAll('doe_ids').map((val) => String(val)).filter(Boolean);
     const payload = new URLSearchParams();
     if (name) payload.set('name', name);
     if (executors) payload.set('executors', executors);
-    includes.forEach((val) => payload.append('include', val));
-    doeIds.forEach((val) => payload.append('doe_ids', val));
     const url = editingReportId
       ? `/experiments/<%= experiment.id %>/reports/${editingReportId}`
       : `/experiments/<%= experiment.id %>/reports`;

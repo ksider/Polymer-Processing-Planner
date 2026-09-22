@@ -5,7 +5,10 @@ import {
   buildQualificationCsv,
   buildDoeCsv,
   buildOutputsCsv,
-  buildReportEditorSeed
+  buildReportEditorSeed,
+  buildReportWorkspaceOutline,
+  buildReportWorkspaceOutlineMarkdown,
+  buildReportWorkspaceSources
 } from "../services/report_service.js";
 import { htmlToMarkdown, markdownToSafeHtml } from "../services/markdown_service.js";
 import {
@@ -34,6 +37,22 @@ const parseIdList = (raw: unknown) => {
     .split(",")
     .map((item) => Number(item))
     .filter((val) => Number.isFinite(val));
+};
+
+const isEmptyWorkspaceDocument = (document: { content_json: string; html_snapshot: string | null } | null) => {
+  if (!document || document.html_snapshot?.trim() !== "<p></p>") return false;
+  try {
+    const content = JSON.parse(document.content_json) as {
+      type?: string;
+      content?: Array<{ type?: string; content?: unknown[] }>;
+    };
+    return content.type === "doc"
+      && content.content?.length === 1
+      && content.content[0]?.type === "paragraph"
+      && !content.content[0]?.content?.length;
+  } catch {
+    return false;
+  }
 };
 
 export function createReportRouter(db: Db) {
@@ -130,8 +149,22 @@ export function createReportRouter(db: Db) {
       executors: config.executors,
       doeIds
     };
-    const reportData = buildReport(db, config.experiment_id, options);
-    const existingDoc = getReportDocument(db, reportId);
+    const reportData = buildReport(db, config.experiment_id, { ...options, includeQualification: true });
+    let existingDoc = getReportDocument(db, reportId);
+    // Upgrade only the empty one-paragraph drafts created by the first
+    // workspace shell. Documents containing author content are never changed.
+    if (isEmptyWorkspaceDocument(existingDoc)) {
+      upsertReportDocument(
+        db,
+        reportId,
+        JSON.stringify(buildReportWorkspaceOutline()),
+        null,
+        buildReportWorkspaceOutlineMarkdown(),
+        "tiptap",
+        1
+      );
+      existingDoc = getReportDocument(db, reportId);
+    }
     const generatedAt = new Date().toLocaleString();
     let seedData: unknown;
     if (existingDoc) {
@@ -147,6 +180,7 @@ export function createReportRouter(db: Db) {
       report: reportData,
       reportConfig: config,
       editorData: seedData,
+      sourceCatalog: buildReportWorkspaceSources(db, reportData),
       hasSavedDoc: Boolean(existingDoc),
       htmlSnapshot: existingDoc?.html_snapshot ?? ""
     });

@@ -1,23 +1,59 @@
 <%- include('partials/head', { title: `Polymer Processing Planner | Report Editor ${report.experiment.id}` }) %>
-<%- include('partials/nav') %>
-<div class="container">
-  <div class="card">
-    <div class="card-header">
+<main class="report-workspace" id="reportWorkspace">
+  <header class="report-workspace-header">
+    <div class="report-workspace-title">
       <a class="back-link" href="/reports/<%= reportConfig.id %>" aria-label="Back to report">
         <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
       </a>
       <div>
-        <h1 class="card-title"><%- formatInline(reportConfig.name) %></h1>
-        <div class="small-note"><%= reportConfig?.signed_at ? 'Signed report (read-only)' : 'Editable report document' %></div>
-      </div>
-      <div class="section-actions">
-        <button class="pure-button pure-button-secondary" type="button" id="printReport">Export PDF</button>
-        <button class="pure-button pure-button-primary" type="button" id="saveReport">Save</button>
+        <h1><%- formatInline(reportConfig.name) %></h1>
+        <div class="small-note"><%= reportConfig?.signed_at ? 'Signed report (read-only)' : 'Draft document' %></div>
       </div>
     </div>
-    <% if (reportConfig?.signed_at) { %>
-      <div class="auth-error">Signed report is read-only.</div>
-    <% } %>
+    <div class="document-toolbar-slot" id="documentToolbarSlot" aria-label="Document formatting tools"></div>
+    <div class="report-workspace-actions">
+      <button class="pure-button pure-button-secondary workspace-sources-toggle" type="button" id="toggleSources" aria-controls="reportSources" aria-expanded="true">
+        <span class="material-symbols-rounded" aria-hidden="true">source</span>
+        <span>Sources</span>
+      </button>
+      <details class="workspace-overflow-menu">
+        <summary class="icon-button" aria-label="Document actions" title="Document actions">
+          <span class="material-symbols-rounded" aria-hidden="true">more_vert</span>
+        </summary>
+        <div class="workspace-overflow-actions">
+          <button class="pure-button pure-button-secondary" type="button" id="printReport">Export PDF</button>
+          <button class="pure-button pure-button-primary" type="button" id="saveReport">Save</button>
+        </div>
+      </details>
+    </div>
+  </header>
+
+  <% if (reportConfig?.signed_at) { %>
+    <div class="auth-error report-workspace-notice">Signed report is read-only.</div>
+  <% } %>
+
+  <div class="report-workspace-layout">
+    <aside class="report-source-rail" id="reportSources" aria-label="Report sources">
+      <div class="report-source-rail-header">
+        <div>
+          <span class="workspace-eyebrow">Research data</span>
+          <h2>Sources</h2>
+        </div>
+        <button class="icon-button report-source-close" type="button" id="closeSources" aria-label="Close sources">
+          <span class="material-symbols-rounded" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <label class="source-search-label" for="sourceSearch">Find a source</label>
+      <div class="report-source-search">
+        <span class="material-symbols-rounded" aria-hidden="true">search</span>
+        <input id="sourceSearch" type="search" placeholder="Search data">
+      </div>
+      <nav class="report-source-tree" id="sourceTree" aria-label="Source groups"></nav>
+      <p class="report-source-hint" id="sourceEmptyState" hidden>No matching source data.</p>
+    </aside>
+    <div class="report-source-scrim" id="sourceScrim" aria-hidden="true"></div>
+
+    <section class="report-document-pane" aria-label="Report document">
     <div class="editor-toolbar" id="editorToolbar">
       <button class="pure-button button-sm icon-only" type="button" data-cmd="undo" title="Undo"><span class="material-symbols-rounded">undo</span></button>
       <button class="pure-button button-sm icon-only" type="button" data-cmd="redo" title="Redo"><span class="material-symbols-rounded">redo</span></button>
@@ -111,8 +147,24 @@
     </div>
     <div id="editorRoot" class="editor-surface"></div>
     <div class="save-status small-note" id="saveStatus"></div>
+    </section>
   </div>
-</div>
+</main>
+
+<dialog class="modal-frame source-preview-dialog" id="sourcePreviewDialog">
+  <div class="modal-header">
+    <strong id="sourcePreviewTitle">Source preview</strong>
+    <button class="pure-button" type="button" id="closeSourcePreview">Close</button>
+  </div>
+  <div class="modal-body" id="sourcePreviewBody"></div>
+  <div class="modal-footer source-preview-actions" id="sourcePreviewActions">
+    <button class="pure-button" type="button" data-source-insert="value">Insert value</button>
+    <button class="pure-button pure-button-primary" type="button" data-source-insert="label">Insert label + value</button>
+    <button class="pure-button" type="button" data-source-insert="table">Insert table</button>
+    <button class="pure-button pure-button-primary" type="button" data-source-insert="section">Insert section</button>
+    <button class="pure-button pure-button-primary" type="button" data-source-insert="figure">Insert figure</button>
+  </div>
+</dialog>
 
 <script nonce="<%= cspNonce %>" src="/vendor/echarts/dist/echarts.min.js"></script>
 
@@ -135,6 +187,7 @@
   // Seed data is produced on the server from the report content. This keeps the
   // editor structure stable and predictable.
   const editorData = <%- jsonForScript(editorData) %>;
+  const sourceCatalog = <%- jsonForScript(sourceCatalog) %>;
   const hasSavedDoc = <%= hasSavedDoc ? 'true' : 'false' %>;
   const htmlSnapshot = <%- jsonForScript(htmlSnapshot || '') %>;
   const rheoData = <%- jsonForScript(report.qualification?.charts.rheology || []) %>;
@@ -145,6 +198,32 @@
     codeBlockStyle: 'fenced',
     bulletListMarker: '-'
   });
+
+  const reportWorkspace = document.getElementById('reportWorkspace');
+  const sourceToggle = document.getElementById('toggleSources');
+  const sourceClose = document.getElementById('closeSources');
+  const sourceScrim = document.getElementById('sourceScrim');
+  const documentToolbarSlot = document.getElementById('documentToolbarSlot');
+  const editorToolbar = document.getElementById('editorToolbar');
+  if (documentToolbarSlot && editorToolbar) documentToolbarSlot.appendChild(editorToolbar);
+
+  const setSourcesOpen = (open) => {
+    reportWorkspace?.classList.toggle('sources-open', open);
+    sourceToggle?.setAttribute('aria-expanded', String(open));
+  };
+
+  sourceToggle?.addEventListener('click', () => {
+    setSourcesOpen(!reportWorkspace?.classList.contains('sources-open'));
+  });
+  sourceClose?.addEventListener('click', () => setSourcesOpen(false));
+  sourceScrim?.addEventListener('click', () => setSourcesOpen(false));
+
+  const syncWorkspaceHeight = () => {
+    const navHeight = document.querySelector('.top-nav')?.getBoundingClientRect().height || 0;
+    reportWorkspace?.style.setProperty('--report-workspace-height', `${Math.max(0, window.innerHeight - navHeight)}px`);
+  };
+  syncWorkspaceHeight();
+  window.addEventListener('resize', syncWorkspaceHeight);
 
   const ReportImage = Image.extend({
     addAttributes() {
@@ -326,6 +405,14 @@
     };
   };
 
+  const buildRunSeriesOption = (chartData, title) => ({
+    grid: { left: 60, right: 30, top: 45, bottom: 70, containLabel: true },
+    title: { text: title, left: 'center', textStyle: { fontSize: 14 } },
+    xAxis: { type: 'category', data: chartData?.categories || [], axisLabel: { rotate: 35 } },
+    yAxis: { type: 'value', name: chartData?.unit || '' },
+    series: [{ type: 'line', symbol: 'circle', connectNulls: false, data: chartData?.values || [] }]
+  });
+
   const buildInitialContent = () => {
     if (htmlSnapshot) return normalizeSavedHtmlInlineTags(htmlSnapshot);
     if (isTipTapDoc(editorData)) return editorData;
@@ -381,6 +468,266 @@
       TableCell
     ],
     content: buildInitialContent()
+  });
+
+  const sourceTree = document.getElementById('sourceTree');
+  const sourceSearch = document.getElementById('sourceSearch');
+  const sourceEmptyState = document.getElementById('sourceEmptyState');
+  const sourcePreviewDialog = document.getElementById('sourcePreviewDialog');
+  const sourcePreviewTitle = document.getElementById('sourcePreviewTitle');
+  const sourcePreviewBody = document.getElementById('sourcePreviewBody');
+  let selectedSource = null;
+
+  const sourceText = (value) => String(value ?? '').trim();
+  const makeTextNode = (text) => ({ type: 'text', text: sourceText(text) });
+  const makeParagraphNode = (text = '') => {
+    const value = sourceText(text);
+    return value ? { type: 'paragraph', content: [makeTextNode(value)] } : { type: 'paragraph' };
+  };
+  const makeHeadingNode = (text, level = 3) => ({
+    type: 'heading',
+    attrs: { level },
+    content: [makeTextNode(text)]
+  });
+  const makeRecipeTable = (components) => ({
+    type: 'table',
+    content: [
+      {
+        type: 'tableRow',
+        content: ['Component', 'PHR'].map((value) => ({
+          type: 'tableHeader',
+          content: [makeParagraphNode(value)]
+        }))
+      },
+      ...(Array.isArray(components) && components.length
+        ? components.map((component) => ({
+          type: 'tableRow',
+          content: [component.component_name, component.phr].map((value) => ({
+            type: 'tableCell',
+            content: [makeParagraphNode(value)]
+          }))
+        }))
+        : [{
+          type: 'tableRow',
+          content: ['-', '-'].map((value) => ({
+            type: 'tableCell',
+            content: [makeParagraphNode(value)]
+          }))
+        }])
+    ]
+  });
+  const makeRowsTable = (rows) => ({
+    type: 'table',
+    content: [
+      { type: 'tableRow', content: ['Result', 'Value'].map((value) => ({ type: 'tableHeader', content: [makeParagraphNode(value)] })) },
+      ...(rows || []).map((row) => ({
+        type: 'tableRow',
+        content: [row.label, row.value].map((value) => ({ type: 'tableCell', content: [makeParagraphNode(value)] }))
+      }))
+    ]
+  });
+  const makeRunReference = (source, addObservation) => {
+    const reference = {
+      type: 'paragraph',
+      content: [{
+        type: 'text',
+        text: `Qualification run: ${source.label}`,
+        marks: [{ type: 'link', attrs: { href: source.runUrl, target: '_blank', rel: 'noopener noreferrer' } }]
+      }]
+    };
+    return [
+      reference,
+      ...(source.rows?.length ? [makeRowsTable(source.rows)] : []),
+      ...(addObservation ? [makeParagraphNode('Test observation / artifact: ')] : [])
+    ];
+  };
+
+  const renderSourcePreview = (source) => {
+    if (!sourcePreviewBody || !sourcePreviewTitle) return;
+    sourcePreviewTitle.textContent = source.label;
+    sourcePreviewBody.replaceChildren();
+    if (source.kind === 'recipe') {
+      if (source.description) {
+        const description = document.createElement('p');
+        description.textContent = source.description;
+        sourcePreviewBody.appendChild(description);
+      }
+      const table = document.createElement('table');
+      table.className = 'pure-table table-compact source-preview-table';
+      const head = table.createTHead().insertRow();
+      ['Component', 'PHR'].forEach((label) => {
+        const cell = document.createElement('th');
+        cell.textContent = label;
+        head.appendChild(cell);
+      });
+      const body = table.createTBody();
+      (source.components || []).forEach((component) => {
+        const row = body.insertRow();
+        const componentCell = row.insertCell();
+        componentCell.textContent = sourceText(component.component_name) || '-';
+        const phrCell = row.insertCell();
+        phrCell.textContent = sourceText(component.phr) || '-';
+      });
+      if (!source.components?.length) {
+        const row = body.insertRow();
+        ['-', '-'].forEach((value) => {
+          const cell = row.insertCell();
+          cell.textContent = value;
+        });
+      }
+      sourcePreviewBody.appendChild(table);
+    } else if (source.rows) {
+      const table = document.createElement('table');
+      table.className = 'pure-table table-compact source-preview-table';
+      const body = table.createTBody();
+      source.rows.forEach((row) => {
+        const tableRow = body.insertRow();
+        [row.label, row.value].forEach((entry) => {
+          const cell = tableRow.insertCell();
+          cell.textContent = sourceText(entry) || '-';
+        });
+      });
+      sourcePreviewBody.appendChild(table);
+    } else if (source.kind === 'chart') {
+      const note = document.createElement('p');
+      note.textContent = 'Insert a PNG snapshot of the current qualification chart.';
+      sourcePreviewBody.appendChild(note);
+    } else {
+      const list = document.createElement('dl');
+      list.className = 'source-preview-value';
+      const term = document.createElement('dt');
+      term.textContent = source.label;
+      const value = document.createElement('dd');
+      value.textContent = sourceText(source.value) || '-';
+      list.append(term, value);
+      sourcePreviewBody.appendChild(list);
+    }
+
+    document.querySelectorAll('[data-source-insert]').forEach((button) => {
+      const action = button.getAttribute('data-source-insert');
+      const visible = source.kind === 'recipe'
+        ? action === 'table' || action === 'section'
+        : source.kind === 'results'
+          ? action === 'table' || action === 'section'
+          : source.kind === 'run'
+            ? action === 'value' || action === 'label'
+            : source.kind === 'chart'
+              ? action === 'figure'
+              : action === 'value' || action === 'label';
+      button.hidden = !visible;
+      if (action === 'value') button.textContent = source.kind === 'run' ? 'Insert run reference' : 'Insert value';
+      if (action === 'label') button.textContent = source.kind === 'run' ? 'Insert reference + observation' : 'Insert label + value';
+      button.toggleAttribute('disabled', isSigned);
+    });
+  };
+
+  const openSourcePreview = (source) => {
+    selectedSource = source;
+    renderSourcePreview(source);
+    if (sourcePreviewDialog instanceof HTMLDialogElement) sourcePreviewDialog.showModal();
+  };
+
+  const renderSourceTree = () => {
+    if (!sourceTree) return;
+    const query = sourceText(sourceSearch?.value).toLowerCase();
+    sourceTree.replaceChildren();
+    let shownItems = 0;
+    const filterSources = (items) => (items || []).flatMap((source) => {
+      const children = filterSources(source.children);
+      const searchable = [source.label, source.value, source.description]
+        .filter(Boolean).join(' ').toLowerCase();
+      return !query || searchable.includes(query) || children.length ? [{ ...source, children }] : [];
+    });
+    const appendSources = (parent, items) => {
+      items.forEach((source) => {
+        if (source.children?.length) {
+          const branch = document.createElement('details');
+          branch.className = 'report-source-branch';
+          branch.open = Boolean(query);
+          const summary = document.createElement('summary');
+          summary.textContent = source.label;
+          branch.appendChild(summary);
+          appendSources(branch, source.children);
+          parent.appendChild(branch);
+          return;
+        }
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'report-source-item';
+        const name = document.createElement('strong');
+        name.textContent = source.label;
+        const detail = document.createElement('small');
+        detail.textContent = source.kind === 'run' ? 'Run result and reference' : source.kind === 'chart' ? 'Preview and insert figure' : source.kind === 'results' ? 'Preview and insert results' : source.kind === 'recipe' ? `${source.components?.length || 0} components` : 'Preview and insert';
+        button.append(name, detail);
+        button.addEventListener('click', () => openSourcePreview(source));
+        parent.appendChild(button);
+        shownItems += 1;
+      });
+    };
+    (sourceCatalog || []).forEach((group) => {
+      const items = filterSources(group.items);
+      if (!items.length) return;
+      const section = document.createElement('section');
+      section.className = 'report-source-section';
+      const heading = document.createElement('h3');
+      const icon = document.createElement('span');
+      icon.className = 'material-symbols-rounded';
+      icon.setAttribute('aria-hidden', 'true');
+      icon.textContent = group.icon;
+      const label = document.createElement('span');
+      label.textContent = group.label;
+      heading.append(icon, label);
+      section.appendChild(heading);
+      appendSources(section, items);
+      sourceTree.appendChild(section);
+    });
+    if (sourceEmptyState) sourceEmptyState.hidden = shownItems > 0;
+  };
+
+  sourceSearch?.addEventListener('input', renderSourceTree);
+  renderSourceTree();
+
+  document.getElementById('closeSourcePreview')?.addEventListener('click', () => {
+    if (sourcePreviewDialog instanceof HTMLDialogElement) sourcePreviewDialog.close();
+  });
+
+  document.querySelectorAll('[data-source-insert]').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (!selectedSource || isSigned) return;
+      const action = button.getAttribute('data-source-insert');
+      let content = [];
+      if (selectedSource.kind === 'recipe') {
+        const table = makeRecipeTable(selectedSource.components);
+        content = action === 'section'
+          ? [
+            makeHeadingNode(selectedSource.label),
+            ...(selectedSource.description ? [makeParagraphNode(selectedSource.description)] : []),
+            table
+          ]
+          : [table];
+      } else if (selectedSource.kind === 'results') {
+        const table = makeRowsTable(selectedSource.rows);
+        content = action === 'section' ? [makeHeadingNode('Qualification results'), table] : [table];
+      } else if (selectedSource.kind === 'run') {
+        content = makeRunReference(selectedSource, action === 'label');
+      } else if (selectedSource.kind === 'chart') {
+        const imageUrl = selectedSource.chartType === 'rheology'
+          ? renderChartImage(buildRheoOption)
+          : selectedSource.chartType === 'process-window'
+            ? renderChartImage(buildWindowOption)
+            : renderChartImage(() => buildRunSeriesOption(selectedSource.chartData, selectedSource.label));
+        content = [
+          makeHeadingNode(selectedSource.label),
+          { type: 'image', attrs: { src: imageUrl, alt: selectedSource.label, title: null } },
+          makeParagraphNode(selectedSource.label)
+        ];
+      } else {
+        const value = sourceText(selectedSource.value) || '-';
+        content = [makeParagraphNode(action === 'label' ? `${selectedSource.label}: ${value}` : value)];
+      }
+      editor.chain().focus().insertContent(content).run();
+      if (sourcePreviewDialog instanceof HTMLDialogElement) sourcePreviewDialog.close();
+    });
   });
 
   const execCommand = (command) => {
