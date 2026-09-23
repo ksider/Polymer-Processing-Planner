@@ -125,6 +125,7 @@
       <span class="toolbar-sep" aria-hidden="true"></span>
       <button class="pure-button button-sm icon-only" type="button" data-cmd="link" title="Link"><span class="material-symbols-rounded">link</span></button>
       <button class="pure-button button-sm icon-only" type="button" data-cmd="image" title="Image"><span class="material-symbols-rounded">image</span></button>
+      <button class="pure-button button-sm icon-only" type="button" data-cmd="chemical-structure" title="Chemical structure"><span class="material-symbols-rounded">schema</span></button>
       <div class="toolbar-image-placeholder" id="imageToolsGroup" hidden aria-hidden="true"></div>
       <div class="table-tools" title="Table tools">
         <button class="pure-button button-sm icon-only" type="button" id="tablePickerToggle" title="Insert table">
@@ -153,6 +154,7 @@
       <button class="pure-button button-sm image-op" type="button" data-cmd="image-align-left" title="Align image left">L</button>
       <button class="pure-button button-sm image-op" type="button" data-cmd="image-align-center" title="Align image center">C</button>
       <button class="pure-button button-sm image-op" type="button" data-cmd="image-align-right" title="Align image right">R</button>
+      <button class="pure-button button-sm image-op chemical-structure-edit" type="button" data-cmd="chemical-structure-edit" title="Edit chemical structure" hidden><span class="material-symbols-rounded">schema</span></button>
       <button class="pure-button button-sm image-op danger" type="button" data-cmd="image-delete" title="Delete image">Del</button>
     </div>
     <div id="editorRoot" class="editor-surface"></div>
@@ -283,6 +285,7 @@
     : [];
   toolbarControls.forEach((control, index) => {
     if (control.classList.contains('toolbar-image-placeholder')) control.dataset.toolbarTab = 'none';
+    else if (control.querySelector('[data-cmd="chemical-structure"]')) control.dataset.toolbarTab = 'insert';
     else if (control.classList.contains('table-tools')) control.dataset.toolbarTab = 'table';
     else if (index <= 2) control.dataset.toolbarTab = 'history';
     else if (index === 19 || index === 31) control.dataset.toolbarTab = 'none';
@@ -349,6 +352,21 @@
             ? element.getAttribute('data-align')
             : 'center',
           renderHTML: (attributes) => ({ 'data-align': attributes.align || 'center' })
+        },
+        chemicalKet: {
+          default: null,
+          parseHTML: (element) => element.getAttribute('data-chemical-ket') || null,
+          renderHTML: (attributes) => attributes.chemicalKet ? { 'data-chemical-ket': attributes.chemicalKet } : {}
+        },
+        chemicalMolfile: {
+          default: null,
+          parseHTML: (element) => element.getAttribute('data-chemical-molfile') || null,
+          renderHTML: (attributes) => attributes.chemicalMolfile ? { 'data-chemical-molfile': attributes.chemicalMolfile } : {}
+        },
+        chemicalSmiles: {
+          default: null,
+          parseHTML: (element) => element.getAttribute('data-chemical-smiles') || null,
+          renderHTML: (attributes) => attributes.chemicalSmiles ? { 'data-chemical-smiles': attributes.chemicalSmiles } : {}
         }
       };
     }
@@ -1199,6 +1217,35 @@
       if (!src) return;
       chain.setImage({ src: src.trim(), width: '80%', align: 'center' }).run();
     }
+    if (command === 'chemical-structure' || command === 'chemical-structure-edit') {
+      const chemicalEditor = window.ChemicalStructureEditor;
+      if (!chemicalEditor) {
+        window.alert('Chemical editor is still loading. Please try again in a moment.');
+        return;
+      }
+      const editing = command === 'chemical-structure-edit' && editor.isActive('image');
+      const current = editing ? editor.getAttributes('image') : {};
+      const initialStructure = current.chemicalKet || current.chemicalMolfile || current.chemicalSmiles || '';
+      chemicalEditor.open({ initialStructure }).then((structure) => {
+        if (!structure || isSigned) return;
+        const attrs = {
+          src: structure.pngDataUrl,
+          alt: 'Chemical structure',
+          title: null,
+          width: current.width || '80%',
+          align: current.align || 'center',
+          chemicalKet: structure.ket,
+          chemicalMolfile: structure.molfile,
+          chemicalSmiles: structure.smiles
+        };
+        const nextChain = editor.chain().focus();
+        if (editing && editor.isActive('image')) nextChain.updateAttributes('image', attrs).run();
+        else nextChain.setImage(attrs).run();
+      }).catch((error) => {
+        window.alert(error instanceof Error ? error.message : 'Unable to export chemical structure.');
+      });
+      return;
+    }
     if (command === 'image-width-25') chain.updateAttributes('image', { width: '25%' }).run();
     if (command === 'image-width-50') chain.updateAttributes('image', { width: '50%' }).run();
     if (command === 'image-width-75') chain.updateAttributes('image', { width: '75%' }).run();
@@ -1364,6 +1411,7 @@
   const imageContextBar = document.getElementById('imageContextBar');
   const imageWidthRange = document.getElementById('imageWidthRange');
   const imageWidthValue = document.getElementById('imageWidthValue');
+  const chemicalStructureEdit = document.querySelector('[data-cmd="chemical-structure-edit"]');
   const tableOpsGroup = document.getElementById('tableOpsGroup');
   const pickerRows = 10;
   const pickerCols = 10;
@@ -1430,6 +1478,9 @@
     const imageActive = editor.isActive('image');
     const tableActive = editor.isActive('table');
     imageContextBar?.classList.toggle('is-visible', imageActive);
+    if (chemicalStructureEdit instanceof HTMLElement) {
+      chemicalStructureEdit.hidden = !imageActive || !editor.getAttributes('image').chemicalKet;
+    }
     tableOpsGroup?.classList.toggle('is-visible', tableActive);
     if (imageActive) {
       const width = normalizeImageWidth(editor.getAttributes('image').width);

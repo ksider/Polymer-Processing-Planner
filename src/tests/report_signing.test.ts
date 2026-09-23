@@ -13,6 +13,7 @@ import { createDoeStudy } from "../repos/doe_repo.js";
 import { upsertParamConfig } from "../repos/params_repo.js";
 import { insertAnalysisField, listActiveAnalysisFields } from "../repos/analysis_repo.js";
 import { insertRuns } from "../repos/runs_repo.js";
+import { ensureDirectRoom, sendMessageToRoom } from "../services/messages_service.js";
 import { getCsrfToken } from "./csrf_test_helpers.js";
 
 let dbPath = "";
@@ -69,6 +70,24 @@ test("only experiment owner can sign report", async () => {
     tempPassword: 0
   });
   assert.ok(managerUserId > 0);
+
+  const ownerOtherRoomId = ensureDirectRoom(db, ownerUserId, otherUserId);
+  const ownerManagerRoomId = ensureDirectRoom(db, ownerUserId, managerUserId);
+  const unrelatedMessageId = sendMessageToRoom(db, {
+    roomId: ownerManagerRoomId,
+    senderUserId: ownerUserId,
+    subject: "Private context",
+    body: "This reply target belongs to another conversation."
+  });
+  assert.throws(
+    () => sendMessageToRoom(db, {
+      roomId: ownerOtherRoomId,
+      senderUserId: ownerUserId,
+      subject: "Invalid cross-room reply",
+      replyToMessageId: unrelatedMessageId
+    }),
+    /Reply message is not in this room/
+  );
 
   const experimentId = createExperimentWithDefaults(db, {
     name: "Owner sign test",
@@ -163,6 +182,12 @@ test("only experiment owner can sign report", async () => {
     .type("form")
     .send({ email: "manager@example.com", password: "ManagerPass123!", _csrf: managerLoginCsrf })
     .expect(302);
+  const draftCsrf = await getCsrfToken(managerAgent, "/me");
+  await managerAgent
+    .post(`/messages/rooms/${ownerOtherRoomId}/draft.json`)
+    .type("form")
+    .send({ subject: "Not allowed", body: "", _csrf: draftCsrf })
+    .expect(403);
 
   db.prepare("UPDATE experiments SET notes = ? WHERE id = ?")
     .run("Source description from the experiment.", experimentId);

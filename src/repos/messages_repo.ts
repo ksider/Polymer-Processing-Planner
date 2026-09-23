@@ -952,7 +952,7 @@ export function listChatRoomMessages(
            ? = 'all'
            OR (? = 'mentions' AND mb.mention_flag = 1)
            OR (? = 'attachments' AND COALESCE(m.payload_json, '') != '')
-           OR (? = 'system' AND m.kind = 'system')
+           OR (? = 'system' AND m.kind IN ('system', 'assignment', 'task'))
          )
        ORDER BY datetime(m.created_at) ASC, m.id ASC
        LIMIT ?`

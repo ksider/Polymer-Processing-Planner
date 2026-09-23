@@ -141,7 +141,14 @@
               </div>
             </div>
           </div>
-          <div class="journal-editor" data-entity-notes-input data-placeholder="Write note for this entity..."></div>
+          <div
+            class="journal-editor"
+            data-entity-notes-input
+            data-placeholder="Write note for this entity..."
+            contenteditable="true"
+            role="textbox"
+            aria-multiline="true"
+          ></div>
           <div class="notes-compose-footer">
             <span class="small-note">Ctrl/Cmd+Enter: append today · Ctrl/Cmd+Shift+Enter: new note</span>
             <button class="pure-button pure-button-primary" type="button" data-entity-notes-send>Add note</button>
@@ -778,6 +785,9 @@
       document.body.classList.toggle('notes-drawer-open', willOpen);
       if (willOpen) {
         await loadNotes();
+        const editor = await ensureNotesEditor();
+        if (editor) editor.commands.focus('end');
+        else input?.focus();
         if (feedScroll) {
           feedScroll.scrollTop = 0;
         }

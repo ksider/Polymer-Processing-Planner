@@ -5,7 +5,7 @@
     </td>
     <td>
       <h1>Polymer Processing Planner</h1>
-      <p>Local, offline planner for polymer processing.</p>
+      <p>Local-first workspace for polymer processing experiments, qualification, DOE and controlled reports.</p>
       <p><strong>Stack:</strong></p>
       <p>
         <img src="https://img.shields.io/badge/Node.js-20.x-1f6feb?style=flat&logo=node.js&logoColor=white" alt="Node.js" />
@@ -15,7 +15,9 @@
         <img src="https://img.shields.io/badge/PureCSS-3.x-2f9c74?style=flat&logo=css3&logoColor=white" alt="PureCSS" />
         <img src="https://img.shields.io/badge/ECharts-5.x-c23531?style=flat" alt="ECharts" />
         <img src="https://img.shields.io/badge/jStat-1.x-6a5acd?style=flat" alt="jStat" />
-        <img src="https://img.shields.io/badge/Editor.js-2.x-2c2f36?style=flat" alt="Editor.js" />
+        <img src="https://img.shields.io/badge/TipTap-3.x-2c2f36?style=flat" alt="TipTap" />
+        <img src="https://img.shields.io/badge/DOCX-export-2f7d5d?style=flat" alt="DOCX export" />
+        <img src="https://img.shields.io/badge/Ketcher-local-167782?style=flat" alt="Local Ketcher chemical editor" />
         <img src="https://img.shields.io/badge/Passport.js-0.6-1d2b3a?style=flat" alt="Passport.js" />
         <img src="https://img.shields.io/badge/bcryptjs-2.x-8b5a2b?style=flat" alt="bcryptjs" />
       </p>
@@ -29,7 +31,10 @@
   <a href="https://youtu.be/0Hs7cjxP4B0" target="_blank" rel="noopener noreferrer">Watch on YouTube</a>
 </p>
 
-## Install + Run
+## Install and Run
+
+Requirements: Node.js 20.x and npm.
+
 ```bash
 npm install
 npm run dev
@@ -48,7 +53,9 @@ Open `http://localhost:3000`.
 │  ├─ middleware/             # Auth/access/permission middlewares
 │  ├─ domain/                 # Domain math/helpers (DOE imports/stats/designs)
 │  ├─ views/                  # EJS pages + partials
-│  ├─ public/                 # Frontend assets (app.css, app.js, illustrations)
+│  ├─ public/                 # Frontend assets, including the local Ketcher build
+│  │  ├─ chemical_structure_editor.js  # Shared chemical-editor adapter
+│  │  └─ ketcher/             # Self-hosted Ketcher standalone application
 │  └─ tests/                  # Integration tests
 ├─ dist/                      # Compiled output (`npm run build`)
 ├─ data/im_doe.sqlite         # Runtime SQLite database (never commit it)
@@ -88,11 +95,11 @@ Create a `.env` file based on `.env.example` and set:
 5) Create multiple Detailed Optimization (DOE) studies under the same experiment.
 6) Configure factors, generate runlists, and enter run data.
 7) Review analysis (charts + heatmap + 3D when possible).
-8) Generate and edit reports (multiple reports per experiment).
-9) Track Tasks on a kanban board inside each experiment.
-10) Use the internal messenger for direct chats, group chats, entity links, and system notifications.
-
-Planned: export data to CSV.
+8) Create a report setup, assign its author and responsible signer, then open the text editor.
+9) Insert qualification results, DOE analyses, run references, charts, tables and images into the report.
+10) Save/export DOCX, send the completed report for signature, and sign it.
+11) Track Tasks on a kanban board inside each experiment.
+12) Use the internal messenger for direct chats, group chats, entity links, and system notifications.
 
 ## Routing Model
 - Process list: `/`
@@ -109,7 +116,7 @@ Planned: export data to CSV.
   - DOE studies
   - Reports (signature required)
 - Task progress is calculated from linked entities; tasks without entities are driven by manual status moves.
-- Reports can be signed inside the task popup (manager/engineer/admin).
+- Report tasks move with the report workflow: the author owns the drafting task; after submission, the responsible signer owns the signature task.
 - Each task has calendar actions: download .ics or open a Google Calendar link.
 
 ## Entity Responsibility + Notifications
@@ -121,7 +128,10 @@ Planned: export data to CSV.
 - Profile page includes:
   - assigned entities list (entity + experiment links)
   - notifications feed with mark-read actions
-- Report signature is restricted to the experiment owner.
+- Report setup roles are explicit:
+  - `author` writes the report and sends it for signature;
+  - `responsible signer` signs after submission;
+  - `admin` / `manager` can assign these roles and change controlled setup fields.
 
 ## Messenger (Current UX)
 - Main page: `/messages`
@@ -144,7 +154,9 @@ Planned: export data to CSV.
   - mentions for participants
 - Notifications model:
   - system notifications do not mix into ordinary chat rooms
-  - notifications live in a dedicated right-side column and in the global unread popover
+  - notifications live in a dedicated right-side column in Messenger
+  - opening a notification marks it read and follows its entity link
+  - the navigation bell opens Messenger rather than a duplicate notification feed
 - Debug data:
   - use `npm run seed:messages -- --reset` to recreate demo chats/messages
 
@@ -201,6 +213,7 @@ Planned: export data to CSV.
   - date filter
   - entity-only toggle (in entity drawers)
 - Soft-delete is enabled for `admin` / `manager`.
+- The note editor supports formatted text, tables, links and resizable images. The shared chemical-editor adapter is loaded globally so the same structure workflow can be added to notes without a second integration.
 
 ## Qualification Packs (by Process Type)
 Qualification is process-specific (6-step pack is selected by `process_type`):
@@ -245,8 +258,39 @@ Implementation notes:
 Reference book (Amazon search):
 - Robust Process Development and Scientific Molding (Suhas Kulkarni): https://a.co/d/aDv52KL
 
-## Report Plan (Next Work)
-The current report plan lives at `report_plan` in the project root.
+## Reports
+
+Each experiment can have multiple reports. A report has its own editable name and description; its initial description may be seeded from the experiment without changing the experiment itself.
+
+### Setup and permissions
+
+- `admin` and `manager` can select the author, responsible signer, report type, number, target date and signature SLA.
+- The author can update only the report name and description while the report is still a draft.
+- The report number is initially generated from the draft creation date and can be adjusted by a manager or administrator.
+- Available standard templates: `Qualification`, `DOE`, and `Combined`.
+- Draft editing belongs to the author. Once sent for signature, editing moves to the responsible signer. A signed report is read-only.
+
+### Document editor
+
+- The editor is TipTap-based and starts with a report outline rather than an empty page.
+- Its source rail provides hierarchical experiment data, qualification results, DOE analyses, runs and their charts.
+- The Insert tab can add tables, links, images, charts, source references and chemical structures.
+- Image controls appear only when an image is selected and support width and alignment changes.
+- The report document is stored as TipTap JSON plus an HTML snapshot and a Markdown representation.
+
+### Chemical structures
+
+- Ketcher is bundled locally under `src/public/ketcher`; no chemical structure is sent to an external editor service.
+- In a report, choose **Insert → Chemical structure**, draw a molecule or reaction, then choose **Insert structure**.
+- The visible result is a PNG for DOCX compatibility. The same image node preserves KET, MOL V3000 and SMILES so it can be reopened and edited later.
+- Select a chemical-structure image to reveal its edit-structure action in the image toolbar.
+
+### Signature and export
+
+1. The author finishes the document and uses **Send for signature**.
+2. The application records the submission timestamp, calculates the signature due date from the SLA, reassigns the report task and notifies the responsible signer.
+3. The responsible signer signs or the author/manager recalls the report for revision.
+4. DOCX export includes the configured report metadata, generated title information, document contents and signature information. Embedded PNG/JPEG/GIF/BMP images are supported.
 
 ## Recent Changes (for handoff)
 - Internal messenger added and expanded:
@@ -261,9 +305,9 @@ The current report plan lives at `report_plan` in the project root.
 - UI shows live previews for tokenized values; inputs keep the token, summaries display the resolved value.
 - Step calculations resolve tokens at runtime (server + client), so values survive reloads.
 - Machine edit page shows a small read-only token field next to each parameter for quick copy.
-- Report generator now saves report configs per experiment (multiple reports per experiment).
-- Report list lives inside the experiment, right after Detailed Optimization.
-- Report editor (Editor.js) with seeded structure and embedded charts (rheology + process window).
+- Report setup, drafting, signature routing and DOCX export are implemented per report.
+- Report list lives inside the experiment, after Detailed Optimization.
+- The report editor uses TipTap with seeded headings, source insertion and embedded qualification/DOE charts.
 - Editable report documents are stored in `report_documents` and opened via `/reports/:id/editor`.
 
 ## Supported Recipe Import Formats
@@ -300,3 +344,4 @@ Additive,3,,2,
 - `npm run dev` - start with hot reload
 - `npm run build` - compile to `dist/`
 - `npm run start` - run compiled output
+- `npm test` - run integration and regression tests

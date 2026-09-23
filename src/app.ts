@@ -152,6 +152,22 @@ app.use((_req, res, next) => {
   next();
 });
 
+// Ketcher is a self-hosted web application embedded only by our own editor.
+// It needs a CSP of its own: the standalone build starts a WebAssembly worker
+// and its compiled scripts do not carry the application's per-request nonce.
+app.use(
+  "/ketcher",
+  (_req, res, next) => {
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' blob:; worker-src 'self' blob:; frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
+    );
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    next();
+  },
+  express.static(path.resolve(publicPath, "ketcher"))
+);
+
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -169,7 +185,9 @@ app.use(
         imgSrc: ["'self'", "data:", "https://api.dicebear.com", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         connectSrc: ["'self'"],
-        frameSrc: ["'none'"],
+        // Only local embedded tools, such as the self-hosted chemistry editor,
+        // may be framed. Remote frames remain prohibited.
+        frameSrc: ["'self'"],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
         formAction: ["'self'"],

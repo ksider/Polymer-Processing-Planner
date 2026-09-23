@@ -312,18 +312,22 @@ export function createMessagesRouter(db: Db) {
     const subject = String(req.body?.subject ?? "").trim();
     const body = String(req.body?.body ?? "");
     const replyToMessageId = toUserId(req.body?.reply_to_message_id);
-    if (!subject && !body.trim() && !replyToMessageId) {
-      clearDraftForRoom(db, req.user.id, roomId);
-      return res.json({ ok: true, cleared: true });
+    try {
+      if (!subject && !body.trim() && !replyToMessageId) {
+        clearDraftForRoom(db, req.user.id, roomId);
+        return res.json({ ok: true, cleared: true });
+      }
+      saveDraftForRoom(db, {
+        userId: req.user.id,
+        roomId,
+        subject,
+        body,
+        replyToMessageId
+      });
+      return res.json({ ok: true });
+    } catch {
+      return res.status(403).json({ error: "Room not found" });
     }
-    saveDraftForRoom(db, {
-      userId: req.user.id,
-      roomId,
-      subject,
-      body,
-      replyToMessageId
-    });
-    return res.json({ ok: true });
   });
 
   router.post("/messages/rooms/:roomId/read", (req, res) => {

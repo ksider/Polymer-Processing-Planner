@@ -779,6 +779,12 @@ export function sendMessageToRoom(
   }
   const room = getChatRoomByIdForUser(db, data.roomId, data.senderUserId);
   if (!room) throw new Error("Room not found.");
+  if (data.replyToMessageId) {
+    const replyTarget = getMessageById(db, data.replyToMessageId);
+    if (!replyTarget || Number(replyTarget.chat_room_id) !== Number(data.roomId)) {
+      throw new Error("Reply message is not in this room.");
+    }
+  }
   const visibility: MessageVisibility = room.room_type === "group" ? "collective" : "direct";
   const now = new Date().toISOString();
   const payloadJson = serializePayload(data.payload ?? null);
@@ -852,6 +858,8 @@ export function saveDraftForRoom(
     replyToMessageId?: number | null;
   }
 ) {
+  const room = getChatRoomByIdForUser(db, data.roomId, data.userId);
+  if (!room) throw new Error("Room not found.");
   upsertMessageDraft(db, {
     user_id: data.userId,
     room_id: data.roomId,
@@ -862,6 +870,8 @@ export function saveDraftForRoom(
 }
 
 export function clearDraftForRoom(db: Db, userId: number, roomId: number) {
+  const room = getChatRoomByIdForUser(db, roomId, userId);
+  if (!room) throw new Error("Room not found.");
   deleteMessageDraft(db, userId, roomId);
 }
 
@@ -969,6 +979,12 @@ export function editRoomMessage(
   const message = getMessageById(db, data.messageId);
   if (!message || Number(message.chat_room_id) !== Number(data.roomId)) {
     throw new Error("Message not found.");
+  }
+  if (data.replyToMessageId) {
+    const replyTarget = getMessageById(db, data.replyToMessageId);
+    if (!replyTarget || Number(replyTarget.chat_room_id) !== Number(data.roomId)) {
+      throw new Error("Reply message is not in this room.");
+    }
   }
   const isOwn = Number(message.sender_user_id) === Number(data.actorUserId);
   const isAdmin = String(data.actorRole ?? "").toLowerCase() === "admin";
