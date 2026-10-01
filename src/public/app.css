@@ -5956,3 +5956,464 @@ body.notes-drawer-open {
 .process-calendar-panel > summary::-webkit-details-marker {
   display: none;
 }
+
+/* DOE Analysis V2 workspace */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.doe-analysis-page {
+  max-width: 1680px;
+}
+
+.doe-analysis-header {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.doe-analysis-heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.doe-analysis-header-tools {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.55rem;
+}
+
+.doe-analysis-switcher {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.doe-analysis-switcher select {
+  width: min(28rem, 38vw);
+}
+
+.doe-analysis-switcher .pure-button {
+  white-space: nowrap;
+}
+
+.doe-analysis-title-row,
+.doe-analysis-panel-title,
+.doe-analysis-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.doe-analysis-title-row {
+  justify-content: flex-start;
+}
+
+.doe-analysis-title-row .card-title,
+.doe-analysis-panel-title h2,
+.doe-analysis-section-heading .card-title {
+  margin: 0;
+}
+
+.doe-analysis-panel-title h2 {
+  font-size: 1.05rem;
+}
+
+.doe-analysis-engine {
+  border: 1px solid #cfd8cf;
+  border-radius: 999px;
+  color: #38613f;
+  font-size: 0.8rem;
+  padding: 0.35rem 0.65rem;
+  white-space: nowrap;
+}
+
+.doe-analysis-engine.is-mock {
+  border-color: #d9c892;
+  color: #725b16;
+}
+
+.doe-analysis-engine.is-error {
+  border-color: #e4b1b1;
+  color: #a22d2d;
+}
+
+.doe-analysis-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 310px);
+  gap: 1rem;
+  align-items: start;
+}
+
+.doe-analysis-inspector {
+  position: sticky;
+  top: 0.75rem;
+}
+
+.doe-analysis-canvas {
+  min-width: 0;
+}
+
+.doe-analysis-section-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+
+.doe-analysis-section-nav a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.doe-analysis-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.doe-analysis-metrics > div {
+  border: 1px solid #e1e1da;
+  border-radius: 10px;
+  padding: 0.65rem;
+  background: #fafaf7;
+}
+
+.doe-analysis-metrics span,
+.doe-analysis-metrics strong {
+  display: block;
+}
+
+.doe-analysis-metrics span {
+  color: #6f6f68;
+  font-size: 0.75rem;
+}
+
+.doe-analysis-metrics strong {
+  font-size: 1.2rem;
+  margin-top: 0.15rem;
+}
+
+.doe-analysis-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  border: 1px solid #dfcf98;
+  border-radius: 10px;
+  background: #fffaf0;
+  padding: 0.75rem;
+  margin-top: 1rem;
+}
+
+.doe-analysis-empty-result {
+  min-height: 10rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  color: #6f6f68;
+  text-align: center;
+  padding: 1rem;
+}
+
+.doe-analysis-empty-result .material-symbols-rounded {
+  font-size: 2rem;
+}
+
+.doe-analysis-column-groups,
+.doe-analysis-result-grid,
+.doe-analysis-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.doe-analysis-chart-card {
+  border: 1px solid #e1e1da;
+  border-radius: 10px;
+  padding: 0.75rem;
+  min-width: 0;
+}
+
+.doe-analysis-chart-card h3,
+.doe-analysis-chart-card p {
+  margin-top: 0;
+}
+
+.doe-analysis-chart-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.doe-analysis-chart-heading h3 {
+  margin-bottom: 0.35rem;
+}
+
+.doe-analysis-chart-heading select {
+  max-width: 19rem;
+  min-width: 11rem;
+}
+
+.doe-analysis-chart-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  border-top: 1px solid #ecece7;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+}
+
+.doe-analysis-chart-actions .pure-button {
+  font-size: 0.72rem;
+  padding: 0.35rem 0.55rem;
+}
+
+.doe-analysis-chart {
+  height: 300px;
+  width: 100%;
+}
+
+.doe-analysis-chart-wide {
+  grid-column: 1 / -1;
+}
+
+.doe-analysis-contour-chart {
+  height: 420px;
+}
+
+.doe-analysis-contour-chart.is-3d {
+  height: 520px;
+}
+
+.doe-analysis-column-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-top: 1px solid #ecece7;
+  padding: 0.45rem 0;
+}
+
+.doe-analysis-column-item small {
+  color: #77776f;
+  text-align: right;
+}
+
+.doe-analysis-table-scroll {
+  overflow: auto;
+  margin-top: 0.8rem;
+  max-height: 34rem;
+}
+
+.doe-analysis-data-table {
+  min-width: max-content;
+}
+
+.doe-analysis-data-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f5f5f1;
+}
+
+.doe-analysis-data-table th span,
+.doe-analysis-data-table th small {
+  display: block;
+}
+
+.doe-analysis-data-table th small {
+  color: #77776f;
+  font-weight: 400;
+  margin-top: 0.15rem;
+}
+
+.doe-analysis-data-table tr.is-excluded td {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.doe-analysis-data-table tr.is-incomplete td {
+  background: #fffaf0;
+}
+
+.doe-analysis-data-table tbody tr {
+  cursor: pointer;
+}
+
+.doe-analysis-data-table tbody tr.is-selected td {
+  background: #fff0c9;
+  box-shadow: inset 0 2px 0 #d38a16, inset 0 -2px 0 #d38a16;
+}
+
+.doe-analysis-data-table tbody tr.is-selected td:first-child {
+  box-shadow: inset 3px 0 0 #d38a16, inset 0 2px 0 #d38a16, inset 0 -2px 0 #d38a16;
+}
+
+.doe-analysis-run-selection {
+  position: fixed;
+  z-index: 20;
+  right: 1rem;
+  bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid #d6c08a;
+  border-radius: 12px;
+  background: #fffaf0;
+  box-shadow: 0 8px 28px rgba(47, 43, 31, 0.2);
+  padding: 0.65rem 0.75rem;
+}
+
+.doe-analysis-run-selection[hidden] {
+  display: none;
+}
+
+.doe-analysis-run-selection > div {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.doe-analysis-fieldset {
+  border: 0;
+  border-top: 1px solid #e4e4de;
+  margin: 1rem 0 0;
+  padding: 0.8rem 0 0;
+}
+
+.doe-analysis-fieldset legend {
+  font-weight: 600;
+  padding: 0 0.35rem 0 0;
+}
+
+.doe-analysis-inspector select,
+.doe-analysis-inspector button[type="submit"] {
+  width: 100%;
+}
+
+.doe-analysis-field-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border-bottom: 1px solid #e4e4de;
+  margin: 0.65rem 0;
+  padding-bottom: 0.65rem;
+  font-size: 0.85rem;
+}
+
+.doe-analysis-inspector .pure-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0.45rem 0;
+}
+
+.doe-analysis-revisions {
+  border-top: 1px solid #e4e4de;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+}
+
+.doe-analysis-revisions h3 {
+  font-size: 0.9rem;
+  margin: 0 0 0.5rem;
+}
+
+.doe-analysis-revision-item {
+  border-left: 2px solid #d8d8d1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0.45rem 0;
+  padding: 0.2rem 0 0.2rem 0.55rem;
+}
+
+.doe-analysis-revision-item > div {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.doe-analysis-revision-item small {
+  color: #77776f;
+}
+
+@media (max-width: 1100px) {
+  .doe-analysis-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .doe-analysis-inspector {
+    position: static;
+  }
+}
+
+@media (max-width: 760px) {
+  .doe-analysis-header,
+  .doe-analysis-layout {
+    display: block;
+  }
+
+  .doe-analysis-engine {
+    display: inline-block;
+    margin-top: 0;
+  }
+
+  .doe-analysis-inspector,
+  .doe-analysis-section-nav {
+    position: static;
+  }
+
+  .doe-analysis-header-tools {
+    align-items: stretch;
+    margin-top: 0.75rem;
+  }
+
+  .doe-analysis-switcher {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .doe-analysis-switcher label {
+    flex: 1 1 100%;
+  }
+
+  .doe-analysis-switcher select {
+    width: 100%;
+  }
+
+  .doe-analysis-run-selection {
+    left: 0.6rem;
+    right: 0.6rem;
+    bottom: 0.6rem;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .doe-analysis-column-groups,
+  .doe-analysis-result-grid,
+  .doe-analysis-chart-grid {
+    grid-template-columns: 1fr;
+  }
+}

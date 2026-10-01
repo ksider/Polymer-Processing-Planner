@@ -1,0 +1,377 @@
+<%- include('../partials/head', { title: `DOE Analysis V2 | ${doe.name}` }) %>
+<%- include('../partials/nav') %>
+<%
+  const displayCell = (value) => {
+    if (value === null || typeof value === 'undefined') return '—';
+    if (Array.isArray(value)) return value.length ? value.join(', ') : '[]';
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    return String(value);
+  };
+  const completeness = overview.responseCompleteness === null
+    ? '—'
+    : `${Math.round(overview.responseCompleteness * 100)}%`;
+%>
+
+<main class="container doe-analysis-page" data-analysis-workspace
+  data-engine-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/engine"
+  data-calculate-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/calculate"
+  data-analyses-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/analyses"
+  data-run-base-url="/experiments/<%= experiment.id %>/runs"
+  data-analysis-id="<%= selectedAnalysis?.id || '' %>"
+  data-analysis-state="<%= selectedAnalysis?.state || 'draft' %>">
+  <header class="card doe-analysis-header">
+    <a class="back-link" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>?tab=analysis" aria-label="Back to current analysis">
+      <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
+    </a>
+    <div class="doe-analysis-heading">
+      <div class="doe-analysis-title-row">
+        <h1 class="card-title"><%- formatInline(doe.name) %> · Analysis V2</h1>
+        <span class="badge"><%= selectedAnalysis ? selectedAnalysis.state : 'Preview' %></span>
+      </div>
+      <p class="small-note"><%- formatInline(experiment.name) %> · <%= doe.designType %> · dataset <code><%= dataset.datasetRevision.slice(0, 12) %></code></p>
+    </div>
+    <div class="doe-analysis-header-tools">
+      <div class="doe-analysis-switcher">
+        <label>
+          <span class="visually-hidden">Analysis</span>
+          <select data-analysis-nav-select aria-label="Choose analysis">
+            <option value="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2" <%= selectedAnalysis ? '' : 'selected' %>>Unsaved analysis · Draft</option>
+            <% analyses.filter((analysis) => !analysis.archivedAt).forEach((analysis) => { %>
+              <option value="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2?analysis_id=<%= analysis.id %>" <%= selectedAnalysis?.id === analysis.id ? 'selected' : '' %>><%= analysis.name %> · <%= analysis.state %></option>
+            <% }); %>
+          </select>
+        </label>
+        <a class="icon-button" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2" title="New analysis" aria-label="New analysis">
+          <span class="material-symbols-rounded" aria-hidden="true">add</span>
+        </a>
+        <a class="pure-button" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>?tab=analysis">Old analysis</a>
+      </div>
+      <div class="doe-analysis-engine" data-engine-status aria-live="polite">Checking engine…</div>
+    </div>
+  </header>
+
+  <div class="doe-analysis-layout">
+    <section class="doe-analysis-canvas">
+      <nav class="card doe-analysis-section-nav" aria-label="Analysis sections">
+        <a href="#analysis-overview">Overview</a>
+        <a href="#analysis-data">Data</a>
+        <a href="#analysis-results">Results</a>
+      </nav>
+
+      <section class="card" id="analysis-overview">
+        <div class="doe-analysis-section-heading">
+          <div>
+            <h2 class="card-title">Overview</h2>
+            <p class="small-note">What will enter the calculation before a model is fitted.</p>
+          </div>
+        </div>
+        <div class="doe-analysis-metrics">
+          <div><span>Total runs</span><strong><%= overview.totalRuns %></strong></div>
+          <div><span>Complete</span><strong><%= overview.completeRuns %></strong></div>
+          <div><span>Included now</span><strong><%= overview.includedRuns %></strong></div>
+          <div><span>Excluded</span><strong><%= overview.excludedRuns %></strong></div>
+          <div><span>Factors</span><strong><%= overview.factorCount %></strong></div>
+          <div><span>Responses</span><strong><%= overview.responseCount %></strong></div>
+          <div><span>Measurement completeness</span><strong><%= completeness %></strong></div>
+        </div>
+
+        <% if (dataset.responseAudit.hasConflicts || dataset.responseAudit.hasLegacyOnlyValues || dataset.warnings.length) { %>
+          <div class="doe-analysis-notice" role="status">
+            <strong>Data provenance needs attention</strong>
+            <span>
+              <%= dataset.responseAudit.counts.legacy_only %> legacy-only values,
+              <%= dataset.responseAudit.counts.conflict %> conflicts,
+              <%= dataset.responseAudit.counts.ambiguous_legacy %> ambiguous values.
+            </span>
+          </div>
+        <% } %>
+        <% if (overview.includesIncomplete) { %>
+          <div class="doe-analysis-notice" role="status">
+            <strong>Historical completion flags are missing</strong>
+            <span>No usable run is marked complete, so “Include unfinished runs” is enabled explicitly for this draft. Review the worksheet before calculating.</span>
+          </div>
+        <% } %>
+
+        <div class="doe-analysis-column-groups">
+          <div>
+            <h3>Factors</h3>
+            <% if (!factors.length) { %><p class="small-note">No numeric factors.</p><% } %>
+            <% factors.forEach((column) => { %>
+              <div class="doe-analysis-column-item">
+                <span><%- formatInline(column.label) %></span>
+                <small><%= column.unit || 'no unit' %> · <%= column.factor?.coding || 'uncoded' %></small>
+              </div>
+            <% }); %>
+          </div>
+          <div>
+            <h3>Measured responses</h3>
+            <% if (!responses.length) { %><p class="small-note">No active numeric measured responses.</p><% } %>
+            <% responses.forEach((column) => { %>
+              <div class="doe-analysis-column-item">
+                <span><%- formatInline(column.label) %></span>
+                <small><%= column.unit || 'no unit' %> · <code><%= column.code %></code></small>
+              </div>
+            <% }); %>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="analysis-data">
+        <div class="doe-analysis-section-heading">
+          <div>
+            <h2 class="card-title">Data worksheet</h2>
+            <p class="small-note">One row per run. Raw values are shown; coded factor values remain available to the model.</p>
+          </div>
+          <span class="badge"><%= dataset.rows.length %> rows</span>
+        </div>
+        <div class="doe-analysis-table-scroll" tabindex="0">
+          <table class="pure-table pure-table-bordered table-compact doe-analysis-data-table">
+            <thead>
+              <tr>
+                <% dataset.columns.forEach((column) => { %>
+                  <th scope="col">
+                    <span><%- formatInline(column.label) %></span>
+                    <small><%= column.role %><%= column.unit ? ` · ${column.unit}` : '' %></small>
+                  </th>
+                <% }); %>
+              </tr>
+            </thead>
+            <tbody>
+              <% dataset.rows.forEach((row) => { %>
+                <tr class="<%= row.excluded ? 'is-excluded' : !row.done ? 'is-incomplete' : '' %>" data-run-row data-run-id="<%= row.runId %>" data-run-code="<%= row.runCode %>" tabindex="0" aria-selected="false">
+                  <% dataset.columns.forEach((column) => { %>
+                    <td><%= displayCell(row.values[column.key]) %></td>
+                  <% }); %>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card" id="analysis-results" data-results-panel>
+        <div class="doe-analysis-section-heading">
+          <div>
+            <h2 class="card-title">Calculation result</h2>
+            <p class="small-note" data-result-meta></p>
+          </div>
+        </div>
+        <div class="doe-analysis-empty-result" data-results-empty>
+          <span class="material-symbols-rounded" aria-hidden="true">query_stats</span>
+          <strong>Waiting for the analytics engine</strong>
+          <span>The default model will calculate automatically when a real R engine is connected.</span>
+        </div>
+        <div data-results-content hidden>
+          <div class="doe-analysis-notice" data-result-warnings hidden></div>
+          <div class="doe-analysis-metrics" data-result-metrics></div>
+          <p class="small-note doe-analysis-quality-note">R-squared describes the fitted runs. Adjusted R-squared penalizes unnecessary terms. Predicted R-squared estimates performance on a run left out of fitting and may be negative when prediction is poor.</p>
+          <div class="doe-analysis-chart-grid">
+            <section class="doe-analysis-chart-card">
+              <h3>Effect strength</h3>
+              <p class="small-note">Absolute t-value: estimated effect divided by its uncertainty. A longer bar means stronger statistical evidence; the intercept is omitted.</p>
+              <div class="doe-analysis-chart" data-effects-chart role="img" aria-label="Pareto chart of standardized effects"></div>
+            </section>
+            <section class="doe-analysis-chart-card">
+              <h3>Prediction errors</h3>
+              <p class="small-note">X is the model prediction. Y is measured response minus prediction. A random cloud around zero is desirable. Select a point to open its run.</p>
+              <div class="doe-analysis-chart" data-residual-chart role="img" aria-label="Residuals versus fitted values"></div>
+            </section>
+            <section class="doe-analysis-chart-card" data-main-effects-card hidden>
+              <h3>Main effects</h3>
+              <p class="small-note">Model prediction while one factor changes and the others stay at their reference values.</p>
+              <div class="doe-analysis-chart" data-main-effects-chart role="img" aria-label="Main effects plot"></div>
+            </section>
+            <section class="doe-analysis-chart-card" data-interaction-card hidden>
+              <div class="doe-analysis-chart-heading">
+                <h3 data-interaction-title>Factor interaction</h3>
+                <label>
+                  <span class="visually-hidden">Factor pair</span>
+                  <select data-interaction-pair aria-label="Choose factor pair"></select>
+                </label>
+              </div>
+              <p class="small-note">Non-parallel lines indicate that one factor changes the effect of another.</p>
+              <div class="doe-analysis-chart" data-interaction-chart role="img" aria-label="Factor interaction plot"></div>
+            </section>
+            <section class="doe-analysis-chart-card" data-qq-card hidden>
+              <h3>Normal probability plot</h3>
+              <p class="small-note">Residuals close to the diagonal are more consistent with a normal-error assumption.</p>
+              <div class="doe-analysis-chart" data-qq-chart role="img" aria-label="Normal probability plot of standardized errors"></div>
+            </section>
+            <section class="doe-analysis-chart-card" data-run-order-card hidden>
+              <h3>Prediction errors by run order</h3>
+              <p class="small-note">Drift, cycles, or clusters can reveal time-related process changes.</p>
+              <div class="doe-analysis-chart" data-run-order-chart role="img" aria-label="Prediction errors by run order"></div>
+            </section>
+            <section class="doe-analysis-chart-card doe-analysis-chart-wide" data-surface-card hidden>
+              <div class="doe-analysis-chart-heading">
+                <h3 data-surface-title>Response contour</h3>
+                <label>
+                  <span class="visually-hidden">Surface factor pair</span>
+                  <select data-surface-pair aria-label="Choose response-surface factor pair"></select>
+                </label>
+                <label>
+                  <span class="visually-hidden">Surface view</span>
+                  <select data-surface-view aria-label="Choose surface view">
+                    <option value="contour">Contour</option>
+                    <option value="3d">3D surface</option>
+                  </select>
+                </label>
+              </div>
+              <p class="small-note">Color is the model prediction. Circles are measured runs and open the source run when selected. <span data-surface-held></span></p>
+              <div class="doe-analysis-notice" data-surface-render-status hidden></div>
+              <div class="doe-analysis-chart doe-analysis-contour-chart" data-surface-chart role="img" aria-label="Predicted response contour"></div>
+            </section>
+          </div>
+          <div class="doe-analysis-result-grid">
+            <section>
+              <h3>ANOVA</h3>
+              <p class="small-note">Lack of fit compares model mismatch with repeat-to-repeat variation. A small p-value indicates that the selected model form may be inadequate. Pure error is variation between runs at identical factor settings.</p>
+              <div class="doe-analysis-table-scroll">
+                <table class="pure-table pure-table-bordered table-compact">
+                  <thead><tr><th>Term</th><th>DF</th><th>SS</th><th>MS</th><th>F</th><th>p</th></tr></thead>
+                  <tbody data-anova-body></tbody>
+                </table>
+              </div>
+            </section>
+            <section>
+              <h3>Coefficients</h3>
+              <div class="doe-analysis-table-scroll">
+                <table class="pure-table pure-table-bordered table-compact">
+                  <thead><tr><th>Term</th><th>Estimate</th><th>Standard uncertainty</th><th>Signal / uncertainty (t)</th><th>p-value</th></tr></thead>
+                  <tbody data-coefficients-body></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+          <section>
+            <h3>Run diagnostics</h3>
+            <div class="doe-analysis-table-scroll">
+              <table class="pure-table pure-table-bordered table-compact">
+                <thead><tr><th>Run</th><th>Predicted response</th><th>Prediction error</th><th>Standardized error</th><th>Leverage</th><th>Cook's distance</th></tr></thead>
+                <tbody data-diagnostics-body></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+    </section>
+
+    <aside class="card doe-analysis-inspector">
+      <div class="doe-analysis-panel-title">
+        <h2>Model</h2>
+        <span class="badge"><%= selectedAnalysis ? `#${selectedAnalysis.id}` : 'Basic' %></span>
+      </div>
+      <div class="doe-analysis-field-links">
+        <a href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>?tab=design">Configure input factors</a>
+        <a href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>?tab=design&amp;manage_fields=1">Configure measured responses</a>
+      </div>
+      <p class="small-note">Input factors define run settings. Measured response values are entered inside each run.</p>
+      <% if (defaultSpecification) { %>
+        <form class="pure-form pure-form-stacked" data-analysis-form>
+          <label for="analysisName">Analysis name</label>
+          <input id="analysisName" name="analysisName" maxlength="120" value="<%= selectedAnalysis?.name || '' %>" placeholder="For example: Cycle time — quadratic model" <%= selectedAnalysis ? 'readonly' : '' %>>
+
+          <label for="analysisResponse">Measured response</label>
+          <select id="analysisResponse" name="responseKey">
+            <% responses.forEach((response) => { %>
+              <option value="<%= response.key %>" <%= response.key === defaultSpecification.responseKey ? 'selected' : '' %>><%- formatInline(response.label) %></option>
+            <% }); %>
+          </select>
+
+          <label for="analysisFamily">Model family</label>
+          <select id="analysisFamily" name="modelFamily">
+            <option value="factorial" <%= defaultSpecification.modelFamily === 'factorial' ? 'selected' : '' %>>Factorial</option>
+            <option value="response_surface" <%= defaultSpecification.modelFamily === 'response_surface' ? 'selected' : '' %>>Response surface</option>
+            <option value="regression" <%= defaultSpecification.modelFamily === 'regression' ? 'selected' : '' %>>Regression</option>
+          </select>
+
+          <fieldset class="doe-analysis-fieldset">
+            <legend>Factors</legend>
+            <% factors.forEach((factor) => { %>
+              <label class="pure-checkbox">
+                <input type="checkbox" name="factorKeys" value="<%= factor.key %>" checked>
+                <span><%- formatInline(factor.label) %></span>
+              </label>
+            <% }); %>
+          </fieldset>
+
+          <fieldset class="doe-analysis-fieldset">
+            <legend>Dataset</legend>
+            <label class="pure-checkbox">
+              <input type="checkbox" name="useCodedFactors" <%= defaultSpecification.useCodedFactors ? 'checked' : '' %>>
+              Use coded factor values
+            </label>
+            <label class="pure-checkbox">
+              <input type="checkbox" name="includeIncomplete" <%= defaultSpecification.includeIncomplete ? 'checked' : '' %>>
+              Include unfinished runs
+            </label>
+            <label class="pure-checkbox">
+              <input type="checkbox" name="includeExcluded">
+              Include excluded runs
+            </label>
+          </fieldset>
+
+          <label for="analysisConfidence">Confidence level</label>
+          <select id="analysisConfidence" name="confidenceLevel">
+            <option value="0.90">90%</option>
+            <option value="0.95" selected>95%</option>
+            <option value="0.99">99%</option>
+          </select>
+
+          <button class="pure-button pure-button-primary" type="submit" data-calculate-button disabled><%= selectedAnalysis ? 'Recalculate and save' : 'Calculate preview' %></button>
+          <% if (!selectedAnalysis) { %>
+            <button class="pure-button" type="button" data-save-analysis disabled>Save analysis</button>
+          <% } %>
+          <p class="small-note" data-calculation-status aria-live="polite">Checking analytics engine…</p>
+          <% if (selectedAnalysis?.state === 'stale') { %>
+            <div class="doe-analysis-notice">Source data changed after the saved calculation. The previous result remains available until you recalculate.</div>
+          <% } %>
+          <% if (selectedAnalysis?.state === 'failed' && latestSuccessfulRevision) { %>
+            <div class="doe-analysis-notice">The last recalculation failed. The previous successful revision is shown.</div>
+          <% } %>
+          <% if (selectedAnalysis) { %>
+            <section class="doe-analysis-revisions">
+              <h3>Calculation revisions</h3>
+              <% if (!selectedRevisions.length) { %>
+                <p class="small-note">No calculations saved yet.</p>
+              <% } %>
+              <% selectedRevisions.forEach((revision) => { %>
+                <div class="doe-analysis-revision-item">
+                  <div>
+                    <strong>#<%= revision.id %></strong>
+                    <span class="badge"><%= revision.status.toLowerCase() %></span>
+                  </div>
+                  <small><%= revision.calculatedAt.slice(0, 19).replace('T', ' ') %></small>
+                  <small>dataset <code><%= revision.datasetRevision.slice(0, 10) %></code></small>
+                  <% if (revision.error) { %><small><%= revision.error.message %></small><% } %>
+                </div>
+              <% }); %>
+            </section>
+          <% } %>
+        </form>
+      <% } else { %>
+        <div class="doe-analysis-notice">
+          Add at least one active numeric response and numeric factor before calculating a model.
+        </div>
+      <% } %>
+    </aside>
+  </div>
+
+  <div class="doe-analysis-run-selection" data-run-selection role="status" hidden>
+    <span>Selected <strong data-selected-run-label></strong></span>
+    <div>
+      <button class="pure-button" type="button" data-show-selected-run>Show in worksheet</button>
+      <a class="pure-button pure-button-primary" data-open-selected-run href="#">Open run</a>
+      <button class="icon-button" type="button" data-clear-selected-run aria-label="Clear run selection" title="Clear selection">
+        <span class="material-symbols-rounded" aria-hidden="true">close</span>
+      </button>
+    </div>
+  </div>
+</main>
+
+<script nonce="<%= cspNonce %>" id="analysis-initial-result" type="application/json"><%- jsonForScript(latestSuccessfulRevision?.result || null) %></script>
+<script nonce="<%= cspNonce %>" id="analysis-column-labels" type="application/json"><%- jsonForScript(Object.fromEntries(dataset.columns.map((column) => [column.key, column.label]))) %></script>
+<script nonce="<%= cspNonce %>" src="/vendor/echarts/dist/echarts.min.js" defer></script>
+<script nonce="<%= cspNonce %>" src="/vendor/echarts-gl/dist/echarts-gl.min.js?v=2.0.9" defer></script>
+<script nonce="<%= cspNonce %>" src="/doe_analysis_workspace.js?v=20261001-3d4" defer></script>
+<%- include('../partials/foot') %>

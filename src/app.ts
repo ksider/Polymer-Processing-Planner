@@ -32,6 +32,7 @@ import { buildBreadcrumbs } from "./services/breadcrumbs.js";
 import { countUnreadMessageBoxes } from "./repos/messages_repo.js";
 import { getProcessById, getProcessRouteCode } from "./repos/processes_repo.js";
 import { getExperiment } from "./repos/experiments_repo.js";
+import { createDoeAnalysisRouter, isDoeAnalysisV2Enabled } from "./modules/doe_analysis/index.js";
 
 export function createApp() {
   const app = express();
@@ -121,6 +122,8 @@ app.locals.avatarUrl = (userId: unknown) => {
   const id = Number(userId);
   return Number.isFinite(id) && id > 0 ? `/avatars/${id}.svg` : "";
 };
+
+app.locals.analysisV2Enabled = isDoeAnalysisV2Enabled();
 
 app.locals.jsonForScript = (value: unknown) =>
   JSON.stringify(value ?? null)
@@ -265,6 +268,7 @@ app.use(createTasksRouter(db));
 app.use(createMessagesRouter(db));
 app.use(createHomeRouter(db));
 app.use(createRecipesRouter(db));
+app.use(createDoeAnalysisRouter(db));
 app.use(createExperimentsRouter(db));
 app.use(createRunsRouter(db));
 app.use(createQualificationRouter(db));

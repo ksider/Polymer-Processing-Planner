@@ -72,11 +72,11 @@
 
     <div class="card">
       <div class="card-header">
-        <h2 class="card-title">Measured Outputs</h2>
-        <a class="pure-button pure-button-secondary" href="/experiments/<%= experiment.id %>/doe/<%= run.doe_id %>?tab=analysis">Manage measured fields</a>
+        <h2 class="card-title">Measured Responses</h2>
+        <a class="pure-button pure-button-secondary" href="/experiments/<%= experiment.id %>/doe/<%= run.doe_id %>?tab=design&amp;manage_fields=1">Configure measured responses</a>
       </div>
       <% if (analysisGroups.length === 0) { %>
-        <p class="small-note">No active measured fields. Enable them in the Analysis tab.</p>
+        <p class="small-note">No active measured responses. Configure them in the DOE Design tab.</p>
       <% } %>
       <% analysisGroups.forEach((group) => { %>
         <div class="output-group">

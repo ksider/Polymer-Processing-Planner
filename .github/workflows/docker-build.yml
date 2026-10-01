@@ -7,6 +7,15 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - image: polymer-planner
+            context: .
+            dockerfile: ./Dockerfile
+          - image: polymer-planner-analytics
+            context: ./analytics-r
+            dockerfile: ./analytics-r/Dockerfile
     permissions:
       contents: read
       packages: write
@@ -24,6 +33,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/polymer-planner:latest
+          tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:latest

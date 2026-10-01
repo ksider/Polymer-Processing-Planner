@@ -482,6 +482,41 @@ function initDb(db: Db) {
       created_at TEXT NOT NULL,
       FOREIGN KEY (experiment_id) REFERENCES experiments(id) ON DELETE CASCADE
     );
+    CREATE TABLE IF NOT EXISTS doe_analyses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      doe_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      specification_json TEXT NOT NULL,
+      latest_successful_revision_id INTEGER,
+      created_by_user_id INTEGER,
+      archived_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (doe_id) REFERENCES doe_studies(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE TABLE IF NOT EXISTS doe_analysis_revisions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      analysis_id INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      dataset_revision TEXT NOT NULL,
+      contract_version TEXT NOT NULL,
+      request_id TEXT NOT NULL,
+      engine_name TEXT,
+      engine_version TEXT,
+      specification_json TEXT NOT NULL,
+      result_json TEXT,
+      error_json TEXT,
+      calculated_by_user_id INTEGER,
+      calculated_at TEXT NOT NULL,
+      FOREIGN KEY (analysis_id) REFERENCES doe_analyses(id) ON DELETE CASCADE,
+      FOREIGN KEY (calculated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_doe_analyses_doe_id
+      ON doe_analyses(doe_id, archived_at, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_doe_analysis_revisions_analysis_id
+      ON doe_analysis_revisions(analysis_id, id DESC);
     CREATE TABLE IF NOT EXISTS report_configs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       experiment_id INTEGER NOT NULL,

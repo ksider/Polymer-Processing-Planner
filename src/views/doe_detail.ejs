@@ -24,6 +24,9 @@
       <a class="<%= tab === 'design' ? 'active' : '' %>" href="/experiments/<%= experiment.id %>/doe/<%= doeId %>?tab=design">Design</a>
       <a class="<%= tab === 'runs' ? 'active' : '' %>" href="/experiments/<%= experiment.id %>/doe/<%= doeId %>?tab=runs">Runs</a>
       <a class="<%= tab === 'analysis' ? 'active' : '' %>" href="/experiments/<%= experiment.id %>/doe/<%= doeId %>?tab=analysis">Analysis</a>
+      <% if (analysisV2Enabled) { %>
+        <a href="/experiments/<%= experiment.id %>/doe/<%= doeId %>/analysis-v2">Analysis V2</a>
+      <% } %>
     </div>
   </div>
 
@@ -73,6 +76,30 @@
       <div style="margin-top: 1rem;">
         <button class="pure-button pure-button-secondary" type="button" id="openFactorDialog">Edit All Parameters</button>
       </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Measured Responses</h2>
+          <p class="small-note">Define what will be measured before running the experiment. Responses can also be added later without regenerating existing runs.</p>
+        </div>
+        <button class="pure-button pure-button-secondary" type="button" data-open-measured-fields>Configure measured responses</button>
+      </div>
+      <% if (activeAnalysisFields.length === 0) { %>
+        <p class="small-note"><strong>No measured responses selected.</strong> Add at least one numeric response for model analysis.</p>
+      <% } else { %>
+        <div class="field-grid" style="margin-top: 0.75rem;">
+          <% activeAnalysisFields.forEach((field) => { %>
+            <div class="field-chip">
+              <div class="field-content">
+                <div class="field-title"><%- formatInline(field.label) %></div>
+                <div class="field-meta"><%= field.field_type %><% if (field.unit) { %> · <%- formatInline(field.unit) %><% } %></div>
+              </div>
+            </div>
+          <% }); %>
+        </div>
+      <% } %>
     </div>
 
     <div class="card">
@@ -707,9 +734,9 @@
     <div class="card">
       <div class="card-header">
         <h2 class="card-title">Analysis Controls</h2>
-        <button class="pure-button pure-button-secondary" type="button" id="openMeasuredFieldsDialog">Manage measured fields</button>
       </div>
-      <p class="small-note" id="noActiveNumericOutputs" <%= outputNumericParams.length === 0 ? '' : 'style="display:none;"' %>><strong>No active numeric outputs.</strong> Enable measured fields to run analysis.</p>
+      <p class="small-note">Measured responses are configured in the Design tab and entered inside each run.</p>
+      <p class="small-note" id="noActiveNumericOutputs" <%= outputNumericParams.length === 0 ? '' : 'style="display:none;"' %>><strong>No active numeric responses.</strong> Configure measured responses in Design to run analysis.</p>
       <form class="pure-form pure-form-stacked" method="get" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>">
         <input type="hidden" name="tab" value="analysis">
         <div class="grid-two">
@@ -1076,13 +1103,13 @@
 
 <dialog id="measuredFieldsDialog" class="modal-frame">
   <div class="modal-header">
-    <strong>Measured Fields</strong>
+    <strong>Measured Responses</strong>
     <button class="pure-button" type="button" data-close>Close</button>
   </div>
   <div class="modal-body">
     <div class="card">
       <h2 class="card-title">Standard fields</h2>
-      <p class="small-note">Activate per experiment. Deactivating keeps stored data.</p>
+      <p class="small-note">Select responses before measurements begin. You may add more later; deactivating a response keeps all stored values.</p>
       <form method="POST" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/analysis-fields/standard" data-autosave="standard">
         <div class="field-grid">
           <% standardAnalysisFields.forEach((field) => { %>
@@ -1197,9 +1224,11 @@
 
 <script nonce="<%= cspNonce %>">
   const measuredDialog = document.getElementById('measuredFieldsDialog');
-  const openMeasuredDialog = document.getElementById('openMeasuredFieldsDialog');
-  if (openMeasuredDialog && measuredDialog) {
-    openMeasuredDialog.addEventListener('click', () => measuredDialog.showModal());
+  document.querySelectorAll('[data-open-measured-fields]').forEach((button) => {
+    if (measuredDialog) button.addEventListener('click', () => measuredDialog.showModal());
+  });
+  if (measuredDialog && <%- jsonForScript(manageMeasuredFields === true) %>) {
+    measuredDialog.showModal();
   }
   if (measuredDialog) {
     measuredDialog.querySelectorAll('[data-close]').forEach((btn) => {

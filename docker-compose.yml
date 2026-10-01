@@ -17,4 +17,15 @@ services:
       NODE_ENV: production
       DB_PATH: /app/data/im_doe.sqlite
       TRUST_PROXY: "1"
+      DOE_ANALYTICS_MODE: http
+      DOE_ANALYTICS_URL: http://analytics-r:8000
+      DOE_ANALYTICS_TIMEOUT_MS: "15000"
+    restart: unless-stopped
+
+  analytics-r:
+    build:
+      context: ./analytics-r
+    container_name: polymer-planner-analytics
+    expose:
+      - "8000"
     restart: unless-stopped

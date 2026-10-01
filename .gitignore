@@ -41,4 +41,5 @@ im_doe.sqlite-wal
 /info
 plan.md
 .ai
-/docs
+/docs/*
+!/docs/DOE_ANALYSIS_V2_PLAN.md

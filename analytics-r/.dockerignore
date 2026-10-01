@@ -1,0 +1,6 @@
+.git
+tests
+library
+*.Rproj
+.Rhistory
+.RData

@@ -858,6 +858,7 @@ export function createExperimentsRouter(db: Db) {
       params,
       inputParams,
       activeInputParams,
+      activeAnalysisFields,
       outputNumericParams,
       tagOutputFields,
       booleanOutputFields,
@@ -874,7 +875,8 @@ export function createExperimentsRouter(db: Db) {
       qualSummaries,
       canAssignEntities,
       assignableUsers,
-      doeAssigneeId
+      doeAssigneeId,
+      manageMeasuredFields: req.query.manage_fields === "1"
     });
   });
 
@@ -1151,7 +1153,7 @@ export function createExperimentsRouter(db: Db) {
       }
     }
     if (wantsJson) return res.status(204).send();
-    res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=analysis`);
+    res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=design&manage_fields=1`);
   });
 
   router.get("/experiments/:id/doe/:doeId/analysis-fields/tag-values", (req, res) => {
@@ -1247,7 +1249,7 @@ export function createExperimentsRouter(db: Db) {
       });
     }
     if (wantsJson) return res.status(204).send();
-    res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=analysis`);
+    res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=design&manage_fields=1`);
   });
 
   router.post("/experiments/:id/doe/:doeId/analysis-fields/custom/active", (req, res) => {
@@ -1261,17 +1263,17 @@ export function createExperimentsRouter(db: Db) {
     const isActive = isActiveRaw === "1" || isActiveRaw === "true" || isActiveRaw === "on" ? 1 : 0;
     if (!Number.isFinite(fieldId) || fieldId <= 0) {
       if (wantsJson) return res.status(400).json({ error: "Field id required." });
-      return res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=analysis`);
+      return res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=design&manage_fields=1`);
     }
     const experimentFields = listExperimentAnalysisFields(db, doeId);
     const existing = experimentFields.find((field) => field.id === fieldId);
     if (!existing || existing.is_standard === 1) {
       if (wantsJson) return res.status(404).json({ error: "Field not found." });
-      return res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=analysis`);
+      return res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=design&manage_fields=1`);
     }
     updateAnalysisFieldActive(db, fieldId, isActive);
     if (wantsJson) return res.status(204).send();
-    res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=analysis`);
+    res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=design&manage_fields=1`);
   });
 
   router.post("/experiments/:id/doe/:doeId/analysis-fields/new", (req, res) => {
@@ -1283,7 +1285,7 @@ export function createExperimentsRouter(db: Db) {
     const label = String(req.body.label || "").trim();
     if (!label) {
       if (wantsJson) return res.status(400).json({ error: "Label is required." });
-      return res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=analysis`);
+      return res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=design&manage_fields=1`);
     }
 
     const rawType = String(req.body.field_type || "number").trim();
@@ -1345,7 +1347,7 @@ export function createExperimentsRouter(db: Db) {
         }
       });
     }
-    res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=analysis`);
+    res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=design&manage_fields=1`);
   });
 
   router.post("/experiments/:id/doe/:doeId/generate", (req, res) => {
