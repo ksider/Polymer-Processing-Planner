@@ -15,7 +15,7 @@ jobs:
             dockerfile: ./Dockerfile
           - image: polymer-planner-analytics
             context: ./analytics-r
-            dockerfile: ./Dockerfile
+            dockerfile: ./analytics-r/Dockerfile
     permissions:
       contents: read
       packages: write
