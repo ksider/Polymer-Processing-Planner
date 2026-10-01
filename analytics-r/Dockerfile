@@ -14,6 +14,7 @@ RUN apt-get update \
     libxml2-dev \
     libsodium-dev \
     pkg-config \
+    zlib1g-dev \
   && rm -rf /var/lib/apt/lists/*
 
 RUN R -q -e "install.packages(c('plumber', 'jsonlite'), repos='https://cloud.r-project.org'); library(plumber); library(jsonlite)"
