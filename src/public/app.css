@@ -6016,6 +6016,21 @@ body.notes-drawer-open {
   gap: 0.75rem;
 }
 
+.doe-analysis-section-actions,
+.doe-analysis-table-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.doe-analysis-table-heading {
+  justify-content: space-between;
+}
+
+.doe-analysis-table-heading h3 {
+  margin: 0;
+}
+
 .doe-analysis-title-row {
   justify-content: flex-start;
 }

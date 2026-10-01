@@ -44,6 +44,7 @@ let selectedAnalysisRunId = null;
     if (target) window.location.assign(target);
   });
   bindRunSelection(workspace);
+  bindTableCopy(workspace);
 
   fetch(workspace.dataset.engineUrl, {
     headers: { accept: "application/json" },
@@ -266,7 +267,7 @@ function renderCharts(workspace, result) {
         trigger: "item",
         formatter: (item) => `${item.name}<br>Effect strength: ${formatNumber(item.value)}`
       },
-      xAxis: { type: "value", name: "Effect strength", nameLocation: "middle", nameGap: 22 },
+      xAxis: { type: "value", name: "Effect strength", nameLocation: "middle", nameGap: 22, axisLabel: numericAxisLabels() },
       yAxis: { type: "category", data: effects.map((effect) => effect.term), axisLabel: { width: 150, overflow: "truncate" } },
       series: [{
         type: "bar",
@@ -295,8 +296,8 @@ function renderCharts(workspace, result) {
         trigger: "item",
         formatter: (item) => `Run ${item.value[2]}<br>Predicted: ${formatNumber(item.value[0])}<br>Error: ${formatNumber(item.value[1])}<br>Standardized error: ${formatNumber(item.value[3])}`
       },
-      xAxis: { type: "value", name: "Predicted response", nameLocation: "middle", nameGap: 26 },
-      yAxis: { type: "value", name: "Prediction error" },
+      xAxis: { type: "value", name: "Predicted response", nameLocation: "middle", nameGap: 26, axisLabel: numericAxisLabels() },
+      yAxis: { type: "value", name: "Prediction error", axisLabel: numericAxisLabels() },
       series: [{
         type: "scatter",
         data: points,
@@ -320,6 +321,7 @@ function renderCharts(workspace, result) {
 
 function renderModelPlotCharts(workspace, plots) {
   renderMainEffects(workspace, plots.mainEffects || []);
+  renderMeanByFactor(workspace, plots.meanByFactor || []);
   renderInteractions(workspace, plots.interactions || []);
   renderQq(workspace, plots.qq || []);
   renderRunOrder(workspace, plots.residualOrder || []);
@@ -331,6 +333,100 @@ function renderModelPlotCharts(workspace, plots) {
   renderSurfaces(workspace, surfaces);
 }
 
+function renderMeanByFactor(workspace, factors) {
+  const card = workspace.querySelector("[data-mean-factor-card]");
+  const selector = workspace.querySelector("[data-mean-factor-select]");
+  if (!card || !selector || !factors.length) {
+    if (card) card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+  const previous = selector.value;
+  selector.replaceChildren(...factors.map((factor) => {
+    const option = document.createElement("option");
+    option.value = factor.factorKey;
+    option.textContent = analysisColumnLabels[factor.factorKey] || factor.factorKey;
+    return option;
+  }));
+  selector.hidden = factors.length < 2;
+  selector.value = factors.some((factor) => factor.factorKey === previous) ? previous : factors[0].factorKey;
+  const renderSelected = () => {
+    const factor = factors.find((item) => item.factorKey === selector.value) || factors[0];
+    renderFactorMeans(workspace, factor);
+  };
+  selector.onchange = renderSelected;
+  renderSelected();
+}
+
+function renderFactorMeans(workspace, factor) {
+  const host = workspace.querySelector("[data-mean-factor-chart]");
+  const card = workspace.querySelector("[data-mean-factor-card]");
+  if (!host || !card || !factor?.points?.length) {
+    if (card) card.hidden = true;
+    return;
+  }
+  const factorLabel = analysisColumnLabels[factor.factorKey] || factor.factorKey;
+  const title = card.querySelector("[data-mean-factor-title]");
+  if (title) title.textContent = `Mean response by ${factorLabel}`;
+  const points = factor.points.filter((point) => Number.isFinite(point.value) && Number.isFinite(point.mean));
+  const intervals = points.filter((point) => Number.isFinite(point.confidenceLow) && Number.isFinite(point.confidenceHigh));
+  const responseRange = axisRange(points.flatMap((point) => [point.mean, point.confidenceLow, point.confidenceHigh]));
+  chartFor(host).setOption({
+    animationDuration: 250,
+    aria: { enabled: true },
+    grid: { left: 14, right: 18, top: 18, bottom: 42, containLabel: true },
+    tooltip: {
+      trigger: "item",
+      formatter: (item) => {
+        const point = item.data;
+        if (!point || !Number.isFinite(point.mean)) return "Confidence interval";
+        const interval = Number.isFinite(point.confidenceLow) && Number.isFinite(point.confidenceHigh)
+          ? `<br>Confidence interval: ${formatNumber(point.confidenceLow)} to ${formatNumber(point.confidenceHigh)}`
+          : "<br>Confidence interval: unavailable (one measurement)";
+        return `${factorLabel}: ${formatNumber(point.factorValue)}<br>Mean response: ${formatNumber(point.mean)}${interval}<br>Measurements: ${point.n}`;
+      }
+    },
+    xAxis: { type: "value", name: factorLabel, nameLocation: "middle", nameGap: 28, axisLabel: numericAxisLabels(), ...axisRange(points.map((point) => point.value)) },
+    yAxis: { type: "value", name: "Mean response", axisLabel: numericAxisLabels(), ...responseRange },
+    series: [
+      {
+        name: "Confidence interval",
+        type: "custom",
+        silent: true,
+        data: intervals.map((point) => [point.value, point.confidenceLow, point.confidenceHigh]),
+        renderItem: (params, api) => {
+          const low = api.coord([api.value(0), api.value(1)]);
+          const high = api.coord([api.value(0), api.value(2)]);
+          const cap = 5;
+          return {
+            type: "group",
+            children: [
+              { type: "line", shape: { x1: low[0], y1: low[1], x2: high[0], y2: high[1] }, style: { stroke: "#52745a", lineWidth: 1.5 } },
+              { type: "line", shape: { x1: low[0] - cap, y1: low[1], x2: low[0] + cap, y2: low[1] }, style: { stroke: "#52745a", lineWidth: 1.5 } },
+              { type: "line", shape: { x1: high[0] - cap, y1: high[1], x2: high[0] + cap, y2: high[1] }, style: { stroke: "#52745a", lineWidth: 1.5 } }
+            ]
+          };
+        }
+      },
+      {
+        name: "Observed mean",
+        type: "line",
+        symbolSize: 8,
+        data: points.map((point) => ({
+          factorValue: point.value,
+          mean: point.mean,
+          confidenceLow: point.confidenceLow,
+          confidenceHigh: point.confidenceHigh,
+          n: point.n,
+          value: [point.value, point.mean]
+        })),
+        itemStyle: { color: "#52745a" },
+        lineStyle: { color: "#52745a" }
+      }
+    ]
+  }, true);
+}
+
 function renderMainEffects(workspace, effects) {
   const host = workspace.querySelector("[data-main-effects-chart]");
   const card = workspace.querySelector("[data-main-effects-card]");
@@ -339,14 +435,15 @@ function renderMainEffects(workspace, effects) {
     return;
   }
   card.hidden = false;
+  const predicted = effects.flatMap((effect) => (effect.points || []).map((point) => point.predicted));
   chartFor(host).setOption({
     animationDuration: 250,
     aria: { enabled: true },
     legend: { type: "scroll", top: 0 },
     grid: { left: 14, right: 18, top: 42, bottom: 38, containLabel: true },
     tooltip: { trigger: "axis" },
-    xAxis: { type: "value", name: "Coded factor level", nameLocation: "middle", nameGap: 26 },
-    yAxis: { type: "value", name: "Predicted response" },
+    xAxis: { type: "value", name: "Coded factor level", nameLocation: "middle", nameGap: 26, axisLabel: numericAxisLabels() },
+    yAxis: { type: "value", name: "Predicted response", axisLabel: numericAxisLabels(), ...axisRange(predicted) },
     series: effects.map((effect) => ({
       name: analysisColumnLabels[effect.factorKey] || effect.factorKey,
       type: "line",
@@ -386,14 +483,22 @@ function renderInteraction(workspace, interaction) {
   const yLabel = analysisColumnLabels[interaction.factorYKey] || interaction.factorYKey;
   const title = card.querySelector("[data-interaction-title]");
   if (title) title.textContent = `${xLabel} × ${yLabel}`;
+  const predicted = interaction.series.flatMap((series) => (series.points || []).map((point) => point.predicted));
   chartFor(host).setOption({
     animationDuration: 250,
     aria: { enabled: true },
     legend: { type: "scroll", top: 0 },
     grid: { left: 14, right: 18, top: 42, bottom: 38, containLabel: true },
     tooltip: { trigger: "axis" },
-    xAxis: { type: "value", name: xLabel, nameLocation: "middle", nameGap: 26 },
-    yAxis: { type: "value", name: "Predicted response" },
+    xAxis: {
+      type: "value",
+      name: xLabel,
+      nameLocation: "middle",
+      nameGap: 26,
+      axisLabel: numericAxisLabels(),
+      ...axisRange(interaction.series.flatMap((series) => (series.points || []).map((point) => point.factorXValue)))
+    },
+    yAxis: { type: "value", name: "Predicted response", axisLabel: numericAxisLabels(), ...axisRange(predicted) },
     series: interaction.series.map((series) => ({
       name: `${yLabel} = ${formatNumber(series.factorYValue)}`,
       type: "line",
@@ -426,8 +531,8 @@ function renderQq(workspace, points) {
         ? `Run ${item.value[2]}<br>Theoretical: ${formatNumber(item.value[0])}<br>Standardized error: ${formatNumber(item.value[1])}`
         : "Normal reference"
     },
-    xAxis: { type: "value", name: "Theoretical normal quantile", nameLocation: "middle", nameGap: 26 },
-    yAxis: { type: "value", name: "Standardized error" },
+    xAxis: { type: "value", name: "Theoretical normal quantile", nameLocation: "middle", nameGap: 26, axisLabel: numericAxisLabels() },
+    yAxis: { type: "value", name: "Standardized error", axisLabel: numericAxisLabels() },
     series: [
       { type: "line", data: [[low, low], [high, high]], symbol: "none", silent: true, lineStyle: { type: "dashed", color: "#999" } },
       {
@@ -466,8 +571,8 @@ function renderRunOrder(workspace, points) {
     aria: { enabled: true },
     grid: { left: 14, right: 18, top: 14, bottom: 38, containLabel: true },
     tooltip: { trigger: "item", formatter: (item) => `Run ${item.value[2]}<br>Order: ${item.value[0]}<br>Error: ${formatNumber(item.value[1])}` },
-    xAxis: { type: "value", name: "Run order", nameLocation: "middle", nameGap: 26, minInterval: 1 },
-    yAxis: { type: "value", name: "Prediction error" },
+    xAxis: { type: "value", name: "Run order", nameLocation: "middle", nameGap: 26, minInterval: 1, axisLabel: numericAxisLabels() },
+    yAxis: { type: "value", name: "Prediction error", axisLabel: numericAxisLabels() },
     series: [{
       type: "line",
       data: usable.map((point) => ({
@@ -533,6 +638,11 @@ function renderSurface(workspace, surface, viewMode = "contour") {
   const predicted = usable.map((point) => point.predicted);
   const actual = (surface.actualPoints || [])
     .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+  const xRange = axisRange(usable.map((point) => point.x));
+  const yRange = axisRange(usable.map((point) => point.y));
+  // Actual measurements may sit above or below the fitted surface, so they also
+  // define the visible height of the 3D plot.
+  const zRange = axisRange([...predicted, ...actual.map((point) => point.response)]);
   let use3d = viewMode === "3d";
   if (renderStatus) {
     renderStatus.textContent = use3d ? "Rendering 3D surface…" : "";
@@ -552,7 +662,7 @@ function renderSurface(workspace, surface, viewMode = "contour") {
   const common = {
     animationDuration: 250,
     aria: { enabled: true },
-    visualMap: { min: Math.min(...predicted), max: Math.max(...predicted), calculable: true, orient: "vertical", right: 0, top: "middle", seriesIndex: 0 }
+    visualMap: { min: Math.min(...predicted), max: Math.max(...predicted), precision: 3, calculable: true, orient: "vertical", right: 0, top: "middle", seriesIndex: 0 }
   };
   const contourOption = {
     ...common,
@@ -562,8 +672,8 @@ function renderSurface(workspace, surface, viewMode = "contour") {
         ? `Run ${item.value[4]}<br>${xLabel}: ${formatNumber(item.value[0])}<br>${yLabel}: ${formatNumber(item.value[1])}<br>Measured response: ${formatNumber(item.value[2])}<br>Predicted response: ${formatNumber(item.value[3])}`
         : `${xLabel}: ${formatNumber(item.value[0])}<br>${yLabel}: ${formatNumber(item.value[1])}<br>Predicted response: ${formatNumber(item.value[2])}`
     },
-    xAxis: { type: "value", name: xLabel, nameLocation: "middle", nameGap: 28 },
-    yAxis: { type: "value", name: yLabel },
+    xAxis: { type: "value", name: xLabel, nameLocation: "middle", nameGap: 28, axisLabel: numericAxisLabels(), ...xRange },
+    yAxis: { type: "value", name: yLabel, axisLabel: numericAxisLabels(), ...yRange },
     series: [
       { name: "Predicted surface", type: "heatmap", data: usable.map((point) => [point.x, point.y, point.predicted]), progressive: 1000 },
       {
@@ -587,9 +697,9 @@ function renderSurface(workspace, surface, viewMode = "contour") {
         ? `Run ${item.value[4]}<br>${xLabel}: ${formatNumber(item.value[0])}<br>${yLabel}: ${formatNumber(item.value[1])}<br>Measured response: ${formatNumber(item.value[2])}<br>Predicted response: ${formatNumber(item.value[3])}`
         : `${xLabel}: ${formatNumber(item.value[0])}<br>${yLabel}: ${formatNumber(item.value[1])}<br>Predicted response: ${formatNumber(item.value[2])}`
     },
-    xAxis3D: { type: "value", name: xLabel },
-    yAxis3D: { type: "value", name: yLabel },
-    zAxis3D: { type: "value", name: "Predicted response" },
+    xAxis3D: { type: "value", name: xLabel, axisLabel: numericAxisLabels(), ...xRange },
+    yAxis3D: { type: "value", name: yLabel, axisLabel: numericAxisLabels(), ...yRange },
+    zAxis3D: { type: "value", name: "Predicted response", axisLabel: numericAxisLabels(), ...zRange },
     grid3D: {
       boxWidth: 110,
       boxDepth: 90,
@@ -619,7 +729,11 @@ function renderSurface(workspace, surface, viewMode = "contour") {
     ]
   };
   try {
-    chart.setOption(use3d ? surfaceOption : contourOption, true);
+    if (use3d) {
+      withSafeEchartsGlExpressions(() => chart.setOption(surfaceOption, true));
+    } else {
+      chart.setOption(contourOption, true);
+    }
     if (use3d) {
       const renderedTypes = (chart.getOption().series || []).map((series) => series.type);
       if (!renderedTypes.includes("surface")) {
@@ -773,6 +887,62 @@ function updateChartExportAvailability(host) {
   svgButton.title = is3d ? "SVG export is unavailable for WebGL 3D charts; use PNG." : "";
 }
 
+function withSafeEchartsGlExpressions(callback) {
+  const nativeFunction = window.Function;
+  function SafeTextureFunction(...args) {
+    const isTextureExpression = args.length === 4
+      && args[0] === "width"
+      && args[1] === "height"
+      && args[2] === "dpr"
+      && typeof args[3] === "string"
+      && /^return\s+/.test(args[3]);
+    if (!isTextureExpression) {
+      return Reflect.construct(nativeFunction, args);
+    }
+    const expression = args[3].replace(/^return\s+/, "").replace(/;\s*$/, "").trim();
+    return (width, height, dpr = 1) => evaluateTextureExpression(expression, { width, height, dpr });
+  }
+  Object.setPrototypeOf(SafeTextureFunction, nativeFunction);
+  SafeTextureFunction.prototype = nativeFunction.prototype;
+  window.Function = SafeTextureFunction;
+  try {
+    return callback();
+  } finally {
+    window.Function = nativeFunction;
+  }
+}
+
+function evaluateTextureExpression(expression, variables) {
+  let source = expression.replace(/\s+/g, "");
+  while (source.startsWith("(") && source.endsWith(")")) {
+    source = source.slice(1, -1);
+  }
+  if (source.startsWith("[") && source.endsWith("]")) {
+    const values = source.slice(1, -1).split(",");
+    if (!values.length || values.length > 2) throw new Error("Unsupported ECharts GL texture expression.");
+    return values.map((value) => evaluateTextureScalar(value, variables));
+  }
+  return evaluateTextureScalar(source, variables);
+}
+
+function evaluateTextureScalar(expression, variables) {
+  const tokens = expression.match(/width|height|dpr|\d+(?:\.\d+)?|[*/]/g) || [];
+  if (tokens.join("") !== expression || tokens.length % 2 === 0) {
+    throw new Error("Unsupported ECharts GL texture expression.");
+  }
+  const operand = (token) => Object.hasOwn(variables, token) ? Number(variables[token]) : Number(token);
+  let value = operand(tokens[0]);
+  if (!Number.isFinite(value)) throw new Error("Invalid ECharts GL texture operand.");
+  for (let index = 1; index < tokens.length; index += 2) {
+    const next = operand(tokens[index + 1]);
+    if (!Number.isFinite(next) || (tokens[index] === "/" && next === 0)) {
+      throw new Error("Invalid ECharts GL texture operand.");
+    }
+    value = tokens[index] === "*" ? value * next : value / next;
+  }
+  return value;
+}
+
 function exportChart(host, fileName, format) {
   const chart = window.echarts?.getInstanceByDom(host);
   if (!chart) return;
@@ -805,6 +975,77 @@ function safeFileName(value) {
 
 function chartFor(element) {
   return window.echarts.getInstanceByDom(element) || window.echarts.init(element);
+}
+
+function bindTableCopy(workspace) {
+  workspace.querySelectorAll("[data-copy-table]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const table = workspace.querySelector(button.dataset.copyTable || "");
+      if (!table) return;
+      const label = button.dataset.copyLabel || button.textContent.trim() || "Copy TSV";
+      button.dataset.copyLabel = label;
+      try {
+        await copyTextAsTsv(tableToTsv(table));
+        button.textContent = "Copied";
+        button.setAttribute("aria-label", "Table copied as TSV");
+      } catch {
+        button.textContent = "Copy failed";
+        button.setAttribute("aria-label", "Table could not be copied");
+      }
+      window.setTimeout(() => {
+        button.textContent = label;
+        button.removeAttribute("aria-label");
+      }, 1800);
+    });
+  });
+}
+
+function tableToTsv(table) {
+  return [...table.querySelectorAll("tr")]
+    .map((row) => [...row.querySelectorAll("th, td")]
+      .map((cell) => tsvCell((cell.innerText || cell.textContent || "").replace(/\s+/g, " ").trim()))
+      .join("\t"))
+    .filter(Boolean)
+    .join("\n");
+}
+
+function tsvCell(value) {
+  return /[\t\n\r\"]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+async function copyTextAsTsv(text) {
+  if (!text) throw new Error("The table is empty.");
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const fallback = document.createElement("textarea");
+  fallback.value = text;
+  fallback.setAttribute("readonly", "");
+  fallback.style.cssText = "position:fixed;left:-10000px;top:0";
+  document.body.append(fallback);
+  fallback.select();
+  const copied = document.execCommand("copy");
+  fallback.remove();
+  if (!copied) throw new Error("Clipboard access was denied.");
+}
+
+function axisRange(values, padding = 0.04) {
+  const numbers = values.filter((value) => Number.isFinite(value));
+  if (!numbers.length) return { scale: true };
+  const low = Math.min(...numbers);
+  const high = Math.max(...numbers);
+  const span = high - low;
+  // A small margin avoids points touching the frame, without anchoring a
+  // response plot at zero. A flat prediction still receives a visible range.
+  const margin = span > 0
+    ? span * padding
+    : Math.max(Math.abs(low) * padding, 1);
+  return { min: low - margin, max: high + margin, scale: true };
+}
+
+function numericAxisLabels() {
+  return { formatter: (value) => formatNumber(Number(value)) };
 }
 
 function showEmptyResult(workspace, title, message) {

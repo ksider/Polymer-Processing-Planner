@@ -20,7 +20,7 @@
   data-analysis-id="<%= selectedAnalysis?.id || '' %>"
   data-analysis-state="<%= selectedAnalysis?.state || 'draft' %>">
   <header class="card doe-analysis-header">
-    <a class="back-link" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>?tab=analysis" aria-label="Back to current analysis">
+    <a class="back-link" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>?tab=design" aria-label="Back to DOE design">
       <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
     </a>
     <div class="doe-analysis-heading">
@@ -122,7 +122,10 @@
             <h2 class="card-title">Data worksheet</h2>
             <p class="small-note">One row per run. Raw values are shown; coded factor values remain available to the model.</p>
           </div>
-          <span class="badge"><%= dataset.rows.length %> rows</span>
+          <div class="doe-analysis-section-actions">
+            <span class="badge"><%= dataset.rows.length %> rows</span>
+            <button class="pure-button" type="button" data-copy-table="#analysis-data .doe-analysis-data-table">Copy TSV</button>
+          </div>
         </div>
         <div class="doe-analysis-table-scroll" tabindex="0">
           <table class="pure-table pure-table-bordered table-compact doe-analysis-data-table">
@@ -181,6 +184,17 @@
               <p class="small-note">Model prediction while one factor changes and the others stay at their reference values.</p>
               <div class="doe-analysis-chart" data-main-effects-chart role="img" aria-label="Main effects plot"></div>
             </section>
+            <section class="doe-analysis-chart-card" data-mean-factor-card hidden>
+              <div class="doe-analysis-chart-heading">
+                <h3 data-mean-factor-title>Mean response by factor</h3>
+                <label>
+                  <span class="visually-hidden">Factor for measured means</span>
+                  <select data-mean-factor-select aria-label="Choose factor for measured means"></select>
+                </label>
+              </div>
+              <p class="small-note">Observed mean at each physical factor setting. Whiskers show the selected confidence interval for the mean; no interval is shown when a setting has one measurement.</p>
+              <div class="doe-analysis-chart" data-mean-factor-chart role="img" aria-label="Observed mean response by factor with confidence interval"></div>
+            </section>
             <section class="doe-analysis-chart-card" data-interaction-card hidden>
               <div class="doe-analysis-chart-heading">
                 <h3 data-interaction-title>Factor interaction</h3>
@@ -223,8 +237,11 @@
             </section>
           </div>
           <div class="doe-analysis-result-grid">
-            <section>
-              <h3>ANOVA</h3>
+            <section id="analysis-anova">
+              <div class="doe-analysis-table-heading">
+                <h3>ANOVA</h3>
+                <button class="pure-button" type="button" data-copy-table="#analysis-anova table">Copy TSV</button>
+              </div>
               <p class="small-note">Lack of fit compares model mismatch with repeat-to-repeat variation. A small p-value indicates that the selected model form may be inadequate. Pure error is variation between runs at identical factor settings.</p>
               <div class="doe-analysis-table-scroll">
                 <table class="pure-table pure-table-bordered table-compact">
@@ -233,8 +250,11 @@
                 </table>
               </div>
             </section>
-            <section>
-              <h3>Coefficients</h3>
+            <section id="analysis-coefficients">
+              <div class="doe-analysis-table-heading">
+                <h3>Coefficients</h3>
+                <button class="pure-button" type="button" data-copy-table="#analysis-coefficients table">Copy TSV</button>
+              </div>
               <div class="doe-analysis-table-scroll">
                 <table class="pure-table pure-table-bordered table-compact">
                   <thead><tr><th>Term</th><th>Estimate</th><th>Standard uncertainty</th><th>Signal / uncertainty (t)</th><th>p-value</th></tr></thead>
@@ -243,8 +263,11 @@
               </div>
             </section>
           </div>
-          <section>
-            <h3>Run diagnostics</h3>
+          <section id="analysis-diagnostics">
+            <div class="doe-analysis-table-heading">
+              <h3>Run diagnostics</h3>
+              <button class="pure-button" type="button" data-copy-table="#analysis-diagnostics table">Copy TSV</button>
+            </div>
             <div class="doe-analysis-table-scroll">
               <table class="pure-table pure-table-bordered table-compact">
                 <thead><tr><th>Run</th><th>Predicted response</th><th>Prediction error</th><th>Standardized error</th><th>Leverage</th><th>Cook's distance</th></tr></thead>
@@ -373,5 +396,5 @@
 <script nonce="<%= cspNonce %>" id="analysis-column-labels" type="application/json"><%- jsonForScript(Object.fromEntries(dataset.columns.map((column) => [column.key, column.label]))) %></script>
 <script nonce="<%= cspNonce %>" src="/vendor/echarts/dist/echarts.min.js" defer></script>
 <script nonce="<%= cspNonce %>" src="/vendor/echarts-gl/dist/echarts-gl.min.js?v=2.0.9" defer></script>
-<script nonce="<%= cspNonce %>" src="/doe_analysis_workspace.js?v=20261001-3d4" defer></script>
+<script nonce="<%= cspNonce %>" src="/doe_analysis_workspace.js?v=20261001-precision1" defer></script>
 <%- include('../partials/foot') %>

@@ -113,6 +113,12 @@ analyze_request <- function(request) {
       source <- if (isTRUE(specification$useCodedFactors)) row$codedValues else row$values
       numeric_value(source[[key]])
     }, numeric(1))
+    # Keep the physical setting alongside the model coordinate. Grouped means
+    # should be readable in the units used to run the experiment, even when the
+    # fitted model uses coded factors.
+    model_data[[paste0("raw_x", index)]] <- vapply(available_rows, function(row) {
+      numeric_value(row$values[[key]])
+    }, numeric(1))
   }
 
   complete <- complete.cases(model_data)
@@ -177,7 +183,7 @@ analyze_request <- function(request) {
     coefficients = build_coefficients(fit, factor_keys, as.numeric(specification$confidenceLevel)),
     anova = build_anova(fit, factor_keys, lack_of_fit),
     diagnostics = build_diagnostics(fit, used_data),
-    plots = build_model_plots(fit, used_data, factor_keys, specification$modelFamily),
+    plots = build_model_plots(fit, used_data, factor_keys, specification$modelFamily, as.numeric(specification$confidenceLevel)),
     warnings = warnings
   )
 }
@@ -380,7 +386,7 @@ build_diagnostics <- function(fit, used_data) {
   })
 }
 
-build_model_plots <- function(fit, used_data, factor_keys, model_family) {
+build_model_plots <- function(fit, used_data, factor_keys, model_family, confidence_level) {
   variables <- paste0("x", seq_along(factor_keys))
   reference <- vapply(variables, function(variable) mean(used_data[[variable]]), numeric(1))
   names(reference) <- variables
@@ -397,6 +403,28 @@ build_model_plots <- function(fit, used_data, factor_keys, model_family) {
         value = unname(values[[point_index]]),
         predicted = finite_or_na(predicted[[point_index]])
       ))
+    )
+  })
+
+  mean_by_factor <- lapply(seq_along(variables), function(index) {
+    raw_variable <- paste0("raw_x", index)
+    values <- sort(unique(as.numeric(used_data[[raw_variable]])))
+    list(
+      factorKey = factor_keys[[index]],
+      points = lapply(values, function(value) {
+        responses <- used_data$y[used_data[[raw_variable]] == value]
+        count <- length(responses)
+        average <- mean(responses)
+        standard_error <- if (count > 1) stats::sd(responses) / sqrt(count) else NA_real_
+        critical <- if (count > 1) stats::qt(1 - (1 - confidence_level) / 2, count - 1) else NA_real_
+        list(
+          value = unname(value),
+          mean = finite_or_na(average),
+          confidenceLow = finite_or_na(average - critical * standard_error),
+          confidenceHigh = finite_or_na(average + critical * standard_error),
+          n = count
+        )
+      })
     )
   })
 
@@ -493,6 +521,7 @@ build_model_plots <- function(fit, used_data, factor_keys, model_family) {
 
   list(
     mainEffects = main_effects,
+    meanByFactor = mean_by_factor,
     interactions = interactions,
     qq = qq,
     residualOrder = residual_order,

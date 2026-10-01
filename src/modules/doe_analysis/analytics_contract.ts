@@ -74,6 +74,16 @@ export type DoeAnalyticsPlots = {
     factorKey: string;
     points: Array<{ value: number; predicted: number | null }>;
   }>;
+  meanByFactor: Array<{
+    factorKey: string;
+    points: Array<{
+      value: number;
+      mean: number | null;
+      confidenceLow: number | null;
+      confidenceHigh: number | null;
+      n: number;
+    }>;
+  }>;
   interactions: Array<{
     factorXKey: string;
     factorYKey: string;

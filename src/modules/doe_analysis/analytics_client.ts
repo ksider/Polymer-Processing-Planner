@@ -66,6 +66,7 @@ export class MockDoeAnalyticsClient implements DoeAnalyticsClient {
       diagnostics: [],
       plots: {
         mainEffects: [],
+        meanByFactor: [],
         interactions: [],
         qq: [],
         residualOrder: [],
