@@ -3,7 +3,7 @@ FROM rocker/r-ver:4.4.3
 ENV RENV_CONFIG_PAK_ENABLED=FALSE
 WORKDIR /opt/analytics
 
-RUN R -q -e "install.packages(c('plumber', 'jsonlite'), repos='https://cloud.r-project.org')"
+RUN R -q -e "install.packages(c('plumber', 'jsonlite'), repos='https://cloud.r-project.org'); library(plumber); library(jsonlite)"
 
 COPY R ./R
 COPY plumber.R run.R ./
