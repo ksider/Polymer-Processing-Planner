@@ -1,15 +1,15 @@
 # DOE Analysis V2 — product and implementation plan
 
-Status: draft for implementation planning.
+Status: active implementation plan. Updated 2026-10-03.
 
 Implementation status:
 
 Current product priority — analysis workspace first. Report integration is
 intentionally paused after its read-only saved-revision source was established.
-The next implementation work belongs inside Analysis V2: single-response
-optimization, then multi-response desirability, transformations, blocks, and
-model comparison. Reports must consume these saved artifacts later, but do not
-drive their interaction design.
+The optimizer, desirability, transformations, blocks, comparison, confirmation
+runs, response types, graph views, and process-type templates below are already
+implemented. Reports must consume these saved artifacts later, but do not drive
+their interaction design.
 
 - Phase 0 — in progress. Product terminology, the TypeScript dataset/analytics
   contracts, and cross-service JSON schemas are defined. Initial R numerical
@@ -25,11 +25,11 @@ drive their interaction design.
   two-image CI/build configuration are implemented. Dependency locking, Docker
   verification on the server, richer DOE-specific outputs, and reviewed golden
   values remain.
-- Phase 3 — in progress. A feature-flagged workspace shell now provides the
-  analysis navigator placeholder, dataset overview, provenance warning,
-  worksheet, basic model inspector, engine status, and semantic result tables.
-  Saved navigation, richer completeness/design warnings, linked selection, and
-  responsive drawer behavior remain.
+- Phase 3 — in progress. A feature-flagged workspace provides saved analysis
+  navigation, dataset overview, provenance warning, worksheet, model
+  inspector, engine status, semantic result tables, linked run selection, and
+  an independently scrolling inspector. Richer completeness/design warnings
+  and responsive drawer behavior remain.
 - Measured-response schema management now belongs to DOE Design rather than the
   legacy analysis screen. Responses can be configured before run generation or
   added later without regenerating runs; adding a response changes the dataset
@@ -55,12 +55,14 @@ drive their interaction design.
   explicit actions to reveal or open the source run. Charts now name the
   selected response, its unit, and their factor coordinate system; selecting a
   standardized-effect bar links it to the corresponding ANOVA and coefficient
-  rows. Remaining work is visual review with production DOE data.
-- Phase 6 — in progress. The Analysis V2 workspace now exports an
-  analysis-ready CSV of real numeric factors and measured numeric responses,
-  suitable for direct import into external DOE software. The report catalogue
-  now exposes saved successful Analysis V2 revisions through a read-only
-  endpoint; report-editor insertion and snapshot metadata remain.
+  rows. Custom graphs are collapsed by default, saved views can restore them,
+  and all 2D charts label both axes. Remaining work is visual review with
+  production DOE data.
+- Phase 6 — in progress. The Analysis V2 workspace exports an analysis-ready
+  CSV of real numeric factors and measured numeric responses, suitable for
+  direct import into external DOE software. The report catalogue exposes saved
+  successful Analysis V2 revisions through a read-only endpoint; report-editor
+  insertion and snapshot metadata are paused.
 - Phase 7 — not started.
 - Phase 8 — in progress. The first single-response optimizer is available in
   the analysis specification: minimize, maximize, or hit a target inside
@@ -99,9 +101,43 @@ drive their interaction design.
   store field codes rather than a DOE's local IDs, then validate and map onto
   the active fields of the DOE where they are applied.
 
-Implementation checkpoint — 2026-10-01:
+### Current analysis backlog
 
-- `npm run build` and all 18 Node tests pass;
+Completed in the analysis workspace:
+
+- saved analyses, immutable revisions, jobs, stale detection, activity, and
+  guided hierarchical terms;
+- factorial, regression, and response-surface fitting; ANOVA, coefficients,
+  diagnostics, pure error/lack-of-fit where applicable, and linked plots;
+- 2D/3D response surfaces, interactions, mean-with-95%-CI, residual, Q-Q,
+  run-order, observed/predicted, and effect-strength views, plus PNG/SVG;
+- single- and compatible multi-response optimisation, confirmation runs, model
+  comparison, response transforms, categorical blocks, calculated numeric
+  responses, boolean responses, and tag-presence logistic responses;
+- saved graph views, a configurable scatter/mean graph, copyable tables,
+  external-analysis CSV, and process-type model templates.
+
+Still to do, in priority order:
+
+1. Validate the current workspace and chart layout on real production DOE data;
+   resolve only reproducible usability defects found there.
+2. Extend multi-response desirability to calculated and binary outcomes, with
+   statistically appropriate observed ranges and goals.
+3. Add broader derived-column expressions and before/after model diagnostics;
+   do not turn this into an unrestricted code-expression field.
+4. Add advanced statistical options only when required: weighted/robust fits,
+   transformation suggestions, stationary/canonical response-surface analysis,
+   and stronger alias/confounding presentation.
+5. Improve process-type template governance (rename/version/ownership) if
+   shared-template use makes that necessary.
+6. Evaluate faceting or an embedded exploratory worksheet only after a concrete
+   interaction design is agreed; facets are intentionally absent today.
+7. Resume reports, then complete response-data migration and remove the legacy
+   DOE analysis only after parity and production verification.
+
+Implementation checkpoint — 2026-10-03:
+
+- `npm run build` and all 25 Node tests pass;
 - `Rscript analytics-r/tests/run_tests.R` passes without external R web
   dependencies;
 - local Planner development auto-selects a project-local `Rscript` client when
@@ -567,16 +603,12 @@ separate storage if real datasets prove them too large.
 
 ### 7.2 Later analyses
 
-- binary response models;
-- tag-to-binary response derivation;
-- multi-response desirability optimization;
 - weighted and robust regression;
 - transformation suggestions;
-- confirmation-run workflow;
 - sequential DOE recommendations;
-- model comparison;
-- user-defined derived columns;
-- reusable analysis templates by process type.
+- broader user-defined derived columns;
+- stationary-point and canonical response-surface analysis;
+- reusable-template governance when process-type sharing needs it.
 
 ### 7.3 Statistical safeguards
 
@@ -928,14 +960,16 @@ Exit criteria:
 
 Deliverables:
 
-- multi-response optimizer and desirability;
-- confirmation-run creation;
-- free graph builder and saved DOE-level views;
-- derived columns and transformations;
-- binary/tag response support;
-- analysis comparison;
-- reusable model templates by process type;
-- optional evaluation of an advanced embedded worksheet.
+- [x] Multi-response optimizer and desirability for compatible direct continuous responses;
+- [x] confirmation-run creation;
+- [x] free graph builder and saved DOE-level views;
+- [x] response transforms and difference/sum/ratio calculated responses;
+- [x] boolean and tag-presence binary response support;
+- [x] analysis comparison;
+- [x] reusable model templates by process type;
+- [ ] multi-response desirability for calculated and binary outcomes;
+- [ ] broader derived columns and before/after diagnostics;
+- [ ] optional evaluation of an advanced embedded worksheet.
 
 Immediate analysis sequence:
 
@@ -954,7 +988,7 @@ Immediate analysis sequence:
    coerced into a continuous response.
 4. Analysis comparison and confirmation runs: compare two saved revisions and
    turn a selected recommendation into a traceable follow-up run. Confirmation
-   runs are implemented; comparison is next.
+   runs and comparison are implemented.
 
 Exit criteria:
 
