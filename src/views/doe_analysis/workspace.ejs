@@ -64,11 +64,13 @@
         <a class="icon-button" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2" title="New analysis" aria-label="New analysis">
           <span class="material-symbols-rounded" aria-hidden="true">add</span>
         </a>
+      </div>
+      <div class="doe-analysis-engine-row">
         <button class="doe-analysis-link" type="button" data-open-comparison hidden>Compare models</button>
         <button class="doe-analysis-link" type="button" data-open-saved-views hidden>Saved graphs</button>
         <button class="doe-analysis-link" type="button" data-open-templates hidden>Model templates</button>
+        <div class="doe-analysis-engine" data-engine-status aria-live="polite">Checking engine…</div>
       </div>
-      <div class="doe-analysis-engine" data-engine-status aria-live="polite">Checking engine…</div>
     </div>
   </header>
 
@@ -650,5 +652,5 @@
 <script nonce="<%= cspNonce %>" id="analysis-dataset" type="application/json"><%- jsonForScript(dataset) %></script>
 <script nonce="<%= cspNonce %>" src="/vendor/echarts/dist/echarts.min.js" defer></script>
 <script nonce="<%= cspNonce %>" src="/vendor/echarts-gl/dist/echarts-gl.min.js?v=2.0.9" defer></script>
-<script nonce="<%= cspNonce %>" src="/doe_analysis_workspace.js?v=20261003-model-templates1" defer></script>
+<script nonce="<%= cspNonce %>" src="/doe_analysis_workspace.js?v=20261003-section-navigation1" defer></script>
 <%- include('../partials/foot') %>

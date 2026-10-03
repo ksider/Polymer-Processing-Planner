@@ -6092,6 +6092,17 @@ body.notes-drawer-open {
   white-space: nowrap;
 }
 
+.doe-analysis-engine-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  justify-content: flex-end;
+}
+
+.doe-analysis-engine-row .doe-analysis-link {
+  white-space: nowrap;
+}
+
 .doe-analysis-engine.is-mock {
   border-color: #d9c892;
   color: #725b16;
@@ -6137,6 +6148,13 @@ body.notes-drawer-open {
   color: inherit;
   font-weight: 600;
   text-decoration: none;
+}
+
+.doe-analysis-section-nav a.is-active {
+  background: #e4eee5;
+  border-radius: 999px;
+  color: #28513a;
+  padding: 0.3rem 0.55rem;
 }
 
 .doe-analysis-metrics {
@@ -6524,6 +6542,11 @@ body.notes-drawer-open {
   .doe-analysis-engine {
     display: inline-block;
     margin-top: 0;
+  }
+
+  .doe-analysis-engine-row {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .doe-analysis-inspector,

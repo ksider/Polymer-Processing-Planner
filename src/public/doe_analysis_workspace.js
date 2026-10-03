@@ -63,6 +63,7 @@ let analysisUsesCodedFactors = false;
     const target = String(analysisSwitcher.value || "");
     if (target) window.location.assign(target);
   });
+  bindSectionNavigation(workspace);
   bindRunSelection(workspace);
   bindTermSelection(workspace);
   bindTableCopy(workspace);
@@ -241,6 +242,44 @@ let analysisUsesCodedFactors = false;
     });
   });
 })();
+
+function bindSectionNavigation(workspace) {
+  const navigation = workspace.querySelector(".doe-analysis-section-nav");
+  if (!navigation) return;
+  const links = [...navigation.querySelectorAll('a[href^="#"]')];
+  const items = links.map((link) => ({ link, section: workspace.querySelector(link.getAttribute("href")) }))
+    .filter((item) => item.section instanceof HTMLElement);
+  if (!items.length) return;
+  const setActive = (section) => {
+    items.forEach((item) => {
+      const active = item.section === section;
+      item.link.classList.toggle("is-active", active);
+      if (active) item.link.setAttribute("aria-current", "location");
+      else item.link.removeAttribute("aria-current");
+    });
+  };
+  const refresh = () => {
+    const offset = 112;
+    const passed = items.filter((item) => item.section.getBoundingClientRect().top <= offset);
+    if (passed.length) return setActive(passed[passed.length - 1].section);
+    const next = items.find((item) => item.section.getBoundingClientRect().bottom > offset);
+    setActive((next || items[0]).section);
+  };
+  let scheduled = false;
+  const schedule = () => {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => { scheduled = false; refresh(); });
+  };
+  links.forEach((link) => link.addEventListener("click", () => {
+    const item = items.find((candidate) => candidate.link === link);
+    if (item) setActive(item.section);
+    window.setTimeout(refresh, 0);
+  }));
+  window.addEventListener("scroll", schedule, { passive: true });
+  window.addEventListener("resize", schedule);
+  refresh();
+}
 
 function bindAnalysisLifecycleActions(workspace, context) {
   const { csrfToken, savedAnalysisId, analysisName, status, button, saveButton } = context;
