@@ -4,6 +4,17 @@ import type { DoeAnalysisDataset } from "./types.js";
 export const DOE_ANALYTICS_CONTRACT_VERSION = "1.0" as const;
 
 export type DoeAnalysisModelFamily = "factorial" | "response_surface" | "regression";
+export type DoeAnalysisResponseTransform = "none" | "log" | "sqrt";
+export type DoeAnalysisResponseModel = "continuous" | "binary";
+export type DoeAnalysisDerivedResponseOperation = "difference" | "sum" | "ratio";
+export type DoeAnalysisDerivedResponse = {
+  operation: DoeAnalysisDerivedResponseOperation;
+  leftKey: string;
+  rightKey: string;
+};
+export type DoeAnalysisTagResponse = {
+  tag: string;
+};
 export type DoeAnalysisModelTerm = `main:${string}` | `interaction:${string}|${string}` | `quadratic:${string}`;
 export type DoeAnalysisOptimizationObjective = "minimize" | "maximize" | "target";
 export type DoeAnalysisOptimization = {
@@ -15,12 +26,17 @@ export type DoeAnalysisOptimization = {
 export type DoeAnalysisSpecification = {
   responseKey: string;
   factorKeys: string[];
+  blockKeys: string[];
   modelFamily: DoeAnalysisModelFamily;
   modelTerms: DoeAnalysisModelTerm[];
   useCodedFactors: boolean;
   includeExcluded: boolean;
   includeIncomplete: boolean;
   confidenceLevel: number;
+  responseTransform: DoeAnalysisResponseTransform;
+  responseModel: DoeAnalysisResponseModel;
+  derivedResponse?: DoeAnalysisDerivedResponse;
+  tagResponse?: DoeAnalysisTagResponse;
   optimization?: DoeAnalysisOptimization;
 };
 
@@ -151,9 +167,14 @@ export type DoeAnalyticsSuccess = {
     target: number | null;
     predicted: number | null;
     factorValues: Record<string, number>;
+    blockValues: Record<string, string>;
     modelFactorValues: Record<string, number>;
     factorBounds: Record<string, { min: number; max: number }>;
     candidatesEvaluated: number;
+  };
+  recommendations?: {
+    minimum: NonNullable<DoeAnalyticsSuccess["optimizer"]>;
+    maximum: NonNullable<DoeAnalyticsSuccess["optimizer"]>;
   };
   plots?: DoeAnalyticsPlots;
   warnings: DoeAnalyticsWarning[];
@@ -191,12 +212,18 @@ export class DoeAnalyticsValidationError extends Error {
 }
 
 export function defaultAnalysisSpecification(dataset: DoeAnalysisDataset): DoeAnalysisSpecification {
-  const numericResponses = dataset.columns.filter(
-    (column) => column.role === "response" && column.active && column.dataType === "number"
+  const supportedResponses = dataset.columns.filter(
+    (column) => column.role === "response" && column.active && (
+      column.dataType === "number" ||
+      column.dataType === "boolean" ||
+      (column.dataType === "tags" && column.allowedValues.length > 0)
+    )
   );
-  const response = numericResponses.reduce<(typeof numericResponses)[number] | undefined>(
+  const response = supportedResponses.reduce<(typeof supportedResponses)[number] | undefined>(
     (best, column) => {
       if (!best) return column;
+      if (best.dataType === "boolean" && column.dataType === "number") return column;
+      if (best.dataType === "number" && column.dataType === "boolean") return best;
       return populatedNumericCount(dataset, column.key) > populatedNumericCount(dataset, best.key)
         ? column
         : best;
@@ -207,7 +234,7 @@ export function defaultAnalysisSpecification(dataset: DoeAnalysisDataset): DoeAn
     (column) => column.role === "factor" && column.active && column.dataType === "number"
   );
   if (!response) {
-    throw new DoeAnalyticsValidationError(["The DOE has no active numeric response."]);
+    throw new DoeAnalyticsValidationError(["The DOE has no active numeric, boolean, or configured tag response."]);
   }
   const modelFamily: DoeAnalysisModelFamily = dataset.doe.designType === "BBD"
     ? "response_surface"
@@ -217,12 +244,18 @@ export function defaultAnalysisSpecification(dataset: DoeAnalysisDataset): DoeAn
   return {
     responseKey: response.key,
     factorKeys: factors.map((column) => column.key),
+    blockKeys: dataset.columns
+      .filter((column) => column.role === "block" && column.active && (column.dataType === "category" || column.dataType === "text"))
+      .map((column) => column.key),
     modelFamily,
     modelTerms: defaultModelTerms(modelFamily, factors.map((column) => column.key)),
     useCodedFactors: modelFamily !== "regression",
     includeExcluded: false,
     includeIncomplete: false,
-    confidenceLevel: 0.95
+    confidenceLevel: 0.95,
+    responseTransform: "none",
+    responseModel: response.dataType === "boolean" || response.dataType === "tags" ? "binary" : "continuous",
+    tagResponse: response.dataType === "tags" ? { tag: response.allowedValues[0] } : undefined
   };
 }
 
@@ -238,11 +271,16 @@ export function normalizeAnalysisSpecification(
   input: Partial<DoeAnalysisSpecification> | null | undefined
 ): DoeAnalysisSpecification {
   const defaults = defaultAnalysisSpecification(dataset);
+  const responseKey = typeof input?.responseKey === "string" ? input.responseKey : defaults.responseKey;
+  const selectedResponse = dataset.columns.find((column) => column.key === responseKey);
   const specification: DoeAnalysisSpecification = {
-    responseKey: typeof input?.responseKey === "string" ? input.responseKey : defaults.responseKey,
+    responseKey,
     factorKeys: Array.isArray(input?.factorKeys)
       ? input.factorKeys.filter((key): key is string => typeof key === "string")
       : defaults.factorKeys,
+    blockKeys: Array.isArray(input?.blockKeys)
+      ? input.blockKeys.filter((key): key is string => typeof key === "string")
+      : defaults.blockKeys,
     modelFamily: input?.modelFamily ?? defaults.modelFamily,
     modelTerms: Array.isArray(input?.modelTerms)
       ? input.modelTerms.filter((term): term is DoeAnalysisModelTerm => typeof term === "string")
@@ -260,6 +298,16 @@ export function normalizeAnalysisSpecification(
     confidenceLevel: typeof input?.confidenceLevel === "number"
       ? input.confidenceLevel
       : defaults.confidenceLevel,
+    responseTransform: input?.responseTransform === "log" || input?.responseTransform === "sqrt"
+      ? input.responseTransform
+      : "none",
+    responseModel: responseModelFor(dataset, responseKey),
+    derivedResponse: normalizeDerivedResponse(input?.derivedResponse),
+    tagResponse: normalizeTagResponse(input?.tagResponse) ?? (
+      selectedResponse?.dataType === "tags" && selectedResponse.allowedValues.length
+        ? { tag: selectedResponse.allowedValues[0] }
+        : undefined
+    ),
     optimization: normalizeOptimization(input?.optimization)
   };
   validateAnalysisSpecification(dataset, specification);
@@ -274,8 +322,40 @@ export function validateAnalysisSpecification(
   const response = dataset.columns.find((column) => column.key === specification.responseKey);
   if (!response || response.role !== "response" || !response.active) {
     issues.push(`Unknown or inactive response column: ${specification.responseKey}.`);
-  } else if (response.dataType !== "number") {
-    issues.push(`Response ${specification.responseKey} is not numeric.`);
+  } else if (response.dataType !== "number" && response.dataType !== "boolean" && response.dataType !== "tags") {
+    issues.push(`Response ${specification.responseKey} must be numeric, boolean, or tags.`);
+  } else if (specification.responseModel !== responseModelFor(dataset, specification.responseKey)) {
+    issues.push(`Response model does not match the data type of ${specification.responseKey}.`);
+  }
+  if (specification.derivedResponse) {
+    const { operation, leftKey, rightKey } = specification.derivedResponse;
+    if (!["difference", "sum", "ratio"].includes(operation)) {
+      issues.push("Unsupported derived response operation.");
+    }
+    if (leftKey === rightKey) {
+      issues.push("A derived response must use two different measured responses.");
+    }
+    for (const key of [leftKey, rightKey]) {
+      const source = dataset.columns.find((column) => column.key === key);
+      if (!source || source.role !== "response" || !source.active || source.dataType !== "number") {
+        issues.push(`Derived response source ${key} must be an active numeric response.`);
+      }
+    }
+    if (specification.responseKey !== leftKey) {
+      issues.push("The primary response must match the first derived response source.");
+    }
+  }
+  if (specification.tagResponse) {
+    if (response?.dataType !== "tags") {
+      issues.push("A tag response must use a tags measurement field.");
+    } else if (!response.allowedValues.includes(specification.tagResponse.tag)) {
+      issues.push(`Tag ${specification.tagResponse.tag} is not available for ${specification.responseKey}.`);
+    }
+  } else if (response?.dataType === "tags") {
+    issues.push("Select a tag to analyse its presence or absence.");
+  }
+  if (specification.derivedResponse && specification.tagResponse) {
+    issues.push("A derived numeric response cannot also be a tag response.");
   }
 
   if (!Array.isArray(specification.factorKeys) || specification.factorKeys.length === 0) {
@@ -295,11 +375,34 @@ export function validateAnalysisSpecification(
     }
   }
 
+  if (!Array.isArray(specification.blockKeys)) {
+    issues.push("Blocks must be an array.");
+  } else {
+    const uniqueBlockKeys = new Set(specification.blockKeys);
+    if (uniqueBlockKeys.size !== specification.blockKeys.length) {
+      issues.push("Blocks must be unique.");
+    }
+    for (const key of uniqueBlockKeys) {
+      const block = dataset.columns.find((column) => column.key === key);
+      if (!block || block.role !== "block" || !block.active) {
+        issues.push(`Unknown or inactive block column: ${key}.`);
+      } else if (block.dataType !== "category" && block.dataType !== "text") {
+        issues.push(`Block ${key} must be categorical or text.`);
+      }
+    }
+  }
+
   if (!["factorial", "response_surface", "regression"].includes(specification.modelFamily)) {
     issues.push(`Unsupported model family: ${String(specification.modelFamily)}.`);
   }
   if (!(specification.confidenceLevel > 0.5 && specification.confidenceLevel < 1)) {
     issues.push("Confidence level must be greater than 0.5 and less than 1.");
+  }
+  if (!["none", "log", "sqrt"].includes(specification.responseTransform)) {
+    issues.push("Unsupported response transformation.");
+  }
+  if (specification.responseModel === "binary" && specification.responseTransform !== "none") {
+    issues.push("A boolean response cannot use a numeric response transformation.");
   }
   if (specification.optimization) {
     if (specification.optimization.objective === "target" && !Number.isFinite(specification.optimization.target)) {
@@ -338,6 +441,33 @@ export function validateAnalysisSpecification(
     }
   }
   if (issues.length) throw new DoeAnalyticsValidationError(issues);
+}
+
+function normalizeDerivedResponse(input: unknown): DoeAnalysisDerivedResponse | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const candidate = input as Partial<DoeAnalysisDerivedResponse>;
+  if (
+    (candidate.operation !== "difference" && candidate.operation !== "sum" && candidate.operation !== "ratio") ||
+    typeof candidate.leftKey !== "string" ||
+    typeof candidate.rightKey !== "string"
+  ) return undefined;
+  return {
+    operation: candidate.operation,
+    leftKey: candidate.leftKey,
+    rightKey: candidate.rightKey
+  };
+}
+
+function normalizeTagResponse(input: unknown): DoeAnalysisTagResponse | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const tag = (input as Partial<DoeAnalysisTagResponse>).tag;
+  return typeof tag === "string" && tag.trim() ? { tag: tag.trim() } : undefined;
+}
+
+function responseModelFor(dataset: DoeAnalysisDataset, responseKey: string): DoeAnalysisResponseModel {
+  return ["boolean", "tags"].includes(dataset.columns.find((column) => column.key === responseKey)?.dataType ?? "")
+    ? "binary"
+    : "continuous";
 }
 
 export function defaultModelTerms(

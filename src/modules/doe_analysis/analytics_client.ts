@@ -46,7 +46,7 @@ export class MockDoeAnalyticsClient implements DoeAnalyticsClient {
       (request.specification.includeExcluded || !row.excluded) &&
       (request.specification.includeIncomplete || row.done)
     );
-    const usedRows = availableRows.filter((row) => typeof row.values[responseKey] === "number");
+    const usedRows = availableRows.filter((row) => Number.isFinite(responseValue(row.values, request.specification)));
     return {
       ok: true,
       contractVersion: DOE_ANALYTICS_CONTRACT_VERSION,
@@ -65,6 +65,7 @@ export class MockDoeAnalyticsClient implements DoeAnalyticsClient {
       anova: [],
       diagnostics: [],
       optimizer: null,
+      recommendations: undefined,
       plots: {
         mainEffects: [],
         meanByFactor: [],
@@ -82,6 +83,26 @@ export class MockDoeAnalyticsClient implements DoeAnalyticsClient {
       ]
     };
   }
+}
+
+function responseValue(
+  values: Record<string, unknown>,
+  specification: DoeAnalyticsRequest["specification"]
+): number {
+  const derived = specification.derivedResponse;
+  if (!derived) {
+    const direct = values[specification.responseKey];
+    if (specification.tagResponse) {
+      return Array.isArray(direct) ? Number(direct.includes(specification.tagResponse.tag)) : Number.NaN;
+    }
+    return typeof direct === "number" ? direct : typeof direct === "boolean" ? Number(direct) : Number.NaN;
+  }
+  const left = values[derived.leftKey];
+  const right = values[derived.rightKey];
+  if (typeof left !== "number" || typeof right !== "number") return Number.NaN;
+  if (derived.operation === "difference") return left - right;
+  if (derived.operation === "sum") return left + right;
+  return right === 0 ? Number.NaN : left / right;
 }
 
 export class HttpDoeAnalyticsClient implements DoeAnalyticsClient {

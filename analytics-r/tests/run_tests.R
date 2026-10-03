@@ -94,6 +94,104 @@ factorial_anova_terms <- vapply(factorial_result$anova, function(row) row$term, 
 stopifnot("Lack of fit" %in% factorial_anova_terms)
 stopifnot("Pure error" %in% factorial_anova_terms)
 stopifnot("Residual error (total)" %in% factorial_anova_terms)
+
+log_request <- make_request(
+  make_dataset(factorial_points, exp(factorial_response / 10), "FFA"),
+  "factorial"
+)
+log_request$specification$responseTransform <- "log"
+log_result <- analyze_request(log_request)
+stopifnot(identical(log_result$specification$responseTransform, "log"))
+log_estimates <- setNames(
+  vapply(log_result$coefficients, function(row) row$estimate, numeric(1)),
+  vapply(log_result$coefficients, function(row) row$term, character(1))
+)
+assert_close(log_estimates[["factor:1"]], 0.2, tolerance = 1e-7, label = "log-transformed first effect")
+
+invalid_log_dataset <- make_dataset(factorial_points, factorial_response, "FFA")
+invalid_log_dataset$rows[[1]]$values[["response:1"]] <- 0
+invalid_log_request <- make_request(invalid_log_dataset, "factorial")
+invalid_log_request$specification$responseTransform <- "log"
+invalid_log_result <- analyze_request(invalid_log_request)
+invalid_log_warning_codes <- vapply(invalid_log_result$warnings, function(row) row$code, character(1))
+stopifnot("RESPONSE_TRANSFORMATION_OUT_OF_DOMAIN" %in% invalid_log_warning_codes)
+
+derived_dataset <- make_dataset(factorial_points, factorial_response + 2, "FFA")
+derived_dataset$columns[[length(derived_dataset$columns) + 1L]] <- list(
+  key = "response:2",
+  role = "response",
+  dataType = "number",
+  active = TRUE
+)
+for (index in seq_along(derived_dataset$rows)) {
+  derived_dataset$rows[[index]]$values[["response:2"]] <- 2
+}
+derived_request <- make_request(derived_dataset, "factorial")
+derived_request$specification$derivedResponse <- list(
+  operation = "difference",
+  leftKey = "response:1",
+  rightKey = "response:2"
+)
+derived_result <- analyze_request(derived_request)
+derived_estimates <- setNames(
+  vapply(derived_result$coefficients, function(row) row$estimate, numeric(1)),
+  vapply(derived_result$coefficients, function(row) row$term, character(1))
+)
+stopifnot(identical(derived_result$specification$derivedResponse$operation, "difference"))
+assert_close(derived_estimates[["(Intercept)"]], 10, label = "derived response intercept")
+
+binary_dataset <- make_dataset(factorial_points, rep(c(TRUE, FALSE), 8), "FFA")
+binary_dataset$columns[[length(binary_dataset$columns)]]$dataType <- "boolean"
+for (index in seq_along(binary_dataset$rows)) {
+  binary_dataset$rows[[index]]$values[["response:1"]] <- index %% 2 == 1
+}
+binary_request <- make_request(binary_dataset, "factorial")
+binary_result <- analyze_request(binary_request)
+binary_warning_codes <- vapply(binary_result$warnings, function(row) row$code, character(1))
+binary_metrics <- setNames(
+  vapply(binary_result$summary$metrics, function(row) row$value, numeric(1)),
+  vapply(binary_result$summary$metrics, function(row) row$key, character(1))
+)
+stopifnot(identical(binary_result$specification$responseModel, "binary"))
+stopifnot("BINARY_RESPONSE_MODEL" %in% binary_warning_codes)
+stopifnot(is.finite(binary_metrics[["brier_score"]]))
+stopifnot(all(vapply(binary_result$plots$mainEffects[[1]]$points, function(point) point$predicted >= 0 && point$predicted <= 1, logical(1))))
+
+tag_dataset <- make_dataset(factorial_points, factorial_response, "FFA")
+tag_dataset$columns[[length(tag_dataset$columns)]]$dataType <- "tags"
+tag_dataset$columns[[length(tag_dataset$columns)]]$allowedValues <- c("flash", "short shot")
+for (index in seq_along(tag_dataset$rows)) {
+  tag_dataset$rows[[index]]$values[["response:1"]] <- if (index %% 2 == 1) c("flash") else list()
+}
+tag_request <- make_request(tag_dataset, "factorial")
+tag_request$specification$tagResponse <- list(tag = "flash")
+tag_result <- analyze_request(tag_request)
+stopifnot(identical(tag_result$specification$responseModel, "binary"))
+stopifnot("BINARY_RESPONSE_MODEL" %in% vapply(tag_result$warnings, function(row) row$code, character(1)))
+
+block_dataset <- make_dataset(
+  factorial_points,
+  factorial_response + c(rep(0, 8), rep(3, 8)) + rep(c(-0.2, 0.1, 0.3, -0.1), 4),
+  "FFA"
+)
+block_dataset$columns[[length(block_dataset$columns) + 1L]] <- list(
+  key = "block:batch",
+  role = "block",
+  dataType = "category",
+  active = TRUE
+)
+for (index in seq_along(block_dataset$rows)) {
+  block_dataset$rows[[index]]$values[["block:batch"]] <- if (index <= 8) "A" else "B"
+}
+block_request <- make_request(block_dataset, "factorial")
+block_request$specification$blockKeys <- "block:batch"
+block_result <- analyze_request(block_request)
+block_anova_terms <- vapply(block_result$anova, function(row) row$term, character(1))
+block_coefficient_terms <- vapply(block_result$coefficients, function(row) row$term, character(1))
+stopifnot("Block: block:batch" %in% block_anova_terms)
+stopifnot("Block: block:batch = B" %in% block_coefficient_terms)
+stopifnot(identical(block_result$recommendations$maximum$blockValues[["block:batch"]], "A"))
+
 factorial_estimates <- setNames(
   vapply(factorial_result$coefficients, function(row) row$estimate, numeric(1)),
   vapply(factorial_result$coefficients, function(row) row$term, character(1))

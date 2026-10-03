@@ -137,6 +137,20 @@ test("Analysis V2 dataset endpoint uses experiment access and DOE ownership", as
       .expect(200);
     assert.notEqual(datasetAfterNewResponse.body.datasetRevision, response.body.datasetRevision);
 
+    const confirmationSettings = Object.fromEntries(datasetAfterNewResponse.body.columns
+      .filter((column: { role: string; dataType: string }) => column.role === "factor" && column.dataType === "number")
+      .map((column: { key: string; factor?: { levels?: number[] } }) => [column.key, column.factor?.levels?.[0] ?? 0]));
+    const confirmationRun = await agent
+      .post(`/experiments/${experimentId}/doe/${doeId}/analysis-v2/confirmation-runs`)
+      .set("x-csrf-token", pageCsrf)
+      .send({ factorValues: confirmationSettings })
+      .expect(201);
+    assert.match(confirmationRun.body.run.run_code, /^CONF-/);
+    assert.equal(confirmationRun.body.run.done, 0);
+    const datasetAfterConfirmation = await agent
+      .get(`/experiments/${experimentId}/doe/${doeId}/analysis-v2/dataset`)
+      .expect(200);
+
     const engine = await agent
       .get(`/experiments/${experimentId}/doe/${doeId}/analysis-v2/engine`)
       .expect(200);
@@ -150,7 +164,7 @@ test("Analysis V2 dataset endpoint uses experiment access and DOE ownership", as
       .expect(200);
     assert.equal(calculation.body.ok, true);
     assert.equal(calculation.body.engine.mode, "mock");
-    assert.equal(calculation.body.datasetRevision, datasetAfterNewResponse.body.datasetRevision);
+    assert.equal(calculation.body.datasetRevision, datasetAfterConfirmation.body.datasetRevision);
 
     const createdAnalysis = await agent
       .post(`/experiments/${experimentId}/doe/${doeId}/analysis-v2/analyses`)

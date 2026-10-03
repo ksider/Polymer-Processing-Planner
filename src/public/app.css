@@ -6046,6 +6046,39 @@ body.notes-drawer-open {
   vertical-align: middle;
 }
 
+.doe-analysis-link {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--accent, #3f6b58);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.doe-analysis-switcher .doe-analysis-link {
+  white-space: nowrap;
+}
+
+.doe-analysis-view-save {
+  display: flex;
+  gap: 0.55rem;
+}
+
+.doe-analysis-view-save input {
+  flex: 1;
+}
+
+.doe-analysis-axis-limits {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+
 .doe-analysis-panel-title h2 {
   font-size: 1.05rem;
 }

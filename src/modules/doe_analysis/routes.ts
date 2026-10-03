@@ -2,6 +2,8 @@ import express from "express";
 import type { Db } from "../../db.js";
 import { ensureExperimentAccess } from "../../middleware/experiment_access.js";
 import { getExperiment } from "../../repos/experiments_repo.js";
+import { getProcessById } from "../../repos/processes_repo.js";
+import { insertRuns, listRuns } from "../../repos/runs_repo.js";
 import {
   buildDoeAnalysisDataset,
   DoeAnalysisDatasetNotFoundError
@@ -33,6 +35,14 @@ import {
   updateDoeAnalysisSpecification
 } from "./analysis_repo.js";
 import { optimizeSavedAnalyses, type MultiResponseGoalInput } from "./multi_response_service.js";
+import { createDoeAnalysisView, deleteDoeAnalysisView, listDoeAnalysisViews } from "./views_repo.js";
+import {
+  createDoeAnalysisTemplate,
+  deleteDoeAnalysisTemplate,
+  listDoeAnalysisTemplates,
+  specificationToTemplate,
+  templateToSpecification
+} from "./templates_repo.js";
 import {
   DoeAnalysisCalculationQueue,
   getDoeAnalysisJob,
@@ -59,7 +69,7 @@ export function createDoeAnalysisRouter(
         const dataset = buildDoeAnalysisDataset(db, experimentId, doeId);
         if (!experiment) return res.status(404).send("Experiment not found");
         const responses = dataset.columns.filter(
-          (column) => column.role === "response" && column.active && column.dataType === "number"
+          (column) => column.role === "response" && column.active && (column.dataType === "number" || column.dataType === "boolean" || column.dataType === "tags")
         );
         const factors = dataset.columns.filter(
           (column) => column.role === "factor" && column.active && column.dataType === "number"
@@ -121,6 +131,77 @@ export function createDoeAnalysisRouter(
         }
         throw error;
       }
+    }
+  );
+
+  router.get(
+    "/experiments/:id/doe/:doeId/analysis-v2/templates",
+    ensureExperimentAccess(db),
+    (req, res) => {
+      const experiment = getExperiment(db, Number(req.params.id));
+      const processTypeId = processTypeIdForExperiment(db, experiment);
+      if (!processTypeId) return res.status(409).json({ error: "This experiment has no process type for shared model templates." });
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({ templates: listDoeAnalysisTemplates(db, processTypeId) });
+    }
+  );
+
+  router.post(
+    "/experiments/:id/doe/:doeId/analysis-v2/templates",
+    ensureExperimentAccess(db),
+    (req, res) => {
+      if (!canEditAnalysis(req.user)) return res.status(403).json({ error: "Forbidden" });
+      const experiment = getExperiment(db, Number(req.params.id));
+      const processTypeId = processTypeIdForExperiment(db, experiment);
+      if (!processTypeId) return res.status(409).json({ error: "This experiment has no process type for shared model templates." });
+      const name = String(req.body?.name ?? "").trim();
+      if (!name || name.length > 120) return res.status(400).json({ error: "Template name must contain 1 to 120 characters." });
+      try {
+        const dataset = buildDoeAnalysisDataset(db, Number(req.params.id), Number(req.params.doeId));
+        const specification = normalizeAnalysisSpecification(dataset, req.body?.specification as Partial<DoeAnalysisSpecification> | undefined);
+        const template = createDoeAnalysisTemplate(db, {
+          processTypeId,
+          name,
+          specification: specificationToTemplate(dataset, specification),
+          createdByUserId: req.user?.id ?? null
+        });
+        return res.status(201).json({ template });
+      } catch (error) {
+        if (error instanceof DoeAnalyticsValidationError) return sendAnalysisError(res, error, () => undefined);
+        if (error instanceof Error && /UNIQUE constraint failed/.test(error.message)) return res.status(409).json({ error: "A template with this name already exists for this process type." });
+        throw error;
+      }
+    }
+  );
+
+  router.post(
+    "/experiments/:id/doe/:doeId/analysis-v2/templates/:templateId/apply",
+    ensureExperimentAccess(db),
+    (req, res) => {
+      const experiment = getExperiment(db, Number(req.params.id));
+      const processTypeId = processTypeIdForExperiment(db, experiment);
+      if (!processTypeId) return res.status(409).json({ error: "This experiment has no process type for shared model templates." });
+      const template = listDoeAnalysisTemplates(db, processTypeId).find((item) => item.id === Number(req.params.templateId));
+      if (!template) return res.status(404).json({ error: "Model template not found for this process type." });
+      try {
+        const dataset = buildDoeAnalysisDataset(db, Number(req.params.id), Number(req.params.doeId));
+        return res.json({ specification: templateToSpecification(dataset, template.specification) });
+      } catch (error) {
+        return res.status(409).json({ error: error instanceof Error ? error.message : "Template cannot be applied to this DOE." });
+      }
+    }
+  );
+
+  router.delete(
+    "/experiments/:id/doe/:doeId/analysis-v2/templates/:templateId",
+    ensureExperimentAccess(db),
+    (req, res) => {
+      if (!canEditAnalysis(req.user)) return res.status(403).json({ error: "Forbidden" });
+      const experiment = getExperiment(db, Number(req.params.id));
+      const processTypeId = processTypeIdForExperiment(db, experiment);
+      if (!processTypeId) return res.status(409).json({ error: "This experiment has no process type for shared model templates." });
+      if (!deleteDoeAnalysisTemplate(db, processTypeId, Number(req.params.templateId))) return res.status(404).json({ error: "Model template not found." });
+      return res.status(204).end();
     }
   );
 
@@ -382,13 +463,14 @@ export function createDoeAnalysisRouter(
       const doeId = Number(req.params.doeId);
       const candidates = listDoeAnalyses(db, doeId).flatMap((analysis) => {
         const revision = getLatestSuccessfulDoeAnalysisRevision(db, analysis);
-        if (!revision?.dataset || !revision.result) return [];
+        if (!revision?.dataset || !revision.result || revision.specification.derivedResponse || revision.specification.responseModel === "binary") return [];
         return [{
           analysisId: analysis.id,
           name: analysis.name,
           revisionId: revision.id,
           responseKey: revision.specification.responseKey,
           factorKeys: revision.specification.factorKeys,
+          blockKeys: revision.specification.blockKeys ?? [],
           datasetRevision: revision.datasetRevision
         }];
       });
@@ -413,6 +495,110 @@ export function createDoeAnalysisRouter(
       } catch (error) {
         if (error instanceof DoeAnalyticsValidationError) return sendAnalysisError(res, error, () => undefined);
         return res.status(400).json({ error: error instanceof Error ? error.message : "Multi-response optimization failed." });
+      }
+    }
+  );
+
+  router.get(
+    "/experiments/:id/doe/:doeId/analysis-v2/comparison",
+    ensureExperimentAccess(db),
+    (req, res) => {
+      const candidates = listDoeAnalyses(db, Number(req.params.doeId)).flatMap((analysis) => {
+        const revision = getLatestSuccessfulDoeAnalysisRevision(db, analysis);
+        if (!revision?.result) return [];
+        return [{
+          analysisName: analysis.name,
+          revisionId: revision.id,
+          datasetRevision: revision.datasetRevision,
+          specification: revision.specification,
+          summary: revision.result.summary
+        }];
+      });
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({ candidates });
+    }
+  );
+
+  router.get(
+    "/experiments/:id/doe/:doeId/analysis-v2/views",
+    ensureExperimentAccess(db),
+    (req, res) => res.json({ views: listDoeAnalysisViews(db, Number(req.params.doeId)) })
+  );
+
+  router.post(
+    "/experiments/:id/doe/:doeId/analysis-v2/views",
+    ensureExperimentAccess(db),
+    (req, res) => {
+      if (!canEditAnalysis(req.user)) return res.status(403).json({ error: "Forbidden" });
+      const chartType = req.body?.chartType;
+      const name = typeof req.body?.name === "string" ? req.body.name.trim().slice(0, 120) : "";
+      const config = req.body?.config;
+      if ((chartType !== "interaction" && chartType !== "surface" && chartType !== "scatter") || !name || !config || typeof config !== "object" || Array.isArray(config)) {
+        return res.status(400).json({ error: "A view name, supported chart type, and configuration are required." });
+      }
+      return res.status(201).json({ view: createDoeAnalysisView(db, {
+        doeId: Number(req.params.doeId),
+        analysisId: Number.isFinite(Number(req.body?.analysisId)) ? Number(req.body.analysisId) : null,
+        analysisRevisionId: Number.isFinite(Number(req.body?.analysisRevisionId)) ? Number(req.body.analysisRevisionId) : null,
+        name,
+        chartType,
+        config,
+        createdByUserId: req.user?.id ?? null
+      }) });
+    }
+  );
+
+  router.delete(
+    "/experiments/:id/doe/:doeId/analysis-v2/views/:viewId",
+    ensureExperimentAccess(db),
+    (req, res) => {
+      if (!canEditAnalysis(req.user)) return res.status(403).json({ error: "Forbidden" });
+      const deleted = deleteDoeAnalysisView(db, Number(req.params.doeId), Number(req.params.viewId));
+      return deleted ? res.status(204).end() : res.status(404).json({ error: "Saved graph not found." });
+    }
+  );
+
+  router.post(
+    "/experiments/:id/doe/:doeId/analysis-v2/confirmation-runs",
+    ensureExperimentAccess(db),
+    (req, res) => {
+      if (!canEditAnalysis(req.user)) return res.status(403).json({ error: "Forbidden" });
+      const experimentId = Number(req.params.id);
+      const doeId = Number(req.params.doeId);
+      const factorValues = req.body?.factorValues;
+      if (!factorValues || typeof factorValues !== "object" || Array.isArray(factorValues)) {
+        return res.status(400).json({ error: "Factor settings are required." });
+      }
+      try {
+        const dataset = buildDoeAnalysisDataset(db, experimentId, doeId);
+        const factors = dataset.columns.filter((column) => column.role === "factor" && column.active && column.dataType === "number");
+        if (!factors.length || factors.some((factor) => !Number.isFinite(Number(factorValues[factor.key])))) {
+          return res.status(400).json({ error: "Every active numeric factor needs a finite setting." });
+        }
+        const existing = listRuns(db, doeId);
+        const runOrder = existing.reduce((max, run) => Math.max(max, run.run_order), 0) + 1;
+        const runCode = `CONF-${String(runOrder).padStart(3, "0")}`;
+        insertRuns(db, experimentId, doeId, [{
+          run_order: runOrder,
+          run_code: runCode,
+          recipe_id: null,
+          replicate_key: "confirmation",
+          replicate_index: 1,
+          done: 0,
+          exclude_from_analysis: 0,
+          owner_user_id: req.user?.id ?? null
+        }], factors.map((factor) => ({
+          run_id: runOrder,
+          param_def_id: (factor.source as { paramDefinitionId: number }).paramDefinitionId,
+          value_real: Number(factorValues[factor.key]),
+          value_text: null,
+          value_tags_json: null
+        })));
+        const created = listRuns(db, doeId).find((run) => run.run_order === runOrder);
+        return res.status(201).json({ run: created });
+      } catch (error) {
+        if (error instanceof DoeAnalysisDatasetNotFoundError) return res.status(404).json({ error: error.message });
+        throw error;
       }
     }
   );
@@ -547,11 +733,28 @@ function rowIsUsable(
   row: ReturnType<typeof buildDoeAnalysisDataset>["rows"][number],
   specification: DoeAnalysisSpecification
 ): boolean {
-  if (typeof row.values[specification.responseKey] !== "number") return false;
+  if (!Number.isFinite(responseValue(row.values, specification))) return false;
   return specification.factorKeys.every((key) => {
     const value = specification.useCodedFactors ? row.codedValues[key] : row.values[key];
     return typeof value === "number" && Number.isFinite(value);
   });
+}
+
+function responseValue(values: Record<string, unknown>, specification: DoeAnalysisSpecification): number {
+  const derived = specification.derivedResponse;
+  if (!derived) {
+    const direct = values[specification.responseKey];
+    if (specification.tagResponse) {
+      return Array.isArray(direct) ? Number(direct.includes(specification.tagResponse.tag)) : Number.NaN;
+    }
+    return typeof direct === "number" ? direct : typeof direct === "boolean" ? Number(direct) : Number.NaN;
+  }
+  const left = values[derived.leftKey];
+  const right = values[derived.rightKey];
+  if (typeof left !== "number" || typeof right !== "number") return Number.NaN;
+  if (derived.operation === "difference") return left - right;
+  if (derived.operation === "sum") return left + right;
+  return right === 0 ? Number.NaN : left / right;
 }
 
 function analysisReadyCsv(dataset: ReturnType<typeof buildDoeAnalysisDataset>): string {
@@ -637,4 +840,12 @@ function sendAnalysisError(
 
 function canEditAnalysis(user: Express.User | undefined): boolean {
   return user?.role === "admin" || user?.role === "manager" || user?.role === "engineer";
+}
+
+function processTypeIdForExperiment(
+  db: Db,
+  experiment: ReturnType<typeof getExperiment> | null
+): number | null {
+  if (!experiment?.process_id) return null;
+  return getProcessById(db, experiment.process_id)?.process_type_id ?? null;
 }

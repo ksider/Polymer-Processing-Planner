@@ -14,6 +14,7 @@ export type MultiResponseOptimization = {
   candidatesEvaluated: number;
   desirability: number;
   factorValues: Record<string, number>;
+  blockValues: Record<string, string>;
   responses: Array<{
     analysisId: number;
     responseKey: string;
@@ -42,6 +43,9 @@ export function optimizeSavedAnalyses(
   const models = inputs.map((goal) => {
     const revision = byAnalysis.get(goal.analysisId);
     if (!revision?.result || !revision.dataset) throw new Error("Recalculate selected analyses to create reproducible dataset snapshots.");
+    if (revision.specification.derivedResponse || revision.specification.responseModel === "binary") {
+      throw new Error("Multi-response optimization currently supports direct continuous measured responses only.");
+    }
     const responseKey = revision.specification.responseKey;
     const observed = revision.dataset.rows
       .map((row) => row.values[responseKey])
@@ -58,11 +62,17 @@ export function optimizeSavedAnalyses(
   const dataset = models[0].revision.dataset!;
   const datasetRevision = models[0].revision.datasetRevision;
   const factorKeys = models[0].revision.specification.factorKeys;
+  const blockKeys = models[0].revision.specification.blockKeys ?? [];
   for (const model of models) {
-    if (model.revision.datasetRevision !== datasetRevision || !sameKeys(model.revision.specification.factorKeys, factorKeys)) {
-      throw new Error("Selected analyses must use the same dataset snapshot and factor set.");
+    if (
+      model.revision.datasetRevision !== datasetRevision ||
+      !sameKeys(model.revision.specification.factorKeys, factorKeys) ||
+      !sameKeys(model.revision.specification.blockKeys ?? [], blockKeys)
+    ) {
+      throw new Error("Selected analyses must use the same dataset snapshot, factor set, and block adjustment.");
     }
   }
+  const blockValues = representativeBlockValues(dataset, models[0].revision.specification);
   const ranges = factorKeys.map((key) => rangeForFactor(dataset, key, factorBounds[key]));
   const levels = Math.max(5, Math.min(31, Math.floor(50000 ** (1 / ranges.length))));
   const candidates = cartesian(ranges.map((range) => sequence(range.min, range.max, levels)));
@@ -71,7 +81,7 @@ export function optimizeSavedAnalyses(
     const factorValues = Object.fromEntries(factorKeys.map((key, index) => [key, values[index]]));
     const predictions = models.map((model) => ({
       responseKey: model.revision.specification.responseKey,
-      predicted: predict(model.revision, factorValues)
+      predicted: predict(model.revision, factorValues, blockValues)
     }));
     const goals: MultiResponseGoal[] = models.map((model) => ({
       responseKey: model.revision.specification.responseKey,
@@ -88,6 +98,7 @@ export function optimizeSavedAnalyses(
         candidatesEvaluated: candidates.length,
         desirability: score.desirability,
         factorValues,
+        blockValues,
         responses: models.map((model) => {
           const responseKey = model.revision.specification.responseKey;
           return {
@@ -106,13 +117,19 @@ export function optimizeSavedAnalyses(
   return best;
 }
 
-function predict(revision: DoeAnalysisRevisionRecord, raw: Record<string, number>): number {
+function predict(
+  revision: DoeAnalysisRevisionRecord,
+  raw: Record<string, number>,
+  blockValues: Record<string, string>
+): number {
   const result = revision.result!;
   const coordinates = Object.fromEntries(revision.specification.factorKeys.map((key) => [key, modelCoordinate(revision.dataset!, key, raw[key], revision.specification.useCodedFactors)]));
   return result.coefficients.reduce((total, coefficient) => {
     if (!Number.isFinite(coefficient.estimate)) return total;
     const term = coefficient.term;
     if (term === "(Intercept)") return total + coefficient.estimate!;
+    const block = /^Block: (.+) = (.*)$/.exec(term);
+    if (block) return blockValues[block[1]] === block[2] ? total + coefficient.estimate! : total;
     const quadratic = /^I\((factor:\d+)\^2\)$/.exec(term);
     if (quadratic) return total + coefficient.estimate! * coordinates[quadratic[1]] ** 2;
     const parts = term.split(":").reduce<string[]>((items, part, index, all) => {
@@ -121,6 +138,26 @@ function predict(revision: DoeAnalysisRevisionRecord, raw: Record<string, number
     }, []);
     return parts.length ? total + coefficient.estimate! * parts.reduce((value, key) => value * coordinates[key], 1) : total;
   }, 0);
+}
+
+function representativeBlockValues(
+  dataset: DoeAnalysisDataset,
+  specification: DoeAnalysisRevisionRecord["specification"]
+): Record<string, string> {
+  const inScope = dataset.rows.filter((row) =>
+    (specification.includeExcluded || !row.excluded) &&
+    (specification.includeIncomplete || row.done)
+  );
+  return Object.fromEntries((specification.blockKeys ?? []).flatMap((key) => {
+    const counts = new Map<string, number>();
+    for (const row of inScope) {
+      const value = row.values[key];
+      if (typeof value === "string" && value.trim()) counts.set(value, (counts.get(value) ?? 0) + 1);
+    }
+    const representative = [...counts.entries()]
+      .sort(([leftKey, leftCount], [rightKey, rightCount]) => rightCount - leftCount || leftKey.localeCompare(rightKey))[0]?.[0];
+    return representative ? [[key, representative]] : [];
+  }));
 }
 
 function modelCoordinate(dataset: DoeAnalysisDataset, key: string, value: number, coded: boolean): number {

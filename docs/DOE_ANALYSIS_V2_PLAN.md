@@ -66,8 +66,38 @@ drive their interaction design.
   the analysis specification: minimize, maximize, or hit a target inside
   explicit physical factor bounds. It returns a bounded grid-search
   recommendation and a confirmation-run warning as part of the saved result.
-  Multi-response desirability, transformations, blocks, comparison, and
-  confirmation-run creation remain.
+  Multi-response desirability is now available from compatible saved analysis
+  revisions: users select at least two responses, their goals and importance,
+  then receive one bounded recommendation with every component prediction and
+  desirability visible. Every calculated model also exposes bounded minimum
+  and maximum opportunities without a configured goal; either setting can
+  create a new unfinished confirmation run. Reproducible response transforms
+  (`none`, `log`, `sqrt`) now fit and label the model on the selected scale,
+  and invalid source values are disclosed rather than silently recoded.
+  Categorical execution blocks are now part of the saved specification when
+  configured (currently `Recipe` via `recipe as block`): model terms, plots,
+  and recommendations identify the representative block level used. Analysis
+  comparison now provides a side-by-side metric view for the latest successful
+  revision of two saved models and warns on a differing dataset snapshot.
+  Saved graph views now persist the selected interaction pair or response
+  surface pair and 2D/3D mode against the exact calculation revision; the
+  first free graph builder is now available for raw scatter plots or grouped
+  mean plots with 95% confidence intervals. Numeric derived responses now
+  support a reproducible difference, sum, or ratio of two measured responses;
+  the formula is saved in the calculation specification and evaluated by R on
+  the dataset snapshot. Ratio rows with a zero denominator are explicitly
+  omitted. Derived responses are not offered to multi-response desirability
+  until that optimizer can calculate their observed ranges correctly. Size and
+  label mappings, fitted overlays, and axis-limit editing are available;
+  faceting is deliberately deferred until it has a clear, non-disruptive UI.
+  Boolean responses and the explicit presence of one selected tag are now
+  fitted as binomial logistic models, with probability-scale predictions and
+  binary-appropriate metrics and table labels. Multi-response desirability is
+  intentionally limited to direct continuous responses until its scoring is
+  extended for binary outcomes.
+  Reusable model templates are now shared at the process-type level. They
+  store field codes rather than a DOE's local IDs, then validate and map onto
+  the active fields of the DOE where they are applied.
 
 Implementation checkpoint — 2026-10-01:
 
@@ -917,8 +947,14 @@ Immediate analysis sequence:
    overall desirability rather than hiding the trade-off.
 3. Transformations and blocks: make them visible, reproducible model settings
    with before/after diagnostics, never an implicit preprocessing step.
+   Initial response transforms, categorical recipe blocks, and numeric
+   difference/sum/ratio responses are implemented; broader user-defined
+   expressions and before/after comparison remain future work. Boolean and
+   tag-presence outcomes now use a logistic model rather than being silently
+   coerced into a continuous response.
 4. Analysis comparison and confirmation runs: compare two saved revisions and
-   turn a selected recommendation into a traceable follow-up run.
+   turn a selected recommendation into a traceable follow-up run. Confirmation
+   runs are implemented; comparison is next.
 
 Exit criteria:
 

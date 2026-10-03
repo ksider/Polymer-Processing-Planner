@@ -7,4 +7,5 @@ export { createDoeAnalysisRouter, isDoeAnalysisV2Enabled } from "./routes.js";
 export * from "./analytics_client.js";
 export * from "./analytics_contract.js";
 export * from "./analysis_repo.js";
+export * from "./templates_repo.js";
 export * from "./types.js";

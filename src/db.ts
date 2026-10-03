@@ -544,6 +544,34 @@ function initDb(db: Db) {
       FOREIGN KEY (requested_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
       FOREIGN KEY (revision_id) REFERENCES doe_analysis_revisions(id) ON DELETE SET NULL
     );
+    CREATE TABLE IF NOT EXISTS doe_analysis_views (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      doe_id INTEGER NOT NULL,
+      analysis_id INTEGER,
+      analysis_revision_id INTEGER,
+      name TEXT NOT NULL,
+      chart_type TEXT NOT NULL,
+      config_json TEXT NOT NULL,
+      created_by_user_id INTEGER,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (doe_id) REFERENCES doe_studies(id) ON DELETE CASCADE,
+      FOREIGN KEY (analysis_id) REFERENCES doe_analyses(id) ON DELETE SET NULL,
+      FOREIGN KEY (analysis_revision_id) REFERENCES doe_analysis_revisions(id) ON DELETE SET NULL,
+      FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE TABLE IF NOT EXISTS doe_analysis_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      process_type_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      specification_json TEXT NOT NULL,
+      created_by_user_id INTEGER,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(process_type_id, name),
+      FOREIGN KEY (process_type_id) REFERENCES process_types(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
     CREATE INDEX IF NOT EXISTS idx_doe_analyses_doe_id
       ON doe_analyses(doe_id, archived_at, updated_at);
     CREATE INDEX IF NOT EXISTS idx_doe_analysis_revisions_analysis_id
@@ -552,6 +580,10 @@ function initDb(db: Db) {
       ON doe_analysis_events(analysis_id, id DESC);
     CREATE INDEX IF NOT EXISTS idx_doe_analysis_jobs_analysis_id
       ON doe_analysis_jobs(analysis_id, status, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_doe_analysis_views_doe_id
+      ON doe_analysis_views(doe_id, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_doe_analysis_templates_process_type
+      ON doe_analysis_templates(process_type_id, name);
     CREATE TABLE IF NOT EXISTS report_configs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       experiment_id INTEGER NOT NULL,
@@ -1261,6 +1293,38 @@ function initDb(db: Db) {
   if (!hasColumn(db, "doe_analysis_revisions", "dataset_json")) {
     db.exec("ALTER TABLE doe_analysis_revisions ADD COLUMN dataset_json TEXT");
   }
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS doe_analysis_views (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      doe_id INTEGER NOT NULL,
+      analysis_id INTEGER,
+      analysis_revision_id INTEGER,
+      name TEXT NOT NULL,
+      chart_type TEXT NOT NULL,
+      config_json TEXT NOT NULL,
+      created_by_user_id INTEGER,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (doe_id) REFERENCES doe_studies(id) ON DELETE CASCADE,
+      FOREIGN KEY (analysis_id) REFERENCES doe_analyses(id) ON DELETE SET NULL,
+      FOREIGN KEY (analysis_revision_id) REFERENCES doe_analysis_revisions(id) ON DELETE SET NULL,
+      FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_doe_analysis_views_doe_id ON doe_analysis_views(doe_id, id DESC);
+    CREATE TABLE IF NOT EXISTS doe_analysis_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      process_type_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      specification_json TEXT NOT NULL,
+      created_by_user_id INTEGER,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(process_type_id, name),
+      FOREIGN KEY (process_type_id) REFERENCES process_types(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_doe_analysis_templates_process_type ON doe_analysis_templates(process_type_id, name);
+  `);
   if (!hasColumn(db, "report_documents", "editor_kind")) {
     db.exec("ALTER TABLE report_documents ADD COLUMN editor_kind TEXT NOT NULL DEFAULT 'editorjs'");
   }

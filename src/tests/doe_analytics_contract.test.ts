@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   createAnalyticsRequest,
   createDoeAnalyticsClient,
+  defaultAnalysisSpecification,
   DoeAnalyticsValidationError,
   MockDoeAnalyticsClient,
   isDoeAnalysisV2Enabled,
@@ -10,6 +11,7 @@ import {
   type DoeAnalysisDataset
 } from "../modules/doe_analysis/index.js";
 import { scoreMultiResponseCandidate } from "../modules/doe_analysis/multi_response_optimizer.js";
+import { specificationToTemplate, templateToSpecification } from "../modules/doe_analysis/templates_repo.js";
 
 test("multi-response desirability exposes each response trade-off", () => {
   const scored = scoreMultiResponseCandidate([
@@ -31,6 +33,7 @@ test("analytics contract chooses design-aware defaults and mock preserves reques
   assert.equal(request.specification.modelFamily, "response_surface");
   assert.equal(request.specification.useCodedFactors, true);
   assert.equal(request.specification.responseKey, "response:1");
+  assert.equal(request.specification.responseModel, "continuous");
   assert.deepEqual(request.specification.factorKeys, ["factor:1", "factor:2"]);
   assert.deepEqual(request.specification.modelTerms, [
     "main:factor:1",
@@ -99,6 +102,104 @@ test("default analysis prefers the populated numeric response", () => {
   }
   const request = createAnalyticsRequest(dataset, null, "populated-response");
   assert.equal(request.specification.responseKey, "response:2");
+});
+
+test("analysis specification preserves a reproducible derived numeric response", async () => {
+  const dataset = fixtureDataset("FFA");
+  dataset.columns.push(column("response:2", "response", "number"));
+  for (const row of dataset.rows) {
+    row.values["response:2"] = 2;
+    row.responseSources["response:2"] = "measurement";
+  }
+  const specification = normalizeAnalysisSpecification(dataset, {
+    ...defaultAnalysisSpecification(dataset),
+    responseKey: "response:1",
+    derivedResponse: { operation: "difference", leftKey: "response:1", rightKey: "response:2" }
+  });
+  assert.deepEqual(specification.derivedResponse, {
+    operation: "difference",
+    leftKey: "response:1",
+    rightKey: "response:2"
+  });
+  const result = await new MockDoeAnalyticsClient().analyze(createAnalyticsRequest(dataset, specification, "derived-response"));
+  assert.equal(result.ok, true);
+  assert.equal(result.summary.rowsUsed, 1);
+  assert.throws(
+    () => normalizeAnalysisSpecification(dataset, {
+      ...specification,
+      derivedResponse: { operation: "ratio", leftKey: "response:1", rightKey: "response:1" }
+    }),
+    (error: unknown) => error instanceof DoeAnalyticsValidationError &&
+      error.issues.includes("A derived response must use two different measured responses.")
+  );
+});
+
+test("boolean responses select the binary model and use boolean observations", async () => {
+  const dataset = fixtureDataset("FFA");
+  dataset.columns[2] = { ...dataset.columns[2], dataType: "boolean" };
+  for (const [index, row] of dataset.rows.entries()) row.values["response:1"] = index % 2 === 0;
+  const specification = defaultAnalysisSpecification(dataset);
+  assert.equal(specification.responseModel, "binary");
+  const result = await new MockDoeAnalyticsClient().analyze(createAnalyticsRequest(dataset, specification, "boolean-response"));
+  assert.equal(result.ok, true);
+  assert.equal(result.summary.rowsUsed, 1);
+});
+
+test("tag presence is normalized as a binary response", async () => {
+  const dataset = fixtureDataset("FFA");
+  dataset.columns[2] = { ...dataset.columns[2], dataType: "tags", allowedValues: ["flash", "short shot"] };
+  for (const [index, row] of dataset.rows.entries()) row.values["response:1"] = index % 2 === 0 ? ["flash"] : [];
+  const specification = defaultAnalysisSpecification(dataset);
+  assert.equal(specification.responseModel, "binary");
+  assert.deepEqual(specification.tagResponse, { tag: "flash" });
+  const result = await new MockDoeAnalyticsClient().analyze(createAnalyticsRequest(dataset, specification, "tag-response"));
+  assert.equal(result.ok, true);
+  assert.equal(result.summary.rowsUsed, 1);
+});
+
+test("process-type template maps field codes onto the current DOE field keys", () => {
+  const source = fixtureDataset("FFA");
+  const template = specificationToTemplate(source, defaultAnalysisSpecification(source));
+  const target = structuredClone(source);
+  const keyMap: Record<string, string> = {
+    "factor:1": "factor:101",
+    "factor:2": "factor:102",
+    "response:1": "response:201"
+  };
+  target.columns = target.columns.map((column) => ({ ...column, key: keyMap[column.key] || column.key }));
+  target.rows = target.rows.map((row) => ({
+    ...row,
+    values: Object.fromEntries(Object.entries(row.values).map(([key, value]) => [keyMap[key] || key, value])),
+    codedValues: Object.fromEntries(Object.entries(row.codedValues).map(([key, value]) => [keyMap[key] || key, value])),
+    responseSources: Object.fromEntries(Object.entries(row.responseSources).map(([key, value]) => [keyMap[key] || key, value]))
+  }));
+  const applied = templateToSpecification(target, template);
+  assert.equal(applied.responseKey, "response:201");
+  assert.deepEqual(applied.factorKeys, ["factor:101", "factor:102"]);
+  assert.deepEqual(applied.modelTerms, ["main:factor:101", "main:factor:102", "interaction:factor:101|factor:102"]);
+});
+
+test("analysis specification preserves a categorical execution block", () => {
+  const dataset = fixtureDataset("FFA");
+  dataset.columns.push({
+    key: "block:batch",
+    code: "batch",
+    label: "Batch",
+    unit: null,
+    dataType: "category",
+    role: "block",
+    source: { kind: "recipe" },
+    active: true,
+    groupLabel: null,
+    allowedValues: ["A", "B"]
+  });
+  for (const [index, row] of dataset.rows.entries()) row.values["block:batch"] = index === 0 ? "A" : "B";
+
+  const specification = normalizeAnalysisSpecification(dataset, {
+    ...defaultAnalysisSpecification(dataset),
+    blockKeys: ["block:batch"]
+  });
+  assert.deepEqual(specification.blockKeys, ["block:batch"]);
 });
 
 test("analytics client mode is explicit and production defaults to HTTP", () => {
