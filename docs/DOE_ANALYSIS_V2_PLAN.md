@@ -4,6 +4,13 @@ Status: draft for implementation planning.
 
 Implementation status:
 
+Current product priority — analysis workspace first. Report integration is
+intentionally paused after its read-only saved-revision source was established.
+The next implementation work belongs inside Analysis V2: single-response
+optimization, then multi-response desirability, transformations, blocks, and
+model comparison. Reports must consume these saved artifacts later, but do not
+drive their interaction design.
+
 - Phase 0 — in progress. Product terminology, the TypeScript dataset/analytics
   contracts, and cross-service JSON schemas are defined. Initial R numerical
   fixtures exist; review and approval of the golden values remain.
@@ -27,11 +34,12 @@ Implementation status:
   legacy analysis screen. Responses can be configured before run generation or
   added later without regenerating runs; adding a response changes the dataset
   revision so saved analyses can report their stale state.
-- Phase 4 — in progress. Named analysis definitions, immutable successful and
+- Phase 4 — complete. Named analysis definitions, immutable successful and
   failed calculation revisions, last-success preservation, revision history,
-  dataset-revision stale detection, creation, and recalculation are implemented.
-  Rename, duplicate, archive, audit events, asynchronous progress, and model
-  term-level editing remain.
+  dataset-revision stale detection, creation, recalculation, rename, duplicate,
+  archive, restore, hierarchical model term selection with row-count feedback,
+  an immutable per-analysis activity log, and persistent asynchronous
+  calculation jobs with queued/running/completed/failed states are implemented.
 - Phase 5 — in progress. Summary metrics, ANOVA, coefficients, run diagnostics,
   a Pareto-style standardized-effect chart, residuals-versus-fitted chart, and
   residual-point navigation to the source run are implemented. Model-based main
@@ -44,9 +52,22 @@ Implementation status:
   lack of fit, with an explicit warning when that test is not estimable. A 3D
   surface can be switched on for the selected factor pair. Run-bearing charts
   and measured surface points now share one selection with the worksheet, plus
-  explicit actions to reveal or open the source run. Richer term/table linking
-  and final chart context labels remain.
-- Phases 6–8 — not started.
+  explicit actions to reveal or open the source run. Charts now name the
+  selected response, its unit, and their factor coordinate system; selecting a
+  standardized-effect bar links it to the corresponding ANOVA and coefficient
+  rows. Remaining work is visual review with production DOE data.
+- Phase 6 — in progress. The Analysis V2 workspace now exports an
+  analysis-ready CSV of real numeric factors and measured numeric responses,
+  suitable for direct import into external DOE software. The report catalogue
+  now exposes saved successful Analysis V2 revisions through a read-only
+  endpoint; report-editor insertion and snapshot metadata remain.
+- Phase 7 — not started.
+- Phase 8 — in progress. The first single-response optimizer is available in
+  the analysis specification: minimize, maximize, or hit a target inside
+  explicit physical factor bounds. It returns a bounded grid-search
+  recommendation and a confirmation-run warning as part of the saved result.
+  Multi-response desirability, transformations, blocks, comparison, and
+  confirmation-run creation remain.
 
 Implementation checkpoint — 2026-10-01:
 
@@ -885,6 +906,19 @@ Deliverables:
 - analysis comparison;
 - reusable model templates by process type;
 - optional evaluation of an advanced embedded worksheet.
+
+Immediate analysis sequence:
+
+1. Single-response optimizer: maximize, minimize, or hit a target within
+   explicit factor bounds; return predicted response, factor settings, and a
+   clear warning that the recommendation is model-based.
+2. Multi-response desirability: combine per-response goals only from saved,
+   compatible analysis revisions; show each response prediction alongside the
+   overall desirability rather than hiding the trade-off.
+3. Transformations and blocks: make them visible, reproducible model settings
+   with before/after diagnostics, never an implicit preprocessing step.
+4. Analysis comparison and confirmation runs: compare two saved revisions and
+   turn a selected recommendation into a traceable follow-up run.
 
 Exit criteria:
 

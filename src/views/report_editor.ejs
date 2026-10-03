@@ -216,6 +216,32 @@
   </div>
 </dialog>
 
+<dialog class="modal-frame doe-analysis-dialog" id="doeAnalysisV2Dialog">
+  <div class="modal-header">
+    <div>
+      <span class="workspace-eyebrow">Saved DOE analysis</span>
+      <strong id="doeAnalysisV2Title">Analysis snapshot</strong>
+    </div>
+    <button class="pure-button" type="button" id="closeDoeAnalysisV2">Close</button>
+  </div>
+  <div class="modal-body doe-dialog-body">
+    <div class="doe-analysis-controls">
+      <label>Analysis
+        <select id="doeAnalysisV2Select"></select>
+      </label>
+      <label>Calculation revision
+        <select id="doeAnalysisV2Revision"></select>
+      </label>
+    </div>
+    <p class="small-note" id="doeAnalysisV2Meta">Loading saved result…</p>
+    <div class="doe-table-scroll" id="doeAnalysisV2Table"></div>
+  </div>
+  <div class="modal-footer source-preview-actions">
+    <button class="pure-button" type="button" id="insertDoeAnalysisV2Summary">Insert summary</button>
+    <button class="pure-button pure-button-primary" type="button" id="insertDoeAnalysisV2Section">Insert analysis section</button>
+  </div>
+</dialog>
+
 <dialog class="modal-frame doe-runs-dialog" id="doeRunsDialog">
   <div class="modal-header">
     <div>
@@ -619,6 +645,14 @@
   const insertDoeAnalysisTable = document.getElementById('insertDoeAnalysisTable');
   const insertDoeAnalysisSection = document.getElementById('insertDoeAnalysisSection');
   const insertDoeAnalysisChart = document.getElementById('insertDoeAnalysisChart');
+  const doeAnalysisV2Dialog = document.getElementById('doeAnalysisV2Dialog');
+  const doeAnalysisV2Title = document.getElementById('doeAnalysisV2Title');
+  const doeAnalysisV2Select = document.getElementById('doeAnalysisV2Select');
+  const doeAnalysisV2Revision = document.getElementById('doeAnalysisV2Revision');
+  const doeAnalysisV2Meta = document.getElementById('doeAnalysisV2Meta');
+  const doeAnalysisV2Table = document.getElementById('doeAnalysisV2Table');
+  const insertDoeAnalysisV2Summary = document.getElementById('insertDoeAnalysisV2Summary');
+  const insertDoeAnalysisV2Section = document.getElementById('insertDoeAnalysisV2Section');
   const doeRunsDialog = document.getElementById('doeRunsDialog');
   const doeRunsTitle = document.getElementById('doeRunsTitle');
   const doeRunsMeta = document.getElementById('doeRunsMeta');
@@ -630,6 +664,7 @@
   let selectedSource = null;
   let selectedDoeStudyId = null;
   let doeAnalysisData = null;
+  let doeAnalysisV2Data = null;
   let doeRunsData = null;
   const selectedDoeRuns = new Map();
 
@@ -824,6 +859,52 @@
     }
   };
 
+  const formatSnapshotNumber = (value) => Number.isFinite(value)
+    ? new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(value)
+    : '–';
+  const snapshotTable = (result) => {
+    const rows = [
+      ...(result?.summary?.metrics || []).map((metric) => [metric.label, formatSnapshotNumber(metric.value)]),
+      ['Rows used', String(result?.summary?.rowsUsed ?? '–')],
+      ['Rows missing response', String(result?.summary?.rowsMissingResponse ?? '–')]
+    ];
+    return makeDataTable(['Metric', 'Value'], rows);
+  };
+  const renderDoeAnalysisV2 = (data) => {
+    doeAnalysisV2Data = data;
+    const analysis = (data?.analyses || []).find((item) => item.id === data?.selected?.analysisId);
+    if (doeAnalysisV2Title) doeAnalysisV2Title.textContent = analysis ? `${data.study.name} — ${analysis.name}` : `${data?.study?.name || 'DOE'} — saved analyses`;
+    setSelectOptions(doeAnalysisV2Select, (data?.analyses || []).map((item) => ({ id: item.id, label: item.name })), data?.selected?.analysisId);
+    setSelectOptions(doeAnalysisV2Revision, analysis?.revisions?.map((item) => ({ id: item.id, label: `Revision #${item.id} · ${String(item.calculatedAt || '').slice(0, 19).replace('T', ' ')}` })) || [], data?.selected?.revisionId);
+    const result = data?.revision?.result;
+    if (doeAnalysisV2Meta) {
+      doeAnalysisV2Meta.textContent = result
+        ? `Snapshot: revision #${data.revision.id} · dataset ${String(data.revision.datasetRevision).slice(0, 12)} · calculated ${String(data.revision.calculatedAt).slice(0, 19).replace('T', ' ')}. This is saved output; it is not recalculated for the report.`
+        : 'No successful saved calculations are available for this DOE.';
+    }
+    if (doeAnalysisV2Table) doeAnalysisV2Table.replaceChildren(result ? makePreviewTable(['Metric', 'Value'], [
+      ...(result.summary?.metrics || []).map((metric) => [metric.label, formatSnapshotNumber(metric.value)]),
+      ['Rows used', String(result.summary?.rowsUsed ?? '–')]
+    ], '') : makePreviewTable([], [], 'No successful saved calculations are available.'));
+    if (insertDoeAnalysisV2Summary instanceof HTMLButtonElement) insertDoeAnalysisV2Summary.disabled = isSigned || !result;
+    if (insertDoeAnalysisV2Section instanceof HTMLButtonElement) insertDoeAnalysisV2Section.disabled = isSigned || !result;
+  };
+
+  const loadDoeAnalysisV2 = async () => {
+    if (!selectedDoeStudyId) return;
+    if (doeAnalysisV2Meta) doeAnalysisV2Meta.textContent = 'Loading saved analysis revision…';
+    const params = new URLSearchParams();
+    if (sourceText(doeAnalysisV2Select?.value)) params.set('analysis_id', sourceText(doeAnalysisV2Select.value));
+    if (sourceText(doeAnalysisV2Revision?.value)) params.set('revision_id', sourceText(doeAnalysisV2Revision.value));
+    try {
+      const response = await fetch(`/reports/${reportId}/sources/doe/${selectedDoeStudyId}/analysis-v2?${params}`);
+      if (!response.ok) throw new Error('Saved analysis is unavailable.');
+      renderDoeAnalysisV2(await response.json());
+    } catch (error) {
+      if (doeAnalysisV2Meta) doeAnalysisV2Meta.textContent = error instanceof Error ? error.message : 'Saved analysis is unavailable.';
+    }
+  };
+
   const loadDoeAnalysis = async () => {
     if (!selectedDoeStudyId) return;
     setDoeAnalysisLoading('Loading analysis…');
@@ -1008,6 +1089,13 @@
       loadDoeAnalysis();
       return;
     }
+    if (source.kind === 'doe-analysis-v2') {
+      selectedDoeStudyId = source.studyId;
+      doeAnalysisV2Data = null;
+      if (doeAnalysisV2Dialog instanceof HTMLDialogElement) doeAnalysisV2Dialog.showModal();
+      loadDoeAnalysisV2();
+      return;
+    }
     if (source.kind === 'doe-runs') {
       selectedDoeStudyId = source.studyId;
       selectedDoeRuns.clear();
@@ -1053,6 +1141,8 @@
         const detail = document.createElement('small');
         detail.textContent = source.kind === 'doe-analysis'
           ? 'Choose a calculation and insert the result'
+          : source.kind === 'doe-analysis-v2'
+            ? 'Saved calculation revisions — no report-time recalculation'
           : source.kind === 'doe-runs'
             ? `${source.runCount || 0} runs · data and responsible person`
             : source.kind === 'run' ? 'Run result and reference' : source.kind === 'chart' ? 'Preview and insert figure' : source.kind === 'results' ? 'Preview and insert results' : source.kind === 'recipe' ? `${source.components?.length || 0} components` : 'Preview and insert';
@@ -1092,12 +1182,20 @@
   document.getElementById('closeDoeAnalysis')?.addEventListener('click', () => {
     if (doeAnalysisDialog instanceof HTMLDialogElement) doeAnalysisDialog.close();
   });
+  document.getElementById('closeDoeAnalysisV2')?.addEventListener('click', () => {
+    if (doeAnalysisV2Dialog instanceof HTMLDialogElement) doeAnalysisV2Dialog.close();
+  });
   document.getElementById('closeDoeRuns')?.addEventListener('click', () => {
     if (doeRunsDialog instanceof HTMLDialogElement) doeRunsDialog.close();
   });
   [doeAnalysisMode, doeAnalysisOutput, doeAnalysisFactor, doeAnalysisSecondFactor].forEach((control) => {
     control?.addEventListener('change', loadDoeAnalysis);
   });
+  doeAnalysisV2Select?.addEventListener('change', () => {
+    if (doeAnalysisV2Revision instanceof HTMLSelectElement) doeAnalysisV2Revision.value = '';
+    loadDoeAnalysisV2();
+  });
+  doeAnalysisV2Revision?.addEventListener('change', loadDoeAnalysisV2);
   doeRunsPrevious?.addEventListener('click', () => loadDoeRuns(Math.max((doeRunsData?.page || 1) - 1, 1)));
   doeRunsNext?.addEventListener('click', () => loadDoeRuns((doeRunsData?.page || 1) + 1));
 
@@ -1124,6 +1222,29 @@
   insertDoeAnalysisTable?.addEventListener('click', () => insertDoeAnalysis('table'));
   insertDoeAnalysisSection?.addEventListener('click', () => insertDoeAnalysis('section'));
   insertDoeAnalysisChart?.addEventListener('click', () => insertDoeAnalysis('chart'));
+  const insertDoeAnalysisV2 = (kind) => {
+    const snapshot = doeAnalysisV2Data?.revision;
+    const result = snapshot?.result;
+    const analysis = (doeAnalysisV2Data?.analyses || []).find((item) => item.id === doeAnalysisV2Data?.selected?.analysisId);
+    if (!result || !analysis || isSigned) return;
+    const provenance = `Analysis snapshot: ${analysis.name}; revision #${snapshot.id}; dataset ${String(snapshot.datasetRevision).slice(0, 12)}; calculated ${String(snapshot.calculatedAt).slice(0, 19).replace('T', ' ')}.`;
+    const summary = snapshotTable(result);
+    const content = kind === 'section'
+      ? [
+        makeHeadingNode(`${doeAnalysisV2Data.study.name} — ${analysis.name}`),
+        makeParagraphNode(provenance),
+        summary,
+        makeHeadingNode('ANOVA', 3),
+        makeDataTable(['Term', 'DF', 'SS', 'MS', 'F', 'p'], (result.anova || []).map((row) => [row.term, ...[row.degreesOfFreedom, row.sumOfSquares, row.meanSquare, row.statistic, row.pValue].map(formatSnapshotNumber)])),
+        makeHeadingNode('Coefficients', 3),
+        makeDataTable(['Term', 'Estimate', 'Standard error', 't', 'p'], (result.coefficients || []).map((row) => [row.term, ...[row.estimate, row.standardError, row.statistic, row.pValue].map(formatSnapshotNumber)]))
+      ]
+      : [makeParagraphNode(provenance), summary];
+    editor.chain().focus().insertContent(content).run();
+    if (doeAnalysisV2Dialog instanceof HTMLDialogElement) doeAnalysisV2Dialog.close();
+  };
+  insertDoeAnalysisV2Summary?.addEventListener('click', () => insertDoeAnalysisV2('summary'));
+  insertDoeAnalysisV2Section?.addEventListener('click', () => insertDoeAnalysisV2('section'));
   insertDoeRunReferences?.addEventListener('click', () => {
     if (isSigned || !selectedDoeRuns.size || !doeRunsData) return;
     const content = [makeHeadingNode(`${doeRunsData.study.name} — selected runs`)];

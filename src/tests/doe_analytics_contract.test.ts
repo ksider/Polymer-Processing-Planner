@@ -9,6 +9,20 @@ import {
   normalizeAnalysisSpecification,
   type DoeAnalysisDataset
 } from "../modules/doe_analysis/index.js";
+import { scoreMultiResponseCandidate } from "../modules/doe_analysis/multi_response_optimizer.js";
+
+test("multi-response desirability exposes each response trade-off", () => {
+  const scored = scoreMultiResponseCandidate([
+    { responseKey: "response:quality", objective: "maximize", importance: 2, observedMin: 0, observedMax: 100 },
+    { responseKey: "response:cycle", objective: "minimize", importance: 1, observedMin: 10, observedMax: 30 }
+  ], [
+    { responseKey: "response:quality", predicted: 80 },
+    { responseKey: "response:cycle", predicted: 15 }
+  ]);
+  assert.equal(scored.components["response:quality"], 0.8);
+  assert.equal(scored.components["response:cycle"], 0.75);
+  assert.ok(scored.desirability > 0 && scored.desirability < 1);
+});
 
 test("analytics contract chooses design-aware defaults and mock preserves request identity", async () => {
   const dataset = fixtureDataset("BBD");
@@ -18,6 +32,13 @@ test("analytics contract chooses design-aware defaults and mock preserves reques
   assert.equal(request.specification.useCodedFactors, true);
   assert.equal(request.specification.responseKey, "response:1");
   assert.deepEqual(request.specification.factorKeys, ["factor:1", "factor:2"]);
+  assert.deepEqual(request.specification.modelTerms, [
+    "main:factor:1",
+    "main:factor:2",
+    "interaction:factor:1|factor:2",
+    "quadratic:factor:1",
+    "quadratic:factor:2"
+  ]);
 
   const result = await new MockDoeAnalyticsClient().analyze(request);
   assert.equal(result.ok, true);
@@ -42,6 +63,29 @@ test("analytics specification rejects unknown columns and invalid model options"
       assert.equal(error.issues.length, 3);
       return true;
     }
+  );
+});
+
+test("analysis specification supports a hierarchical subset of model terms", () => {
+  const dataset = fixtureDataset("BBD");
+  const specification = normalizeAnalysisSpecification(dataset, {
+    modelFamily: "response_surface",
+    factorKeys: ["factor:1", "factor:2"],
+    modelTerms: ["main:factor:1", "main:factor:2", "interaction:factor:1|factor:2"]
+  });
+  assert.deepEqual(specification.modelTerms, [
+    "main:factor:1",
+    "main:factor:2",
+    "interaction:factor:1|factor:2"
+  ]);
+  assert.throws(
+    () => normalizeAnalysisSpecification(dataset, {
+      modelFamily: "response_surface",
+      factorKeys: ["factor:1", "factor:2"],
+      modelTerms: ["main:factor:1", "interaction:factor:1|factor:2"]
+    }),
+    (error: unknown) => error instanceof DoeAnalyticsValidationError &&
+      error.issues.includes("Interaction interaction:factor:1|factor:2 requires both corresponding main effects.")
   );
 });
 

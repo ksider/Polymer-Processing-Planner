@@ -10,14 +10,17 @@
   const completeness = overview.responseCompleteness === null
     ? '—'
     : `${Math.round(overview.responseCompleteness * 100)}%`;
+  const analysisArchived = Boolean(selectedAnalysis?.archivedAt);
 %>
 
 <main class="container doe-analysis-page" data-analysis-workspace
   data-engine-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/engine"
   data-calculate-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/calculate"
+  data-multi-optimize-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/multi-optimize"
   data-analyses-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/analyses"
   data-run-base-url="/experiments/<%= experiment.id %>/runs"
   data-analysis-id="<%= selectedAnalysis?.id || '' %>"
+  data-pending-job-id="<%= pendingCalculationJob?.id || '' %>"
   data-analysis-state="<%= selectedAnalysis?.state || 'draft' %>">
   <header class="card doe-analysis-header">
     <a class="back-link" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>?tab=design" aria-label="Back to DOE design">
@@ -39,12 +42,18 @@
             <% analyses.filter((analysis) => !analysis.archivedAt).forEach((analysis) => { %>
               <option value="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2?analysis_id=<%= analysis.id %>" <%= selectedAnalysis?.id === analysis.id ? 'selected' : '' %>><%= analysis.name %> · <%= analysis.state %></option>
             <% }); %>
+            <% if (analyses.some((analysis) => analysis.archivedAt)) { %>
+              <optgroup label="Archived analyses">
+                <% analyses.filter((analysis) => analysis.archivedAt).forEach((analysis) => { %>
+                  <option value="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2?analysis_id=<%= analysis.id %>" <%= selectedAnalysis?.id === analysis.id ? 'selected' : '' %>><%= analysis.name %> · archived</option>
+                <% }); %>
+              </optgroup>
+            <% } %>
           </select>
         </label>
         <a class="icon-button" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2" title="New analysis" aria-label="New analysis">
           <span class="material-symbols-rounded" aria-hidden="true">add</span>
         </a>
-        <a class="pure-button" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>?tab=analysis">Old analysis</a>
       </div>
       <div class="doe-analysis-engine" data-engine-status aria-live="polite">Checking engine…</div>
     </div>
@@ -119,12 +128,11 @@
       <section class="card" id="analysis-data">
         <div class="doe-analysis-section-heading">
           <div>
-            <h2 class="card-title">Data worksheet</h2>
+            <h2 class="card-title">Data worksheet <button class="icon-button tiny" type="button" data-copy-table="#analysis-data .doe-analysis-data-table" data-copy-icon title="Copy table as TSV" aria-label="Copy table as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button><a class="icon-button tiny" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/export.csv" title="Download analysis-ready CSV" aria-label="Download analysis-ready CSV"><span class="material-symbols-rounded" aria-hidden="true">download</span></a></h2>
             <p class="small-note">One row per run. Raw values are shown; coded factor values remain available to the model.</p>
           </div>
           <div class="doe-analysis-section-actions">
             <span class="badge"><%= dataset.rows.length %> rows</span>
-            <button class="pure-button" type="button" data-copy-table="#analysis-data .doe-analysis-data-table">Copy TSV</button>
           </div>
         </div>
         <div class="doe-analysis-table-scroll" tabindex="0">
@@ -166,18 +174,34 @@
         </div>
         <div data-results-content hidden>
           <div class="doe-analysis-notice" data-result-warnings hidden></div>
+          <section class="doe-analysis-optimizer" data-optimizer-result hidden>
+            <div>
+              <h3>Recommended settings</h3>
+              <p class="small-note" data-optimizer-summary></p>
+            </div>
+            <div class="doe-analysis-optimizer-values" data-optimizer-values></div>
+          </section>
+          <div class="doe-analysis-notice doe-analysis-term-selection" data-term-selection hidden>
+            <span data-selected-term-label></span>
+            <button class="pure-button button-small" type="button" data-clear-selected-term>Clear selection</button>
+          </div>
           <div class="doe-analysis-metrics" data-result-metrics></div>
           <p class="small-note doe-analysis-quality-note">R-squared describes the fitted runs. Adjusted R-squared penalizes unnecessary terms. Predicted R-squared estimates performance on a run left out of fitting and may be negative when prediction is poor.</p>
           <div class="doe-analysis-chart-grid">
             <section class="doe-analysis-chart-card">
               <h3>Effect strength</h3>
-              <p class="small-note">Absolute t-value: estimated effect divided by its uncertainty. A longer bar means stronger statistical evidence; the intercept is omitted.</p>
+              <p class="small-note">Absolute t-value: estimated effect divided by its uncertainty. A longer bar means stronger statistical evidence; the intercept is omitted. Select a bar to link it to its ANOVA and coefficient rows.</p>
               <div class="doe-analysis-chart" data-effects-chart role="img" aria-label="Pareto chart of standardized effects"></div>
             </section>
             <section class="doe-analysis-chart-card">
               <h3>Prediction errors</h3>
               <p class="small-note">X is the model prediction. Y is measured response minus prediction. A random cloud around zero is desirable. Select a point to open its run.</p>
               <div class="doe-analysis-chart" data-residual-chart role="img" aria-label="Residuals versus fitted values"></div>
+            </section>
+            <section class="doe-analysis-chart-card" data-observed-predicted-card hidden>
+              <h3>Observed vs predicted</h3>
+              <p class="small-note">Points near the diagonal are predicted accurately. This gives fractional-factorial models a direct fit check alongside effect and residual plots.</p>
+              <div class="doe-analysis-chart" data-observed-predicted-chart role="img" aria-label="Observed response versus predicted response"></div>
             </section>
             <section class="doe-analysis-chart-card" data-main-effects-card hidden>
               <h3>Main effects</h3>
@@ -240,7 +264,7 @@
             <section id="analysis-anova">
               <div class="doe-analysis-table-heading">
                 <h3>ANOVA</h3>
-                <button class="pure-button" type="button" data-copy-table="#analysis-anova table">Copy TSV</button>
+                <button class="icon-button tiny" type="button" data-copy-table="#analysis-anova table" data-copy-icon title="Copy ANOVA table as TSV" aria-label="Copy ANOVA table as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button>
               </div>
               <p class="small-note">Lack of fit compares model mismatch with repeat-to-repeat variation. A small p-value indicates that the selected model form may be inadequate. Pure error is variation between runs at identical factor settings.</p>
               <div class="doe-analysis-table-scroll">
@@ -253,8 +277,9 @@
             <section id="analysis-coefficients">
               <div class="doe-analysis-table-heading">
                 <h3>Coefficients</h3>
-                <button class="pure-button" type="button" data-copy-table="#analysis-coefficients table">Copy TSV</button>
+                <button class="icon-button tiny" type="button" data-copy-table="#analysis-coefficients table" data-copy-icon title="Copy coefficients table as TSV" aria-label="Copy coefficients table as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button>
               </div>
+              <p class="small-note">Estimate is the fitted contribution of a term while the other selected terms are held in the model. Standard uncertainty measures its precision; t and p test whether that contribution is distinguishable from zero. The sign indicates direction.</p>
               <div class="doe-analysis-table-scroll">
                 <table class="pure-table pure-table-bordered table-compact">
                   <thead><tr><th>Term</th><th>Estimate</th><th>Standard uncertainty</th><th>Signal / uncertainty (t)</th><th>p-value</th></tr></thead>
@@ -266,7 +291,7 @@
           <section id="analysis-diagnostics">
             <div class="doe-analysis-table-heading">
               <h3>Run diagnostics</h3>
-              <button class="pure-button" type="button" data-copy-table="#analysis-diagnostics table">Copy TSV</button>
+              <button class="icon-button tiny" type="button" data-copy-table="#analysis-diagnostics table" data-copy-icon title="Copy diagnostics table as TSV" aria-label="Copy diagnostics table as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button>
             </div>
             <div class="doe-analysis-table-scroll">
               <table class="pure-table pure-table-bordered table-compact">
@@ -276,6 +301,15 @@
             </div>
           </section>
         </div>
+      </section>
+      <section class="card" id="analysis-multi-optimize" data-multi-optimize hidden>
+        <div class="doe-analysis-section-heading"><div><h2 class="card-title">Optimize multiple responses</h2><p class="small-note">Combine compatible saved model revisions. The overall desirability never hides each response result.</p></div></div>
+        <form class="pure-form pure-form-stacked" data-multi-optimize-form>
+          <div data-multi-optimize-goals></div>
+          <button class="pure-button pure-button-primary" type="submit">Find compromise</button>
+          <p class="small-note" data-multi-optimize-status></p>
+        </form>
+        <div class="doe-analysis-optimizer" data-multi-optimize-result hidden></div>
       </section>
     </section>
 
@@ -292,17 +326,17 @@
       <% if (defaultSpecification) { %>
         <form class="pure-form pure-form-stacked" data-analysis-form>
           <label for="analysisName">Analysis name</label>
-          <input id="analysisName" name="analysisName" maxlength="120" value="<%= selectedAnalysis?.name || '' %>" placeholder="For example: Cycle time — quadratic model" <%= selectedAnalysis ? 'readonly' : '' %>>
+          <input id="analysisName" name="analysisName" maxlength="120" value="<%= selectedAnalysis?.name || '' %>" placeholder="For example: Cycle time — quadratic model" <%= analysisArchived ? 'readonly' : '' %>>
 
           <label for="analysisResponse">Measured response</label>
-          <select id="analysisResponse" name="responseKey">
+          <select id="analysisResponse" name="responseKey" <%= analysisArchived ? 'disabled' : '' %>>
             <% responses.forEach((response) => { %>
               <option value="<%= response.key %>" <%= response.key === defaultSpecification.responseKey ? 'selected' : '' %>><%- formatInline(response.label) %></option>
             <% }); %>
           </select>
 
           <label for="analysisFamily">Model family</label>
-          <select id="analysisFamily" name="modelFamily">
+          <select id="analysisFamily" name="modelFamily" <%= analysisArchived ? 'disabled' : '' %>>
             <option value="factorial" <%= defaultSpecification.modelFamily === 'factorial' ? 'selected' : '' %>>Factorial</option>
             <option value="response_surface" <%= defaultSpecification.modelFamily === 'response_surface' ? 'selected' : '' %>>Response surface</option>
             <option value="regression" <%= defaultSpecification.modelFamily === 'regression' ? 'selected' : '' %>>Regression</option>
@@ -312,8 +346,32 @@
             <legend>Factors</legend>
             <% factors.forEach((factor) => { %>
               <label class="pure-checkbox">
-                <input type="checkbox" name="factorKeys" value="<%= factor.key %>" checked>
+                <input type="checkbox" name="factorKeys" value="<%= factor.key %>" <%= defaultSpecification.factorKeys.includes(factor.key) ? 'checked' : '' %> <%= analysisArchived ? 'disabled' : '' %>>
                 <span><%- formatInline(factor.label) %></span>
+              </label>
+            <% }); %>
+          </fieldset>
+
+          <fieldset class="doe-analysis-fieldset" data-model-terms>
+            <legend>Model terms</legend>
+            <p class="small-note">Only selected terms are fitted. Interactions and quadratic terms require their main effects.</p>
+            <p class="small-note" data-model-term-feedback aria-live="polite"></p>
+            <% factors.forEach((factor) => { const term = `main:${factor.key}`; %>
+              <label class="pure-checkbox" data-model-term-label>
+                <input type="checkbox" name="modelTerms" value="<%= term %>" data-model-families="factorial response_surface regression" data-model-factor-keys="<%= factor.key %>" <%= defaultSpecification.modelTerms.includes(term) ? 'checked' : '' %> <%= analysisArchived ? 'disabled' : '' %>>
+                <span><%- formatInline(factor.label) %></span>
+              </label>
+            <% }); %>
+            <% factors.forEach((left, index) => { factors.slice(index + 1).forEach((right) => { const term = `interaction:${left.key}|${right.key}`; %>
+              <label class="pure-checkbox" data-model-term-label>
+                <input type="checkbox" name="modelTerms" value="<%= term %>" data-model-families="factorial response_surface" data-model-factor-keys="<%= left.key %>|<%= right.key %>" <%= defaultSpecification.modelTerms.includes(term) ? 'checked' : '' %> <%= analysisArchived ? 'disabled' : '' %>>
+                <span><%- formatInline(left.label) %> × <%- formatInline(right.label) %></span>
+              </label>
+            <% }); }); %>
+            <% factors.forEach((factor) => { const term = `quadratic:${factor.key}`; %>
+              <label class="pure-checkbox" data-model-term-label>
+                <input type="checkbox" name="modelTerms" value="<%= term %>" data-model-families="response_surface" data-model-factor-keys="<%= factor.key %>" <%= defaultSpecification.modelTerms.includes(term) ? 'checked' : '' %> <%= analysisArchived ? 'disabled' : '' %>>
+                <span><%- formatInline(factor.label) %>²</span>
               </label>
             <% }); %>
           </fieldset>
@@ -321,31 +379,70 @@
           <fieldset class="doe-analysis-fieldset">
             <legend>Dataset</legend>
             <label class="pure-checkbox">
-              <input type="checkbox" name="useCodedFactors" <%= defaultSpecification.useCodedFactors ? 'checked' : '' %>>
+              <input type="checkbox" name="useCodedFactors" <%= defaultSpecification.useCodedFactors ? 'checked' : '' %> <%= analysisArchived ? 'disabled' : '' %>>
               Use coded factor values
             </label>
             <label class="pure-checkbox">
-              <input type="checkbox" name="includeIncomplete" <%= defaultSpecification.includeIncomplete ? 'checked' : '' %>>
+              <input type="checkbox" name="includeIncomplete" <%= defaultSpecification.includeIncomplete ? 'checked' : '' %> <%= analysisArchived ? 'disabled' : '' %>>
               Include unfinished runs
             </label>
             <label class="pure-checkbox">
-              <input type="checkbox" name="includeExcluded">
+              <input type="checkbox" name="includeExcluded" <%= defaultSpecification.includeExcluded ? 'checked' : '' %> <%= analysisArchived ? 'disabled' : '' %>>
               Include excluded runs
             </label>
           </fieldset>
 
+          <fieldset class="doe-analysis-fieldset" data-optimization-controls>
+            <legend>Optimize this response</legend>
+            <p class="small-note">Optional. Recommendations stay within the physical factor bounds below and are saved with the calculation revision.</p>
+            <label for="optimizationObjective">Goal</label>
+            <select id="optimizationObjective" name="optimizationObjective" <%= analysisArchived ? 'disabled' : '' %>>
+              <option value="">No optimization</option>
+              <option value="maximize" <%= defaultSpecification.optimization?.objective === 'maximize' ? 'selected' : '' %>>Maximize response</option>
+              <option value="minimize" <%= defaultSpecification.optimization?.objective === 'minimize' ? 'selected' : '' %>>Minimize response</option>
+              <option value="target" <%= defaultSpecification.optimization?.objective === 'target' ? 'selected' : '' %>>Hit a target</option>
+            </select>
+            <label data-optimization-target for="optimizationTarget">Target value</label>
+            <input data-optimization-target id="optimizationTarget" name="optimizationTarget" type="number" step="any" value="<%= defaultSpecification.optimization?.target ?? '' %>" <%= analysisArchived ? 'disabled' : '' %>>
+            <div class="doe-analysis-optimization-bounds" data-optimization-bounds>
+              <% factors.forEach((factor) => { const levels = factor.factor?.levels || []; const configured = defaultSpecification.optimization?.factorBounds?.[factor.key]; const low = configured?.min ?? levels[0] ?? ''; const high = configured?.max ?? levels[levels.length - 1] ?? ''; %>
+                <div data-optimization-factor="<%= factor.key %>">
+                  <strong><%- formatInline(factor.label) %><%= factor.unit ? ` (${factor.unit})` : '' %></strong>
+                  <label>Min <input name="optimizationMin:<%= factor.key %>" type="number" step="any" value="<%= low %>" <%= analysisArchived ? 'disabled' : '' %>></label>
+                  <label>Max <input name="optimizationMax:<%= factor.key %>" type="number" step="any" value="<%= high %>" <%= analysisArchived ? 'disabled' : '' %>></label>
+                </div>
+              <% }); %>
+            </div>
+          </fieldset>
+
           <label for="analysisConfidence">Confidence level</label>
-          <select id="analysisConfidence" name="confidenceLevel">
-            <option value="0.90">90%</option>
-            <option value="0.95" selected>95%</option>
-            <option value="0.99">99%</option>
+          <select id="analysisConfidence" name="confidenceLevel" <%= analysisArchived ? 'disabled' : '' %>>
+            <option value="0.90" <%= defaultSpecification.confidenceLevel === 0.90 ? 'selected' : '' %>>90%</option>
+            <option value="0.95" <%= defaultSpecification.confidenceLevel === 0.95 ? 'selected' : '' %>>95%</option>
+            <option value="0.99" <%= defaultSpecification.confidenceLevel === 0.99 ? 'selected' : '' %>>99%</option>
           </select>
 
           <button class="pure-button pure-button-primary" type="submit" data-calculate-button disabled><%= selectedAnalysis ? 'Recalculate and save' : 'Calculate preview' %></button>
           <% if (!selectedAnalysis) { %>
             <button class="pure-button" type="button" data-save-analysis disabled>Save analysis</button>
           <% } %>
+          <% if (selectedAnalysis) { %>
+            <div class="doe-analysis-analysis-actions" role="group" aria-label="Analysis actions">
+              <% if (!analysisArchived) { %>
+                <button class="pure-button" type="button" data-rename-analysis>Rename</button>
+              <% } %>
+              <button class="pure-button" type="button" data-duplicate-analysis>Duplicate</button>
+              <% if (analysisArchived) { %>
+                <button class="pure-button pure-button-primary" type="button" data-restore-analysis>Restore</button>
+              <% } else { %>
+                <button class="pure-button button-danger" type="button" data-archive-analysis>Archive</button>
+              <% } %>
+            </div>
+          <% } %>
           <p class="small-note" data-calculation-status aria-live="polite">Checking analytics engine…</p>
+          <% if (analysisArchived) { %>
+            <div class="doe-analysis-notice">This analysis is archived. Its saved revisions remain available, but the model cannot be changed or recalculated until restored.</div>
+          <% } %>
           <% if (selectedAnalysis?.state === 'stale') { %>
             <div class="doe-analysis-notice">Source data changed after the saved calculation. The previous result remains available until you recalculate.</div>
           <% } %>
@@ -367,6 +464,23 @@
                   <small><%= revision.calculatedAt.slice(0, 19).replace('T', ' ') %></small>
                   <small>dataset <code><%= revision.datasetRevision.slice(0, 10) %></code></small>
                   <% if (revision.error) { %><small><%= revision.error.message %></small><% } %>
+                </div>
+              <% }); %>
+            </section>
+            <section class="doe-analysis-revisions">
+              <h3>Activity</h3>
+              <% if (!selectedEvents.length) { %>
+                <p class="small-note">No activity recorded yet.</p>
+              <% } %>
+              <% selectedEvents.forEach((event) => { %>
+                <div class="doe-analysis-revision-item">
+                  <div>
+                    <strong><%= event.action.replaceAll('_', ' ').toLowerCase() %></strong>
+                    <% if (event.actorName) { %><small>by <%= event.actorName %></small><% } %>
+                  </div>
+                  <small><%= event.createdAt.slice(0, 19).replace('T', ' ') %></small>
+                  <% if (event.details.copiedFromAnalysisId) { %><small>copied from #<%= event.details.copiedFromAnalysisId %></small><% } %>
+                  <% if (event.details.revisionId) { %><small>revision #<%= event.details.revisionId %></small><% } %>
                 </div>
               <% }); %>
             </section>
@@ -394,7 +508,8 @@
 
 <script nonce="<%= cspNonce %>" id="analysis-initial-result" type="application/json"><%- jsonForScript(latestSuccessfulRevision?.result || null) %></script>
 <script nonce="<%= cspNonce %>" id="analysis-column-labels" type="application/json"><%- jsonForScript(Object.fromEntries(dataset.columns.map((column) => [column.key, column.label]))) %></script>
+<script nonce="<%= cspNonce %>" id="analysis-column-units" type="application/json"><%- jsonForScript(Object.fromEntries(dataset.columns.map((column) => [column.key, column.unit]))) %></script>
 <script nonce="<%= cspNonce %>" src="/vendor/echarts/dist/echarts.min.js" defer></script>
 <script nonce="<%= cspNonce %>" src="/vendor/echarts-gl/dist/echarts-gl.min.js?v=2.0.9" defer></script>
-<script nonce="<%= cspNonce %>" src="/doe_analysis_workspace.js?v=20261001-precision1" defer></script>
+<script nonce="<%= cspNonce %>" src="/doe_analysis_workspace.js?v=20261003-optimizer1" defer></script>
 <%- include('../partials/foot') %>

@@ -506,6 +506,7 @@ function initDb(db: Db) {
       engine_name TEXT,
       engine_version TEXT,
       specification_json TEXT NOT NULL,
+      dataset_json TEXT,
       result_json TEXT,
       error_json TEXT,
       calculated_by_user_id INTEGER,
@@ -513,10 +514,44 @@ function initDb(db: Db) {
       FOREIGN KEY (analysis_id) REFERENCES doe_analyses(id) ON DELETE CASCADE,
       FOREIGN KEY (calculated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
     );
+    CREATE TABLE IF NOT EXISTS doe_analysis_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      analysis_id INTEGER NOT NULL,
+      action TEXT NOT NULL,
+      details_json TEXT,
+      actor_user_id INTEGER,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (analysis_id) REFERENCES doe_analyses(id) ON DELETE CASCADE,
+      FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE TABLE IF NOT EXISTS doe_analysis_jobs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      analysis_id INTEGER NOT NULL,
+      doe_id INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      dataset_revision TEXT NOT NULL,
+      request_id TEXT NOT NULL,
+      specification_json TEXT NOT NULL,
+      dataset_json TEXT NOT NULL,
+      requested_by_user_id INTEGER,
+      revision_id INTEGER,
+      error_json TEXT,
+      created_at TEXT NOT NULL,
+      started_at TEXT,
+      finished_at TEXT,
+      FOREIGN KEY (analysis_id) REFERENCES doe_analyses(id) ON DELETE CASCADE,
+      FOREIGN KEY (doe_id) REFERENCES doe_studies(id) ON DELETE CASCADE,
+      FOREIGN KEY (requested_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (revision_id) REFERENCES doe_analysis_revisions(id) ON DELETE SET NULL
+    );
     CREATE INDEX IF NOT EXISTS idx_doe_analyses_doe_id
       ON doe_analyses(doe_id, archived_at, updated_at);
     CREATE INDEX IF NOT EXISTS idx_doe_analysis_revisions_analysis_id
       ON doe_analysis_revisions(analysis_id, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_doe_analysis_events_analysis_id
+      ON doe_analysis_events(analysis_id, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_doe_analysis_jobs_analysis_id
+      ON doe_analysis_jobs(analysis_id, status, id DESC);
     CREATE TABLE IF NOT EXISTS report_configs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       experiment_id INTEGER NOT NULL,
@@ -1222,6 +1257,9 @@ function initDb(db: Db) {
   }
   if (!hasColumn(db, "report_documents", "content_md")) {
     db.exec("ALTER TABLE report_documents ADD COLUMN content_md TEXT");
+  }
+  if (!hasColumn(db, "doe_analysis_revisions", "dataset_json")) {
+    db.exec("ALTER TABLE doe_analysis_revisions ADD COLUMN dataset_json TEXT");
   }
   if (!hasColumn(db, "report_documents", "editor_kind")) {
     db.exec("ALTER TABLE report_documents ADD COLUMN editor_kind TEXT NOT NULL DEFAULT 'editorjs'");

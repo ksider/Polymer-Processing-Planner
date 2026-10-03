@@ -73,9 +73,44 @@ validate_analysis_request <- function(request) {
   if (!(specification$modelFamily %in% families)) {
     issues <- c(issues, "Unsupported model family.")
   }
+  model_terms <- selected_model_terms(specification, factor_keys)
+  allowed_terms <- default_model_terms(specification$modelFamily, factor_keys)
+  if (!length(model_terms)) {
+    issues <- c(issues, "Select at least one model term.")
+  }
+  if (anyDuplicated(model_terms)) {
+    issues <- c(issues, "Model terms must be unique.")
+  }
+  if (length(setdiff(model_terms, allowed_terms))) {
+    issues <- c(issues, "One or more model terms are not supported by the selected model family.")
+  }
+  for (term in model_terms) {
+    if (startsWith(term, "interaction:")) {
+      components <- strsplit(sub("^interaction:", "", term), "|", fixed = TRUE)[[1]]
+      if (length(components) != 2L || !all(paste0("main:", components) %in% model_terms)) {
+        issues <- c(issues, paste0("Interaction ", term, " requires both corresponding main effects."))
+      }
+    }
+    if (startsWith(term, "quadratic:")) {
+      component <- sub("^quadratic:", "", term)
+      if (!paste0("main:", component) %in% model_terms) {
+        issues <- c(issues, paste0("Quadratic term ", term, " requires its main effect."))
+      }
+    }
+  }
   confidence <- as.numeric(specification$confidenceLevel)
   if (length(confidence) != 1L || is.na(confidence) || confidence <= 0.5 || confidence >= 1) {
     issues <- c(issues, "confidenceLevel must be greater than 0.5 and less than 1.")
+  }
+  optimization <- specification$optimization
+  if (!is.null(optimization)) {
+    objective <- optimization$objective
+    if (!(objective %in% c("minimize", "maximize", "target"))) {
+      issues <- c(issues, "Optimization objective must be minimize, maximize, or target.")
+    }
+    if (identical(objective, "target") && !is.finite(as.numeric(optimization$target))) {
+      issues <- c(issues, "A numeric target is required for target optimization.")
+    }
   }
   if (length(issues)) {
     analysis_error("INVALID_ANALYSIS_REQUEST", paste(issues, collapse = " "), details = list(issues = issues))
@@ -98,6 +133,7 @@ analyze_request <- function(request) {
   available_rows <- rows[included]
   response_key <- specification$responseKey
   factor_keys <- unlist(specification$factorKeys, use.names = FALSE)
+  model_terms <- selected_model_terms(specification, factor_keys)
   response_values <- vapply(available_rows, function(row) numeric_value(row$values[[response_key]]), numeric(1))
   rows_missing_response <- sum(is.na(response_values))
 
@@ -124,14 +160,7 @@ analyze_request <- function(request) {
   complete <- complete.cases(model_data)
   used_data <- model_data[complete, , drop = FALSE]
   omitted_factor_rows <- sum(!complete & !is.na(model_data$y))
-  term_count <- length(factor_keys)
-  minimum_rows <- if (identical(specification$modelFamily, "response_surface")) {
-    1 + 2 * term_count + choose(term_count, 2) + 1
-  } else if (identical(specification$modelFamily, "factorial")) {
-    1 + term_count + choose(term_count, 2) + 1
-  } else {
-    1 + term_count + 1
-  }
+  minimum_rows <- length(model_terms) + 2L
   if (nrow(used_data) < minimum_rows) {
     analysis_error(
       "INSUFFICIENT_DATA",
@@ -140,7 +169,7 @@ analyze_request <- function(request) {
     )
   }
 
-  formula <- build_model_formula(specification$modelFamily, term_count)
+  formula <- build_model_formula(model_terms, factor_keys)
   fit <- lm(formula, data = used_data)
   if (df.residual(fit) <= 0) {
     analysis_error("INSUFFICIENT_DEGREES_OF_FREEDOM", "The model has no residual degrees of freedom.")
@@ -183,26 +212,50 @@ analyze_request <- function(request) {
     coefficients = build_coefficients(fit, factor_keys, as.numeric(specification$confidenceLevel)),
     anova = build_anova(fit, factor_keys, lack_of_fit),
     diagnostics = build_diagnostics(fit, used_data),
+    optimizer = build_optimizer(fit, used_data, factor_keys, specification$optimization),
     plots = build_model_plots(fit, used_data, factor_keys, specification$modelFamily, as.numeric(specification$confidenceLevel)),
     warnings = warnings
   )
 }
 
-build_model_formula <- function(model_family, factor_count) {
-  variables <- paste0("x", seq_len(factor_count))
-  if (identical(model_family, "response_surface")) {
-    interactions <- if (factor_count > 1) {
-      apply(combn(variables, 2), 2, paste, collapse = ":")
-    } else character()
-    squares <- paste0("I(", variables, "^2)")
-    terms <- c(variables, interactions, squares)
-  } else if (identical(model_family, "factorial") && factor_count > 1) {
-    interactions <- apply(combn(variables, 2), 2, paste, collapse = ":")
-    terms <- c(variables, interactions)
-  } else {
-    terms <- variables
+default_model_terms <- function(model_family, factor_keys) {
+  main_effects <- paste0("main:", factor_keys)
+  if (identical(model_family, "regression")) return(main_effects)
+  interactions <- if (length(factor_keys) > 1) {
+    apply(combn(factor_keys, 2), 2, function(pair) paste0("interaction:", pair[[1]], "|", pair[[2]]))
+  } else character()
+  if (identical(model_family, "factorial")) return(c(main_effects, interactions))
+  c(main_effects, interactions, paste0("quadratic:", factor_keys))
+}
+
+selected_model_terms <- function(specification, factor_keys) {
+  if (is.null(specification$modelTerms)) {
+    return(default_model_terms(specification$modelFamily, factor_keys))
   }
-  reformulate(terms, response = "y")
+  unlist(specification$modelTerms, use.names = FALSE)
+}
+
+build_model_formula <- function(model_terms, factor_keys) {
+  variable_for <- function(factor_key) {
+    index <- match(factor_key, factor_keys)
+    if (is.na(index)) return(NA_character_)
+    paste0("x", index)
+  }
+  terms <- vapply(model_terms, function(term) {
+    if (startsWith(term, "main:")) {
+      return(variable_for(sub("^main:", "", term)))
+    }
+    if (startsWith(term, "quadratic:")) {
+      variable <- variable_for(sub("^quadratic:", "", term))
+      return(paste0("I(", variable, "^2)"))
+    }
+    if (startsWith(term, "interaction:")) {
+      components <- strsplit(sub("^interaction:", "", term), "|", fixed = TRUE)[[1]]
+      return(paste(variable_for(components[[1]]), variable_for(components[[2]]), sep = ":"))
+    }
+    NA_character_
+  }, character(1))
+  reformulate(terms[!is.na(terms)], response = "y")
 }
 
 build_summary <- function(fit, rows_available, rows_after_scope, rows_used, missing_response) {
@@ -384,6 +437,74 @@ build_diagnostics <- function(fit, used_data) {
       cooksDistance = finite_or_na(cooks[[index]])
     )
   })
+}
+
+build_optimizer <- function(fit, used_data, factor_keys, optimization) {
+  if (is.null(optimization)) return(NULL)
+  objective <- optimization$objective
+  target <- if (identical(objective, "target")) as.numeric(optimization$target) else NA_real_
+  requested_bounds <- optimization$factorBounds
+  if (is.null(requested_bounds)) requested_bounds <- list()
+  variables <- paste0("x", seq_along(factor_keys))
+  raw_variables <- paste0("raw_x", seq_along(factor_keys))
+  ranges <- vector("list", length(factor_keys))
+  names(ranges) <- factor_keys
+  model_ranges <- vector("list", length(factor_keys))
+  names(model_ranges) <- variables
+
+  for (index in seq_along(factor_keys)) {
+    key <- factor_keys[[index]]
+    raw_values <- used_data[[raw_variables[[index]]]]
+    model_values <- used_data[[variables[[index]]]]
+    default_min <- min(raw_values)
+    default_max <- max(raw_values)
+    requested <- requested_bounds[[key]]
+    lower <- if (!is.null(requested)) as.numeric(requested$min) else default_min
+    upper <- if (!is.null(requested)) as.numeric(requested$max) else default_max
+    if (!is.finite(lower) || !is.finite(upper) || lower >= upper) {
+      analysis_error("INVALID_ANALYSIS_REQUEST", paste0("Optimization bounds for ", key, " must have min below max."))
+    }
+    ordered <- order(raw_values, model_values)
+    raw_unique <- raw_values[ordered]
+    model_unique <- model_values[ordered]
+    keep <- !duplicated(raw_unique)
+    raw_unique <- raw_unique[keep]
+    model_unique <- model_unique[keep]
+    if (length(raw_unique) < 2L) {
+      analysis_error("INVALID_ANALYSIS_REQUEST", paste0("Optimization requires at least two settings for ", key, "."))
+    }
+    to_model <- function(value) approx(raw_unique, model_unique, xout = value, rule = 2)$y
+    ranges[[key]] <- list(min = lower, max = upper)
+    model_ranges[[variables[[index]]]] <- c(to_model(lower), to_model(upper))
+  }
+
+  # Grid search is deterministic and bounded. It intentionally recommends
+  # only within explicitly declared factor limits, never extrapolating beyond
+  # the selected physical range.
+  per_factor <- max(5L, min(41L, floor(50000^(1 / length(variables)))))
+  raw_grid <- do.call(expand.grid, c(lapply(ranges, function(bound) seq(bound$min, bound$max, length.out = per_factor)), list(KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE)))
+  names(raw_grid) <- factor_keys
+  model_grid <- as.data.frame(lapply(seq_along(variables), function(index) {
+    range <- model_ranges[[variables[[index]]]]
+    seq(range[[1]], range[[2]], length.out = per_factor)
+  }), check.names = FALSE)
+  names(model_grid) <- variables
+  # expand.grid above establishes the same column-order cartesian product.
+  model_grid <- do.call(expand.grid, c(unname(model_grid), list(KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE)))
+  names(model_grid) <- variables
+  predicted <- safe_predict(fit, model_grid)
+  score <- if (identical(objective, "maximize")) predicted else if (identical(objective, "minimize")) -predicted else -abs(predicted - target)
+  best <- which.max(score)
+  if (!length(best) || !is.finite(predicted[[best]])) return(NULL)
+  list(
+    objective = objective,
+    target = finite_or_na(target),
+    predicted = finite_or_na(predicted[[best]]),
+    factorValues = as.list(vapply(factor_keys, function(key) raw_grid[[key]][[best]], numeric(1))),
+    modelFactorValues = as.list(vapply(variables, function(key) model_grid[[key]][[best]], numeric(1))),
+    factorBounds = ranges,
+    candidatesEvaluated = nrow(raw_grid)
+  )
 }
 
 build_model_plots <- function(fit, used_data, factor_keys, model_family, confidence_level) {

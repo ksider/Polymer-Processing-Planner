@@ -31,6 +31,14 @@ import { getExperiment } from "../repos/experiments_repo.js";
 import { findUserById, listUsers } from "../repos/users_repo.js";
 import { ensureExperimentAccess, ensureReportAccess } from "../middleware/experiment_access.js";
 import { assignEntityResponsibility, syncReportTaskSignature } from "../services/entity_assignment_service.js";
+import {
+  getDoeAnalysis,
+  getDoeAnalysisRevision,
+  getLatestSuccessfulDoeAnalysisRevision,
+  listDoeAnalyses,
+  listDoeAnalysisRevisions
+} from "../modules/doe_analysis/analysis_repo.js";
+import { listDoeStudies } from "../repos/doe_repo.js";
 
 const parseInclude = (raw: unknown) => {
   if (!raw) return null;
@@ -410,6 +418,62 @@ export function createReportRouter(db: Db) {
     );
     if (!data) return res.status(404).json({ error: "DOE study not found" });
     return res.json(data);
+  });
+
+  // Report sources use a completed Analysis V2 revision verbatim. This route
+  // must never invoke R or construct a fresh calculation from mutable run data.
+  router.get("/reports/:reportId/sources/doe/:doeId/analysis-v2", (req, res) => {
+    const reportId = Number(req.params.reportId);
+    const doeId = Number(req.params.doeId);
+    const config = getReportConfig(db, reportId);
+    if (!config) return res.status(404).json({ error: "Report not found" });
+    const study = listDoeStudies(db, config.experiment_id).find((item) => item.id === doeId);
+    if (!study) return res.status(404).json({ error: "DOE study not found" });
+
+    const analyses = listDoeAnalyses(db, doeId).map((analysis) => {
+      const latest = getLatestSuccessfulDoeAnalysisRevision(db, analysis);
+      return {
+        id: analysis.id,
+        name: analysis.name,
+        archivedAt: analysis.archivedAt,
+        latestSuccessfulRevisionId: latest?.id ?? null,
+        latestCalculatedAt: latest?.calculatedAt ?? null,
+        revisions: listDoeAnalysisRevisions(db, analysis.id, 50)
+          .filter((revision) => revision.status === "SUCCEEDED" && Boolean(revision.result))
+          .map((revision) => ({
+            id: revision.id,
+            datasetRevision: revision.datasetRevision,
+            calculatedAt: revision.calculatedAt
+          }))
+      };
+    }).filter((analysis) => analysis.latestSuccessfulRevisionId !== null);
+    const requestedAnalysisId = Number(req.query.analysis_id);
+    const selectedAnalysis = analyses.find((analysis) => analysis.id === requestedAnalysisId) ?? analyses[0] ?? null;
+    if (!selectedAnalysis) {
+      return res.json({ study: { id: study.id, name: study.name }, analyses: [], selected: null, revision: null });
+    }
+    const analysis = getDoeAnalysis(db, doeId, selectedAnalysis.id);
+    if (!analysis) return res.status(404).json({ error: "Saved analysis not found" });
+    const requestedRevisionId = Number(req.query.revision_id);
+    const revision = Number.isFinite(requestedRevisionId) && requestedRevisionId > 0
+      ? getDoeAnalysisRevision(db, analysis.id, requestedRevisionId)
+      : getLatestSuccessfulDoeAnalysisRevision(db, analysis);
+    if (!revision || revision.status !== "SUCCEEDED" || !revision.result) {
+      return res.status(404).json({ error: "Successful analysis revision not found" });
+    }
+    return res.json({
+      study: { id: study.id, name: study.name },
+      analyses,
+      selected: { analysisId: analysis.id, revisionId: revision.id },
+      revision: {
+        id: revision.id,
+        datasetRevision: revision.datasetRevision,
+        calculatedAt: revision.calculatedAt,
+        engineName: revision.engineName,
+        engineVersion: revision.engineVersion,
+        result: revision.result
+      }
+    });
   });
 
   router.get("/reports/:reportId/sources/doe/:doeId/runs", (req, res) => {

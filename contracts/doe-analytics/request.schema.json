@@ -75,6 +75,15 @@
           "items": { "type": "string", "minLength": 1 }
         },
         "modelFamily": { "enum": ["factorial", "response_surface", "regression"] },
+        "modelTerms": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^(main:.+|interaction:.+\\|.+|quadratic:.+)$"
+          }
+        },
         "useCodedFactors": { "type": "boolean" },
         "includeExcluded": { "type": "boolean" },
         "includeIncomplete": { "type": "boolean" },

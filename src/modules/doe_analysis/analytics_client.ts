@@ -64,6 +64,7 @@ export class MockDoeAnalyticsClient implements DoeAnalyticsClient {
       coefficients: [],
       anova: [],
       diagnostics: [],
+      optimizer: null,
       plots: {
         mainEffects: [],
         meanByFactor: [],

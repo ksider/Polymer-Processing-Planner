@@ -1,5 +1,9 @@
 let analysisColumnLabels = {};
+let analysisColumnUnits = {};
 let selectedAnalysisRunId = null;
+let selectedAnalysisTerm = null;
+let analysisResponseLabel = "Response";
+let analysisUsesCodedFactors = false;
 
 (() => {
   const workspace = document.querySelector("[data-analysis-workspace]");
@@ -13,6 +17,14 @@ let selectedAnalysisRunId = null;
       analysisColumnLabels = {};
     }
   }
+  const columnUnitsNode = document.querySelector("#analysis-column-units");
+  if (columnUnitsNode?.textContent) {
+    try {
+      analysisColumnUnits = JSON.parse(columnUnitsNode.textContent) || {};
+    } catch {
+      analysisColumnUnits = {};
+    }
+  }
 
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
   const engineStatus = workspace.querySelector("[data-engine-status]");
@@ -23,6 +35,8 @@ let selectedAnalysisRunId = null;
   const analysisName = workspace.querySelector("[name=analysisName]");
   const analysisSwitcher = workspace.querySelector("[data-analysis-nav-select]");
   const savedAnalysisId = Number(workspace.dataset.analysisId) || null;
+  const pendingCalculationJobId = Number(workspace.dataset.pendingJobId) || null;
+  const archivedAnalysis = workspace.dataset.analysisState === "archived";
   const initialResultNode = document.querySelector("#analysis-initial-result");
   let hasVisibleResult = false;
   if (initialResultNode?.textContent) {
@@ -44,7 +58,27 @@ let selectedAnalysisRunId = null;
     if (target) window.location.assign(target);
   });
   bindRunSelection(workspace);
+  bindTermSelection(workspace);
   bindTableCopy(workspace);
+  bindAnalysisLifecycleActions(workspace, {
+    csrfToken,
+    savedAnalysisId,
+    analysisName,
+    status,
+    button,
+    saveButton
+  });
+  bindModelTermControls(form, archivedAnalysis);
+  bindOptimizationControls(form, archivedAnalysis);
+  bindMultiOptimizer(workspace, csrfToken);
+  if (savedAnalysisId && pendingCalculationJobId) {
+    watchSavedCalculationJob(workspace, pendingCalculationJobId, {
+      csrfToken,
+      status,
+      button,
+      saveButton
+    });
+  }
 
   fetch(workspace.dataset.engineUrl, {
     headers: { accept: "application/json" },
@@ -65,12 +99,18 @@ let selectedAnalysisRunId = null;
         if (empty) empty.querySelector("span:last-child").textContent = "Mock mode validates integration only and does not generate ANOVA or coefficients.";
         return;
       }
-      if (button) button.disabled = false;
-      if (saveButton) saveButton.disabled = false;
+      if (!archivedAnalysis && !pendingCalculationJobId && button) button.disabled = false;
+      if (!archivedAnalysis && !pendingCalculationJobId && saveButton) saveButton.disabled = false;
       if (savedAnalysisId) {
-        if (status) status.textContent = workspace.dataset.analysisState === "stale"
-          ? "Source data changed. Recalculate to create a new revision."
-          : "Saved analysis loaded. Change settings or recalculate when needed.";
+        if (status) {
+          status.textContent = pendingCalculationJobId
+            ? "Calculation is queued. This page will refresh when the result is ready."
+            : archivedAnalysis
+            ? "Archived analysis loaded. Restore it to edit or recalculate."
+            : workspace.dataset.analysisState === "stale"
+              ? "Source data changed. Recalculate to create a new revision."
+              : "Saved analysis loaded. Change settings or recalculate when needed.";
+        }
       } else {
         if (status) status.textContent = "R is connected. Calculating the default model…";
         form?.requestSubmit();
@@ -90,7 +130,9 @@ let selectedAnalysisRunId = null;
 
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (archivedAnalysis) return;
     const specification = readSpecification(form);
+    let calculationQueued = false;
     if (button) button.disabled = true;
     if (status) status.textContent = "Calculating…";
     try {
@@ -107,6 +149,17 @@ let selectedAnalysisRunId = null;
         body: JSON.stringify({ specification })
       });
       const payload = await response.json();
+      if (savedAnalysisId && response.status === 202 && payload.job?.id) {
+        calculationQueued = true;
+        if (status) status.textContent = "Calculation queued…";
+        watchSavedCalculationJob(workspace, Number(payload.job.id), {
+          csrfToken,
+          status,
+          button,
+          saveButton
+        });
+        return;
+      }
       const result = payload.result ?? payload;
       if (!response.ok || result.ok !== true) {
         throw new Error(payload.message || result.message || result.error?.message || "Calculation failed");
@@ -121,7 +174,7 @@ let selectedAnalysisRunId = null;
       if (status) status.textContent = message;
       if (!hasVisibleResult) showEmptyResult(workspace, "Model was not calculated", message);
     } finally {
-      if (button) button.disabled = false;
+      if (button && !calculationQueued) button.disabled = false;
     }
   });
 
@@ -178,17 +231,279 @@ let selectedAnalysisRunId = null;
   });
 })();
 
+function bindAnalysisLifecycleActions(workspace, context) {
+  const { csrfToken, savedAnalysisId, analysisName, status, button, saveButton } = context;
+  if (!savedAnalysisId) return;
+  const baseUrl = `${workspace.dataset.analysesUrl}/${savedAnalysisId}`;
+  const actionButtons = workspace.querySelectorAll("[data-rename-analysis], [data-duplicate-analysis], [data-archive-analysis], [data-restore-analysis]");
+  const runAction = async (sourceButton, url, options = {}) => {
+    actionButtons.forEach((item) => { item.disabled = true; });
+    if (button) button.disabled = true;
+    if (saveButton) saveButton.disabled = true;
+    try {
+      const response = await fetch(url, {
+        method: options.method || "POST",
+        headers: {
+          accept: "application/json",
+          ...(options.body ? { "content-type": "application/json" } : {}),
+          "x-csrf-token": csrfToken
+        },
+        ...(options.body ? { body: JSON.stringify(options.body) } : {})
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || payload.error || "Analysis could not be updated.");
+      return payload;
+    } catch (error) {
+      if (status) status.textContent = error instanceof Error ? error.message : "Analysis could not be updated.";
+      actionButtons.forEach((item) => { item.disabled = false; });
+      throw error;
+    }
+  };
+
+  workspace.querySelector("[data-rename-analysis]")?.addEventListener("click", async (event) => {
+    const name = String(analysisName?.value || "").trim();
+    if (!name) {
+      if (status) status.textContent = "Enter an analysis name before renaming.";
+      analysisName?.focus();
+      return;
+    }
+    if (status) status.textContent = "Renaming analysis…";
+    try {
+      await runAction(event.currentTarget, baseUrl, { method: "PATCH", body: { name } });
+      window.location.reload();
+    } catch {
+      // The request helper has already reported the error.
+    }
+  });
+
+  workspace.querySelector("[data-duplicate-analysis]")?.addEventListener("click", async (event) => {
+    const currentName = String(analysisName?.value || "Analysis").trim() || "Analysis";
+    const name = window.prompt("Name for the duplicate analysis", `${currentName} copy`);
+    if (name === null) return;
+    if (!name.trim()) {
+      if (status) status.textContent = "Enter a name for the duplicate analysis.";
+      return;
+    }
+    if (status) status.textContent = "Duplicating analysis…";
+    try {
+      const payload = await runAction(event.currentTarget, `${baseUrl}/duplicate`, { body: { name } });
+      window.location.assign(`${window.location.pathname}?analysis_id=${payload.analysis.id}`);
+    } catch {
+      // The request helper has already reported the error.
+    }
+  });
+
+  workspace.querySelector("[data-archive-analysis]")?.addEventListener("click", async (event) => {
+    if (!window.confirm("Archive this analysis? Its saved revisions will be kept and it can be restored later.")) return;
+    if (status) status.textContent = "Archiving analysis…";
+    try {
+      await runAction(event.currentTarget, `${baseUrl}/archive`);
+      window.location.assign(window.location.pathname);
+    } catch {
+      // The request helper has already reported the error.
+    }
+  });
+
+  workspace.querySelector("[data-restore-analysis]")?.addEventListener("click", async (event) => {
+    if (status) status.textContent = "Restoring analysis…";
+    try {
+      await runAction(event.currentTarget, `${baseUrl}/restore`);
+      window.location.reload();
+    } catch {
+      // The request helper has already reported the error.
+    }
+  });
+}
+
+function watchSavedCalculationJob(workspace, jobId, context) {
+  const analysisId = Number(workspace.dataset.analysisId);
+  if (!analysisId || !jobId) return;
+  const { status, button, saveButton } = context;
+  if (button) button.disabled = true;
+  if (saveButton) saveButton.disabled = true;
+  const jobUrl = `${workspace.dataset.analysesUrl}/${analysisId}/jobs/${jobId}`;
+  const poll = async () => {
+    try {
+      const response = await fetch(jobUrl, { headers: { accept: "application/json" } });
+      const payload = await response.json();
+      if (!response.ok || !payload.job) throw new Error(payload.message || payload.error || "Calculation status is unavailable.");
+      const job = payload.job;
+      if (job.status === "QUEUED" || job.status === "RUNNING") {
+        if (status) status.textContent = job.status === "QUEUED" ? "Calculation queued…" : "Calculating model…";
+        window.setTimeout(poll, 700);
+        return;
+      }
+      if (job.status === "SUCCEEDED") {
+        if (status) status.textContent = "Calculation completed. Refreshing saved revision…";
+        window.location.reload();
+        return;
+      }
+      const message = job.error?.message || "Calculation did not complete.";
+      if (status) status.textContent = message;
+      if (button) button.disabled = false;
+      if (saveButton) saveButton.disabled = false;
+    } catch (error) {
+      if (status) status.textContent = error instanceof Error ? error.message : "Calculation status is unavailable.";
+      if (button) button.disabled = false;
+      if (saveButton) saveButton.disabled = false;
+    }
+  };
+  void poll();
+}
+
 function readSpecification(form) {
   const data = new FormData(form);
+  const factorKeys = data.getAll("factorKeys").map(String);
+  const objective = String(data.get("optimizationObjective") || "");
+  const factorBounds = Object.fromEntries(factorKeys.flatMap((key) => {
+    const minRaw = String(data.get(`optimizationMin:${key}`) ?? "").trim();
+    const maxRaw = String(data.get(`optimizationMax:${key}`) ?? "").trim();
+    const min = Number(minRaw);
+    const max = Number(maxRaw);
+    return minRaw && maxRaw && Number.isFinite(min) && Number.isFinite(max) ? [[key, { min, max }]] : [];
+  }));
   return {
     responseKey: String(data.get("responseKey") || ""),
-    factorKeys: data.getAll("factorKeys").map(String),
+    factorKeys,
     modelFamily: String(data.get("modelFamily") || "regression"),
+    modelTerms: data.getAll("modelTerms").map(String),
     useCodedFactors: data.has("useCodedFactors"),
     includeIncomplete: data.has("includeIncomplete"),
     includeExcluded: data.has("includeExcluded"),
-    confidenceLevel: Number(data.get("confidenceLevel") || 0.95)
+    confidenceLevel: Number(data.get("confidenceLevel") || 0.95),
+    ...(objective === "minimize" || objective === "maximize" || objective === "target"
+      ? {
+        optimization: {
+          objective,
+          ...(objective === "target" ? { target: Number(data.get("optimizationTarget")) } : {}),
+          factorBounds
+        }
+      }
+      : {})
   };
+}
+
+function bindOptimizationControls(form, archivedAnalysis) {
+  if (!form) return;
+  const objective = form.elements.namedItem("optimizationObjective");
+  if (!(objective instanceof HTMLSelectElement)) return;
+  const targetControls = [...form.querySelectorAll("[data-optimization-target]")];
+  const factorControls = [...form.querySelectorAll('input[name="factorKeys"]')];
+  const sync = () => {
+    const active = objective.value !== "";
+    targetControls.forEach((control) => { control.hidden = objective.value !== "target"; });
+    form.querySelectorAll("[data-optimization-factor]").forEach((row) => {
+      const enabled = active && factorControls.some((control) => control.checked && control.value === row.dataset.optimizationFactor);
+      row.hidden = !enabled;
+      row.querySelectorAll("input").forEach((input) => { input.disabled = archivedAnalysis || !enabled; });
+    });
+  };
+  objective.addEventListener("change", sync);
+  factorControls.forEach((control) => control.addEventListener("change", sync));
+  sync();
+}
+
+async function bindMultiOptimizer(workspace, csrfToken) {
+  const card = workspace.querySelector("[data-multi-optimize]");
+  const form = workspace.querySelector("[data-multi-optimize-form]");
+  const goalsHost = workspace.querySelector("[data-multi-optimize-goals]");
+  const status = workspace.querySelector("[data-multi-optimize-status]");
+  const resultHost = workspace.querySelector("[data-multi-optimize-result]");
+  if (!card || !form || !goalsHost || !status || !resultHost) return;
+  try {
+    const response = await fetch(workspace.dataset.multiOptimizeUrl, { headers: { accept: "application/json" } });
+    const payload = await response.json();
+    const candidates = payload.candidates || [];
+    if (candidates.length < 2) return;
+    card.hidden = false;
+    goalsHost.replaceChildren(...candidates.map((candidate) => {
+      const row = document.createElement("fieldset");
+      row.className = "doe-analysis-fieldset";
+      row.innerHTML = `<label class="pure-checkbox"><input type="checkbox" name="multiAnalysis" value="${candidate.analysisId}"> <strong>${escapeHtml(candidate.name)}</strong> · ${escapeHtml(analysisColumnLabels[candidate.responseKey] || candidate.responseKey)}</label><label>Goal <select name="multiObjective:${candidate.analysisId}"><option value="maximize">Maximize</option><option value="minimize">Minimize</option><option value="target">Target</option></select></label><label>Target <input name="multiTarget:${candidate.analysisId}" type="number" step="any"></label><label>Importance (1–5) <input name="multiImportance:${candidate.analysisId}" type="number" min="1" max="5" value="1"></label>`;
+      return row;
+    }));
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const data = new FormData(form);
+      const selected = data.getAll("multiAnalysis").map(Number).filter(Number.isFinite);
+      if (selected.length < 2) { status.textContent = "Select at least two saved analyses."; return; }
+      const goals = selected.map((analysisId) => ({ analysisId, objective: String(data.get(`multiObjective:${analysisId}`)), target: Number(data.get(`multiTarget:${analysisId}`)), importance: Number(data.get(`multiImportance:${analysisId}`) || 1) }));
+      status.textContent = "Optimizing saved models…";
+      const answer = await fetch(workspace.dataset.multiOptimizeUrl, { method: "POST", headers: { accept: "application/json", "content-type": "application/json", "x-csrf-token": csrfToken }, body: JSON.stringify({ goals }) });
+      const body = await answer.json();
+      if (!answer.ok) { status.textContent = body.error || "Optimization failed."; return; }
+      status.textContent = `Evaluated ${formatNumber(body.result.candidatesEvaluated)} settings.`;
+      resultHost.hidden = false;
+      resultHost.replaceChildren(...Object.entries(body.result.factorValues).map(([key, value]) => { const item = document.createElement("div"); item.textContent = `${displayColumn(key, key)}: ${formatNumber(value)}`; return item; }), ...body.result.responses.map((row) => { const item = document.createElement("div"); item.textContent = `${displayColumn(row.responseKey, row.responseKey)}: ${formatNumber(row.predicted)} · desirability ${formatNumber(row.desirability)}`; return item; }));
+    });
+  } catch { status.textContent = "Saved multi-response analyses are unavailable."; }
+}
+
+function escapeHtml(value) { const node = document.createElement("span"); node.textContent = String(value); return node.innerHTML; }
+
+function bindModelTermControls(form, archivedAnalysis) {
+  if (!form) return;
+  const familyControl = form.elements.namedItem("modelFamily");
+  if (!(familyControl instanceof HTMLSelectElement)) return;
+  const factorControls = [...form.querySelectorAll('input[name="factorKeys"]')];
+  const termControls = [...form.querySelectorAll('input[name="modelTerms"]')];
+  const feedback = form.querySelector("[data-model-term-feedback]");
+  if (!termControls.length) return;
+
+  const mainTerm = (factorKey) => `main:${factorKey}`;
+  const selectedFactorKeys = () => new Set(
+    factorControls.filter((control) => control.checked).map((control) => control.value)
+  );
+  const getParts = (control) => {
+    const term = control.value;
+    if (term.startsWith("interaction:")) return term.slice("interaction:".length).split("|");
+    if (term.startsWith("quadratic:")) return [term.slice("quadratic:".length)];
+    if (term.startsWith("main:")) return [term.slice("main:".length)];
+    return [];
+  };
+  const sync = () => {
+    const selectedFactors = selectedFactorKeys();
+    for (const control of termControls) {
+      const label = control.closest("[data-model-term-label]");
+      const families = (control.dataset.modelFamilies || "").split(" ").filter(Boolean);
+      const factorKeys = (control.dataset.modelFactorKeys || "").split("|").filter(Boolean);
+      const supportsFamily = families.includes(familyControl.value);
+      const supportsFactors = factorKeys.every((factorKey) => selectedFactors.has(factorKey));
+      if (label) label.hidden = !supportsFamily;
+      if (!supportsFamily || !supportsFactors) control.checked = false;
+      control.disabled = archivedAnalysis || !supportsFamily || !supportsFactors;
+    }
+    if (feedback) {
+      const termCount = termControls.filter((control) => control.checked).length;
+      feedback.textContent = termCount
+        ? `${termCount} model term${termCount === 1 ? "" : "s"} selected. At least ${termCount + 2} complete measured runs are required to fit it with residual error.`
+        : "Select at least one model term.";
+    }
+  };
+  const enforceHierarchy = (source) => {
+    const parts = getParts(source);
+    if (source.checked && (source.value.startsWith("interaction:") || source.value.startsWith("quadratic:"))) {
+      for (const factorKey of parts) {
+        const main = termControls.find((control) => control.value === mainTerm(factorKey));
+        if (main) main.checked = true;
+      }
+    }
+    if (!source.checked && source.value.startsWith("main:")) {
+      const factorKey = parts[0];
+      for (const control of termControls) {
+        if (control === source) continue;
+        if (getParts(control).includes(factorKey)) control.checked = false;
+      }
+    }
+    sync();
+  };
+
+  for (const control of termControls) {
+    control.addEventListener("change", () => enforceHierarchy(control));
+  }
+  familyControl.addEventListener("change", sync);
+  for (const control of factorControls) control.addEventListener("change", sync);
+  sync();
 }
 
 function renderResult(workspace, result, scroll = true) {
@@ -199,11 +514,14 @@ function renderResult(workspace, result, scroll = true) {
   const metrics = workspace.querySelector("[data-result-metrics]");
   const warnings = workspace.querySelector("[data-result-warnings]");
   if (!panel) return;
+  analysisResponseLabel = displayColumn(result.specification?.responseKey, "Response");
+  analysisUsesCodedFactors = result.specification?.useCodedFactors === true;
   panel.hidden = false;
   if (empty) empty.hidden = true;
   if (content) content.hidden = false;
   if (meta) {
-    meta.textContent = `${result.summary.rowsUsed} rows used · dataset ${result.datasetRevision.slice(0, 12)} · request ${result.requestId}`;
+    const coordinateSystem = analysisUsesCodedFactors ? "coded factor coordinates" : "physical factor values";
+    meta.textContent = `${analysisResponseLabel} · ${modelFamilyLabel(result.specification?.modelFamily)} · ${coordinateSystem} · ${result.summary.rowsUsed} rows used · dataset ${result.datasetRevision.slice(0, 12)}`;
   }
   if (metrics) {
     metrics.replaceChildren(...result.summary.metrics.map((metric) => {
@@ -230,6 +548,7 @@ function renderResult(workspace, result, scroll = true) {
       return line;
     }));
   }
+  renderOptimizer(workspace, result.optimizer);
   fillTable(
     workspace.querySelector("[data-anova-body]"),
     result.anova,
@@ -245,17 +564,45 @@ function renderResult(workspace, result, scroll = true) {
     result.diagnostics,
     ["runId", "fitted", "residual", "standardizedResidual", "leverage", "cooksDistance"]
   );
+  applyTermSelection(workspace);
   renderCharts(workspace, result);
   if (scroll) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderOptimizer(workspace, optimizer) {
+  const card = workspace.querySelector("[data-optimizer-result]");
+  const summary = workspace.querySelector("[data-optimizer-summary]");
+  const values = workspace.querySelector("[data-optimizer-values]");
+  if (!card || !summary || !values) return;
+  if (!optimizer || !Number.isFinite(optimizer.predicted)) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+  const goal = optimizer.objective === "target"
+    ? `Target ${formatNumber(optimizer.target)}`
+    : optimizer.objective === "maximize" ? "Maximum predicted response" : "Minimum predicted response";
+  summary.textContent = `${goal}: ${formatNumber(optimizer.predicted)} ${analysisResponseLabel}. Evaluated ${formatNumber(optimizer.candidatesEvaluated)} settings within the selected bounds; confirm this recommendation with a new run.`;
+  values.replaceChildren(...Object.entries(optimizer.factorValues || {}).map(([key, value]) => {
+    const item = document.createElement("div");
+    const label = document.createElement("span");
+    const setting = document.createElement("strong");
+    label.textContent = displayColumn(key, key);
+    setting.textContent = formatNumber(value);
+    item.append(label, setting);
+    return item;
+  }));
 }
 
 function renderCharts(workspace, result) {
   if (!window.echarts) return;
   const effectHost = workspace.querySelector("[data-effects-chart]");
   const residualHost = workspace.querySelector("[data-residual-chart]");
+  const observedPredictedHost = workspace.querySelector("[data-observed-predicted-chart]");
+  const observedPredictedCard = workspace.querySelector("[data-observed-predicted-card]");
   const effects = (result.coefficients || [])
     .filter((row) => row.term !== "(Intercept)" && typeof row.statistic === "number" && Number.isFinite(row.statistic))
-    .map((row) => ({ term: displayTerm(row.term), value: Math.abs(row.statistic), signed: row.statistic }))
+    .map((row) => ({ rawTerm: row.term, term: displayTerm(row.term), value: Math.abs(row.statistic), signed: row.statistic }))
     .sort((left, right) => left.value - right.value);
   if (effectHost) {
     const chart = chartFor(effectHost);
@@ -265,7 +612,7 @@ function renderCharts(workspace, result) {
       grid: { left: 12, right: 24, top: 12, bottom: 28, containLabel: true },
       tooltip: {
         trigger: "item",
-        formatter: (item) => `${item.name}<br>Effect strength: ${formatNumber(item.value)}`
+        formatter: (item) => `${item.name}<br>Effect strength: ${formatNumber(item.value)}<br>Select to link the statistical rows.`
       },
       xAxis: { type: "value", name: "Effect strength", nameLocation: "middle", nameGap: 22, axisLabel: numericAxisLabels() },
       yAxis: { type: "category", data: effects.map((effect) => effect.term), axisLabel: { width: 150, overflow: "truncate" } },
@@ -274,11 +621,17 @@ function renderCharts(workspace, result) {
         data: effects.map((effect) => ({
           name: effect.term,
           value: effect.value,
+          analysisTerm: effect.rawTerm,
           itemStyle: { color: effect.signed >= 0 ? "#52745a" : "#a76d55" }
         })),
         barMaxWidth: 22
       }]
     }, true);
+    chart.off("click");
+    chart.on("click", (event) => {
+      const term = typeof event.data?.analysisTerm === "string" ? event.data.analysisTerm : null;
+      if (term) selectTerm(workspace, term);
+    });
   }
   if (residualHost) {
     const chart = chartFor(residualHost);
@@ -296,8 +649,8 @@ function renderCharts(workspace, result) {
         trigger: "item",
         formatter: (item) => `Run ${item.value[2]}<br>Predicted: ${formatNumber(item.value[0])}<br>Error: ${formatNumber(item.value[1])}<br>Standardized error: ${formatNumber(item.value[3])}`
       },
-      xAxis: { type: "value", name: "Predicted response", nameLocation: "middle", nameGap: 26, axisLabel: numericAxisLabels() },
-      yAxis: { type: "value", name: "Prediction error", axisLabel: numericAxisLabels() },
+      xAxis: { type: "value", name: responseAxisLabel("Predicted"), nameLocation: "middle", nameGap: 26, axisLabel: numericAxisLabels() },
+      yAxis: { type: "value", name: responseAxisLabel("Prediction error"), axisLabel: numericAxisLabels() },
       series: [{
         type: "scatter",
         data: points,
@@ -313,6 +666,44 @@ function renderCharts(workspace, result) {
       const runId = runIdFromChartEvent(event);
       if (runId !== null) selectRun(workspace, runId);
     });
+  }
+  if (observedPredictedHost && observedPredictedCard) {
+    const points = (result.diagnostics || [])
+      .filter((row) => Number.isFinite(row.fitted) && Number.isFinite(row.residual))
+      .map((row) => ({
+        value: [row.fitted, row.fitted + row.residual, row.runId],
+        runId: row.runId
+      }));
+    observedPredictedCard.hidden = points.length === 0;
+    if (points.length) {
+      const range = axisRange(points.flatMap((point) => [point.value[0], point.value[1]]));
+      const chart = chartFor(observedPredictedHost);
+      chart.setOption({
+        animationDuration: 250,
+        aria: { enabled: true },
+        grid: { left: 12, right: 18, top: 12, bottom: 38, containLabel: true },
+        tooltip: {
+          trigger: "item",
+          formatter: (item) => `Run ${item.value[2]}<br>Predicted: ${formatNumber(item.value[0])}<br>Observed: ${formatNumber(item.value[1])}`
+        },
+        xAxis: { type: "value", name: responseAxisLabel("Predicted"), nameLocation: "middle", nameGap: 26, axisLabel: numericAxisLabels(), ...range },
+        yAxis: { type: "value", name: responseAxisLabel("Observed"), axisLabel: numericAxisLabels(), ...range },
+        series: [{
+          type: "scatter",
+          data: points,
+          selectedMode: "single",
+          symbolSize: 9,
+          itemStyle: { color: "#52745a" },
+          select: { itemStyle: { color: "#f2ad3b", borderColor: "#262622", borderWidth: 2 } },
+          markLine: { silent: true, symbol: "none", lineStyle: { type: "dashed", color: "#999" }, data: [[{ coord: [range.min, range.min] }, { coord: [range.max, range.max] }]] }
+        }]
+      }, true);
+      chart.off("click");
+      chart.on("click", (event) => {
+        const runId = runIdFromChartEvent(event);
+        if (runId !== null) selectRun(workspace, runId);
+      });
+    }
   }
   renderModelPlotCharts(workspace, result.plots || {});
   setupChartExports(workspace, result);
@@ -387,7 +778,7 @@ function renderFactorMeans(workspace, factor) {
       }
     },
     xAxis: { type: "value", name: factorLabel, nameLocation: "middle", nameGap: 28, axisLabel: numericAxisLabels(), ...axisRange(points.map((point) => point.value)) },
-    yAxis: { type: "value", name: "Mean response", axisLabel: numericAxisLabels(), ...responseRange },
+    yAxis: { type: "value", name: responseAxisLabel("Mean"), axisLabel: numericAxisLabels(), ...responseRange },
     series: [
       {
         name: "Confidence interval",
@@ -442,8 +833,8 @@ function renderMainEffects(workspace, effects) {
     legend: { type: "scroll", top: 0 },
     grid: { left: 14, right: 18, top: 42, bottom: 38, containLabel: true },
     tooltip: { trigger: "axis" },
-    xAxis: { type: "value", name: "Coded factor level", nameLocation: "middle", nameGap: 26, axisLabel: numericAxisLabels() },
-    yAxis: { type: "value", name: "Predicted response", axisLabel: numericAxisLabels(), ...axisRange(predicted) },
+    xAxis: { type: "value", name: analysisUsesCodedFactors ? "Coded factor level" : "Factor value", nameLocation: "middle", nameGap: 26, axisLabel: numericAxisLabels() },
+    yAxis: { type: "value", name: responseAxisLabel("Predicted"), axisLabel: numericAxisLabels(), ...axisRange(predicted) },
     series: effects.map((effect) => ({
       name: analysisColumnLabels[effect.factorKey] || effect.factorKey,
       type: "line",
@@ -492,13 +883,13 @@ function renderInteraction(workspace, interaction) {
     tooltip: { trigger: "axis" },
     xAxis: {
       type: "value",
-      name: xLabel,
+      name: factorAxisLabel(interaction.factorXKey),
       nameLocation: "middle",
       nameGap: 26,
       axisLabel: numericAxisLabels(),
       ...axisRange(interaction.series.flatMap((series) => (series.points || []).map((point) => point.factorXValue)))
     },
-    yAxis: { type: "value", name: "Predicted response", axisLabel: numericAxisLabels(), ...axisRange(predicted) },
+    yAxis: { type: "value", name: responseAxisLabel("Predicted"), axisLabel: numericAxisLabels(), ...axisRange(predicted) },
     series: interaction.series.map((series) => ({
       name: `${yLabel} = ${formatNumber(series.factorYValue)}`,
       type: "line",
@@ -572,7 +963,7 @@ function renderRunOrder(workspace, points) {
     grid: { left: 14, right: 18, top: 14, bottom: 38, containLabel: true },
     tooltip: { trigger: "item", formatter: (item) => `Run ${item.value[2]}<br>Order: ${item.value[0]}<br>Error: ${formatNumber(item.value[1])}` },
     xAxis: { type: "value", name: "Run order", nameLocation: "middle", nameGap: 26, minInterval: 1, axisLabel: numericAxisLabels() },
-    yAxis: { type: "value", name: "Prediction error", axisLabel: numericAxisLabels() },
+    yAxis: { type: "value", name: responseAxisLabel("Prediction error"), axisLabel: numericAxisLabels() },
     series: [{
       type: "line",
       data: usable.map((point) => ({
@@ -624,15 +1015,15 @@ function renderSurface(workspace, surface, viewMode = "contour") {
     return;
   }
   card.hidden = false;
-  const xLabel = analysisColumnLabels[surface.factorXKey] || surface.factorXKey;
-  const yLabel = analysisColumnLabels[surface.factorYKey] || surface.factorYKey;
+  const xLabel = displayColumn(surface.factorXKey, surface.factorXKey);
+  const yLabel = displayColumn(surface.factorYKey, surface.factorYKey);
   const title = card.querySelector("[data-surface-title]");
-  if (title) title.textContent = `Predicted response: ${xLabel} × ${yLabel}`;
+  if (title) title.textContent = `Predicted ${analysisResponseLabel}: ${xLabel} × ${yLabel}`;
   const held = card.querySelector("[data-surface-held]");
   const heldEntries = Object.entries(surface.heldValues || {});
   if (held) {
     held.textContent = heldEntries.length
-      ? `Held constant: ${heldEntries.map(([key, value]) => `${analysisColumnLabels[key] || key} = ${formatNumber(value)}`).join(", ")}.`
+      ? `Held constant: ${heldEntries.map(([key, value]) => `${displayColumn(key, key)} = ${formatNumber(value)}`).join(", ")}.`
       : "No other factors are held constant.";
   }
   const predicted = usable.map((point) => point.predicted);
@@ -669,11 +1060,11 @@ function renderSurface(workspace, surface, viewMode = "contour") {
     grid: { left: 14, right: 90, top: 16, bottom: 42, containLabel: true },
     tooltip: {
       formatter: (item) => item.seriesName === "Measured runs"
-        ? `Run ${item.value[4]}<br>${xLabel}: ${formatNumber(item.value[0])}<br>${yLabel}: ${formatNumber(item.value[1])}<br>Measured response: ${formatNumber(item.value[2])}<br>Predicted response: ${formatNumber(item.value[3])}`
-        : `${xLabel}: ${formatNumber(item.value[0])}<br>${yLabel}: ${formatNumber(item.value[1])}<br>Predicted response: ${formatNumber(item.value[2])}`
+        ? `Run ${item.value[4]}<br>${xLabel}: ${formatNumber(item.value[0])}<br>${yLabel}: ${formatNumber(item.value[1])}<br>${responseAxisLabel("Measured")}: ${formatNumber(item.value[2])}<br>${responseAxisLabel("Predicted")}: ${formatNumber(item.value[3])}`
+        : `${xLabel}: ${formatNumber(item.value[0])}<br>${yLabel}: ${formatNumber(item.value[1])}<br>${responseAxisLabel("Predicted")}: ${formatNumber(item.value[2])}`
     },
-    xAxis: { type: "value", name: xLabel, nameLocation: "middle", nameGap: 28, axisLabel: numericAxisLabels(), ...xRange },
-    yAxis: { type: "value", name: yLabel, axisLabel: numericAxisLabels(), ...yRange },
+    xAxis: { type: "value", name: factorAxisLabel(surface.factorXKey), nameLocation: "middle", nameGap: 28, axisLabel: numericAxisLabels(), ...xRange },
+    yAxis: { type: "value", name: factorAxisLabel(surface.factorYKey), axisLabel: numericAxisLabels(), ...yRange },
     series: [
       { name: "Predicted surface", type: "heatmap", data: usable.map((point) => [point.x, point.y, point.predicted]), progressive: 1000 },
       {
@@ -694,12 +1085,12 @@ function renderSurface(workspace, surface, viewMode = "contour") {
     ...common,
     tooltip: {
       formatter: (item) => item.seriesName === "Measured runs"
-        ? `Run ${item.value[4]}<br>${xLabel}: ${formatNumber(item.value[0])}<br>${yLabel}: ${formatNumber(item.value[1])}<br>Measured response: ${formatNumber(item.value[2])}<br>Predicted response: ${formatNumber(item.value[3])}`
-        : `${xLabel}: ${formatNumber(item.value[0])}<br>${yLabel}: ${formatNumber(item.value[1])}<br>Predicted response: ${formatNumber(item.value[2])}`
+        ? `Run ${item.value[4]}<br>${xLabel}: ${formatNumber(item.value[0])}<br>${yLabel}: ${formatNumber(item.value[1])}<br>${responseAxisLabel("Measured")}: ${formatNumber(item.value[2])}<br>${responseAxisLabel("Predicted")}: ${formatNumber(item.value[3])}`
+        : `${xLabel}: ${formatNumber(item.value[0])}<br>${yLabel}: ${formatNumber(item.value[1])}<br>${responseAxisLabel("Predicted")}: ${formatNumber(item.value[2])}`
     },
-    xAxis3D: { type: "value", name: xLabel, axisLabel: numericAxisLabels(), ...xRange },
-    yAxis3D: { type: "value", name: yLabel, axisLabel: numericAxisLabels(), ...yRange },
-    zAxis3D: { type: "value", name: "Predicted response", axisLabel: numericAxisLabels(), ...zRange },
+    xAxis3D: { type: "value", name: factorAxisLabel(surface.factorXKey), axisLabel: numericAxisLabels(), ...xRange },
+    yAxis3D: { type: "value", name: factorAxisLabel(surface.factorYKey), axisLabel: numericAxisLabels(), ...yRange },
+    zAxis3D: { type: "value", name: responseAxisLabel("Predicted"), axisLabel: numericAxisLabels(), ...zRange },
     grid3D: {
       boxWidth: 110,
       boxDepth: 90,
@@ -982,19 +1373,26 @@ function bindTableCopy(workspace) {
     button.addEventListener("click", async () => {
       const table = workspace.querySelector(button.dataset.copyTable || "");
       if (!table) return;
+      const icon = button.querySelector(".material-symbols-rounded");
       const label = button.dataset.copyLabel || button.textContent.trim() || "Copy TSV";
+      const originalAria = button.dataset.copyAria ?? button.getAttribute("aria-label") ?? "";
       button.dataset.copyLabel = label;
+      button.dataset.copyAria = originalAria;
       try {
         await copyTextAsTsv(tableToTsv(table));
-        button.textContent = "Copied";
+        if (button.dataset.copyIcon && icon) icon.textContent = "check";
+        else button.textContent = "Copied";
         button.setAttribute("aria-label", "Table copied as TSV");
       } catch {
-        button.textContent = "Copy failed";
+        if (button.dataset.copyIcon && icon) icon.textContent = "error";
+        else button.textContent = "Copy failed";
         button.setAttribute("aria-label", "Table could not be copied");
       }
       window.setTimeout(() => {
-        button.textContent = label;
-        button.removeAttribute("aria-label");
+        if (button.dataset.copyIcon && icon) icon.textContent = "content_copy";
+        else button.textContent = label;
+        if (originalAria) button.setAttribute("aria-label", originalAria);
+        else button.removeAttribute("aria-label");
       }, 1800);
     });
   });
@@ -1074,6 +1472,10 @@ function fillTable(body, rows, keys) {
   }
   body.replaceChildren(...source.map((sourceRow) => {
     const row = document.createElement("tr");
+    if (typeof sourceRow.term === "string") {
+      row.dataset.analysisTerm = sourceRow.term;
+      row.classList.add("doe-analysis-term-row");
+    }
     for (const key of keys) {
       const cell = document.createElement("td");
       cell.textContent = key === "term"
@@ -1085,6 +1487,51 @@ function fillTable(body, rows, keys) {
     }
     return row;
   }));
+}
+
+function bindTermSelection(workspace) {
+  workspace.querySelector("[data-clear-selected-term]")?.addEventListener("click", () => selectTerm(workspace, null));
+}
+
+function selectTerm(workspace, term) {
+  selectedAnalysisTerm = term;
+  applyTermSelection(workspace);
+}
+
+function applyTermSelection(workspace) {
+  const selection = workspace.querySelector("[data-term-selection]");
+  const label = workspace.querySelector("[data-selected-term-label]");
+  const selectedLabel = selectedAnalysisTerm ? displayTerm(selectedAnalysisTerm) : "";
+  workspace.querySelectorAll("[data-analysis-term]").forEach((row) => {
+    row.classList.toggle("is-selected-term", Boolean(selectedAnalysisTerm) && row.dataset.analysisTerm === selectedAnalysisTerm);
+  });
+  if (selection) selection.hidden = !selectedAnalysisTerm;
+  if (label && selectedAnalysisTerm) {
+    label.textContent = `${selectedLabel} selected. Matching ANOVA and coefficient rows are highlighted below.`;
+  }
+}
+
+function displayColumn(key, fallback) {
+  const label = analysisColumnLabels[key] || fallback;
+  const unit = analysisColumnUnits[key];
+  return unit ? `${label} (${unit})` : label;
+}
+
+function responseAxisLabel(prefix) {
+  return `${prefix} ${analysisResponseLabel}`;
+}
+
+function factorAxisLabel(key) {
+  const label = displayColumn(key, key);
+  return analysisUsesCodedFactors ? `${label} (coded)` : label;
+}
+
+function modelFamilyLabel(value) {
+  return {
+    factorial: "factorial model",
+    response_surface: "response-surface model",
+    regression: "regression model"
+  }[value] || "model";
 }
 
 function displayTerm(value) {

@@ -4,15 +4,24 @@ import type { DoeAnalysisDataset } from "./types.js";
 export const DOE_ANALYTICS_CONTRACT_VERSION = "1.0" as const;
 
 export type DoeAnalysisModelFamily = "factorial" | "response_surface" | "regression";
+export type DoeAnalysisModelTerm = `main:${string}` | `interaction:${string}|${string}` | `quadratic:${string}`;
+export type DoeAnalysisOptimizationObjective = "minimize" | "maximize" | "target";
+export type DoeAnalysisOptimization = {
+  objective: DoeAnalysisOptimizationObjective;
+  target?: number;
+  factorBounds?: Record<string, { min: number; max: number }>;
+};
 
 export type DoeAnalysisSpecification = {
   responseKey: string;
   factorKeys: string[];
   modelFamily: DoeAnalysisModelFamily;
+  modelTerms: DoeAnalysisModelTerm[];
   useCodedFactors: boolean;
   includeExcluded: boolean;
   includeIncomplete: boolean;
   confidenceLevel: number;
+  optimization?: DoeAnalysisOptimization;
 };
 
 export type DoeAnalyticsRequest = {
@@ -137,6 +146,15 @@ export type DoeAnalyticsSuccess = {
   coefficients: DoeAnalyticsCoefficient[];
   anova: DoeAnalyticsAnovaRow[];
   diagnostics: DoeAnalyticsDiagnosticRow[];
+  optimizer?: null | {
+    objective: DoeAnalysisOptimizationObjective;
+    target: number | null;
+    predicted: number | null;
+    factorValues: Record<string, number>;
+    modelFactorValues: Record<string, number>;
+    factorBounds: Record<string, { min: number; max: number }>;
+    candidatesEvaluated: number;
+  };
   plots?: DoeAnalyticsPlots;
   warnings: DoeAnalyticsWarning[];
 };
@@ -200,6 +218,7 @@ export function defaultAnalysisSpecification(dataset: DoeAnalysisDataset): DoeAn
     responseKey: response.key,
     factorKeys: factors.map((column) => column.key),
     modelFamily,
+    modelTerms: defaultModelTerms(modelFamily, factors.map((column) => column.key)),
     useCodedFactors: modelFamily !== "regression",
     includeExcluded: false,
     includeIncomplete: false,
@@ -225,6 +244,14 @@ export function normalizeAnalysisSpecification(
       ? input.factorKeys.filter((key): key is string => typeof key === "string")
       : defaults.factorKeys,
     modelFamily: input?.modelFamily ?? defaults.modelFamily,
+    modelTerms: Array.isArray(input?.modelTerms)
+      ? input.modelTerms.filter((term): term is DoeAnalysisModelTerm => typeof term === "string")
+      : defaultModelTerms(
+          input?.modelFamily ?? defaults.modelFamily,
+          Array.isArray(input?.factorKeys)
+            ? input.factorKeys.filter((key): key is string => typeof key === "string")
+            : defaults.factorKeys
+        ),
     useCodedFactors: typeof input?.useCodedFactors === "boolean"
       ? input.useCodedFactors
       : defaults.useCodedFactors,
@@ -232,7 +259,8 @@ export function normalizeAnalysisSpecification(
     includeIncomplete: input?.includeIncomplete === true,
     confidenceLevel: typeof input?.confidenceLevel === "number"
       ? input.confidenceLevel
-      : defaults.confidenceLevel
+      : defaults.confidenceLevel,
+    optimization: normalizeOptimization(input?.optimization)
   };
   validateAnalysisSpecification(dataset, specification);
   return specification;
@@ -273,10 +301,78 @@ export function validateAnalysisSpecification(
   if (!(specification.confidenceLevel > 0.5 && specification.confidenceLevel < 1)) {
     issues.push("Confidence level must be greater than 0.5 and less than 1.");
   }
+  if (specification.optimization) {
+    if (specification.optimization.objective === "target" && !Number.isFinite(specification.optimization.target)) {
+      issues.push("A numeric target is required for target optimization.");
+    }
+    for (const [key, bounds] of Object.entries(specification.optimization.factorBounds ?? {})) {
+      if (!specification.factorKeys.includes(key)) issues.push(`Optimization bounds include unknown factor ${key}.`);
+      if (!Number.isFinite(bounds.min) || !Number.isFinite(bounds.max) || bounds.min >= bounds.max) {
+        issues.push(`Optimization bounds for ${key} must have min below max.`);
+      }
+    }
+  }
   if (specification.modelFamily === "response_surface" && specification.factorKeys.length < 2) {
     issues.push("A response-surface model requires at least two factors.");
   }
+  const allowedTerms = new Set(defaultModelTerms(specification.modelFamily, specification.factorKeys));
+  if (!specification.modelTerms.length) {
+    issues.push("Select at least one model term.");
+  }
+  if (new Set(specification.modelTerms).size !== specification.modelTerms.length) {
+    issues.push("Model terms must be unique.");
+  }
+  for (const term of specification.modelTerms) {
+    if (!allowedTerms.has(term)) issues.push(`Unsupported model term: ${term}.`);
+    if (term.startsWith("interaction:")) {
+      const [left, right] = term.slice("interaction:".length).split("|");
+      if (!specification.modelTerms.includes(`main:${left}`) || !specification.modelTerms.includes(`main:${right}`)) {
+        issues.push(`Interaction ${term} requires both corresponding main effects.`);
+      }
+    }
+    if (term.startsWith("quadratic:")) {
+      const factorKey = term.slice("quadratic:".length);
+      if (!specification.modelTerms.includes(`main:${factorKey}`)) {
+        issues.push(`Quadratic term ${term} requires its main effect.`);
+      }
+    }
+  }
   if (issues.length) throw new DoeAnalyticsValidationError(issues);
+}
+
+export function defaultModelTerms(
+  modelFamily: DoeAnalysisModelFamily,
+  factorKeys: string[]
+): DoeAnalysisModelTerm[] {
+  const mainEffects = factorKeys.map((key) => `main:${key}` as DoeAnalysisModelTerm);
+  if (modelFamily === "regression") return mainEffects;
+  const interactions = factorKeys.flatMap((left, index) => factorKeys.slice(index + 1).map(
+    (right) => `interaction:${left}|${right}` as DoeAnalysisModelTerm
+  ));
+  if (modelFamily === "factorial") return [...mainEffects, ...interactions];
+  return [
+    ...mainEffects,
+    ...interactions,
+    ...factorKeys.map((key) => `quadratic:${key}` as DoeAnalysisModelTerm)
+  ];
+}
+
+function normalizeOptimization(value: unknown): DoeAnalysisOptimization | undefined {
+  if (!isRecord(value)) return undefined;
+  const objective = value.objective;
+  if (objective !== "minimize" && objective !== "maximize" && objective !== "target") return undefined;
+  const factorBounds: Record<string, { min: number; max: number }> = {};
+  if (isRecord(value.factorBounds)) {
+    for (const [key, bounds] of Object.entries(value.factorBounds)) {
+      if (!isRecord(bounds) || typeof bounds.min !== "number" || typeof bounds.max !== "number") continue;
+      factorBounds[key] = { min: bounds.min, max: bounds.max };
+    }
+  }
+  return {
+    objective,
+    ...(typeof value.target === "number" ? { target: value.target } : {}),
+    ...(Object.keys(factorBounds).length ? { factorBounds } : {})
+  };
 }
 
 export function createAnalyticsRequest(

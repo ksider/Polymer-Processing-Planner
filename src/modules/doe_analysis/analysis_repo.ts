@@ -4,6 +4,7 @@ import type {
   DoeAnalyticsFailure,
   DoeAnalyticsSuccess
 } from "./analytics_contract.js";
+import type { DoeAnalysisDataset } from "./types.js";
 
 export type DoeAnalysisStoredState = "draft" | "calculated" | "stale" | "failed" | "archived";
 
@@ -30,10 +31,31 @@ export type DoeAnalysisRevisionRecord = {
   engineName: string | null;
   engineVersion: string | null;
   specification: DoeAnalysisSpecification;
+  dataset: DoeAnalysisDataset | null;
   result: DoeAnalyticsSuccess | null;
   error: DoeAnalyticsFailure["error"] | null;
   calculatedByUserId: number | null;
   calculatedAt: string;
+};
+
+export type DoeAnalysisEventAction =
+  | "CREATED"
+  | "RENAMED"
+  | "CALCULATION_QUEUED"
+  | "CALCULATED"
+  | "CALCULATION_FAILED"
+  | "CALCULATION_CANCELLED"
+  | "ARCHIVED"
+  | "RESTORED";
+
+export type DoeAnalysisEventRecord = {
+  id: number;
+  analysisId: number;
+  action: DoeAnalysisEventAction;
+  details: Record<string, unknown>;
+  actorUserId: number | null;
+  actorName: string | null;
+  createdAt: string;
 };
 
 type AnalysisRow = {
@@ -59,10 +81,21 @@ type RevisionRow = {
   engine_name: string | null;
   engine_version: string | null;
   specification_json: string;
+  dataset_json: string | null;
   result_json: string | null;
   error_json: string | null;
   calculated_by_user_id: number | null;
   calculated_at: string;
+};
+
+type EventRow = {
+  id: number;
+  analysis_id: number;
+  action: DoeAnalysisEventAction;
+  details_json: string | null;
+  actor_user_id: number | null;
+  actor_name: string | null;
+  created_at: string;
 };
 
 export function listDoeAnalyses(db: Db, doeId: number): DoeAnalysisRecord[] {
@@ -126,6 +159,78 @@ export function updateDoeAnalysisSpecification(
   ).run(JSON.stringify(specification), new Date().toISOString(), analysisId);
 }
 
+export function renameDoeAnalysis(db: Db, analysisId: number, name: string): void {
+  db.prepare(
+    `UPDATE doe_analyses
+     SET name = ?, updated_at = ?
+     WHERE id = ?`
+  ).run(name.trim(), new Date().toISOString(), analysisId);
+}
+
+export function archiveDoeAnalysis(db: Db, analysisId: number): void {
+  const timestamp = new Date().toISOString();
+  db.prepare(
+    `UPDATE doe_analyses
+     SET archived_at = COALESCE(archived_at, ?), updated_at = ?
+     WHERE id = ?`
+  ).run(timestamp, timestamp, analysisId);
+}
+
+export function restoreDoeAnalysis(db: Db, analysisId: number): void {
+  db.prepare(
+    `UPDATE doe_analyses
+     SET archived_at = NULL, updated_at = ?
+     WHERE id = ?`
+  ).run(new Date().toISOString(), analysisId);
+}
+
+export function recordDoeAnalysisEvent(
+  db: Db,
+  input: {
+    analysisId: number;
+    action: DoeAnalysisEventAction;
+    actorUserId?: number | null;
+    details?: Record<string, unknown>;
+  }
+): void {
+  db.prepare(
+    `INSERT INTO doe_analysis_events
+     (analysis_id, action, details_json, actor_user_id, created_at)
+     VALUES (?, ?, ?, ?, ?)`
+  ).run(
+    input.analysisId,
+    input.action,
+    input.details ? JSON.stringify(input.details) : null,
+    input.actorUserId ?? null,
+    new Date().toISOString()
+  );
+}
+
+export function listDoeAnalysisEvents(
+  db: Db,
+  analysisId: number,
+  limit = 20
+): DoeAnalysisEventRecord[] {
+  const safeLimit = Math.max(1, Math.min(100, Math.trunc(limit)));
+  const rows = db.prepare(
+    `SELECT e.*, u.name AS actor_name
+     FROM doe_analysis_events e
+     LEFT JOIN users u ON u.id = e.actor_user_id
+     WHERE e.analysis_id = ?
+     ORDER BY e.id DESC
+     LIMIT ?`
+  ).all(analysisId, safeLimit) as EventRow[];
+  return rows.map((row) => ({
+    id: row.id,
+    analysisId: row.analysis_id,
+    action: row.action,
+    details: row.details_json ? JSON.parse(row.details_json) as Record<string, unknown> : {},
+    actorUserId: row.actor_user_id,
+    actorName: row.actor_name,
+    createdAt: row.created_at
+  }));
+}
+
 export function listDoeAnalysisRevisions(
   db: Db,
   analysisId: number,
@@ -141,6 +246,14 @@ export function listDoeAnalysisRevisions(
     )
     .all(analysisId, safeLimit) as RevisionRow[];
   return rows.map(mapRevision);
+}
+
+export function getDoeAnalysisRevision(
+  db: Db,
+  analysisId: number,
+  revisionId: number
+): DoeAnalysisRevisionRecord | null {
+  return getRevision(db, analysisId, revisionId);
 }
 
 export function getLatestSuccessfulDoeAnalysisRevision(
@@ -161,7 +274,8 @@ export function saveSuccessfulDoeAnalysisRevision(
   db: Db,
   analysis: DoeAnalysisRecord,
   result: DoeAnalyticsSuccess,
-  calculatedByUserId?: number | null
+  calculatedByUserId?: number | null,
+  dataset?: DoeAnalysisDataset | null
 ): DoeAnalysisRevisionRecord {
   const transaction = db.transaction(() => {
     const timestamp = new Date().toISOString();
@@ -169,9 +283,9 @@ export function saveSuccessfulDoeAnalysisRevision(
       .prepare(
         `INSERT INTO doe_analysis_revisions
          (analysis_id, status, dataset_revision, contract_version, request_id,
-          engine_name, engine_version, specification_json, result_json, error_json,
+          engine_name, engine_version, specification_json, dataset_json, result_json, error_json,
           calculated_by_user_id, calculated_at)
-         VALUES (?, 'SUCCEEDED', ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`
+         VALUES (?, 'SUCCEEDED', ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`
       )
       .run(
         analysis.id,
@@ -181,6 +295,7 @@ export function saveSuccessfulDoeAnalysisRevision(
         result.engine.name,
         result.engine.version,
         JSON.stringify(result.specification),
+        dataset ? boundedJson(dataset) : null,
         boundedJson(result),
         calculatedByUserId ?? null,
         timestamp
@@ -283,6 +398,7 @@ function mapRevision(row: RevisionRow): DoeAnalysisRevisionRecord {
     engineName: row.engine_name,
     engineVersion: row.engine_version,
     specification: JSON.parse(row.specification_json) as DoeAnalysisSpecification,
+    dataset: row.dataset_json ? JSON.parse(row.dataset_json) as DoeAnalysisDataset : null,
     result: row.result_json ? JSON.parse(row.result_json) as DoeAnalyticsSuccess : null,
     error: row.error_json ? JSON.parse(row.error_json) as DoeAnalyticsFailure["error"] : null,
     calculatedByUserId: row.calculated_by_user_id,
@@ -290,7 +406,7 @@ function mapRevision(row: RevisionRow): DoeAnalysisRevisionRecord {
   };
 }
 
-function boundedJson(result: DoeAnalyticsSuccess): string {
+function boundedJson(result: unknown): string {
   const json = JSON.stringify(result);
   if (Buffer.byteLength(json, "utf8") > 5 * 1024 * 1024) {
     throw new Error("DOE analysis result exceeds the 5 MB persistence limit");

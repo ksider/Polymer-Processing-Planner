@@ -18,6 +18,7 @@ import {
 } from "./analysis_service.js";
 import { mean, sd } from "../domain/stats.js";
 import { findUserById } from "../repos/users_repo.js";
+import { getLatestSuccessfulDoeAnalysisRevision, listDoeAnalyses } from "../modules/doe_analysis/analysis_repo.js";
 
 type ReportOptions = {
   includeQualification: boolean;
@@ -92,7 +93,7 @@ type ReportWorkspaceSourceRow = { label: string; value: string };
 
 type ReportWorkspaceSource = {
   id: string;
-  kind: "value" | "recipe" | "branch" | "results" | "run" | "chart" | "doe-analysis" | "doe-runs";
+  kind: "value" | "recipe" | "branch" | "results" | "run" | "chart" | "doe-analysis" | "doe-analysis-v2" | "doe-runs";
   label: string;
   value?: string | null;
   description?: string | null;
@@ -430,15 +431,24 @@ export function buildReportWorkspaceSources(db: Db, report: ReportData): ReportW
   // its right-hand source rail slow to render.
   const doeItems: ReportWorkspaceSource[] = listDoeStudies(db, report.experiment.id).map((study) => {
     const runCount = listRuns(db, study.id).length;
+    const savedAnalysisCount = listDoeAnalyses(db, study.id)
+      .filter((analysis) => Boolean(getLatestSuccessfulDoeAnalysisRevision(db, analysis))).length;
     return {
       id: `doe-study-${study.id}`,
       kind: "branch",
       label: study.name,
       children: [
+        ...(savedAnalysisCount ? [{
+          id: `doe-study-${study.id}-analysis-v2`,
+          kind: "doe-analysis-v2" as const,
+          label: `Saved analyses (${savedAnalysisCount})`,
+          studyId: study.id,
+          runCount
+        }] : []),
         {
           id: `doe-study-${study.id}-analysis`,
           kind: "doe-analysis",
-          label: "Analysis",
+          label: "Legacy analysis (comparison)",
           studyId: study.id,
           runCount
         },

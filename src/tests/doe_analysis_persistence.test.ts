@@ -56,10 +56,11 @@ test("saved DOE analysis keeps successful revisions and becomes stale with sourc
     assert.equal(resolveDoeAnalysisState(db, analysis, dataset.datasetRevision), "draft");
 
     const result = await new MockDoeAnalyticsClient().analyze(request);
-    const successful = saveSuccessfulDoeAnalysisRevision(db, analysis, result);
+    const successful = saveSuccessfulDoeAnalysisRevision(db, analysis, result, null, dataset);
     const afterSuccess = getDoeAnalysis(db, doeId, analysis.id);
     assert.ok(afterSuccess);
     assert.equal(afterSuccess.latestSuccessfulRevisionId, successful.id);
+    assert.equal(successful.dataset?.datasetRevision, dataset.datasetRevision);
     assert.equal(resolveDoeAnalysisState(db, afterSuccess, dataset.datasetRevision), "calculated");
 
     const factorValue = db.prepare(

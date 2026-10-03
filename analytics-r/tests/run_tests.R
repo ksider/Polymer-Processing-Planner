@@ -102,6 +102,32 @@ assert_close(factorial_estimates[["(Intercept)"]], 10, label = "factorial interc
 assert_close(factorial_estimates[["factor:1"]], 2, label = "factorial first effect")
 assert_close(factorial_estimates[["factor:1:factor:2"]], 4, label = "factorial interaction")
 
+partial_factorial_request <- make_request(
+  make_dataset(factorial_points, factorial_response, "FFA"),
+  "factorial"
+)
+partial_factorial_request$specification$modelTerms <- c(
+  "main:factor:1",
+  "main:factor:2",
+  "interaction:factor:1|factor:2"
+)
+partial_factorial_result <- analyze_request(partial_factorial_request)
+partial_factorial_terms <- vapply(partial_factorial_result$coefficients, function(row) row$term, character(1))
+stopifnot(identical(
+  partial_factorial_terms,
+  c("(Intercept)", "factor:1", "factor:2", "factor:1:factor:2")
+))
+partial_factorial_error <- tryCatch(
+  {
+    partial_factorial_request$specification$modelTerms <- c("main:factor:1", "interaction:factor:1|factor:2")
+    analyze_request(partial_factorial_request)
+    NULL
+  },
+  doe_analysis_error = function(error) error
+)
+stopifnot(inherits(partial_factorial_error, "doe_analysis_error"))
+stopifnot(identical(partial_factorial_error$code, "INVALID_ANALYSIS_REQUEST"))
+
 bbd_points <- rbind(
   c(-1, -1, 0), c(1, -1, 0), c(-1, 1, 0), c(1, 1, 0),
   c(-1, 0, -1), c(1, 0, -1), c(-1, 0, 1), c(1, 0, 1),
@@ -129,6 +155,23 @@ bbd_estimates <- setNames(
 assert_close(bbd_estimates[["(Intercept)"]], 50, tolerance = 1e-7, label = "BBD intercept")
 assert_close(bbd_estimates[["I(factor:1^2)"]], -2, tolerance = 1e-7, label = "BBD quadratic")
 assert_close(bbd_estimates[["factor:1:factor:2"]], 1.5, tolerance = 1e-7, label = "BBD interaction")
+
+optimizer_request <- make_request(make_dataset(bbd_points, bbd_response, "BBD"), "response_surface")
+optimizer_request$specification$optimization <- list(
+  objective = "target",
+  target = 50,
+  factorBounds = list(
+    "factor:1" = list(min = -0.5, max = 0.5),
+    "factor:2" = list(min = -0.5, max = 0.5),
+    "factor:3" = list(min = -0.5, max = 0.5)
+  )
+)
+optimizer_result <- analyze_request(optimizer_request)$optimizer
+stopifnot(identical(optimizer_result$objective, "target"))
+stopifnot(optimizer_result$candidatesEvaluated > 0)
+stopifnot(abs(optimizer_result$factorValues[["factor:1"]]) <= 0.5 + 1e-8)
+stopifnot(abs(optimizer_result$factorValues[["factor:2"]]) <= 0.5 + 1e-8)
+stopifnot(abs(optimizer_result$factorValues[["factor:3"]]) <= 0.5 + 1e-8)
 
 insufficient_request <- make_request(
   make_dataset(bbd_points[1:5, , drop = FALSE], bbd_response[1:5], "BBD"),
