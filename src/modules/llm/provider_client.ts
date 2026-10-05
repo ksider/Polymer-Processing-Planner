@@ -81,8 +81,23 @@ export async function requestDoeInterpretation(
       throw new LlmProviderError(message, "RESPONSE");
     }
     const content = contentFromProvider(profile, body);
-    const parsed = parseJsonContent(content);
-    const interpretation = validateDoeInterpretationResponse(request.context, parsed);
+    let interpretation: DoeInterpretationResponse;
+    try {
+      const parsed = parseJsonContent(content);
+      interpretation = validateDoeInterpretationResponse(request.context, parsed);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown response validation error.";
+      console.warn("[llm] provider response validation failed", {
+        profileId: profile.id,
+        providerKind: profile.providerKind,
+        model: profile.model,
+        durationMs: Date.now() - startedAt,
+        contentLength: content.length,
+        reason: message,
+        hasUsage: Boolean(asRecord(body?.usage))
+      });
+      throw error;
+    }
     const usage = usageFromProvider(profile, body, promptForEstimate, content);
     console.info("[llm] provider interpretation completed", {
       profileId: profile.id,
@@ -96,7 +111,16 @@ export async function requestDoeInterpretation(
     });
     return { interpretation, usage };
   } catch (error) {
-    if (error instanceof LlmProviderError) throw error;
+    if (error instanceof LlmProviderError) {
+      console.warn("[llm] provider request ended with a handled error", {
+        profileId: profile.id,
+        providerKind: profile.providerKind,
+        code: error.code,
+        reason: error.message,
+        durationMs: Date.now() - startedAt
+      });
+      throw error;
+    }
     if (error instanceof Error && error.name === "AbortError") {
       console.warn("[llm] provider request timed out", { profileId: profile.id, timeoutMs: profile.timeoutMs });
       throw new LlmProviderError("AI provider request timed out.", "TIMEOUT");

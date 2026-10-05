@@ -269,7 +269,8 @@ export function createDoeAnalysisRouter(
             revisionId,
             userId: req.user?.id ?? null,
             providerProfileId: profile.id,
-            code: error instanceof LlmProviderError ? error.code : "UNKNOWN"
+            code: error instanceof LlmProviderError ? error.code : "UNKNOWN",
+            reason: error instanceof Error ? error.message : "Unknown error"
           });
           return res.status(status).json({ error: message });
         }
