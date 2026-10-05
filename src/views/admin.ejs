@@ -16,6 +16,50 @@
     </div>
   </div>
 
+  <section class="card admin-ai-usage" aria-labelledby="adminAiUsageTitle">
+    <div class="doe-analysis-section-heading">
+      <div>
+        <h2 class="card-title" id="adminAiUsageTitle">AI usage</h2>
+        <p class="small-note">Aggregate token accounting by user, provider, and model. Prompts, answers, and API keys are never included here.</p>
+      </div>
+      <span class="material-symbols-rounded profile-ai-usage-icon" aria-hidden="true">monitoring</span>
+    </div>
+    <nav class="profile-ai-usage-periods" aria-label="AI usage period">
+      <% [['7d', '7 days'], ['30d', '30 days'], ['90d', '90 days'], ['all', 'All time']].forEach(([key, label]) => { %>
+        <a class="<%= aiUsagePeriod?.key === key ? 'is-active' : '' %>" href="/admin?ai_usage_period=<%= key %>#adminAiUsageTitle" <%= aiUsagePeriod?.key === key ? 'aria-current="page"' : '' %>><%= label %></a>
+      <% }) %>
+    </nav>
+    <p class="small-note profile-ai-usage-period-label"><%= aiUsagePeriod?.label || 'All time' %></p>
+    <div class="admin-ai-usage-metrics" aria-label="Aggregate AI token totals">
+      <div><span class="small-note">Input</span><strong><%= Number(llmUsageTotals?.inputTokens || 0).toLocaleString() %></strong></div>
+      <div><span class="small-note">Output</span><strong><%= Number(llmUsageTotals?.outputTokens || 0).toLocaleString() %></strong></div>
+      <div><span class="small-note">Total</span><strong><%= Number(llmUsageTotals?.totalTokens || 0).toLocaleString() %></strong></div>
+      <div><span class="small-note">Requests</span><strong><%= Number(llmUsageTotals?.requestCount || 0).toLocaleString() %></strong></div>
+    </div>
+    <% if (llmUsageBreakdown && llmUsageBreakdown.length) { %>
+      <div class="table-wrap">
+        <table class="pure-table pure-table-striped table-compact">
+          <thead><tr><th>User</th><th>Provider</th><th>Model</th><th>Input</th><th>Output</th><th>Total</th><th>Requests</th></tr></thead>
+          <tbody>
+            <% llmUsageBreakdown.forEach((item) => { %>
+              <tr>
+                <td><strong><%= item.userName || item.userEmail %></strong><br><small><%= item.userEmail %></small></td>
+                <td><%= item.providerName %></td>
+                <td><code><%= item.model %></code></td>
+                <td><%= Number(item.inputTokens).toLocaleString() %></td>
+                <td><%= Number(item.outputTokens).toLocaleString() %></td>
+                <td><strong><%= Number(item.totalTokens).toLocaleString() %></strong></td>
+                <td><%= item.requestCount %><% if (item.failedRequestCount) { %><small> · <%= item.failedRequestCount %> failed</small><% } %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } else { %>
+      <p class="small-note profile-ai-usage-empty">No AI provider requests in this period.</p>
+    <% } %>
+  </section>
+
   <div class="card">
     <div class="doe-analysis-section-heading">
       <div>

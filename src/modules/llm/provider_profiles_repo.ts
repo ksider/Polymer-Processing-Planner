@@ -68,6 +68,12 @@ export type LlmUsageBreakdownRow = LlmUsageTotals & {
   failedRequestCount: number;
 };
 
+export type LlmUsageAdminBreakdownRow = LlmUsageBreakdownRow & {
+  userId: number;
+  userName: string | null;
+  userEmail: string;
+};
+
 type ProviderProfileRow = {
   id: number;
   name: string;
@@ -312,6 +318,83 @@ export function getLlmUsageBreakdownForUser(
     failed_request_count: number;
   }>;
   return rows.map((row) => ({
+    providerName: row.provider_name,
+    model: row.model,
+    inputTokens: row.input_tokens,
+    outputTokens: row.output_tokens,
+    totalTokens: row.total_tokens,
+    requestCount: row.request_count,
+    succeededRequestCount: row.succeeded_request_count,
+    failedRequestCount: row.failed_request_count
+  }));
+}
+
+export function getLlmUsageTotalsForAdmin(db: Db, from?: string, to?: string): LlmUsageTotals {
+  const row = db.prepare(
+    `SELECT
+       COALESCE(SUM(input_tokens), 0) AS input_tokens,
+       COALESCE(SUM(output_tokens), 0) AS output_tokens,
+       COALESCE(SUM(total_tokens), 0) AS total_tokens,
+       COUNT(*) AS request_count
+     FROM llm_usage_events
+     WHERE (? IS NULL OR created_at >= ?)
+       AND (? IS NULL OR created_at < ?)`
+  ).get(from ?? null, from ?? null, to ?? null, to ?? null) as {
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+    request_count: number;
+  };
+  return {
+    inputTokens: row.input_tokens,
+    outputTokens: row.output_tokens,
+    totalTokens: row.total_tokens,
+    requestCount: row.request_count
+  };
+}
+
+/** Administrator-only aggregate. No prompt or response content is selected. */
+export function getLlmUsageBreakdownForAdmin(
+  db: Db,
+  from?: string,
+  to?: string
+): LlmUsageAdminBreakdownRow[] {
+  const rows = db.prepare(
+    `SELECT
+       event.user_id,
+       user.name AS user_name,
+       user.email AS user_email,
+       event.provider_name,
+       event.model,
+       COALESCE(SUM(event.input_tokens), 0) AS input_tokens,
+       COALESCE(SUM(event.output_tokens), 0) AS output_tokens,
+       COALESCE(SUM(event.total_tokens), 0) AS total_tokens,
+       COUNT(*) AS request_count,
+       SUM(CASE WHEN event.status = 'succeeded' THEN 1 ELSE 0 END) AS succeeded_request_count,
+       SUM(CASE WHEN event.status = 'failed' THEN 1 ELSE 0 END) AS failed_request_count
+     FROM llm_usage_events event
+     JOIN users user ON user.id = event.user_id
+     WHERE (? IS NULL OR event.created_at >= ?)
+       AND (? IS NULL OR event.created_at < ?)
+     GROUP BY event.user_id, user.name, user.email, event.provider_name, event.model
+     ORDER BY total_tokens DESC, request_count DESC, user.email COLLATE NOCASE, event.provider_name COLLATE NOCASE, event.model COLLATE NOCASE`
+  ).all(from ?? null, from ?? null, to ?? null, to ?? null) as Array<{
+    user_id: number;
+    user_name: string | null;
+    user_email: string;
+    provider_name: string;
+    model: string;
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+    request_count: number;
+    succeeded_request_count: number;
+    failed_request_count: number;
+  }>;
+  return rows.map((row) => ({
+    userId: row.user_id,
+    userName: row.user_name,
+    userEmail: row.user_email,
     providerName: row.provider_name,
     model: row.model,
     inputTokens: row.input_tokens,

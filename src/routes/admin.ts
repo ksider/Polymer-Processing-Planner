@@ -32,6 +32,8 @@ import {
 import {
   createLlmProviderProfile,
   deleteLlmProviderProfile,
+  getLlmUsageBreakdownForAdmin,
+  getLlmUsageTotalsForAdmin,
   getLlmProviderProfile,
   listLlmProviderProfiles,
   updateLlmProviderProfile,
@@ -52,10 +54,13 @@ function wantsJson(req: express.Request) {
 export function createAdminRouter(db: Db) {
   const router = express.Router();
 
-  router.get("/", (_req, res) => {
+  router.get("/", (req, res) => {
     const settings = getAdminSettings(db);
     const users = listUsers(db);
     const llmProviderProfiles = listLlmProviderProfiles(db);
+    const aiUsagePeriod = aiUsagePeriodFromQuery(req.query.ai_usage_period);
+    const llmUsageTotals = getLlmUsageTotalsForAdmin(db, aiUsagePeriod.from);
+    const llmUsageBreakdown = getLlmUsageBreakdownForAdmin(db, aiUsagePeriod.from);
     const processes = listProcessesWithStats(db).map((process) => ({
       ...process,
       show_on_home: Number(process.show_on_home ?? 1) === 1 ? 1 : 0
@@ -75,13 +80,16 @@ export function createAdminRouter(db: Db) {
       }
       return { ...exp, status, statusLabel };
     });
-    const notice = typeof _req.query.notice === "string" ? _req.query.notice : null;
-    const error = typeof _req.query.error === "string" ? _req.query.error : null;
+    const notice = typeof req.query.notice === "string" ? req.query.notice : null;
+    const error = typeof req.query.error === "string" ? req.query.error : null;
     res.render("admin", {
       title: "Admin",
       settings,
       llmProviderProfiles,
       llmSettingsEncryptionReady: hasLlmSettingsEncryptionKey(),
+      llmUsageTotals,
+      llmUsageBreakdown,
+      aiUsagePeriod,
       users,
       processes,
       experiments,
@@ -504,6 +512,27 @@ export function createAdminRouter(db: Db) {
   });
 
   return router;
+}
+
+type AiUsagePeriod = {
+  key: "7d" | "30d" | "90d" | "all";
+  label: string;
+  from?: string;
+};
+
+function aiUsagePeriodFromQuery(value: unknown): AiUsagePeriod {
+  if (value === "7d") return aiUsagePeriodForDays("7d", 7);
+  if (value === "30d") return aiUsagePeriodForDays("30d", 30);
+  if (value === "90d") return aiUsagePeriodForDays("90d", 90);
+  return { key: "all", label: "All time" };
+}
+
+function aiUsagePeriodForDays(key: "7d" | "30d" | "90d", days: number): AiUsagePeriod {
+  return {
+    key,
+    label: `Last ${days} days`,
+    from: new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+  };
 }
 
 function parseLlmProviderProfileInput(

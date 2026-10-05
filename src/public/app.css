@@ -2113,6 +2113,26 @@ sub {
   font-size: 1.2rem;
 }
 
+.admin-ai-usage-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.admin-ai-usage-metrics > div {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 0.6rem;
+  background: var(--surface-soft, #fafaf8);
+}
+
+.admin-ai-usage-metrics strong {
+  font-size: 1.2rem;
+}
+
 .profile-ai-usage-table {
   margin-top: 0.75rem;
 }
@@ -2248,6 +2268,10 @@ sub {
   }
 
   .profile-ai-usage-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-ai-usage-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
