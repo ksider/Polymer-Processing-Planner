@@ -105,8 +105,8 @@ their interaction design.
   cannot modify analyses, runs, source data, or model settings. Provider calls,
   explicit saves of immutable interpretations, stale labels, per-user token
   totals, and deterministic significance labels are implemented. Provider
-  compatibility hardening, selectable usage periods, administrator aggregates,
-  and eventual report insertion remain.
+  compatibility hardening, administrator aggregates, and eventual report
+  insertion remain.
 
 ### Current analysis backlog
 
@@ -1149,8 +1149,8 @@ fact.
   worksheet data in a usage event. Token accounting is an audit/budget record,
   not a second conversation archive.
 - Give a user a small “My AI usage” view with input, output, and total tokens
-  and a breakdown by model. The all-time personal view is implemented; selectable
-  periods are deferred. Give an administrator an aggregate view plus the same
+  and a breakdown by model. Personal 7-day, 30-day, 90-day, and all-time views
+  are implemented. Give an administrator an aggregate view plus the same
   per-user breakdown; ordinary users cannot view other users' usage.
 - Initial delivery records usage but does not silently deny a request. Quotas,
   cost budgets, or per-profile limits can be added later from these records,

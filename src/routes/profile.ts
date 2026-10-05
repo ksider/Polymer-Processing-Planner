@@ -79,7 +79,7 @@ export function createProfileRouter(db: Db) {
     return { ...notice, path };
   };
 
-  const buildProfilePayload = (userId: number) => {
+  const buildProfilePayload = (userId: number, aiUsagePeriod: AiUsagePeriod = aiUsagePeriodFromQuery(undefined)) => {
     const experiments = listExperimentsForOwnerWithMeta(db, userId, false);
     const tasks = listTasksForUser(db, userId);
     const summaryByExperiment = new Map<number, Set<number>>();
@@ -123,8 +123,9 @@ export function createProfileRouter(db: Db) {
       tasks: tasksWithProgress,
       assignedEntities,
       notifications,
-      llmUsageTotals: getLlmUsageTotalsForUser(db, userId),
-      llmUsageBreakdown: getLlmUsageBreakdownForUser(db, userId)
+      llmUsageTotals: getLlmUsageTotalsForUser(db, userId, aiUsagePeriod.from),
+      llmUsageBreakdown: getLlmUsageBreakdownForUser(db, userId, aiUsagePeriod.from),
+      aiUsagePeriod
     };
   };
 
@@ -189,7 +190,7 @@ export function createProfileRouter(db: Db) {
 
   router.get("/me", (req, res) => {
     if (!req.user?.id) return res.redirect("/auth/login");
-    const data = buildProfilePayload(req.user.id);
+    const data = buildProfilePayload(req.user.id, aiUsagePeriodFromQuery(req.query.ai_usage_period));
     res.render("profile", {
       title: "Profile",
       ...data,
@@ -328,4 +329,26 @@ export function createProfileRouter(db: Db) {
   });
 
   return router;
+}
+
+type AiUsagePeriod = {
+  key: "7d" | "30d" | "90d" | "all";
+  label: string;
+  from?: string;
+};
+
+function aiUsagePeriodFromQuery(value: unknown): AiUsagePeriod {
+  const key = typeof value === "string" ? value : "all";
+  if (key === "7d") return aiUsagePeriodForDays("7d", 7);
+  if (key === "30d") return aiUsagePeriodForDays("30d", 30);
+  if (key === "90d") return aiUsagePeriodForDays("90d", 90);
+  return { key: "all", label: "All time" };
+}
+
+function aiUsagePeriodForDays(key: "7d" | "30d" | "90d", days: number): AiUsagePeriod {
+  return {
+    key,
+    label: `Last ${days} days`,
+    from: new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+  };
 }

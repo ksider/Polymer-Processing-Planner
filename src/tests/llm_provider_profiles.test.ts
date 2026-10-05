@@ -168,6 +168,12 @@ test("LLM usage retains provider and estimated token accounting per user", () =>
         failedRequestCount: 1
       }
     ]);
+    db.prepare("UPDATE llm_usage_events SET created_at = ? WHERE provider_name = ?")
+      .run(new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(), "Hosted model");
+    assert.deepEqual(
+      getLlmUsageTotalsForUser(db, userId, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
+      { inputTokens: 120, outputTokens: 80, totalTokens: 200, requestCount: 1 }
+    );
   } finally {
     db.close();
     fs.rmSync(tempDir, { recursive: true, force: true });

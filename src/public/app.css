@@ -2062,6 +2062,37 @@ sub {
   font-size: 1.75rem;
 }
 
+.profile-ai-usage-periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.85rem;
+}
+
+.profile-ai-usage-periods a {
+  border: 1px solid var(--border, #ddd);
+  border-radius: 999px;
+  color: var(--ink, #222);
+  font-size: 0.82rem;
+  padding: 0.28rem 0.65rem;
+  text-decoration: none;
+}
+
+.profile-ai-usage-periods a:hover,
+.profile-ai-usage-periods a:focus-visible {
+  border-color: var(--accent, #496e5a);
+}
+
+.profile-ai-usage-periods a.is-active {
+  border-color: var(--accent, #496e5a);
+  background: var(--accent, #496e5a);
+  color: #fff;
+}
+
+.profile-ai-usage-period-label {
+  margin: 0.5rem 0 0;
+}
+
 .profile-ai-usage-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
