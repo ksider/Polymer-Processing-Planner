@@ -9,7 +9,7 @@ import type { LlmProviderProfileForUse } from "../modules/llm/provider_profiles_
 
 const context: DoeInterpretationContext = {
   contractVersion: "1.1",
-  promptVersion: "1.3",
+  promptVersion: "1.4",
   source: {
     analysisId: 12,
     revisionId: 48,

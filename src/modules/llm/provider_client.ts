@@ -305,55 +305,59 @@ const DOE_INTERPRETATION_RESPONSE_SCHEMA = {
   additionalProperties: false,
   required: ["summary", "findings", "cautions", "nextSteps", "clarifyingQuestions"],
   properties: {
-    summary: { type: "string" },
+    summary: { type: "string", maxLength: 500 },
     findings: {
       type: "array",
+      maxItems: 4,
       items: {
         type: "object",
         additionalProperties: false,
         required: ["claim", "evidenceIds", "confidence", "interpretation"],
         properties: {
-          claim: { type: "string" },
+          claim: { type: "string", maxLength: 220 },
           evidenceIds: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 8 },
           confidence: { type: "string", enum: ["high", "medium", "low"] },
-          interpretation: { type: "string" }
+          interpretation: { type: "string", maxLength: 420 }
         }
       }
     },
     cautions: {
       type: "array",
+      maxItems: 3,
       items: {
         type: "object",
         additionalProperties: false,
         required: ["text", "evidenceIds"],
         properties: {
-          text: { type: "string" },
+          text: { type: "string", maxLength: 260 },
           evidenceIds: { type: "array", items: { type: "string" }, maxItems: 8 }
         }
       }
     },
     nextSteps: {
       type: "array",
+      maxItems: 3,
       items: {
         type: "object",
         additionalProperties: false,
         required: ["text", "kind"],
         properties: {
-          text: { type: "string" },
+          text: { type: "string", maxLength: 260 },
           kind: { type: "string", enum: ["inspect", "refit", "confirm_run", "collect_data"] }
         }
       }
     },
     clarifyingQuestions: {
       type: "array",
+      maxItems: 2,
       items: {
         type: "object",
         additionalProperties: false,
         required: ["id", "question"],
         properties: {
-          id: { type: "string" },
-          question: { type: "string" },
-          options: { type: "array", items: { type: "string" }, maxItems: 6 }
+          id: { type: "string", maxLength: 80 },
+          question: { type: "string", maxLength: 320 },
+          options: { type: "array", items: { type: "string", maxLength: 120 }, maxItems: 4 }
         }
       }
     }
