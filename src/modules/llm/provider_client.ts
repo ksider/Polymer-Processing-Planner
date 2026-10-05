@@ -80,6 +80,17 @@ export async function requestDoeInterpretation(
       });
       throw new LlmProviderError(message, "RESPONSE");
     }
+    const finishReason = finishReasonFromProvider(profile, body);
+    if (finishReason === "length") {
+      console.warn("[llm] provider response was truncated", {
+        profileId: profile.id,
+        providerKind: profile.providerKind,
+        model: profile.model,
+        maxOutputTokens: profile.maxOutputTokens,
+        durationMs: Date.now() - startedAt
+      });
+      throw new LlmProviderError("AI provider response was truncated. Increase this provider profile's maximum output tokens.", "RESPONSE");
+    }
     const content = contentFromProvider(profile, body);
     let interpretation: DoeInterpretationResponse;
     try {
@@ -94,7 +105,8 @@ export async function requestDoeInterpretation(
         durationMs: Date.now() - startedAt,
         contentLength: content.length,
         reason: message,
-        hasUsage: Boolean(asRecord(body?.usage))
+        hasUsage: Boolean(asRecord(body?.usage)),
+        finishReason
       });
       throw error instanceof LlmProviderError
         ? error
@@ -185,9 +197,23 @@ function requestBody(profile: LlmProviderProfileForUse, messages: readonly Provi
     model: profile.model,
     temperature: profile.temperature,
     max_tokens: profile.maxOutputTokens,
-    response_format: { type: "json_object" },
+    response_format: responseFormatFor(profile),
     messages
   };
+}
+
+function responseFormatFor(profile: LlmProviderProfileForUse): Record<string, unknown> {
+  if (isMistralProfile(profile)) {
+    return {
+      type: "json_schema",
+      json_schema: {
+        name: "doe_interpretation",
+        strict: true,
+        schema: DOE_INTERPRETATION_RESPONSE_SCHEMA
+      }
+    };
+  }
+  return { type: "json_object" };
 }
 
 function contentFromProvider(profile: LlmProviderProfileForUse, body: Record<string, unknown> | null): string {
@@ -223,9 +249,116 @@ function parseJsonContent(content: string): unknown {
   try {
     return JSON.parse(stripped);
   } catch {
+    const candidate = firstJsonObject(stripped);
+    if (candidate) {
+      try {
+        return JSON.parse(candidate);
+      } catch {
+        // Preserve the generic, non-sensitive error below.
+      }
+    }
     throw new LlmProviderError("AI provider did not return valid JSON.", "RESPONSE");
   }
 }
+
+function finishReasonFromProvider(profile: LlmProviderProfileForUse, body: Record<string, unknown> | null): string | null {
+  if (profile.providerKind === "ollama") return typeof body?.done_reason === "string" ? body.done_reason : null;
+  const firstChoice = Array.isArray(body?.choices) ? asRecord(body.choices[0]) : null;
+  return typeof firstChoice?.finish_reason === "string" ? firstChoice.finish_reason : null;
+}
+
+function isMistralProfile(profile: LlmProviderProfileForUse): boolean {
+  try {
+    const hostname = new URL(profile.baseUrl).hostname.toLowerCase();
+    return hostname === "api.mistral.ai" || hostname.endsWith(".mistral.ai");
+  } catch {
+    return false;
+  }
+}
+
+function firstJsonObject(value: string): string | null {
+  const start = value.indexOf("{");
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < value.length; index += 1) {
+    const character = value[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') inString = false;
+      continue;
+    }
+    if (character === '"') inString = true;
+    else if (character === "{") depth += 1;
+    else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) return value.slice(start, index + 1);
+    }
+  }
+  return null;
+}
+
+const DOE_INTERPRETATION_RESPONSE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["summary", "findings", "cautions", "nextSteps", "clarifyingQuestions"],
+  properties: {
+    summary: { type: "string" },
+    findings: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["claim", "evidenceIds", "confidence", "interpretation"],
+        properties: {
+          claim: { type: "string" },
+          evidenceIds: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 8 },
+          confidence: { type: "string", enum: ["high", "medium", "low"] },
+          interpretation: { type: "string" }
+        }
+      }
+    },
+    cautions: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["text", "evidenceIds"],
+        properties: {
+          text: { type: "string" },
+          evidenceIds: { type: "array", items: { type: "string" }, maxItems: 8 }
+        }
+      }
+    },
+    nextSteps: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["text", "kind"],
+        properties: {
+          text: { type: "string" },
+          kind: { type: "string", enum: ["inspect", "refit", "confirm_run", "collect_data"] }
+        }
+      }
+    },
+    clarifyingQuestions: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["id", "question"],
+        properties: {
+          id: { type: "string" },
+          question: { type: "string" },
+          options: { type: "array", items: { type: "string" }, maxItems: 6 }
+        }
+      }
+    }
+  }
+} as const;
 
 function providerErrorMessage(body: Record<string, unknown> | null, status: number): string {
   const error = asRecord(body?.error);

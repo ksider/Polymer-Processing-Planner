@@ -9,7 +9,7 @@ import type { LlmProviderProfileForUse } from "../modules/llm/provider_profiles_
 
 const context: DoeInterpretationContext = {
   contractVersion: "1.1",
-  promptVersion: "1.2",
+  promptVersion: "1.3",
   source: {
     analysisId: 12,
     revisionId: 48,
@@ -74,12 +74,14 @@ test("Mistral-compatible adapter sends structured messages and records provider 
     assert.equal(init?.headers && new Headers(init.headers).get("authorization"), "Bearer not-a-real-secret");
     const body = JSON.parse(String(init?.body));
     assert.equal(body.model, "mistral-small-latest");
-    assert.equal(body.response_format.type, "json_object");
+    assert.equal(body.response_format.type, "json_schema");
+    assert.equal(body.response_format.json_schema.name, "doe_interpretation");
+    assert.equal(body.response_format.json_schema.strict, true);
     assert.equal(body.messages[0].role, "system");
     assert.equal(body.messages[1].role, "user");
     assert.match(body.messages[1].content, /ANALYSIS_CONTEXT/);
     return new Response(JSON.stringify({
-      choices: [{ message: { content: JSON.stringify({
+      choices: [{ finish_reason: "stop", message: { content: `Model output:\n\n\`\`\`json\n${JSON.stringify({
         summary: "The fitted model explains the observed response.",
         findings: [{
           claim: "Model fit is reported.",
@@ -90,7 +92,7 @@ test("Mistral-compatible adapter sends structured messages and records provider 
         cautions: [],
         nextSteps: [{ text: "Review diagnostics before changing the process.", kind: "inspect" }],
         clarifyingQuestions: []
-      }) } }],
+      })}\n\`\`\`` } }],
       usage: { prompt_tokens: 120, completion_tokens: 58 }
     }), { status: 200, headers: { "content-type": "application/json" } });
   });
