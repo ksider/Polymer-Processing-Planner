@@ -6046,6 +6046,29 @@ body.notes-drawer-open {
   vertical-align: middle;
 }
 
+.doe-analysis-heading-toggle {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.doe-analysis-heading-toggle .material-symbols-rounded {
+  color: var(--slate, #667085);
+  font-size: 1.1rem;
+}
+
+[data-data-worksheet-body] > .small-note {
+  margin-top: 0.7rem;
+}
+
 .doe-analysis-ai-trigger {
   color: var(--accent-2, #b57829);
 }

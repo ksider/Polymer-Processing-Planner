@@ -66,6 +66,7 @@ let analysisUsesCodedFactors = false;
   bindSectionNavigation(workspace);
   bindRunSelection(workspace);
   bindTermSelection(workspace);
+  bindDataWorksheet(workspace);
   bindTableCopy(workspace);
   bindAnalysisLifecycleActions(workspace, {
     csrfToken,
@@ -2107,6 +2108,19 @@ function bindTableCopy(workspace) {
         else button.removeAttribute("aria-label");
       }, 1800);
     });
+  });
+}
+
+function bindDataWorksheet(workspace) {
+  const toggle = workspace.querySelector("[data-toggle-data-worksheet]");
+  const body = workspace.querySelector("[data-data-worksheet-body]");
+  if (!toggle || !body) return;
+  toggle.addEventListener("click", () => {
+    const expanded = toggle.getAttribute("aria-expanded") === "true";
+    toggle.setAttribute("aria-expanded", String(!expanded));
+    body.hidden = expanded;
+    const icon = toggle.querySelector(".material-symbols-rounded");
+    if (icon) icon.textContent = expanded ? "expand_more" : "expand_less";
   });
 }
 

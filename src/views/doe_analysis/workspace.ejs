@@ -154,15 +154,15 @@
 
       <section class="card" id="analysis-data">
         <div class="doe-analysis-section-heading">
-          <div>
-            <h2 class="card-title">Data worksheet <button class="icon-button tiny" type="button" data-copy-table="#analysis-data .doe-analysis-data-table" data-copy-icon title="Copy table as TSV" aria-label="Copy table as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button><a class="icon-button tiny" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/export.csv" title="Download analysis-ready CSV" aria-label="Download analysis-ready CSV"><span class="material-symbols-rounded" aria-hidden="true">download</span></a></h2>
-            <p class="small-note">One row per run. Raw values are shown; coded factor values remain available to the model.</p>
-          </div>
+          <h2 class="card-title"><button class="doe-analysis-heading-toggle" type="button" data-toggle-data-worksheet aria-expanded="false" aria-controls="analysis-data-body"><span>Data worksheet</span><span class="material-symbols-rounded" aria-hidden="true">expand_more</span></button></h2>
           <div class="doe-analysis-section-actions">
-            <span class="badge"><%= dataset.rows.length %> rows</span>
+            <button class="icon-button tiny" type="button" data-copy-table="#analysis-data .doe-analysis-data-table" data-copy-icon title="Copy table as TSV" aria-label="Copy table as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button>
+            <a class="icon-button tiny" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/export.csv" title="Download analysis-ready CSV" aria-label="Download analysis-ready CSV"><span class="material-symbols-rounded" aria-hidden="true">download</span></a>
           </div>
         </div>
-        <div class="doe-analysis-table-scroll" tabindex="0">
+        <div id="analysis-data-body" data-data-worksheet-body hidden>
+          <p class="small-note">One row per run. Raw values are shown; coded factor values remain available to the model.</p>
+          <div class="doe-analysis-table-scroll" tabindex="0">
           <table class="pure-table pure-table-bordered table-compact doe-analysis-data-table">
             <thead>
               <tr>
@@ -184,6 +184,7 @@
               <% }); %>
             </tbody>
           </table>
+          </div>
         </div>
       </section>
 
@@ -681,5 +682,5 @@
 <script nonce="<%= cspNonce %>" id="analysis-dataset" type="application/json"><%- jsonForScript(dataset) %></script>
 <script nonce="<%= cspNonce %>" src="/vendor/echarts/dist/echarts.min.js" defer></script>
 <script nonce="<%= cspNonce %>" src="/vendor/echarts-gl/dist/echarts-gl.min.js?v=2.0.9" defer></script>
-<script nonce="<%= cspNonce %>" src="/doe_analysis_workspace.js?v=20261005-ai-interpretation2" defer></script>
+<script nonce="<%= cspNonce %>" src="/doe_analysis_workspace.js?v=20261005-ai-interpretation3" defer></script>
 <%- include('../partials/foot') %>
