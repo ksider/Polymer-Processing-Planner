@@ -1,6 +1,7 @@
 import express from "express";
 import type { Db } from "../../db.js";
 import { ensureExperimentAccess } from "../../middleware/experiment_access.js";
+import { createRateLimiter } from "../../middleware/rate_limit.js";
 import { getExperiment } from "../../repos/experiments_repo.js";
 import { getProcessById } from "../../repos/processes_repo.js";
 import { insertRuns, listRuns } from "../../repos/runs_repo.js";
@@ -42,6 +43,15 @@ import {
   type DoeInterpretationLocale
 } from "../llm/doe_interpretation_contract.js";
 import { isDoeAnalysisLlmEnabled } from "../llm/feature_flags.js";
+import {
+  estimatedInputTokensForInterpretation,
+  LlmProviderError,
+  requestDoeInterpretation
+} from "../llm/provider_client.js";
+import {
+  getDefaultDoeLlmProviderProfileForUse,
+  recordLlmUsage
+} from "../llm/provider_profiles_repo.js";
 import { optimizeSavedAnalyses, type MultiResponseGoalInput } from "./multi_response_service.js";
 import { createDoeAnalysisView, deleteDoeAnalysisView, listDoeAnalysisViews } from "./views_repo.js";
 import {
@@ -64,6 +74,11 @@ export function createDoeAnalysisRouter(
 ) {
   const router = express.Router();
   const calculationQueue = new DoeAnalysisCalculationQueue(db, analyticsClient);
+  const llmInterpretationLimiter = createRateLimiter({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    message: "Too many AI interpretation requests. Please try again later."
+  });
 
   router.get(
     "/experiments/:id/doe/:doeId/analysis-v2",
@@ -158,7 +173,8 @@ export function createDoeAnalysisRouter(
   router.post(
     "/experiments/:id/doe/:doeId/analysis-v2/interpret",
     ensureExperimentAccess(db),
-    (req, res, next) => {
+    llmInterpretationLimiter,
+    async (req, res, next) => {
       if (!isDoeAnalysisLlmEnabled()) return res.status(404).json({ error: "AI interpretation is disabled." });
       const doeId = Number(req.params.doeId);
       const analysisId = Number(req.body?.analysisId);
@@ -177,18 +193,84 @@ export function createDoeAnalysisRouter(
         if (rawQuestion.length > 2000) return res.status(400).json({ error: "Question must be at most 2000 characters." });
         const locale: DoeInterpretationLocale = String(req.body?.locale ?? "").toLowerCase().startsWith("ru") ? "ru" : "en";
         const context = buildDoeInterpretationContext(revision);
-        const interpretation = createMockDoeInterpretation({
+        const interpretationRequest = {
           context,
           locale,
           userQuestion: rawQuestion || undefined
+        };
+        const profile = getDefaultDoeLlmProviderProfileForUse(db);
+        if (!profile) {
+          const interpretation = createMockDoeInterpretation(interpretationRequest);
+          console.info("[llm] mock interpretation completed", {
+            analysisId,
+            revisionId,
+            userId: req.user?.id ?? null,
+            reason: "no_enabled_default_profile"
+          });
+          res.setHeader("Cache-Control", "no-store");
+          return res.json({ mode: "mock", interpretation, source: context.source, evidence: context.evidence });
+        }
+        console.info("[llm] interpretation requested", {
+          analysisId,
+          revisionId,
+          userId: req.user?.id ?? null,
+          providerProfileId: profile.id,
+          providerKind: profile.providerKind,
+          model: profile.model,
+          contextEvidenceCount: context.evidence.length,
+          hasQuestion: Boolean(rawQuestion)
         });
-        res.setHeader("Cache-Control", "no-store");
-        return res.json({
-          mode: "mock",
-          interpretation,
-          source: context.source,
-          evidence: context.evidence
-        });
+        try {
+          const { interpretation, usage } = await requestDoeInterpretation(profile, interpretationRequest);
+          recordLlmUsage(db, {
+            userId: req.user?.id ?? null,
+            providerProfileId: profile.id,
+            providerName: profile.name,
+            model: profile.model,
+            analysisId,
+            revisionId,
+            purpose: rawQuestion ? "follow_up" : "initial_interpretation",
+            status: "succeeded",
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            inputTokenSource: usage.inputTokenSource,
+            outputTokenSource: usage.outputTokenSource
+          });
+          res.setHeader("Cache-Control", "no-store");
+          return res.json({
+            mode: "provider",
+            provider: { name: profile.name, model: profile.model },
+            interpretation,
+            source: context.source,
+            evidence: context.evidence,
+            usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens }
+          });
+        } catch (error) {
+          recordLlmUsage(db, {
+            userId: req.user?.id ?? null,
+            providerProfileId: profile.id,
+            providerName: profile.name,
+            model: profile.model,
+            analysisId,
+            revisionId,
+            purpose: rawQuestion ? "follow_up" : "initial_interpretation",
+            status: "failed",
+            inputTokens: estimatedInputTokensForInterpretation(interpretationRequest),
+            outputTokens: null,
+            inputTokenSource: "estimated",
+            outputTokenSource: "unknown"
+          });
+          const message = error instanceof LlmProviderError ? error.message : "AI provider request failed.";
+          const status = error instanceof LlmProviderError && error.code === "CONFIGURATION" ? 422 : 502;
+          console.warn("[llm] interpretation failed", {
+            analysisId,
+            revisionId,
+            userId: req.user?.id ?? null,
+            providerProfileId: profile.id,
+            code: error instanceof LlmProviderError ? error.code : "UNKNOWN"
+          });
+          return res.status(status).json({ error: message });
+        }
       } catch (error) {
         if (error instanceof DoeInterpretationContractError) {
           return res.status(409).json({ error: error.message });

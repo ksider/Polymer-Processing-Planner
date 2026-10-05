@@ -1161,7 +1161,7 @@ fact.
    popup, data-sharing notice, initial interpretation, clarification questions,
    and evidence links using the mock provider. Persistence and the explicit
    save action remain part of M5.
-4. **M4 — real provider adapters** — planned. Add provider calls, URL/network safeguards,
+4. **M4 — real provider adapters** — in progress. Add provider calls, URL/network safeguards,
    ACL/CSRF/rate limits, timeout, structured-output validation, retry/error
    behaviour, provider token-metering, and redacted audit log. Choose the first
    external or private deployment only at this point.

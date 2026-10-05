@@ -122,6 +122,17 @@ export function getLlmProviderProfileForUse(db: Db, profileId: number): LlmProvi
   };
 }
 
+export function getDefaultDoeLlmProviderProfileForUse(db: Db): LlmProviderProfileForUse | null {
+  const row = db.prepare(
+    "SELECT * FROM llm_provider_profiles WHERE enabled = 1 AND default_for_doe = 1 LIMIT 1"
+  ).get() as ProviderProfileRow | undefined;
+  if (!row) return null;
+  return {
+    ...mapProfile(row),
+    apiKey: row.api_key_ciphertext ? decryptLlmSetting(row.api_key_ciphertext) : null
+  };
+}
+
 export function createLlmProviderProfile(db: Db, input: SaveLlmProviderProfileInput): LlmProviderProfile {
   const now = new Date().toISOString();
   const apiKeyCiphertext = normalizeApiKey(input.apiKey);

@@ -9,7 +9,7 @@ import type {
 import type { DoeAnalysisColumn, DoeAnalysisDataset } from "../doe_analysis/types.js";
 
 export const DOE_INTERPRETATION_CONTRACT_VERSION = "1.0" as const;
-export const DOE_INTERPRETATION_PROMPT_VERSION = "1.0" as const;
+export const DOE_INTERPRETATION_PROMPT_VERSION = "1.1" as const;
 
 export type DoeInterpretationLocale = "en" | "ru";
 export type DoeInterpretationEvidenceKind =
@@ -136,7 +136,7 @@ Use the requested locale. Every quantitative claim must cite supplied evidence I
 
 export const DOE_INTERPRETATION_CLARIFICATION_PROMPT = `Using ANALYSIS_CONTEXT and the user request, ask no question if an evidence-based answer is possible. Otherwise ask at most three short, decision-relevant questions, preferably with selectable alternatives. Do not ask for facts already in the context, raw data when aggregates suffice, secrets, credentials, personal data, or unrelated process information.
 
-Clarify only the response/objective, whether the request concerns explanation, model adequacy, optimisation, or confirmation, operating constraints absent from factor bounds, or an explicit trade-off between responses. Return needsClarification, questions, and a short reason as JSON.`;
+Clarify only the response/objective, whether the request concerns explanation, model adequacy, optimisation, or confirmation, operating constraints absent from factor bounds, or an explicit trade-off between responses. Put those questions in the clarifyingQuestions array of the required response JSON.`;
 
 export class DoeInterpretationContractError extends Error {
   constructor(message: string) {
