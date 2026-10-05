@@ -280,7 +280,7 @@ function bindAiInterpretation(workspace, csrfToken) {
       setInteractionDisabled(true);
       return true;
     }
-    if (source) source.textContent = `Source: saved analysis ${analysisId}, calculation revision ${revisionId}.`;
+    if (source) source.textContent = `Source: saved analysis ${analysisId}, calculation revision ${revisionId}. The experiment description, if present, is included as context.`;
     setInteractionDisabled(false);
     return false;
   };

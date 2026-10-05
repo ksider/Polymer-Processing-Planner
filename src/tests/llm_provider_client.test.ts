@@ -8,14 +8,17 @@ import type { DoeInterpretationContext } from "../modules/llm/doe_interpretation
 import type { LlmProviderProfileForUse } from "../modules/llm/provider_profiles_repo.js";
 
 const context: DoeInterpretationContext = {
-  contractVersion: "1.0",
-  promptVersion: "1.1",
+  contractVersion: "1.1",
+  promptVersion: "1.2",
   source: {
     analysisId: 12,
     revisionId: 48,
     datasetRevision: "revision-hash",
     calculatedAt: "2026-10-05T10:00:00.000Z",
     engine: { name: "im-planner-r", version: "0.1.0" }
+  },
+  experiment: {
+    description: "Assess the practical effect of melt temperature on quality."
   },
   design: {
     type: "factorial",

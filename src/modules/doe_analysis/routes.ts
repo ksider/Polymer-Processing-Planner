@@ -183,6 +183,8 @@ export function createDoeAnalysisRouter(
         return res.status(400).json({ error: "A saved analysis and successful revision are required." });
       }
       try {
+        const experiment = getExperiment(db, Number(req.params.id));
+        if (!experiment) return res.status(404).json({ error: "Experiment not found." });
         const analysis = getDoeAnalysis(db, doeId, analysisId);
         if (!analysis) return res.status(404).json({ error: "Analysis not found for this DOE." });
         const revision = getDoeAnalysisRevision(db, analysisId, revisionId);
@@ -192,7 +194,7 @@ export function createDoeAnalysisRouter(
         const rawQuestion = typeof req.body?.question === "string" ? req.body.question.trim() : "";
         if (rawQuestion.length > 2000) return res.status(400).json({ error: "Question must be at most 2000 characters." });
         const locale: DoeInterpretationLocale = String(req.body?.locale ?? "").toLowerCase().startsWith("ru") ? "ru" : "en";
-        const context = buildDoeInterpretationContext(revision);
+        const context = buildDoeInterpretationContext(revision, { experimentDescription: experiment.notes });
         const interpretationRequest = {
           context,
           locale,

@@ -1045,13 +1045,16 @@ The initial context may contain only:
   confidence intervals, diagnostics summary, and identified model limitations;
 - bounded optimizer/recommendation results and the fact that they require
   confirmation; and
+- the optional experiment description, capped at 4,000 characters, clearly
+  disclosed in the workspace and treated as untrusted domain context rather
+  than an instruction; and
 - aggregated plot/diagnostic facts already produced by R, each with a stable
   evidence ID that maps to an existing table or chart in Planner.
 
 Do not send by default:
 
-- the complete worksheet, per-run raw measurements, run codes, free-text
-  notes, recipes, user identities, SQLite data, credentials, or data from other
+- the complete worksheet, per-run raw measurements, run codes, recipes, user
+  identities, SQLite data, credentials, or data from other
   DOE studies;
 - experiment and product names where an opaque ID or generic label is enough;
 - anything not necessary for the question being answered.

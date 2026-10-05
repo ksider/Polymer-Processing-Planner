@@ -137,14 +137,23 @@ function fixtureRevision(): DoeAnalysisRevisionRecord {
 }
 
 test("DOE interpretation context is evidence-linked and excludes worksheet rows", () => {
-  const context = buildDoeInterpretationContext(fixtureRevision());
+  const context = buildDoeInterpretationContext(fixtureRevision(), {
+    experimentDescription: "We are reducing cosmetic defects while keeping the injection-moulding cycle practical."
+  });
   assert.equal(context.source.revisionId, 7);
   assert.equal(context.model.response.label, "Quality");
   assert.equal(context.results.anova[0]?.label, "Melt temperature");
   assert.ok(context.evidence.some((item) => item.id.startsWith("anova:")));
+  assert.equal(context.experiment.description, "We are reducing cosmetic defects while keeping the injection-moulding cycle practical.");
   assert.doesNotMatch(JSON.stringify(context), /raw-run-secret-should-not-leave-planner/);
   assert.doesNotMatch(JSON.stringify(context), /Confidential DOE name/);
   assert.equal("rows" in context, false);
+});
+
+test("DOE interpretation bounds the optional experiment description", () => {
+  const context = buildDoeInterpretationContext(fixtureRevision(), { experimentDescription: "x".repeat(4_100) });
+  assert.ok(context.experiment.description?.startsWith("x".repeat(4_000)));
+  assert.match(context.experiment.description ?? "", /\[Description truncated by Planner\.\]$/);
 });
 
 test("mock DOE interpretation validates only known evidence IDs", () => {
