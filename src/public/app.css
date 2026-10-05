@@ -6213,6 +6213,23 @@ body.notes-drawer-open {
   box-shadow: inset 3px 0 0 #d38a16, inset 0 2px 0 #d38a16, inset 0 -2px 0 #d38a16;
 }
 
+.doe-analysis-interpretation-item {
+  border-left: 3px solid #5e8068;
+  margin: 0.75rem 0;
+  padding: 0.45rem 0.7rem;
+}
+
+.doe-analysis-interpretation-item p {
+  margin: 0.35rem 0 0;
+}
+
+.doe-analysis-evidence-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+}
+
 .doe-analysis-empty-result {
   min-height: 10rem;
   display: flex;

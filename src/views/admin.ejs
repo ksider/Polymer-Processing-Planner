@@ -17,6 +17,69 @@
   </div>
 
   <div class="card">
+    <div class="doe-analysis-section-heading">
+      <div>
+        <h2 class="card-title">AI providers</h2>
+        <p class="small-note">Server-side profiles for DOE interpretation. API keys are encrypted in the database and are never shown again.</p>
+      </div>
+      <button class="pure-button pure-button-primary" type="button" id="openAiProviderDialog">Add provider</button>
+    </div>
+    <% if (!llmSettingsEncryptionReady) { %>
+      <div class="doe-analysis-notice" role="status">
+        <strong>API-key storage is unavailable</strong>
+        <span>Set <code>LLM_SETTINGS_ENCRYPTION_KEY</code> in the Planner environment before saving a key. Keyless Ollama profiles can still be prepared.</span>
+      </div>
+    <% } %>
+    <% if (!llmProviderProfiles.length) { %>
+      <p class="small-note">No AI provider is configured. The DOE assistant remains disabled until a provider is enabled.</p>
+    <% } else { %>
+      <div class="table-wrap">
+        <table class="pure-table pure-table-striped">
+          <thead>
+            <tr><th>Name</th><th>Provider</th><th>Model</th><th>Access</th><th>DOE default</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            <% llmProviderProfiles.forEach((profile) => { %>
+              <tr>
+                <td><strong><%= profile.name %></strong><br><small><%= profile.baseUrl %></small></td>
+                <td><%= profile.providerKind === 'ollama' ? 'Ollama' : 'OpenAI-compatible' %></td>
+                <td><code><%= profile.model %></code></td>
+                <td><%= profile.hasApiKey ? 'API key stored' : 'No API key' %></td>
+                <td><%= profile.defaultForDoe ? 'Default' : '—' %><br><small><%= profile.enabled ? 'Enabled' : 'Disabled' %></small></td>
+                <td>
+                  <button
+                    class="icon-btn icon-only"
+                    type="button"
+                    title="Edit AI provider"
+                    data-edit-ai-provider
+                    data-id="<%= profile.id %>"
+                    data-name="<%= profile.name %>"
+                    data-provider-kind="<%= profile.providerKind %>"
+                    data-base-url="<%= profile.baseUrl %>"
+                    data-model="<%= profile.model %>"
+                    data-max-output-tokens="<%= profile.maxOutputTokens %>"
+                    data-temperature="<%= profile.temperature %>"
+                    data-timeout-ms="<%= profile.timeoutMs %>"
+                    data-enabled="<%= profile.enabled ? '1' : '0' %>"
+                    data-default-for-doe="<%= profile.defaultForDoe ? '1' : '0' %>"
+                    data-has-api-key="<%= profile.hasApiKey ? '1' : '0' %>">
+                    <span class="material-symbols-rounded" aria-hidden="true">edit</span>
+                  </button>
+                  <form method="post" action="/admin/ai-providers/<%= profile.id %>/delete" class="pure-form inline-form" data-confirm="Delete this AI provider profile? Existing token usage records will be retained without its profile link.">
+                    <button class="icon-btn icon-only danger" type="submit" title="Delete AI provider">
+                      <span class="material-symbols-rounded" aria-hidden="true">delete</span>
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </div>
+
+  <div class="card">
     <h2 class="card-title">Users</h2>
     <% if (notice) { %>
       <div class="toast toast-success toast-inline">
@@ -258,6 +321,49 @@
   </div>
 </dialog>
 
+<dialog class="modal-frame" id="aiProviderDialog">
+  <div class="modal-header">
+    <strong id="aiProviderDialogTitle">Add AI provider</strong>
+    <button class="pure-button" type="button" data-close>Close</button>
+  </div>
+  <div class="modal-body">
+    <form id="aiProviderForm" method="post" action="/admin/ai-providers" class="pure-form pure-form-stacked">
+      <label for="aiProviderName">Profile name</label>
+      <input id="aiProviderName" name="name" maxlength="120" required placeholder="Production interpretation model">
+
+      <label for="aiProviderKind">Provider API</label>
+      <select id="aiProviderKind" name="provider_kind" required>
+        <option value="openai_compatible">OpenAI-compatible</option>
+        <option value="ollama">Ollama</option>
+      </select>
+
+      <label for="aiProviderUrl">Base URL</label>
+      <input id="aiProviderUrl" name="base_url" type="url" required placeholder="https://api.example.com/v1">
+      <p class="small-note">The connection itself is tested only when the provider adapter is enabled. Do not put credentials in this URL.</p>
+
+      <label for="aiProviderModel">Model</label>
+      <input id="aiProviderModel" name="model" maxlength="200" required placeholder="model-name">
+
+      <label for="aiProviderKey">API key <span class="small-note" id="aiProviderKeyHint">(optional for local Ollama)</span></label>
+      <input id="aiProviderKey" name="api_key" type="password" autocomplete="new-password" placeholder="Leave empty to keep the current key when editing">
+      <label class="pure-checkbox" id="clearAiProviderKeyRow" hidden>
+        <input id="clearAiProviderKey" name="clear_api_key" type="checkbox">
+        Remove the stored API key
+      </label>
+
+      <div class="pure-g">
+        <div class="pure-u-1 pure-u-md-1-3"><label for="aiProviderOutputTokens">Max output tokens</label><input id="aiProviderOutputTokens" name="max_output_tokens" type="number" min="64" max="32768" step="1" value="1200" required></div>
+        <div class="pure-u-1 pure-u-md-1-3"><label for="aiProviderTemperature">Temperature</label><input id="aiProviderTemperature" name="temperature" type="number" min="0" max="2" step="0.1" value="0.2" required></div>
+        <div class="pure-u-1 pure-u-md-1-3"><label for="aiProviderTimeout">Timeout (ms)</label><input id="aiProviderTimeout" name="timeout_ms" type="number" min="1000" max="120000" step="1000" value="30000" required></div>
+      </div>
+
+      <label class="pure-checkbox"><input id="aiProviderEnabled" name="enabled" type="checkbox"> Enable this provider</label>
+      <label class="pure-checkbox"><input id="aiProviderDefault" name="default_for_doe" type="checkbox"> Use as default for DOE interpretation</label>
+      <button class="pure-button pure-button-primary" type="submit">Save provider</button>
+    </form>
+  </div>
+</dialog>
+
 <dialog class="modal-frame" id="addUserDialog">
   <div class="modal-header">
     <strong>Add User</strong>
@@ -304,14 +410,51 @@
 
 <script nonce="<%= cspNonce %>">
   const settingsDialog = document.getElementById('settingsDialog');
+  const aiProviderDialog = document.getElementById('aiProviderDialog');
+  const aiProviderForm = document.getElementById('aiProviderForm');
+  const aiProviderDialogTitle = document.getElementById('aiProviderDialogTitle');
   const addUserDialog = document.getElementById('addUserDialog');
   const passwordSetupDialog = document.getElementById('passwordSetupDialog');
   const passwordSetupLink = document.getElementById('passwordSetupLink');
   document.getElementById('openSettingsDialog')?.addEventListener('click', () => settingsDialog?.showModal());
+  document.getElementById('openAiProviderDialog')?.addEventListener('click', () => {
+    if (!aiProviderForm) return;
+    aiProviderForm.reset();
+    aiProviderForm.action = '/admin/ai-providers';
+    document.getElementById('aiProviderOutputTokens').value = '1200';
+    document.getElementById('aiProviderTemperature').value = '0.2';
+    document.getElementById('aiProviderTimeout').value = '30000';
+    document.getElementById('clearAiProviderKeyRow').hidden = true;
+    aiProviderDialogTitle.textContent = 'Add AI provider';
+    aiProviderDialog?.showModal();
+  });
+  document.querySelectorAll('[data-edit-ai-provider]').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (!aiProviderForm) return;
+      const data = button.dataset;
+      aiProviderForm.reset();
+      aiProviderForm.action = `/admin/ai-providers/${data.id}`;
+      document.getElementById('aiProviderName').value = data.name || '';
+      document.getElementById('aiProviderKind').value = data.providerKind || 'openai_compatible';
+      document.getElementById('aiProviderUrl').value = data.baseUrl || '';
+      document.getElementById('aiProviderModel').value = data.model || '';
+      document.getElementById('aiProviderOutputTokens').value = data.maxOutputTokens || '1200';
+      document.getElementById('aiProviderTemperature').value = data.temperature || '0.2';
+      document.getElementById('aiProviderTimeout').value = data.timeoutMs || '30000';
+      document.getElementById('aiProviderEnabled').checked = data.enabled === '1';
+      document.getElementById('aiProviderDefault').checked = data.defaultForDoe === '1';
+      document.getElementById('clearAiProviderKeyRow').hidden = data.hasApiKey !== '1';
+      document.getElementById('clearAiProviderKey').checked = false;
+      document.getElementById('aiProviderKey').value = '';
+      aiProviderDialogTitle.textContent = `Edit AI provider: ${data.name || ''}`;
+      aiProviderDialog?.showModal();
+    });
+  });
   document.getElementById('openAddUserDialog')?.addEventListener('click', () => addUserDialog?.showModal());
   document.querySelectorAll('[data-close]').forEach((btn) => {
     btn.addEventListener('click', () => {
       settingsDialog?.close();
+      aiProviderDialog?.close();
       addUserDialog?.close();
       passwordSetupDialog?.close();
     });

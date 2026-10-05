@@ -25,11 +25,13 @@
   data-comparison-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/comparison"
   data-templates-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/templates"
   data-views-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/views"
+  data-interpret-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/interpret"
   data-confirmation-run-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/confirmation-runs"
   data-analyses-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/analyses"
   data-run-base-url="/experiments/<%= experiment.id %>/runs"
   data-analysis-id="<%= selectedAnalysis?.id || '' %>"
   data-analysis-revision-id="<%= latestSuccessfulRevision?.id || '' %>"
+  data-llm-enabled="<%= llmAssistantEnabled ? '1' : '0' %>"
   data-pending-job-id="<%= pendingCalculationJob?.id || '' %>"
   data-analysis-state="<%= selectedAnalysis?.state || 'draft' %>">
   <header class="card doe-analysis-header">
@@ -188,7 +190,7 @@
       <section class="card" id="analysis-results" data-results-panel>
         <div class="doe-analysis-section-heading">
           <div>
-            <h2 class="card-title">Calculation result <button class="doe-analysis-link" type="button" data-open-multi-optimize hidden>Optimize multiple responses</button></h2>
+            <h2 class="card-title">Calculation result <button class="doe-analysis-link" type="button" data-open-ai-interpretation hidden>Interpret with AI</button><button class="doe-analysis-link" type="button" data-open-multi-optimize hidden>Optimize multiple responses</button></h2>
             <p class="small-note" data-result-meta></p>
           </div>
         </div>
@@ -339,6 +341,30 @@
           <p class="small-note" data-multi-optimize-status></p>
         </form>
         <div class="doe-analysis-optimizer" data-multi-optimize-result hidden></div>
+        </div>
+      </dialog>
+      <dialog class="modal-frame doe-analysis-dialog" data-ai-interpretation-dialog>
+        <div class="modal-header"><strong>AI interpretation</strong><button class="pure-button" type="button" data-close-ai-interpretation>Close</button></div>
+        <div class="modal-body pure-form pure-form-stacked">
+          <p class="small-note" data-ai-interpretation-source></p>
+          <div class="doe-analysis-notice" data-ai-interpretation-mode>
+            <strong>Preview mode</strong><span>This stage uses Planner's built-in mock provider. No data leaves Planner; a configured LLM provider will be connected in the next milestone.</span>
+          </div>
+          <div class="doe-analysis-section-actions">
+            <button class="pure-button" type="button" data-ai-starter="Explain this model">Explain this model</button>
+            <button class="pure-button" type="button" data-ai-starter="What affects this response?">What affects this response?</button>
+            <button class="pure-button" type="button" data-ai-starter="What should be checked next?">What should be checked next?</button>
+          </div>
+          <label for="aiInterpretationQuestion">Question (optional)</label>
+          <textarea id="aiInterpretationQuestion" data-ai-interpretation-question maxlength="2000" rows="3" placeholder="Ask about this calculated model"></textarea>
+          <div class="doe-analysis-section-actions"><button class="pure-button pure-button-primary" type="button" data-request-ai-interpretation>Generate interpretation</button><span class="small-note" data-ai-interpretation-status></span></div>
+          <section data-ai-interpretation-result hidden>
+            <h3 data-ai-interpretation-summary></h3>
+            <div data-ai-interpretation-findings></div>
+            <div data-ai-interpretation-cautions></div>
+            <div data-ai-interpretation-next-steps></div>
+            <p class="small-note">Saving an interpretation will be enabled once immutable interpretation artifacts are added.</p>
+          </section>
         </div>
       </dialog>
       <dialog class="modal-frame doe-analysis-dialog" data-analysis-comparison-dialog>
@@ -652,5 +678,5 @@
 <script nonce="<%= cspNonce %>" id="analysis-dataset" type="application/json"><%- jsonForScript(dataset) %></script>
 <script nonce="<%= cspNonce %>" src="/vendor/echarts/dist/echarts.min.js" defer></script>
 <script nonce="<%= cspNonce %>" src="/vendor/echarts-gl/dist/echarts-gl.min.js?v=2.0.9" defer></script>
-<script nonce="<%= cspNonce %>" src="/doe_analysis_workspace.js?v=20261003-section-navigation1" defer></script>
+<script nonce="<%= cspNonce %>" src="/doe_analysis_workspace.js?v=20261005-ai-interpretation1" defer></script>
 <%- include('../partials/foot') %>

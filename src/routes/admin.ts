@@ -29,6 +29,17 @@ import {
   getProcessById,
   normalizeRouteCode
 } from "../repos/processes_repo.js";
+import {
+  createLlmProviderProfile,
+  deleteLlmProviderProfile,
+  getLlmProviderProfile,
+  listLlmProviderProfiles,
+  updateLlmProviderProfile,
+  type LlmProviderKind,
+  type LlmProviderProfile,
+  type SaveLlmProviderProfileInput
+} from "../modules/llm/provider_profiles_repo.js";
+import { hasLlmSettingsEncryptionKey, LlmSettingsEncryptionError } from "../modules/llm/settings_crypto.js";
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -44,6 +55,7 @@ export function createAdminRouter(db: Db) {
   router.get("/", (_req, res) => {
     const settings = getAdminSettings(db);
     const users = listUsers(db);
+    const llmProviderProfiles = listLlmProviderProfiles(db);
     const processes = listProcessesWithStats(db).map((process) => ({
       ...process,
       show_on_home: Number(process.show_on_home ?? 1) === 1 ? 1 : 0
@@ -68,6 +80,8 @@ export function createAdminRouter(db: Db) {
     res.render("admin", {
       title: "Admin",
       settings,
+      llmProviderProfiles,
+      llmSettingsEncryptionReady: hasLlmSettingsEncryptionKey(),
       users,
       processes,
       experiments,
@@ -157,6 +171,62 @@ export function createAdminRouter(db: Db) {
       return res.json({ ok: true, message: "HTTPS setting updated" });
     }
     return res.redirect("/admin?notice=HTTPS setting updated");
+  });
+
+  router.post("/ai-providers", ADMIN_ACTION_LIMITER, (req, res) => {
+    const parsed = parseLlmProviderProfileInput(req.body, false);
+    if ("error" in parsed) return sendAdminInputError(req, res, parsed.error);
+    try {
+      const profile = createLlmProviderProfile(db, {
+        ...parsed.value,
+        createdByUserId: req.user?.id ?? null
+      });
+      insertAudit(db, {
+        actorUserId: req.user?.id ?? null,
+        action: "admin.llm_provider.create",
+        targetUserId: null,
+        detailsJson: JSON.stringify(llmProviderAuditDetails(profile))
+      });
+      return sendAdminSuccess(req, res, "AI provider profile created", { profile });
+    } catch (error) {
+      return sendLlmProviderError(req, res, error);
+    }
+  });
+
+  router.post("/ai-providers/:id", ADMIN_ACTION_LIMITER, (req, res) => {
+    const profileId = Number(req.params.id);
+    if (!Number.isFinite(profileId)) return sendAdminInputError(req, res, "Invalid AI provider profile");
+    if (!getLlmProviderProfile(db, profileId)) return sendAdminInputError(req, res, "AI provider profile not found", 404);
+    const parsed = parseLlmProviderProfileInput(req.body, true);
+    if ("error" in parsed) return sendAdminInputError(req, res, parsed.error);
+    try {
+      const profile = updateLlmProviderProfile(db, profileId, parsed.value);
+      if (!profile) return sendAdminInputError(req, res, "AI provider profile not found", 404);
+      insertAudit(db, {
+        actorUserId: req.user?.id ?? null,
+        action: "admin.llm_provider.update",
+        targetUserId: null,
+        detailsJson: JSON.stringify(llmProviderAuditDetails(profile))
+      });
+      return sendAdminSuccess(req, res, "AI provider profile updated", { profile });
+    } catch (error) {
+      return sendLlmProviderError(req, res, error);
+    }
+  });
+
+  router.post("/ai-providers/:id/delete", ADMIN_ACTION_LIMITER, (req, res) => {
+    const profileId = Number(req.params.id);
+    if (!Number.isFinite(profileId)) return sendAdminInputError(req, res, "Invalid AI provider profile");
+    const profile = getLlmProviderProfile(db, profileId);
+    if (!profile) return sendAdminInputError(req, res, "AI provider profile not found", 404);
+    deleteLlmProviderProfile(db, profileId);
+    insertAudit(db, {
+      actorUserId: req.user?.id ?? null,
+      action: "admin.llm_provider.delete",
+      targetUserId: null,
+      detailsJson: JSON.stringify(llmProviderAuditDetails(profile))
+    });
+    return sendAdminSuccess(req, res, "AI provider profile deleted");
   });
 
   router.post("/users", ADMIN_ACTION_LIMITER, async (req, res) => {
@@ -434,4 +504,104 @@ export function createAdminRouter(db: Db) {
   });
 
   return router;
+}
+
+function parseLlmProviderProfileInput(
+  body: Record<string, unknown> | undefined,
+  isUpdate: boolean
+): { value: Omit<SaveLlmProviderProfileInput, "createdByUserId"> } | { error: string } {
+  const name = String(body?.name ?? "").trim();
+  if (!name || name.length > 120) return { error: "Profile name must contain 1 to 120 characters" };
+  const providerKind = String(body?.provider_kind ?? "").trim();
+  if (providerKind !== "openai_compatible" && providerKind !== "ollama") {
+    return { error: "Choose OpenAI-compatible or Ollama" };
+  }
+  const baseUrl = normalizeLlmBaseUrl(String(body?.base_url ?? ""));
+  if (!baseUrl) return { error: "Provider URL must be a valid HTTP or HTTPS URL without credentials" };
+  const model = String(body?.model ?? "").trim();
+  if (!model || model.length > 200) return { error: "Model name must contain 1 to 200 characters" };
+  const maxOutputTokens = boundedInteger(body?.max_output_tokens, 64, 32768);
+  if (maxOutputTokens === null) return { error: "Maximum output tokens must be between 64 and 32768" };
+  const temperature = boundedNumber(body?.temperature, 0, 2);
+  if (temperature === null) return { error: "Temperature must be between 0 and 2" };
+  const timeoutMs = boundedInteger(body?.timeout_ms, 1000, 120000);
+  if (timeoutMs === null) return { error: "Timeout must be between 1000 and 120000 ms" };
+  const enabled = Boolean(body?.enabled);
+  const defaultForDoe = Boolean(body?.default_for_doe);
+  if (defaultForDoe && !enabled) return { error: "A default DOE provider must be enabled" };
+
+  const typedApiKey = String(body?.api_key ?? "").trim();
+  const clearApiKey = Boolean(body?.clear_api_key);
+  if (typedApiKey && !hasLlmSettingsEncryptionKey()) {
+    return { error: "Set LLM_SETTINGS_ENCRYPTION_KEY before saving an API key" };
+  }
+  if (typedApiKey && clearApiKey) return { error: "Enter a replacement API key or clear it, not both" };
+  const apiKey = typedApiKey ? typedApiKey : clearApiKey ? null : isUpdate ? undefined : null;
+
+  return {
+    value: {
+      name,
+      providerKind: providerKind as LlmProviderKind,
+      baseUrl,
+      model,
+      maxOutputTokens,
+      temperature,
+      timeoutMs,
+      enabled,
+      defaultForDoe,
+      apiKey
+    }
+  };
+}
+
+function normalizeLlmBaseUrl(value: string): string | null {
+  try {
+    const url = new URL(value.trim());
+    if ((url.protocol !== "https:" && url.protocol !== "http:") || url.username || url.password) return null;
+    url.hash = "";
+    url.search = "";
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return null;
+  }
+}
+
+function boundedInteger(value: unknown, min: number, max: number): number | null {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : null;
+}
+
+function boundedNumber(value: unknown, min: number, max: number): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : null;
+}
+
+function llmProviderAuditDetails(profile: LlmProviderProfile) {
+  return {
+    profile_id: profile.id,
+    name: profile.name,
+    provider_kind: profile.providerKind,
+    base_url: profile.baseUrl,
+    model: profile.model,
+    enabled: profile.enabled,
+    default_for_doe: profile.defaultForDoe,
+    has_api_key: profile.hasApiKey
+  };
+}
+
+function sendAdminInputError(req: express.Request, res: express.Response, message: string, status = 400) {
+  if (wantsJson(req)) return res.status(status).json({ ok: false, message });
+  return res.redirect(`/admin?error=${encodeURIComponent(message)}`);
+}
+
+function sendAdminSuccess(req: express.Request, res: express.Response, message: string, extra: Record<string, unknown> = {}) {
+  if (wantsJson(req)) return res.json({ ok: true, message, ...extra });
+  return res.redirect(`/admin?notice=${encodeURIComponent(message)}`);
+}
+
+function sendLlmProviderError(req: express.Request, res: express.Response, error: unknown) {
+  const message = error instanceof LlmSettingsEncryptionError
+    ? error.message
+    : "AI provider profile could not be saved";
+  return sendAdminInputError(req, res, message);
 }

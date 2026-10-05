@@ -83,6 +83,7 @@ let analysisUsesCodedFactors = false;
   bindSavedGraphViews(workspace, csrfToken);
   bindModelTemplates(workspace, csrfToken, form);
   bindCustomGraph(workspace);
+  bindAiInterpretation(workspace, csrfToken);
   if (savedAnalysisId && pendingCalculationJobId) {
     watchSavedCalculationJob(workspace, pendingCalculationJobId, {
       csrfToken,
@@ -242,6 +243,147 @@ let analysisUsesCodedFactors = false;
     });
   });
 })();
+
+function bindAiInterpretation(workspace, csrfToken) {
+  const open = workspace.querySelector("[data-open-ai-interpretation]");
+  const dialog = workspace.querySelector("[data-ai-interpretation-dialog]");
+  const source = workspace.querySelector("[data-ai-interpretation-source]");
+  const question = workspace.querySelector("[data-ai-interpretation-question]");
+  const requestButton = workspace.querySelector("[data-request-ai-interpretation]");
+  const status = workspace.querySelector("[data-ai-interpretation-status]");
+  const result = workspace.querySelector("[data-ai-interpretation-result]");
+  const analysisId = Number(workspace.dataset.analysisId) || null;
+  const revisionId = Number(workspace.dataset.analysisRevisionId) || null;
+  const enabled = workspace.dataset.llmEnabled === "1";
+  if (!open || !dialog || !analysisId || !revisionId || !enabled) return;
+  open.hidden = false;
+  if (source) source.textContent = `Source: saved analysis ${analysisId}, calculation revision ${revisionId}.`;
+
+  const requestInterpretation = async (starter = "") => {
+    const questionText = String(starter || question?.value || "").trim();
+    if (requestButton) requestButton.disabled = true;
+    if (status) status.textContent = "Preparing interpretation…";
+    try {
+      const response = await fetch(workspace.dataset.interpretUrl, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          "x-csrf-token": csrfToken
+        },
+        body: JSON.stringify({
+          analysisId,
+          revisionId,
+          question: questionText || undefined,
+          locale: navigator.language || "en"
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.interpretation) throw new Error(payload.error || "Interpretation could not be generated.");
+      renderAiInterpretation(workspace, payload.interpretation, payload.evidence || []);
+      if (status) status.textContent = payload.mode === "mock" ? "Preview generated locally." : "Interpretation generated.";
+    } catch (error) {
+      if (status) status.textContent = error instanceof Error ? error.message : "Interpretation could not be generated.";
+    } finally {
+      if (requestButton) requestButton.disabled = false;
+    }
+  };
+
+  open.addEventListener("click", () => {
+    dialog.showModal();
+    requestInterpretation("Explain this model");
+  });
+  dialog.querySelector("[data-close-ai-interpretation]")?.addEventListener("click", () => dialog.close());
+  requestButton?.addEventListener("click", () => requestInterpretation());
+  dialog.querySelectorAll("[data-ai-starter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const starter = button.dataset.aiStarter || "";
+      if (question) question.value = starter;
+      requestInterpretation(starter);
+    });
+  });
+}
+
+function renderAiInterpretation(workspace, interpretation, evidence) {
+  const result = workspace.querySelector("[data-ai-interpretation-result]");
+  const summary = workspace.querySelector("[data-ai-interpretation-summary]");
+  const findings = workspace.querySelector("[data-ai-interpretation-findings]");
+  const cautions = workspace.querySelector("[data-ai-interpretation-cautions]");
+  const nextSteps = workspace.querySelector("[data-ai-interpretation-next-steps]");
+  const evidenceById = new Map((Array.isArray(evidence) ? evidence : []).map((item) => [item.id, item]));
+  if (summary) summary.textContent = interpretation.summary || "";
+  renderInterpretationItems(findings, "Findings", interpretation.findings, (item) => [item.claim, item.interpretation], evidenceById, workspace);
+  renderInterpretationItems(cautions, "Cautions", interpretation.cautions, (item) => [item.text], evidenceById, workspace);
+  renderInterpretationItems(nextSteps, "Suggested next steps", interpretation.nextSteps, (item) => [item.text], evidenceById, workspace);
+  const questions = Array.isArray(interpretation.clarifyingQuestions) ? interpretation.clarifyingQuestions : [];
+  if (questions.length && nextSteps) {
+    const heading = document.createElement("h4");
+    heading.textContent = "Clarification";
+    nextSteps.append(heading, ...questions.map((item) => {
+      const note = document.createElement("p");
+      note.textContent = item.question;
+      return note;
+    }));
+  }
+  if (result) result.hidden = false;
+}
+
+function renderInterpretationItems(container, headingText, items, textForItem, evidenceById, workspace) {
+  if (!container) return;
+  const source = Array.isArray(items) ? items : [];
+  if (!source.length) {
+    container.replaceChildren();
+    return;
+  }
+  const heading = document.createElement("h4");
+  heading.textContent = headingText;
+  const nodes = source.map((item) => {
+    const article = document.createElement("article");
+    article.className = "doe-analysis-interpretation-item";
+    textForItem(item).filter(Boolean).forEach((text, index) => {
+      const node = document.createElement(index === 0 ? "strong" : "p");
+      node.textContent = text;
+      article.append(node);
+    });
+    const ids = Array.isArray(item.evidenceIds) ? item.evidenceIds : [];
+    if (ids.length) {
+      const links = document.createElement("div");
+      links.className = "doe-analysis-evidence-links";
+      ids.forEach((id) => {
+        const evidence = evidenceById.get(id);
+        if (!evidence) return;
+        const link = document.createElement("button");
+        link.type = "button";
+        link.className = "doe-analysis-link";
+        link.textContent = evidence.label || "Evidence";
+        link.addEventListener("click", () => focusInterpretationEvidence(workspace, evidence));
+        links.append(link);
+      });
+      if (links.childElementCount) article.append(links);
+    }
+    return article;
+  });
+  container.replaceChildren(heading, ...nodes);
+}
+
+function focusInterpretationEvidence(workspace, evidence) {
+  const term = String(evidence?.values?.term || "");
+  let target = null;
+  if ((evidence?.kind === "anova" || evidence?.kind === "coefficient") && term) {
+    target = [...workspace.querySelectorAll("[data-analysis-term]")].find((node) => node.dataset.analysisTerm === term) || null;
+    if (target) selectTerm(workspace, term);
+  } else if (evidence?.kind === "summary_metric") {
+    target = workspace.querySelector("[data-result-metrics]");
+  } else if (evidence?.kind === "warning") {
+    target = workspace.querySelector("[data-result-warnings]");
+  } else if (evidence?.kind === "diagnostic_summary") {
+    target = workspace.querySelector("[data-residual-chart]");
+  }
+  if (!target) return;
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  target.classList.add("is-selected-term");
+  window.setTimeout(() => target?.classList.remove("is-selected-term"), 1300);
+}
 
 function bindSectionNavigation(workspace) {
   const navigation = workspace.querySelector(".doe-analysis-section-nav");

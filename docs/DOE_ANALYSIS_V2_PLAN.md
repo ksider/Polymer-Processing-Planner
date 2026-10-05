@@ -100,7 +100,7 @@ their interaction design.
   Reusable model templates are now shared at the process-type level. They
   store field codes rather than a DOE's local IDs, then validate and map onto
   the active fields of the DOE where they are applied.
-- Phase 9 — planned. An optional LLM Analysis Assistant will interpret an
+- Phase 9 — in progress. An optional LLM Analysis Assistant will interpret an
   immutable, already calculated revision. It is not a statistical engine and
   cannot modify analyses, runs, source data, or model settings.
 
@@ -1150,21 +1150,27 @@ fact.
 
 #### 9.6 Delivery sequence
 
-1. Approve the data-sharing policy and choose the first provider deployment:
-   external hosted model or private/local endpoint. The interface remains
-   provider-neutral in either case.
-2. Define TypeScript request/response schemas, evidence IDs, context-size
-   limits, prompt versions, feature flag, database records for saved
-   interpretations, and the immutable per-user token-usage ledger.
-3. Implement the context builder and a mock provider; test it solely from saved
-   revisions, never directly from the live database.
-4. Implement the server provider adapter, ACL/CSRF/rate-limit checks, timeout,
-   structured-output validation, retry/error behaviour, provider token-metering,
-   and redacted audit log.
-5. Add the workspace panel, consent/data-preview state, evidence links, saved
-   interpretations, and stale marker.
-6. Add a real-provider integration only after the mock path, security review,
-   and production data-sharing approval succeed.
+1. **M1 — provider settings and accounting foundation** — complete. Added
+   encrypted provider profiles, the immutable per-user token ledger, repository
+   APIs, and administration UI. This includes OpenAI-compatible and Ollama
+   configuration, but makes no external LLM call.
+2. **M2 — trusted interpretation contract** — complete. Defined the compact context,
+   evidence IDs, prompt versions, structured response schemas, and a mock
+   provider. Test only from saved revisions, never the live database.
+3. **M3 — workspace interpretation workflow** — complete. Added the Calculation result
+   popup, data-sharing notice, initial interpretation, clarification questions,
+   and evidence links using the mock provider. Persistence and the explicit
+   save action remain part of M5.
+4. **M4 — real provider adapters** — planned. Add provider calls, URL/network safeguards,
+   ACL/CSRF/rate limits, timeout, structured-output validation, retry/error
+   behaviour, provider token-metering, and redacted audit log. Choose the first
+   external or private deployment only at this point.
+5. **M5 — saved artifacts and report integration**. Persist an immutable
+   interpretation artifact, show stale state, add it to report sources, and
+   render deterministic ANOVA significance styling with optional AI callouts.
+6. **M6 — hardening and rollout**. Complete security, privacy, accessibility,
+   retention, provider-failure, and production-data review; then enable the
+   feature through its flag.
 
 #### 9.7 Tests and exit criteria
 

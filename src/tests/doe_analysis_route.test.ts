@@ -23,6 +23,7 @@ test("Analysis V2 dataset endpoint uses experiment access and DOE ownership", as
   process.env.NODE_ENV = "test";
   process.env.ADMIN_EMAIL = "admin@example.com";
   process.env.ADMIN_TEMP_PASSWORD = "TempPass123!";
+  process.env.DOE_ANALYSIS_LLM_ENABLED = "true";
 
   const { createApp } = await import("../app.js");
   const app = createApp();
@@ -187,6 +188,21 @@ test("Analysis V2 dataset endpoint uses experiment access and DOE ownership", as
     assert.equal(finishedCalculation.body.job.status, "SUCCEEDED");
     assert.equal(finishedCalculation.body.result.ok, true);
     assert.equal(finishedCalculation.body.revision.status, "SUCCEEDED");
+
+    const interpretation = await agent
+      .post(`/experiments/${experimentId}/doe/${doeId}/analysis-v2/interpret`)
+      .set("x-csrf-token", pageCsrf)
+      .send({
+        analysisId: createdAnalysis.body.analysis.id,
+        revisionId: finishedCalculation.body.revision.id,
+        question: "How should I optimize this response?",
+        locale: "en"
+      })
+      .expect(200);
+    assert.equal(interpretation.body.mode, "mock");
+    assert.equal(interpretation.body.source.revisionId, finishedCalculation.body.revision.id);
+    assert.ok(interpretation.body.interpretation.clarifyingQuestions.length <= 1);
+    assert.doesNotMatch(JSON.stringify(interpretation.body), /"rows"\s*:/);
 
     const reportId = createReportConfig(db, {
       experiment_id: experimentId,

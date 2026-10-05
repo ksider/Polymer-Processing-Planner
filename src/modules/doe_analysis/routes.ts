@@ -24,6 +24,7 @@ import {
   archiveDoeAnalysis,
   createDoeAnalysis,
   getDoeAnalysis,
+  getDoeAnalysisRevision,
   getLatestSuccessfulDoeAnalysisRevision,
   listDoeAnalyses,
   listDoeAnalysisEvents,
@@ -34,6 +35,13 @@ import {
   restoreDoeAnalysis,
   updateDoeAnalysisSpecification
 } from "./analysis_repo.js";
+import {
+  buildDoeInterpretationContext,
+  createMockDoeInterpretation,
+  DoeInterpretationContractError,
+  type DoeInterpretationLocale
+} from "../llm/doe_interpretation_contract.js";
+import { isDoeAnalysisLlmEnabled } from "../llm/feature_flags.js";
 import { optimizeSavedAnalyses, type MultiResponseGoalInput } from "./multi_response_service.js";
 import { createDoeAnalysisView, deleteDoeAnalysisView, listDoeAnalysisViews } from "./views_repo.js";
 import {
@@ -123,7 +131,8 @@ export function createDoeAnalysisRouter(
           latestSuccessfulRevision,
           selectedRevisions,
           selectedEvents,
-          pendingCalculationJob
+          pendingCalculationJob,
+          llmAssistantEnabled: isDoeAnalysisLlmEnabled()
         });
       } catch (error) {
         if (error instanceof DoeAnalysisDatasetNotFoundError) {
@@ -143,6 +152,49 @@ export function createDoeAnalysisRouter(
       if (!processTypeId) return res.status(409).json({ error: "This experiment has no process type for shared model templates." });
       res.setHeader("Cache-Control", "no-store");
       return res.json({ templates: listDoeAnalysisTemplates(db, processTypeId) });
+    }
+  );
+
+  router.post(
+    "/experiments/:id/doe/:doeId/analysis-v2/interpret",
+    ensureExperimentAccess(db),
+    (req, res, next) => {
+      if (!isDoeAnalysisLlmEnabled()) return res.status(404).json({ error: "AI interpretation is disabled." });
+      const doeId = Number(req.params.doeId);
+      const analysisId = Number(req.body?.analysisId);
+      const revisionId = Number(req.body?.revisionId);
+      if (!Number.isFinite(analysisId) || !Number.isFinite(revisionId)) {
+        return res.status(400).json({ error: "A saved analysis and successful revision are required." });
+      }
+      try {
+        const analysis = getDoeAnalysis(db, doeId, analysisId);
+        if (!analysis) return res.status(404).json({ error: "Analysis not found for this DOE." });
+        const revision = getDoeAnalysisRevision(db, analysisId, revisionId);
+        if (!revision || revision.status !== "SUCCEEDED") {
+          return res.status(409).json({ error: "A successful saved revision is required for interpretation." });
+        }
+        const rawQuestion = typeof req.body?.question === "string" ? req.body.question.trim() : "";
+        if (rawQuestion.length > 2000) return res.status(400).json({ error: "Question must be at most 2000 characters." });
+        const locale: DoeInterpretationLocale = String(req.body?.locale ?? "").toLowerCase().startsWith("ru") ? "ru" : "en";
+        const context = buildDoeInterpretationContext(revision);
+        const interpretation = createMockDoeInterpretation({
+          context,
+          locale,
+          userQuestion: rawQuestion || undefined
+        });
+        res.setHeader("Cache-Control", "no-store");
+        return res.json({
+          mode: "mock",
+          interpretation,
+          source: context.source,
+          evidence: context.evidence
+        });
+      } catch (error) {
+        if (error instanceof DoeInterpretationContractError) {
+          return res.status(409).json({ error: error.message });
+        }
+        return sendAnalysisError(res, error, next);
+      }
     }
   );
 

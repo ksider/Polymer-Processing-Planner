@@ -572,6 +572,47 @@ function initDb(db: Db) {
       FOREIGN KEY (process_type_id) REFERENCES process_types(id) ON DELETE CASCADE,
       FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
     );
+    CREATE TABLE IF NOT EXISTS llm_provider_profiles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      provider_kind TEXT NOT NULL CHECK (provider_kind IN ('openai_compatible', 'ollama')),
+      base_url TEXT NOT NULL,
+      api_key_ciphertext TEXT,
+      model TEXT NOT NULL,
+      max_output_tokens INTEGER NOT NULL DEFAULT 1200,
+      temperature REAL NOT NULL DEFAULT 0.2,
+      timeout_ms INTEGER NOT NULL DEFAULT 30000,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      default_for_doe INTEGER NOT NULL DEFAULT 0,
+      created_by_user_id INTEGER,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_provider_profiles_one_doe_default
+      ON llm_provider_profiles(default_for_doe)
+      WHERE default_for_doe = 1;
+    CREATE TABLE IF NOT EXISTS llm_usage_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      provider_profile_id INTEGER,
+      provider_name TEXT NOT NULL,
+      model TEXT NOT NULL,
+      analysis_id INTEGER,
+      revision_id INTEGER,
+      purpose TEXT NOT NULL CHECK (purpose IN ('initial_interpretation', 'clarification', 'follow_up')),
+      status TEXT NOT NULL CHECK (status IN ('succeeded', 'failed')),
+      input_tokens INTEGER,
+      output_tokens INTEGER,
+      total_tokens INTEGER,
+      input_token_source TEXT NOT NULL CHECK (input_token_source IN ('provider', 'estimated', 'unknown')),
+      output_token_source TEXT NOT NULL CHECK (output_token_source IN ('provider', 'estimated', 'unknown')),
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (provider_profile_id) REFERENCES llm_provider_profiles(id) ON DELETE SET NULL,
+      FOREIGN KEY (analysis_id) REFERENCES doe_analyses(id) ON DELETE SET NULL,
+      FOREIGN KEY (revision_id) REFERENCES doe_analysis_revisions(id) ON DELETE SET NULL
+    );
     CREATE INDEX IF NOT EXISTS idx_doe_analyses_doe_id
       ON doe_analyses(doe_id, archived_at, updated_at);
     CREATE INDEX IF NOT EXISTS idx_doe_analysis_revisions_analysis_id
@@ -584,6 +625,10 @@ function initDb(db: Db) {
       ON doe_analysis_views(doe_id, id DESC);
     CREATE INDEX IF NOT EXISTS idx_doe_analysis_templates_process_type
       ON doe_analysis_templates(process_type_id, name);
+    CREATE INDEX IF NOT EXISTS idx_llm_usage_events_user_created
+      ON llm_usage_events(user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_llm_usage_events_profile_created
+      ON llm_usage_events(provider_profile_id, created_at DESC);
     CREATE TABLE IF NOT EXISTS report_configs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       experiment_id INTEGER NOT NULL,
