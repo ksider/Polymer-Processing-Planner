@@ -303,6 +303,7 @@
                 <button class="icon-button tiny" type="button" data-copy-table="#analysis-anova table" data-copy-icon title="Copy ANOVA table as TSV" aria-label="Copy ANOVA table as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button>
               </div>
               <p class="small-note" data-anova-note>Lack of fit compares model mismatch with repeat-to-repeat variation. A small p-value indicates that the selected model form may be inadequate. Pure error is variation between runs at identical factor settings.</p>
+              <p class="small-note doe-analysis-significance-legend">p-value labels: green &lt; 0.05, dark green &lt; 0.01, muted ≥ 0.05. A significant lack-of-fit row is shown as a model concern.</p>
               <div class="doe-analysis-table-scroll">
                 <table class="pure-table pure-table-bordered table-compact">
                   <thead><tr><th>Term</th><th>DF</th><th data-anova-sum-heading>SS</th><th>MS</th><th data-anova-stat-heading>F</th><th>p</th></tr></thead>
@@ -316,6 +317,7 @@
                 <button class="icon-button tiny" type="button" data-copy-table="#analysis-coefficients table" data-copy-icon title="Copy coefficients table as TSV" aria-label="Copy coefficients table as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button>
               </div>
               <p class="small-note" data-coefficients-note>Estimate is the fitted contribution of a term while the other selected terms are held in the model. Standard uncertainty measures its precision; t and p test whether that contribution is distinguishable from zero. The sign indicates direction.</p>
+              <p class="small-note doe-analysis-significance-legend">p-value labels use the same 0.05 and 0.01 thresholds as ANOVA.</p>
               <div class="doe-analysis-table-scroll">
                 <table class="pure-table pure-table-bordered table-compact">
                   <thead><tr><th>Term</th><th>Estimate</th><th>Standard uncertainty</th><th data-coefficient-stat-heading>Signal / uncertainty (t)</th><th>p-value</th></tr></thead>

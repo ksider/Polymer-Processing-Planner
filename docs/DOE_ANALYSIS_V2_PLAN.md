@@ -100,9 +100,13 @@ their interaction design.
   Reusable model templates are now shared at the process-type level. They
   store field codes rather than a DOE's local IDs, then validate and map onto
   the active fields of the DOE where they are applied.
-- Phase 9 — in progress. An optional LLM Analysis Assistant will interpret an
+- Phase 9 — in progress. An optional LLM Analysis Assistant interprets an
   immutable, already calculated revision. It is not a statistical engine and
-  cannot modify analyses, runs, source data, or model settings.
+  cannot modify analyses, runs, source data, or model settings. Provider calls,
+  explicit saves of immutable interpretations, stale labels, per-user token
+  totals, and deterministic significance labels are implemented. Provider
+  compatibility hardening, selectable usage periods, administrator aggregates,
+  and eventual report insertion remain.
 
 ### Current analysis backlog
 
@@ -135,8 +139,9 @@ Still to do, in priority order:
    shared-template use makes that necessary.
 6. Evaluate faceting or an embedded exploratory worksheet only after a concrete
    interaction design is agreed; facets are intentionally absent today.
-7. Add the LLM Analysis Assistant after the statistical-result contract and
-   production data validation are trusted; keep it opt-in and read-only.
+7. Complete the opt-in, read-only LLM Analysis Assistant rollout: validate each
+   configured provider against production-shaped results, then add only the
+   remaining usage and report-source work listed in Phase 9.
 8. Resume reports, then complete response-data migration and remove the legacy
    DOE analysis only after parity and production verification.
 
@@ -1144,9 +1149,9 @@ fact.
   worksheet data in a usage event. Token accounting is an audit/budget record,
   not a second conversation archive.
 - Give a user a small “My AI usage” view with input, output, and total tokens
-  for selectable periods and a breakdown by model. Give an administrator an
-  aggregate view plus the same per-user breakdown; ordinary users cannot view
-  other users' usage.
+  and a breakdown by model. The all-time personal view is implemented; selectable
+  periods are deferred. Give an administrator an aggregate view plus the same
+  per-user breakdown; ordinary users cannot view other users' usage.
 - Initial delivery records usage but does not silently deny a request. Quotas,
   cost budgets, or per-profile limits can be added later from these records,
   after actual usage patterns are known.
@@ -1164,13 +1169,15 @@ fact.
    popup, data-sharing notice, initial interpretation, clarification questions,
    and evidence links using the mock provider. Persistence and the explicit
    save action remain part of M5.
-4. **M4 — real provider adapters** — in progress. Add provider calls, URL/network safeguards,
-   ACL/CSRF/rate limits, timeout, structured-output validation, retry/error
-   behaviour, provider token-metering, and redacted audit log. Choose the first
-   external or private deployment only at this point.
-5. **M5 — saved artifacts and report integration** — in progress. Persist an immutable
-   interpretation artifact, show stale state, add it to report sources, and
-   render deterministic ANOVA significance styling with optional AI callouts.
+4. **M4 — real provider adapters** — in progress. The OpenAI-compatible,
+   Mistral structured-output, and Ollama request paths, URL/network safeguards,
+   ACL/CSRF/rate limits, timeout, validation, token-metering, and redacted logs
+   are implemented. Mistral has returned a successful live interpretation;
+   validate each additionally configured provider before calling this complete.
+5. **M5 — saved artifacts and report integration** — in progress. Immutable
+   interpretations, explicit saves, stale state, evidence links, and deterministic
+   ANOVA/coefficient significance styling are implemented. Adding these artifacts
+   to report sources is deliberately paused with report work.
 6. **M6 — hardening and rollout**. Complete security, privacy, accessibility,
    retention, provider-failure, and production-data review; then enable the
    feature through its flag.

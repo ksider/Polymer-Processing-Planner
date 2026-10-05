@@ -1306,12 +1306,14 @@ function renderResult(workspace, result, scroll = true) {
   fillTable(
     workspace.querySelector("[data-anova-body]"),
     result.anova,
-    ["term", "degreesOfFreedom", "sumOfSquares", "meanSquare", "statistic", "pValue"]
+    ["term", "degreesOfFreedom", "sumOfSquares", "meanSquare", "statistic", "pValue"],
+    { pValueContext: "anova" }
   );
   fillTable(
     workspace.querySelector("[data-coefficients-body]"),
     result.coefficients,
-    ["term", "estimate", "standardError", "statistic", "pValue"]
+    ["term", "estimate", "standardError", "statistic", "pValue"],
+    { pValueContext: "coefficient" }
   );
   fillTable(
     workspace.querySelector("[data-diagnostics-body]"),
@@ -2252,7 +2254,7 @@ function showEmptyResult(workspace, title, message) {
   if (detail) detail.textContent = message;
 }
 
-function fillTable(body, rows, keys) {
+function fillTable(body, rows, keys, options = {}) {
   if (!body) return;
   const source = Array.isArray(rows) ? rows : [];
   if (!source.length) {
@@ -2272,15 +2274,54 @@ function fillTable(body, rows, keys) {
     }
     for (const key of keys) {
       const cell = document.createElement("td");
-      cell.textContent = key === "term"
+      const value = key === "term"
         ? displayTerm(sourceRow[key])
         : key === "runId"
           ? String(sourceRow[key] ?? "—")
-        : formatNumber(sourceRow[key]);
+          : formatNumber(sourceRow[key]);
+      cell.textContent = value;
+      if (key === "pValue") appendPValueSignificance(cell, sourceRow, options.pValueContext);
       row.append(cell);
     }
     return row;
   }));
+}
+
+function appendPValueSignificance(cell, row, context) {
+  const pValue = row?.pValue;
+  if (typeof pValue !== "number" || !Number.isFinite(pValue)) return;
+  const significance = pValueSignificance(pValue, String(row?.term || ""), context);
+  const badge = document.createElement("span");
+  badge.className = `doe-analysis-significance doe-analysis-significance--${significance.level}`;
+  badge.textContent = significance.label;
+  badge.title = significance.description;
+  badge.setAttribute("aria-label", significance.description);
+  cell.append(" ", badge);
+}
+
+function pValueSignificance(pValue, term, context) {
+  const lackOfFit = context === "anova" && /^lack of fit$/i.test(term.trim());
+  const displayedP = pValue < 0.001 ? "p < 0.001" : `p = ${formatNumber(pValue)}`;
+  if (pValue < 0.001) {
+    return lackOfFit
+      ? { level: "warning", label: "model concern", description: `Lack of fit is statistically significant (${displayedP}); the selected model form may be inadequate.` }
+      : { level: "strong", label: "highly significant", description: `Statistically significant (${displayedP}).` };
+  }
+  if (pValue < 0.01) {
+    return lackOfFit
+      ? { level: "warning", label: "model concern", description: `Lack of fit is statistically significant (${displayedP}); the selected model form may be inadequate.` }
+      : { level: "strong", label: "highly significant", description: `Statistically significant (${displayedP}).` };
+  }
+  if (pValue < 0.05) {
+    return lackOfFit
+      ? { level: "warning", label: "model concern", description: `Lack of fit is statistically significant (${displayedP}); the selected model form may be inadequate.` }
+      : { level: "significant", label: "significant", description: `Statistically significant at the 0.05 level (${displayedP}).` };
+  }
+  return {
+    level: "not-significant",
+    label: "not significant",
+    description: `Not statistically significant at the 0.05 level (${displayedP}).`
+  };
 }
 
 function bindTermSelection(workspace) {

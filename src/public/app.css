@@ -6410,6 +6410,48 @@ body.notes-drawer-open {
   box-shadow: inset 3px 0 0 #d38a16, inset 0 2px 0 #d38a16, inset 0 -2px 0 #d38a16;
 }
 
+.doe-analysis-significance-legend {
+  margin: 0.3rem 0 0.65rem;
+}
+
+.doe-analysis-significance {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.25rem;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.2;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.doe-analysis-significance--strong {
+  border-color: #397450;
+  background: #e7f4e9;
+  color: #235638;
+}
+
+.doe-analysis-significance--significant {
+  border-color: #8ab596;
+  background: #f2f9f2;
+  color: #376943;
+}
+
+.doe-analysis-significance--not-significant {
+  border-color: #d5d8d2;
+  background: #f6f7f5;
+  color: #687068;
+}
+
+.doe-analysis-significance--warning {
+  border-color: #d09a53;
+  background: #fff5e7;
+  color: #87520c;
+}
+
 .doe-analysis-interpretation-item {
   border-left: 3px solid #5e8068;
   margin: 0.75rem 0;
