@@ -30,6 +30,10 @@ import {
   normalizeAvatarStyle,
   stringifyAvatarStyle
 } from "../services/avatar_service.js";
+import {
+  getLlmUsageBreakdownForUser,
+  getLlmUsageTotalsForUser
+} from "../modules/llm/provider_profiles_repo.js";
 
 export function createProfileRouter(db: Db) {
   const router = express.Router();
@@ -118,7 +122,9 @@ export function createProfileRouter(db: Db) {
       experiments: enrich(experiments),
       tasks: tasksWithProgress,
       assignedEntities,
-      notifications
+      notifications,
+      llmUsageTotals: getLlmUsageTotalsForUser(db, userId),
+      llmUsageBreakdown: getLlmUsageBreakdownForUser(db, userId)
     };
   };
 

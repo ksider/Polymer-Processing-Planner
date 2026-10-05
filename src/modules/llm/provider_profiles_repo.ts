@@ -61,6 +61,13 @@ export type LlmUsageTotals = {
   requestCount: number;
 };
 
+export type LlmUsageBreakdownRow = LlmUsageTotals & {
+  providerName: string;
+  model: string;
+  succeededRequestCount: number;
+  failedRequestCount: number;
+};
+
 type ProviderProfileRow = {
   id: number;
   name: string;
@@ -266,6 +273,54 @@ export function getLlmUsageTotalsForUser(
     totalTokens: row.total_tokens,
     requestCount: row.request_count
   };
+}
+
+/**
+ * Returns only a user's own aggregate usage.  It deliberately contains no
+ * prompts, responses, API keys, experiment names, or other analysis data.
+ */
+export function getLlmUsageBreakdownForUser(
+  db: Db,
+  userId: number,
+  from?: string,
+  to?: string
+): LlmUsageBreakdownRow[] {
+  const rows = db.prepare(
+    `SELECT
+       provider_name,
+       model,
+       COALESCE(SUM(input_tokens), 0) AS input_tokens,
+       COALESCE(SUM(output_tokens), 0) AS output_tokens,
+       COALESCE(SUM(total_tokens), 0) AS total_tokens,
+       COUNT(*) AS request_count,
+       SUM(CASE WHEN status = 'succeeded' THEN 1 ELSE 0 END) AS succeeded_request_count,
+       SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed_request_count
+     FROM llm_usage_events
+     WHERE user_id = ?
+       AND (? IS NULL OR created_at >= ?)
+       AND (? IS NULL OR created_at < ?)
+     GROUP BY provider_name, model
+     ORDER BY total_tokens DESC, request_count DESC, provider_name COLLATE NOCASE, model COLLATE NOCASE`
+  ).all(userId, from ?? null, from ?? null, to ?? null, to ?? null) as Array<{
+    provider_name: string;
+    model: string;
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+    request_count: number;
+    succeeded_request_count: number;
+    failed_request_count: number;
+  }>;
+  return rows.map((row) => ({
+    providerName: row.provider_name,
+    model: row.model,
+    inputTokens: row.input_tokens,
+    outputTokens: row.output_tokens,
+    totalTokens: row.total_tokens,
+    requestCount: row.request_count,
+    succeededRequestCount: row.succeeded_request_count,
+    failedRequestCount: row.failed_request_count
+  }));
 }
 
 function normalizeApiKey(value: string | null | undefined): string | null {

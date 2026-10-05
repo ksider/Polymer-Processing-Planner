@@ -7,6 +7,7 @@ import { openDb } from "../db.js";
 import {
   createLlmProviderProfile,
   getLlmProviderProfileForUse,
+  getLlmUsageBreakdownForUser,
   getLlmUsageTotalsForUser,
   listLlmProviderProfiles,
   recordLlmUsage,
@@ -145,6 +146,28 @@ test("LLM usage retains provider and estimated token accounting per user", () =>
       totalTokens: 240,
       requestCount: 2
     });
+    assert.deepEqual(getLlmUsageBreakdownForUser(db, userId), [
+      {
+        providerName: "Ollama",
+        model: "llama3.2",
+        inputTokens: 120,
+        outputTokens: 80,
+        totalTokens: 200,
+        requestCount: 1,
+        succeededRequestCount: 1,
+        failedRequestCount: 0
+      },
+      {
+        providerName: "Hosted model",
+        model: "small-model",
+        inputTokens: 40,
+        outputTokens: 0,
+        totalTokens: 40,
+        requestCount: 1,
+        succeededRequestCount: 0,
+        failedRequestCount: 1
+      }
+    ]);
   } finally {
     db.close();
     fs.rmSync(tempDir, { recursive: true, force: true });

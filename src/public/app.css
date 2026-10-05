@@ -2041,6 +2041,55 @@ sub {
   gap: 1rem;
 }
 
+.profile-ai-usage-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.profile-ai-usage-head .card-title {
+  margin-bottom: 0.25rem;
+}
+
+.profile-ai-usage-head p {
+  margin: 0;
+  max-width: 48rem;
+}
+
+.profile-ai-usage-icon {
+  color: var(--accent, #496e5a);
+  font-size: 1.75rem;
+}
+
+.profile-ai-usage-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.profile-ai-usage-metrics > div {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 0.6rem;
+  background: var(--surface-soft, #fafaf8);
+}
+
+.profile-ai-usage-metrics strong {
+  font-size: 1.2rem;
+}
+
+.profile-ai-usage-table {
+  margin-top: 0.75rem;
+}
+
+.profile-ai-usage-empty {
+  margin: 1rem 0 0;
+}
+
 .profile-name {
   font-size: 1.3rem;
   margin-bottom: 0.35rem;
@@ -2165,6 +2214,10 @@ sub {
 
   .profile-avatar-config-grid {
     grid-template-columns: 1fr;
+  }
+
+  .profile-ai-usage-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
