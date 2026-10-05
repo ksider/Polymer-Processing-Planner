@@ -341,8 +341,7 @@ function bindAiInterpretation(workspace, csrfToken) {
 
   open.addEventListener("click", () => {
     dialog.showModal();
-    if (showUnavailable()) return;
-    requestInterpretation("Explain this model");
+    showUnavailable();
   });
   dialog.querySelector("[data-close-ai-interpretation]")?.addEventListener("click", () => dialog.close());
   requestButton?.addEventListener("click", () => requestInterpretation());
@@ -350,7 +349,6 @@ function bindAiInterpretation(workspace, csrfToken) {
     button.addEventListener("click", () => {
       const starter = button.dataset.aiStarter || "";
       if (question) question.value = starter;
-      requestInterpretation(starter);
     });
   });
 }
