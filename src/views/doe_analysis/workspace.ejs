@@ -348,7 +348,16 @@
         </div>
       </dialog>
       <dialog class="modal-frame doe-analysis-dialog" data-ai-interpretation-dialog>
-        <div class="modal-header"><strong>AI interpretation</strong><button class="pure-button" type="button" data-close-ai-interpretation>Close</button></div>
+        <div class="modal-header">
+          <strong>AI interpretation</strong>
+          <div class="modal-actions">
+            <span class="doe-ai-readiness" data-ai-interpretation-readiness data-state="checking" tabindex="-1">
+              <span data-ai-interpretation-readiness-label>Checking…</span>
+              <span class="doe-ai-readiness-tooltip" id="aiInterpretationReadinessTooltip" data-ai-interpretation-readiness-tooltip role="tooltip" hidden></span>
+            </span>
+            <button class="pure-button" type="button" data-close-ai-interpretation>Close</button>
+          </div>
+        </div>
         <div class="modal-body pure-form pure-form-stacked">
           <p class="small-note" data-ai-interpretation-source></p>
           <% const aiExperimentDescription = typeof experiment.notes === 'string' ? experiment.notes.trim() : ''; %>
@@ -362,9 +371,6 @@
               <p class="small-note">No experiment description is saved, so none will be sent to the provider.</p>
             <% } %>
           </details>
-          <div class="doe-analysis-notice" data-ai-interpretation-mode>
-            <strong>AI interpretation</strong><span>A configured provider receives the compact calculated result and the optional experiment description only after you open a saved, successfully calculated analysis.</span>
-          </div>
           <div class="doe-analysis-section-actions">
             <button class="pure-button" type="button" data-ai-starter="Explain this model">Explain this model</button>
             <button class="pure-button" type="button" data-ai-starter="What affects this response?">What affects this response?</button>
@@ -693,5 +699,5 @@
 <script nonce="<%= cspNonce %>" id="analysis-dataset" type="application/json"><%- jsonForScript(dataset) %></script>
 <script nonce="<%= cspNonce %>" src="/vendor/echarts/dist/echarts.min.js" defer></script>
 <script nonce="<%= cspNonce %>" src="/vendor/echarts-gl/dist/echarts-gl.min.js?v=2.0.9" defer></script>
-<script nonce="<%= cspNonce %>" src="/doe_analysis_workspace.js?v=20261005-ai-interpretation4" defer></script>
+<script nonce="<%= cspNonce %>" src="/doe_analysis_workspace.js?v=20261005-ai-interpretation5" defer></script>
 <%- include('../partials/foot') %>
