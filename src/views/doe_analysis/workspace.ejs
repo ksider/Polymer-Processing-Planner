@@ -351,6 +351,17 @@
         <div class="modal-header"><strong>AI interpretation</strong><button class="pure-button" type="button" data-close-ai-interpretation>Close</button></div>
         <div class="modal-body pure-form pure-form-stacked">
           <p class="small-note" data-ai-interpretation-source></p>
+          <% const aiExperimentDescription = typeof experiment.notes === 'string' ? experiment.notes.trim() : ''; %>
+          <% const aiExperimentDescriptionPreview = aiExperimentDescription.length > 4_000 ? `${aiExperimentDescription.slice(0, 4_000)}\n\n[Description truncated by Planner.]` : aiExperimentDescription; %>
+          <details class="doe-ai-context-preview" open>
+            <summary>Experiment description included in AI context</summary>
+            <% if (aiExperimentDescriptionPreview) { %>
+              <p class="small-note">This is sent as domain context, not as an instruction.</p>
+              <div class="doe-ai-context-preview-text"><%= aiExperimentDescriptionPreview %></div>
+            <% } else { %>
+              <p class="small-note">No experiment description is saved, so none will be sent to the provider.</p>
+            <% } %>
+          </details>
           <div class="doe-analysis-notice" data-ai-interpretation-mode>
             <strong>AI interpretation</strong><span>A configured provider receives the compact calculated result and the optional experiment description only after you open a saved, successfully calculated analysis.</span>
           </div>

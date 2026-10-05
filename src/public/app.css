@@ -6077,6 +6077,32 @@ body.notes-drawer-open {
   border-color: var(--accent-2, #b57829);
 }
 
+.doe-ai-context-preview {
+  margin: 0.8rem 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.55);
+  padding: 0.65rem 0.8rem;
+}
+
+.doe-ai-context-preview summary {
+  cursor: pointer;
+  color: var(--accent-dark);
+  font-weight: 600;
+}
+
+.doe-ai-context-preview .small-note {
+  margin: 0.5rem 0;
+}
+
+.doe-ai-context-preview-text {
+  max-height: 9rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: var(--ink);
+  font-size: 0.88rem;
+}
+
 .doe-analysis-link {
   appearance: none;
   border: 0;
