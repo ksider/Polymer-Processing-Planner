@@ -240,16 +240,22 @@ function buildContext(
   experimentDescription?: string | null
 ): DoeInterpretationContext {
   const response = requiredColumn(dataset, result.specification.responseKey, "response");
-  const factorColumns = result.specification.factorKeys.map((key) => requiredColumn(dataset, key, "factor"));
-  const blockColumns = result.specification.blockKeys.map((key) => requiredColumn(dataset, key, "block"));
+  // Revisions calculated before optional model fields were introduced remain valid.
+  // Persisted JSON is external input at this boundary, even when TypeScript types
+  // describe the current shape as complete.
+  const factorKeys = arrayOrEmpty(result.specification.factorKeys);
+  const blockKeys = arrayOrEmpty(result.specification.blockKeys);
+  const modelTerms = arrayOrEmpty(result.specification.modelTerms);
+  const factorColumns = factorKeys.map((key) => requiredColumn(dataset, key, "factor"));
+  const blockColumns = blockKeys.map((key) => requiredColumn(dataset, key, "block"));
   const labels = new Map(dataset.columns.map((column) => [column.key, column.label]));
   const evidence: DoeInterpretationEvidence[] = [];
-  const metrics = result.summary.metrics.map((metric) => {
+  const metrics = arrayOrEmpty(result.summary.metrics).map((metric) => {
     const evidenceId = `summary_metric:${escapeEvidencePart(metric.key)}`;
     evidence.push({ id: evidenceId, kind: "summary_metric", label: metric.label, values: { key: metric.key, value: metric.value } });
     return { ...metric, evidenceId };
   });
-  const anova = result.anova.map((row, index) => {
+  const anova = arrayOrEmpty(result.anova).map((row, index) => {
     const evidenceId = `anova:${escapeEvidencePart(row.term)}:${index}`;
     const label = formatTerm(row.term, labels);
     evidence.push({
@@ -260,7 +266,7 @@ function buildContext(
     });
     return { ...row, evidenceId, label };
   });
-  const coefficients = result.coefficients.map((row, index) => {
+  const coefficients = arrayOrEmpty(result.coefficients).map((row, index) => {
     const evidenceId = `coefficient:${escapeEvidencePart(row.term)}:${index}`;
     const label = formatTerm(row.term, labels);
     evidence.push({
@@ -271,7 +277,7 @@ function buildContext(
     });
     return { ...row, evidenceId, label };
   });
-  const warnings = result.warnings.map((warning, index) => {
+  const warnings = arrayOrEmpty(result.warnings).map((warning, index) => {
     const evidenceId = `warning:${escapeEvidencePart(warning.code)}:${index}`;
     evidence.push({ id: evidenceId, kind: "warning", label: warning.code, values: { code: warning.code, message: warning.message } });
     return { code: warning.code, message: warning.message, evidenceId };
@@ -338,7 +344,7 @@ function buildContext(
       },
       responseTransform: result.specification.responseTransform,
       family: result.specification.modelFamily,
-      terms: result.specification.modelTerms.map((term) => ({ key: term, label: formatTerm(term, labels) })),
+      terms: modelTerms.map((term) => ({ key: term, label: formatTerm(term, labels) })),
       factors: factorColumns.map((column) => ({
         key: column.key,
         label: column.label,
@@ -354,16 +360,17 @@ function buildContext(
 }
 
 function summarizeDiagnostics(result: DoeAnalyticsSuccess, evidence: DoeInterpretationEvidence[]) {
-  const standardized = result.diagnostics
+  const diagnostics = arrayOrEmpty(result.diagnostics);
+  const standardized = diagnostics
     .map((row) => row.standardizedResidual)
     .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
-  const cooks = result.diagnostics
+  const cooks = diagnostics
     .map((row) => row.cooksDistance)
     .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
   const evidenceId = "diagnostic_summary:residuals";
   const summary = {
     evidenceId,
-    count: result.diagnostics.length,
+    count: diagnostics.length,
     largestAbsoluteStandardizedResidual: standardized.length ? Math.max(...standardized.map(Math.abs)) : null,
     largestCooksDistance: cooks.length ? Math.max(...cooks) : null
   };
@@ -484,4 +491,8 @@ function normalizeExperimentDescription(value: string | null | undefined): strin
   return description.length <= 4_000
     ? description
     : `${description.slice(0, 4_000)}\n\n[Description truncated by Planner.]`;
+}
+
+function arrayOrEmpty<T>(value: T[] | null | undefined): T[] {
+  return Array.isArray(value) ? value : [];
 }

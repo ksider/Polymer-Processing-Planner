@@ -156,6 +156,21 @@ test("DOE interpretation bounds the optional experiment description", () => {
   assert.match(context.experiment.description ?? "", /\[Description truncated by Planner\.\]$/);
 });
 
+test("DOE interpretation accepts older saved revisions without optional arrays", () => {
+  const revision = fixtureRevision();
+  const legacySpecification = revision.result?.specification as Record<string, unknown>;
+  delete legacySpecification.blockKeys;
+  delete legacySpecification.modelTerms;
+  const legacyResult = revision.result as unknown as Record<string, unknown>;
+  delete legacyResult.warnings;
+  delete legacyResult.diagnostics;
+  const context = buildDoeInterpretationContext(revision);
+  assert.deepEqual(context.model.blocks, []);
+  assert.deepEqual(context.model.terms, []);
+  assert.deepEqual(context.results.warnings, []);
+  assert.equal(context.results.diagnosticSummary.count, 0);
+});
+
 test("mock DOE interpretation validates only known evidence IDs", () => {
   const context = buildDoeInterpretationContext(fixtureRevision());
   const response = createMockDoeInterpretation({ context, locale: "ru" });
