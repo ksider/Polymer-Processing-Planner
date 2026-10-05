@@ -282,6 +282,8 @@ function bindAiInterpretation(workspace, csrfToken) {
       return true;
     }
     if (source) source.textContent = `Source: saved analysis ${analysisId}, calculation revision ${revisionId}. The experiment description, if present, is included as context.`;
+    if (modeNote) renderAiModeNote(modeNote, "Ready to interpret", "This saved calculation is available for interpretation. The configured provider will receive the compact calculated result and the optional experiment description.");
+    if (status) status.textContent = "Ready to generate an interpretation.";
     setInteractionDisabled(false);
     return false;
   };
