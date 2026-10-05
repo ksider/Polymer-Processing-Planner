@@ -253,11 +253,16 @@ function bindAiInterpretation(workspace, csrfToken) {
   const requestButton = workspace.querySelector("[data-request-ai-interpretation]");
   const status = workspace.querySelector("[data-ai-interpretation-status]");
   const result = workspace.querySelector("[data-ai-interpretation-result]");
+  const saveButton = workspace.querySelector("[data-save-ai-interpretation]");
+  const saveStatus = workspace.querySelector("[data-save-ai-interpretation-status]");
+  const savedInterpretations = workspace.querySelector("[data-ai-saved-interpretations]");
+  const savedInterpretationsList = workspace.querySelector("[data-ai-saved-interpretations-list]");
   const readiness = workspace.querySelector("[data-ai-interpretation-readiness]");
   const starterButtons = [...dialog?.querySelectorAll("[data-ai-starter]") || []];
   const analysisId = Number(workspace.dataset.analysisId) || null;
   const revisionId = Number(workspace.dataset.analysisRevisionId) || null;
   const enabled = workspace.dataset.llmEnabled === "1";
+  let latestInterpretationPayload = null;
   if (!open || !dialog) return;
 
   const setInteractionDisabled = (disabled) => {
@@ -318,6 +323,13 @@ function bindAiInterpretation(workspace, csrfToken) {
         provider: payload.mode === "provider" ? String(payload.provider?.name || "unknown") : null
       });
       renderAiInterpretation(workspace, payload.interpretation, payload.evidence || []);
+      latestInterpretationPayload = payload;
+      if (saveButton) {
+        saveButton.hidden = false;
+        saveButton.disabled = false;
+        saveButton.textContent = "Save interpretation";
+      }
+      if (saveStatus) saveStatus.textContent = "";
       if (payload.mode === "mock") {
         renderAiReadiness(readiness, "blocked", "Preview", "No enabled default provider is configured, so this interpretation was generated locally and no data left Planner.");
         if (status) status.textContent = "Generated locally.";
@@ -345,12 +357,62 @@ function bindAiInterpretation(workspace, csrfToken) {
   });
   dialog.querySelector("[data-close-ai-interpretation]")?.addEventListener("click", () => dialog.close());
   requestButton?.addEventListener("click", () => requestInterpretation());
+  saveButton?.addEventListener("click", async () => {
+    if (!latestInterpretationPayload || !analysisId || !revisionId) return;
+    saveButton.disabled = true;
+    if (saveStatus) saveStatus.textContent = "Saving…";
+    try {
+      const response = await fetch(workspace.dataset.interpretationSaveUrl, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          "x-csrf-token": csrfToken
+        },
+        body: JSON.stringify({
+          analysisId,
+          revisionId,
+          interpretation: latestInterpretationPayload.interpretation,
+          mode: latestInterpretationPayload.mode,
+          provider: latestInterpretationPayload.provider
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.artifact) throw new Error(payload.error || "Interpretation could not be saved.");
+      saveButton.textContent = "Saved";
+      if (saveStatus) saveStatus.textContent = `Saved interpretation #${payload.artifact.id}.`;
+      appendSavedInterpretation(savedInterpretations, savedInterpretationsList, payload.artifact);
+      console.info("[DOE AI] interpretation saved", { artifactId: payload.artifact.id, analysisId, revisionId });
+    } catch (error) {
+      saveButton.disabled = false;
+      if (saveStatus) saveStatus.textContent = error instanceof Error ? error.message : "Interpretation could not be saved.";
+      console.warn("[DOE AI] interpretation save failed", { analysisId, revisionId, message: error instanceof Error ? error.message : "unknown" });
+    }
+  });
   dialog.querySelectorAll("[data-ai-starter]").forEach((button) => {
     button.addEventListener("click", () => {
       const starter = button.dataset.aiStarter || "";
       if (question) question.value = starter;
     });
   });
+}
+
+function appendSavedInterpretation(container, list, artifact) {
+  if (!container || !list || !artifact) return;
+  container.hidden = false;
+  const article = document.createElement("article");
+  article.className = "doe-ai-saved-interpretation";
+  const heading = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = "Saved interpretation";
+  const meta = document.createElement("span");
+  meta.className = "small-note";
+  meta.textContent = `#${artifact.id} · ${new Date(artifact.createdAt).toLocaleString()}${artifact.providerName ? ` · ${artifact.providerName}` : ""}${artifact.model ? ` / ${artifact.model}` : ""}`;
+  heading.append(title, meta);
+  const summary = document.createElement("p");
+  summary.textContent = artifact.response?.summary || "";
+  article.append(heading, summary);
+  list.prepend(article);
 }
 
 function renderAiReadiness(container, state, label, detail = "") {

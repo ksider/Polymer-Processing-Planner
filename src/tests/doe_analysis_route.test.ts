@@ -204,6 +204,24 @@ test("Analysis V2 dataset endpoint uses experiment access and DOE ownership", as
     assert.ok(interpretation.body.interpretation.clarifyingQuestions.length <= 1);
     assert.doesNotMatch(JSON.stringify(interpretation.body), /"rows"\s*:/);
 
+    const savedInterpretation = await agent
+      .post(`/experiments/${experimentId}/doe/${doeId}/analysis-v2/interpretations`)
+      .set("x-csrf-token", pageCsrf)
+      .send({
+        analysisId: createdAnalysis.body.analysis.id,
+        revisionId: finishedCalculation.body.revision.id,
+        interpretation: interpretation.body.interpretation,
+        mode: interpretation.body.mode
+      })
+      .expect(201);
+    assert.equal(savedInterpretation.body.artifact.analysisRevisionId, finishedCalculation.body.revision.id);
+    assert.equal(savedInterpretation.body.artifact.response.summary, interpretation.body.interpretation.summary);
+    await agent
+      .get(`/experiments/${experimentId}/doe/${doeId}/analysis-v2?analysis_id=${createdAnalysis.body.analysis.id}`)
+      .expect(200)
+      .expect(/Saved interpretations/)
+      .expect(new RegExp(`Saved interpretation</strong><span class="small-note">#${savedInterpretation.body.artifact.id}`));
+
     const reportId = createReportConfig(db, {
       experiment_id: experimentId,
       name: "Analysis snapshot report",

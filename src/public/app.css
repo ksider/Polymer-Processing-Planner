@@ -6161,6 +6161,35 @@ body.notes-drawer-open {
   transform: translateY(0);
 }
 
+.doe-ai-saved-interpretations {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.8rem;
+}
+
+.doe-ai-saved-interpretations h3 {
+  margin: 0 0 0.55rem;
+  font-size: 0.95rem;
+}
+
+.doe-ai-saved-interpretation {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.doe-ai-saved-interpretation > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.5rem;
+  align-items: baseline;
+}
+
+.doe-ai-saved-interpretation p {
+  margin: 0.35rem 0 0;
+}
+
 .doe-analysis-link {
   appearance: none;
   border: 0;

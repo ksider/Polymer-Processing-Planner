@@ -40,8 +40,10 @@ import {
   buildDoeInterpretationContext,
   createMockDoeInterpretation,
   DoeInterpretationContractError,
+  validateDoeInterpretationResponse,
   type DoeInterpretationLocale
 } from "../llm/doe_interpretation_contract.js";
+import { createDoeAiInterpretation, listDoeAiInterpretations } from "../llm/doe_interpretations_repo.js";
 import { isDoeAnalysisLlmEnabled } from "../llm/feature_flags.js";
 import {
   estimatedInputTokensForInterpretation,
@@ -133,6 +135,12 @@ export function createDoeAnalysisRouter(
         const pendingCalculationJob = selectedAnalysis
           ? findActiveDoeAnalysisJob(db, selectedAnalysis.id)
           : null;
+        const savedAiInterpretations = selectedAnalysis
+          ? listDoeAiInterpretations(db, selectedAnalysis.id).map((artifact) => ({
+            ...artifact,
+            stale: artifact.analysisRevisionId !== latestSuccessfulRevision?.id
+          }))
+          : [];
         return res.render("doe_analysis/workspace", {
           experiment,
           doe: dataset.doe,
@@ -147,6 +155,7 @@ export function createDoeAnalysisRouter(
           selectedRevisions,
           selectedEvents,
           pendingCalculationJob,
+          savedAiInterpretations,
           llmAssistantEnabled: isDoeAnalysisLlmEnabled()
         });
       } catch (error) {
@@ -278,6 +287,62 @@ export function createDoeAnalysisRouter(
         if (error instanceof DoeInterpretationContractError) {
           return res.status(409).json({ error: error.message });
         }
+        return sendAnalysisError(res, error, next);
+      }
+    }
+  );
+
+  router.post(
+    "/experiments/:id/doe/:doeId/analysis-v2/interpretations",
+    ensureExperimentAccess(db),
+    (req, res, next) => {
+      if (!isDoeAnalysisLlmEnabled()) return res.status(404).json({ error: "AI interpretation is disabled." });
+      if (!canEditAnalysis(req.user)) return res.status(403).json({ error: "Forbidden" });
+      const doeId = Number(req.params.doeId);
+      const analysisId = Number(req.body?.analysisId);
+      const revisionId = Number(req.body?.revisionId);
+      if (!Number.isFinite(analysisId) || !Number.isFinite(revisionId)) {
+        return res.status(400).json({ error: "A saved analysis and successful revision are required." });
+      }
+      try {
+        const experiment = getExperiment(db, Number(req.params.id));
+        if (!experiment) return res.status(404).json({ error: "Experiment not found." });
+        const analysis = getDoeAnalysis(db, doeId, analysisId);
+        if (!analysis) return res.status(404).json({ error: "Analysis not found for this DOE." });
+        const revision = getDoeAnalysisRevision(db, analysisId, revisionId);
+        if (!revision || revision.status !== "SUCCEEDED") {
+          return res.status(409).json({ error: "A successful saved revision is required for interpretation." });
+        }
+        const context = buildDoeInterpretationContext(revision, { experimentDescription: experiment.notes });
+        const interpretation = validateDoeInterpretationResponse(context, req.body?.interpretation);
+        const mode = req.body?.mode === "mock" ? "mock" : "provider";
+        const providerName = boundedOptionalText(req.body?.provider?.name, 120);
+        const model = boundedOptionalText(req.body?.provider?.model, 160);
+        const artifact = createDoeAiInterpretation(db, {
+          doeId,
+          analysisId,
+          analysisRevisionId: revisionId,
+          datasetRevision: revision.datasetRevision,
+          mode,
+          providerName,
+          model,
+          contractVersion: context.contractVersion,
+          promptVersion: context.promptVersion,
+          response: interpretation,
+          createdByUserId: req.user?.id ?? null
+        });
+        console.info("[llm] interpretation saved", {
+          artifactId: artifact.id,
+          analysisId,
+          revisionId,
+          userId: req.user?.id ?? null,
+          mode: artifact.mode,
+          providerName: artifact.providerName,
+          model: artifact.model
+        });
+        return res.status(201).json({ artifact });
+      } catch (error) {
+        if (error instanceof DoeInterpretationContractError) return res.status(400).json({ error: error.message });
         return sendAnalysisError(res, error, next);
       }
     }
@@ -977,6 +1042,12 @@ function sendAnalysisError(
 
 function canEditAnalysis(user: Express.User | undefined): boolean {
   return user?.role === "admin" || user?.role === "manager" || user?.role === "engineer";
+}
+
+function boundedOptionalText(value: unknown, maximumLength: number): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  return text && text.length <= maximumLength ? text : null;
 }
 
 function processTypeIdForExperiment(

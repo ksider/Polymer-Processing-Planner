@@ -1168,7 +1168,7 @@ fact.
    ACL/CSRF/rate limits, timeout, structured-output validation, retry/error
    behaviour, provider token-metering, and redacted audit log. Choose the first
    external or private deployment only at this point.
-5. **M5 — saved artifacts and report integration**. Persist an immutable
+5. **M5 — saved artifacts and report integration** — in progress. Persist an immutable
    interpretation artifact, show stale state, add it to report sources, and
    render deterministic ANOVA significance styling with optional AI callouts.
 6. **M6 — hardening and rollout**. Complete security, privacy, accessibility,

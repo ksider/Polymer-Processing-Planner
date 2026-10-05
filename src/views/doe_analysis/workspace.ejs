@@ -26,6 +26,7 @@
   data-templates-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/templates"
   data-views-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/views"
   data-interpret-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/interpret"
+  data-interpretation-save-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/interpretations"
   data-confirmation-run-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/confirmation-runs"
   data-analyses-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/analyses"
   data-run-base-url="/experiments/<%= experiment.id %>/runs"
@@ -384,7 +385,21 @@
             <div data-ai-interpretation-findings></div>
             <div data-ai-interpretation-cautions></div>
             <div data-ai-interpretation-next-steps></div>
-            <p class="small-note">Saving an interpretation will be enabled once immutable interpretation artifacts are added.</p>
+            <div class="doe-analysis-section-actions">
+              <button class="pure-button" type="button" data-save-ai-interpretation>Save interpretation</button>
+              <span class="small-note" data-save-ai-interpretation-status></span>
+            </div>
+          </section>
+          <section class="doe-ai-saved-interpretations" data-ai-saved-interpretations <%= savedAiInterpretations.length ? '' : 'hidden' %>>
+            <h3>Saved interpretations</h3>
+            <div data-ai-saved-interpretations-list>
+              <% savedAiInterpretations.forEach((artifact) => { %>
+                <article class="doe-ai-saved-interpretation">
+                  <div><strong><%= artifact.stale ? 'Stale interpretation' : 'Saved interpretation' %></strong><span class="small-note">#<%= artifact.id %> · <%= new Date(artifact.createdAt).toLocaleString() %><%= artifact.providerName ? ` · ${artifact.providerName}` : '' %><%= artifact.model ? ` / ${artifact.model}` : '' %></span></div>
+                  <p><%= artifact.response.summary %></p>
+                </article>
+              <% }); %>
+            </div>
           </section>
         </div>
       </dialog>
@@ -699,5 +714,5 @@
 <script nonce="<%= cspNonce %>" id="analysis-dataset" type="application/json"><%- jsonForScript(dataset) %></script>
 <script nonce="<%= cspNonce %>" src="/vendor/echarts/dist/echarts.min.js" defer></script>
 <script nonce="<%= cspNonce %>" src="/vendor/echarts-gl/dist/echarts-gl.min.js?v=2.0.9" defer></script>
-<script nonce="<%= cspNonce %>" src="/doe_analysis_workspace.js?v=20261005-ai-interpretation6" defer></script>
+<script nonce="<%= cspNonce %>" src="/doe_analysis_workspace.js?v=20261005-ai-interpretation7" defer></script>
 <%- include('../partials/foot') %>
