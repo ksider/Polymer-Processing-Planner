@@ -1172,8 +1172,10 @@ fact.
 4. **M4 — real provider adapters** — in progress. The OpenAI-compatible,
    Mistral structured-output, and Ollama request paths, URL/network safeguards,
    ACL/CSRF/rate limits, timeout, validation, token-metering, and redacted logs
-   are implemented. Mistral has returned a successful live interpretation;
-   validate each additionally configured provider before calling this complete.
+   are implemented. Mistral has returned a successful live interpretation, and
+   the Gemini OpenAI-compatible endpoint has a strict-schema contract test;
+   validate each additionally configured provider against a live profile before
+   calling this complete.
 5. **M5 — saved artifacts and report integration** — in progress. Immutable
    interpretations, explicit saves, stale state, evidence links, and deterministic
    ANOVA/coefficient significance styling are implemented. Adding these artifacts

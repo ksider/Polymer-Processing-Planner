@@ -203,7 +203,7 @@ function requestBody(profile: LlmProviderProfileForUse, messages: readonly Provi
 }
 
 function responseFormatFor(profile: LlmProviderProfileForUse): Record<string, unknown> {
-  if (isMistralProfile(profile)) {
+  if (supportsStrictJsonSchema(profile)) {
     return {
       type: "json_schema",
       json_schema: {
@@ -267,10 +267,12 @@ function finishReasonFromProvider(profile: LlmProviderProfileForUse, body: Recor
   return typeof firstChoice?.finish_reason === "string" ? firstChoice.finish_reason : null;
 }
 
-function isMistralProfile(profile: LlmProviderProfileForUse): boolean {
+function supportsStrictJsonSchema(profile: LlmProviderProfileForUse): boolean {
   try {
     const hostname = new URL(profile.baseUrl).hostname.toLowerCase();
-    return hostname === "api.mistral.ai" || hostname.endsWith(".mistral.ai");
+    return hostname === "api.mistral.ai"
+      || hostname.endsWith(".mistral.ai")
+      || hostname === "generativelanguage.googleapis.com";
   } catch {
     return false;
   }

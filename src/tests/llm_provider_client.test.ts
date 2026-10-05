@@ -111,3 +111,25 @@ test("openai-compatible adapter refuses an insecure endpoint before a request", 
     (error: unknown) => error instanceof LlmProviderError && error.code === "CONFIGURATION"
   );
 });
+
+test("Gemini OpenAI-compatible adapter uses the documented strict JSON schema endpoint", async () => {
+  await requestDoeInterpretation({
+    ...profile,
+    name: "Gemini test",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    model: "gemini-3.8-flash"
+  }, { context, locale: "en" }, async (input, init) => {
+    assert.equal(String(input), "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
+    assert.equal(new Headers(init?.headers).get("authorization"), "Bearer not-a-real-secret");
+    const body = JSON.parse(String(init?.body));
+    assert.equal(body.response_format.type, "json_schema");
+    assert.equal(body.response_format.json_schema.name, "doe_interpretation");
+    return new Response(JSON.stringify({
+      choices: [{ finish_reason: "stop", message: { content: JSON.stringify({
+        summary: "Model output is available.",
+        findings: [], cautions: [], nextSteps: [], clarifyingQuestions: []
+      }) } }],
+      usage: { prompt_tokens: 21, completion_tokens: 12 }
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  });
+});
