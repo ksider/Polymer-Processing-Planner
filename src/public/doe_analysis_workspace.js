@@ -252,12 +252,38 @@ function bindAiInterpretation(workspace, csrfToken) {
   const requestButton = workspace.querySelector("[data-request-ai-interpretation]");
   const status = workspace.querySelector("[data-ai-interpretation-status]");
   const result = workspace.querySelector("[data-ai-interpretation-result]");
+  const modeNote = workspace.querySelector("[data-ai-interpretation-mode]");
+  const starterButtons = [...dialog?.querySelectorAll("[data-ai-starter]") || []];
   const analysisId = Number(workspace.dataset.analysisId) || null;
   const revisionId = Number(workspace.dataset.analysisRevisionId) || null;
   const enabled = workspace.dataset.llmEnabled === "1";
-  if (!open || !dialog || !analysisId || !revisionId || !enabled) return;
-  open.hidden = false;
-  if (source) source.textContent = `Source: saved analysis ${analysisId}, calculation revision ${revisionId}.`;
+  if (!open || !dialog) return;
+
+  const setInteractionDisabled = (disabled) => {
+    if (requestButton) requestButton.disabled = disabled;
+    if (question) question.disabled = disabled;
+    starterButtons.forEach((button) => { button.disabled = disabled; });
+  };
+
+  const showUnavailable = () => {
+    if (!analysisId || !revisionId) {
+      if (source) source.textContent = "AI interpretation works from a saved analysis with a successful calculation revision.";
+      if (modeNote) renderAiModeNote(modeNote, "Calculation required", "Save the analysis and run a successful calculation first. This keeps every interpretation tied to a reproducible model result.");
+      if (status) status.textContent = "No saved successful calculation is selected.";
+      setInteractionDisabled(true);
+      return true;
+    }
+    if (!enabled) {
+      if (source) source.textContent = `Source ready: saved analysis ${analysisId}, calculation revision ${revisionId}.`;
+      if (modeNote) renderAiModeNote(modeNote, "AI assistant is disabled", "An administrator needs to enable the AI assistant for this Planner server before any analysis data can be sent to a provider.");
+      if (status) status.textContent = "AI interpretation is not enabled on this server.";
+      setInteractionDisabled(true);
+      return true;
+    }
+    if (source) source.textContent = `Source: saved analysis ${analysisId}, calculation revision ${revisionId}.`;
+    setInteractionDisabled(false);
+    return false;
+  };
 
   const requestInterpretation = async (starter = "") => {
     const questionText = String(starter || question?.value || "").trim();
@@ -288,7 +314,6 @@ function bindAiInterpretation(workspace, csrfToken) {
         provider: payload.mode === "provider" ? String(payload.provider?.name || "unknown") : null
       });
       renderAiInterpretation(workspace, payload.interpretation, payload.evidence || []);
-      const modeNote = workspace.querySelector("[data-ai-interpretation-mode]");
       if (payload.mode === "mock") {
         if (modeNote) renderAiModeNote(modeNote, "Preview mode", "No enabled default provider is configured, so no data left Planner.");
         if (status) status.textContent = "Preview generated locally.";
@@ -314,6 +339,7 @@ function bindAiInterpretation(workspace, csrfToken) {
 
   open.addEventListener("click", () => {
     dialog.showModal();
+    if (showUnavailable()) return;
     requestInterpretation("Explain this model");
   });
   dialog.querySelector("[data-close-ai-interpretation]")?.addEventListener("click", () => dialog.close());

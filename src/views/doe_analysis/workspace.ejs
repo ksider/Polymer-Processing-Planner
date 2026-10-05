@@ -190,8 +190,11 @@
       <section class="card" id="analysis-results" data-results-panel>
         <div class="doe-analysis-section-heading">
           <div>
-            <h2 class="card-title">Calculation result <button class="doe-analysis-link" type="button" data-open-ai-interpretation hidden>Interpret with AI</button><button class="doe-analysis-link" type="button" data-open-multi-optimize hidden>Optimize multiple responses</button></h2>
+            <h2 class="card-title">Calculation result <button class="doe-analysis-link" type="button" data-open-multi-optimize hidden>Optimize multiple responses</button></h2>
             <p class="small-note" data-result-meta></p>
+          </div>
+          <div class="doe-analysis-section-actions">
+            <button class="icon-button doe-analysis-ai-trigger" type="button" data-open-ai-interpretation title="Interpret calculation with AI" aria-label="Interpret calculation with AI"><span class="material-symbols-rounded" aria-hidden="true">auto_awesome</span></button>
           </div>
         </div>
         <div class="doe-analysis-empty-result" data-results-empty>
@@ -348,7 +351,7 @@
         <div class="modal-body pure-form pure-form-stacked">
           <p class="small-note" data-ai-interpretation-source></p>
           <div class="doe-analysis-notice" data-ai-interpretation-mode>
-            <strong>Preview mode</strong><span>This stage uses Planner's built-in mock provider. No data leaves Planner; a configured LLM provider will be connected in the next milestone.</span>
+            <strong>AI interpretation</strong><span>Interpretation uses the configured provider only after you open a saved, successfully calculated analysis.</span>
           </div>
           <div class="doe-analysis-section-actions">
             <button class="pure-button" type="button" data-ai-starter="Explain this model">Explain this model</button>
@@ -678,5 +681,5 @@
 <script nonce="<%= cspNonce %>" id="analysis-dataset" type="application/json"><%- jsonForScript(dataset) %></script>
 <script nonce="<%= cspNonce %>" src="/vendor/echarts/dist/echarts.min.js" defer></script>
 <script nonce="<%= cspNonce %>" src="/vendor/echarts-gl/dist/echarts-gl.min.js?v=2.0.9" defer></script>
-<script nonce="<%= cspNonce %>" src="/doe_analysis_workspace.js?v=20261005-ai-interpretation1" defer></script>
+<script nonce="<%= cspNonce %>" src="/doe_analysis_workspace.js?v=20261005-ai-interpretation2" defer></script>
 <%- include('../partials/foot') %>

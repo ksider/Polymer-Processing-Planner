@@ -6046,6 +6046,14 @@ body.notes-drawer-open {
   vertical-align: middle;
 }
 
+.doe-analysis-ai-trigger {
+  color: var(--accent-2, #b57829);
+}
+
+.doe-analysis-ai-trigger:hover {
+  border-color: var(--accent-2, #b57829);
+}
+
 .doe-analysis-link {
   appearance: none;
   border: 0;
