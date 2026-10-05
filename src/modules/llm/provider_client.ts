@@ -96,7 +96,9 @@ export async function requestDoeInterpretation(
         reason: message,
         hasUsage: Boolean(asRecord(body?.usage))
       });
-      throw error;
+      throw error instanceof LlmProviderError
+        ? error
+        : new LlmProviderError(message, "RESPONSE");
     }
     const usage = usageFromProvider(profile, body, promptForEstimate, content);
     console.info("[llm] provider interpretation completed", {

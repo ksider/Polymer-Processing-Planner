@@ -171,6 +171,18 @@ test("DOE interpretation accepts older saved revisions without optional arrays",
   assert.equal(context.results.diagnosticSummary.count, 0);
 });
 
+test("DOE interpretation permits an uncited general caution", () => {
+  const context = buildDoeInterpretationContext(fixtureRevision());
+  const response = validateDoeInterpretationResponse(context, {
+    summary: "Interpret the model with care.",
+    findings: [],
+    cautions: [{ text: "Confirm any proposed operating setting with a new run." }],
+    nextSteps: [],
+    clarifyingQuestions: []
+  });
+  assert.deepEqual(response.cautions[0]?.evidenceIds, []);
+});
+
 test("mock DOE interpretation validates only known evidence IDs", () => {
   const context = buildDoeInterpretationContext(fixtureRevision());
   const response = createMockDoeInterpretation({ context, locale: "ru" });
