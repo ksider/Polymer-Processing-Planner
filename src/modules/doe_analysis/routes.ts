@@ -156,7 +156,8 @@ export function createDoeAnalysisRouter(
           selectedEvents,
           pendingCalculationJob,
           savedAiInterpretations,
-          llmAssistantEnabled: isDoeAnalysisLlmEnabled()
+          llmAssistantEnabled: isDoeAnalysisLlmEnabled(),
+          canRequestAiInterpretation: canEditAnalysis(req.user)
         });
       } catch (error) {
         if (error instanceof DoeAnalysisDatasetNotFoundError) {
@@ -185,6 +186,7 @@ export function createDoeAnalysisRouter(
     llmInterpretationLimiter,
     async (req, res, next) => {
       if (!isDoeAnalysisLlmEnabled()) return res.status(404).json({ error: "AI interpretation is disabled." });
+      if (!canEditAnalysis(req.user)) return res.status(403).json({ error: "Forbidden" });
       const doeId = Number(req.params.doeId);
       const analysisId = Number(req.body?.analysisId);
       const revisionId = Number(req.body?.revisionId);

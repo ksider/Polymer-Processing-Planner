@@ -14,6 +14,7 @@ import {
   generateRuns
 } from "../services/experiments_service.js";
 import { getCsrfToken } from "./csrf_test_helpers.js";
+import { upsertEntityAssignment } from "../repos/entity_assignments_repo.js";
 
 test("Analysis V2 dataset endpoint uses experiment access and DOE ownership", async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "im-planner-analysis-v2-route-"));
@@ -37,6 +38,14 @@ test("Analysis V2 dataset endpoint uses experiment access and DOE ownership", as
       status: "ACTIVE",
       tempPassword: 0
     });
+    const viewerId = createUser(db, {
+      email: "analysis-viewer@example.com",
+      name: "Analysis Viewer",
+      passwordHash: bcrypt.hashSync("ViewerPass123!", 12),
+      role: "viewer",
+      status: "ACTIVE",
+      tempPassword: 0
+    });
     const experimentId = createExperimentWithDefaults(db, {
       name: "Analysis route fixture",
       owner_user_id: userId
@@ -52,6 +61,13 @@ test("Analysis V2 dataset endpoint uses experiment access and DOE ownership", as
       recipe_as_block: 0
     });
     generateRuns(db, experimentId, doeId);
+    upsertEntityAssignment(db, {
+      experiment_id: experimentId,
+      entity_type: "doe",
+      entity_id: doeId,
+      assignee_user_id: viewerId,
+      assigned_by_user_id: userId
+    });
 
     await request(app)
       .get(`/experiments/${experimentId}/doe/${doeId}/analysis-v2/dataset`)
@@ -189,6 +205,14 @@ test("Analysis V2 dataset endpoint uses experiment access and DOE ownership", as
     assert.equal(finishedCalculation.body.result.ok, true);
     assert.equal(finishedCalculation.body.revision.status, "SUCCEEDED");
 
+    await agent
+      .post(`/experiments/${experimentId}/doe/${doeId}/analysis-v2/interpret`)
+      .send({
+        analysisId: createdAnalysis.body.analysis.id,
+        revisionId: finishedCalculation.body.revision.id
+      })
+      .expect(403);
+
     const interpretation = await agent
       .post(`/experiments/${experimentId}/doe/${doeId}/analysis-v2/interpret`)
       .set("x-csrf-token", pageCsrf)
@@ -216,6 +240,33 @@ test("Analysis V2 dataset endpoint uses experiment access and DOE ownership", as
       .expect(201);
     assert.equal(savedInterpretation.body.artifact.analysisRevisionId, finishedCalculation.body.revision.id);
     assert.equal(savedInterpretation.body.artifact.response.summary, interpretation.body.interpretation.summary);
+
+    const viewer = request.agent(app);
+    const viewerLoginCsrf = await getCsrfToken(viewer, "/auth/login");
+    await viewer
+      .post("/auth/login")
+      .type("form")
+      .send({ email: "analysis-viewer@example.com", password: "ViewerPass123!", _csrf: viewerLoginCsrf })
+      .expect(302);
+    const viewerCsrf = await getCsrfToken(viewer, `/experiments/${experimentId}/doe/${doeId}/analysis-v2`);
+    await viewer
+      .get(`/experiments/${experimentId}/doe/${doeId}/analysis-v2?analysis_id=${createdAnalysis.body.analysis.id}`)
+      .expect(200)
+      .expect(/data-llm-can-request="0"/);
+    await viewer
+      .post(`/experiments/${experimentId}/doe/${doeId}/analysis-v2/interpret`)
+      .set("x-csrf-token", viewerCsrf)
+      .send({ analysisId: createdAnalysis.body.analysis.id, revisionId: finishedCalculation.body.revision.id })
+      .expect(403);
+    await viewer
+      .post(`/experiments/${experimentId}/doe/${doeId}/analysis-v2/interpretations`)
+      .set("x-csrf-token", viewerCsrf)
+      .send({
+        analysisId: createdAnalysis.body.analysis.id,
+        revisionId: finishedCalculation.body.revision.id,
+        interpretation: interpretation.body.interpretation
+      })
+      .expect(403);
     await agent
       .get(`/experiments/${experimentId}/doe/${doeId}/analysis-v2?analysis_id=${createdAnalysis.body.analysis.id}`)
       .expect(200)

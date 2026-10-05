@@ -262,6 +262,7 @@ function bindAiInterpretation(workspace, csrfToken) {
   const analysisId = Number(workspace.dataset.analysisId) || null;
   const revisionId = Number(workspace.dataset.analysisRevisionId) || null;
   const enabled = workspace.dataset.llmEnabled === "1";
+  const canRequest = workspace.dataset.llmCanRequest === "1";
   let latestInterpretationPayload = null;
   if (!open || !dialog) return;
 
@@ -282,6 +283,13 @@ function bindAiInterpretation(workspace, csrfToken) {
     if (!enabled) {
       if (source) source.textContent = `Source ready: saved analysis ${analysisId}, calculation revision ${revisionId}.`;
       renderAiReadiness(readiness, "blocked", "AI disabled", "An administrator needs to enable the AI assistant for this Planner server before any analysis data can be sent to a provider.");
+      if (status) status.textContent = "";
+      setInteractionDisabled(true);
+      return true;
+    }
+    if (!canRequest) {
+      if (source) source.textContent = `Source: saved analysis ${analysisId}, calculation revision ${revisionId}. You may review saved interpretations, but generating or saving one requires an engineer, manager, or administrator role.`;
+      renderAiReadiness(readiness, "blocked", "Permission required", "Your role has read-only access to this analysis. It cannot create an external AI request or save a new interpretation.");
       if (status) status.textContent = "";
       setInteractionDisabled(true);
       return true;

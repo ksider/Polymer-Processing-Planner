@@ -33,6 +33,7 @@
   data-analysis-id="<%= selectedAnalysis?.id || '' %>"
   data-analysis-revision-id="<%= latestSuccessfulRevision?.id || '' %>"
   data-llm-enabled="<%= llmAssistantEnabled ? '1' : '0' %>"
+  data-llm-can-request="<%= canRequestAiInterpretation ? '1' : '0' %>"
   data-pending-job-id="<%= pendingCalculationJob?.id || '' %>"
   data-analysis-state="<%= selectedAnalysis?.state || 'draft' %>">
   <header class="card doe-analysis-header">
