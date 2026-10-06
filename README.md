@@ -56,6 +56,7 @@ SESSION_SECRET=<random-secret>
 ADMIN_EMAIL=admin@example.com
 ADMIN_TEMP_PASSWORD=<temporary-password>
 TRUST_PROXY=1
+ALLOWED_ORIGINS=https://planner.example.com
 
 # DOE Analysis V2
 DOE_ANALYSIS_V2_ENABLED=true
