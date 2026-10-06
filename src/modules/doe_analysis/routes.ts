@@ -53,6 +53,8 @@ import {
 } from "../llm/provider_client.js";
 import {
   getDefaultDoeLlmProviderProfileForUse,
+  getLlmProviderProfileForUse,
+  listLlmProviderProfiles,
   recordLlmUsage
 } from "../llm/provider_profiles_repo.js";
 import { optimizeSavedAnalyses, type MultiResponseGoalInput } from "./multi_response_service.js";
@@ -136,6 +138,8 @@ export function createDoeAnalysisRouter(
         const pendingCalculationJob = selectedAnalysis
           ? findActiveDoeAnalysisJob(db, selectedAnalysis.id)
           : null;
+        const aiProviderProfiles = listLlmProviderProfiles(db)
+          .filter((profile) => profile.enabled && (profile.providerKind === "ollama" || profile.hasApiKey));
         const savedAiInterpretations = selectedAnalysis
           ? listDoeAiInterpretations(db, selectedAnalysis.id).map((artifact) => {
             const artifactRevision = getDoeAnalysisRevision(db, selectedAnalysis.id, artifact.analysisRevisionId);
@@ -165,6 +169,7 @@ export function createDoeAnalysisRouter(
           selectedEvents,
           pendingCalculationJob,
           savedAiInterpretations,
+          aiProviderProfiles,
           llmAssistantEnabled: isDoeAnalysisLlmEnabled(),
           canRequestAiInterpretation: canEditAnalysis(req.user)
         });
@@ -220,7 +225,13 @@ export function createDoeAnalysisRouter(
           locale,
           userQuestion: rawQuestion || undefined
         };
-        const profile = getDefaultDoeLlmProviderProfileForUse(db);
+        const requestedProfileId = Number(req.body?.providerProfileId);
+        const profile = Number.isFinite(requestedProfileId) && requestedProfileId > 0
+          ? getLlmProviderProfileForUse(db, requestedProfileId)
+          : getDefaultDoeLlmProviderProfileForUse(db);
+        if (profile && (!profile.enabled || (profile.providerKind !== "ollama" && !profile.apiKey))) {
+          return res.status(422).json({ error: "The selected AI provider is not available." });
+        }
         if (!profile) {
           const interpretation = createMockDoeInterpretation(interpretationRequest);
           console.info("[llm] mock interpretation completed", {

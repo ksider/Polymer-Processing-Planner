@@ -382,7 +382,22 @@
           </div>
           <label for="aiInterpretationQuestion">Question (optional)</label>
           <textarea id="aiInterpretationQuestion" data-ai-interpretation-question maxlength="2000" rows="3" placeholder="Ask about this calculated model"></textarea>
-          <div class="doe-analysis-section-actions"><button class="pure-button pure-button-primary" type="button" data-request-ai-interpretation>Generate interpretation</button><span class="visually-hidden" data-ai-interpretation-status aria-live="polite"></span></div>
+          <div class="doe-analysis-section-actions doe-ai-generate-actions">
+            <% if (aiProviderProfiles.length) { const defaultAiProvider = aiProviderProfiles.find((profile) => profile.defaultForDoe) || aiProviderProfiles[0]; %>
+              <details class="doe-ai-provider-menu" data-ai-provider-menu>
+                <summary aria-label="Choose AI model"><span data-ai-provider-label><%= defaultAiProvider.name %> / <%= defaultAiProvider.model %></span><span class="material-symbols-rounded" aria-hidden="true">unfold_more</span></summary>
+                <div class="doe-ai-provider-menu-popover" role="menu" aria-label="AI models">
+                  <% aiProviderProfiles.forEach((profile) => { %>
+                    <button class="doe-ai-provider-menu-item <%= profile.id === defaultAiProvider.id ? 'is-current' : '' %>" type="button" role="menuitem" data-ai-provider-option data-provider-profile-id="<%= profile.id %>" data-provider-label="<%= `${profile.name} / ${profile.model}` %>">
+                      <span><strong><%= profile.name %></strong><small><%= profile.model %></small></span>
+                      <span class="material-symbols-rounded" aria-hidden="true">check</span>
+                    </button>
+                  <% }); %>
+                </div>
+              </details>
+            <% } %>
+            <button class="pure-button pure-button-primary" type="button" data-request-ai-interpretation>Generate interpretation</button><span class="visually-hidden" data-ai-interpretation-status aria-live="polite"></span>
+          </div>
           <section data-ai-interpretation-result hidden>
             <h3 data-ai-interpretation-summary></h3>
             <div data-ai-interpretation-findings></div>

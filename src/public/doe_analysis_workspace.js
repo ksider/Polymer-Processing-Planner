@@ -258,12 +258,15 @@ function bindAiInterpretation(workspace, csrfToken) {
   const savedInterpretations = workspace.querySelector("[data-ai-saved-interpretations]");
   const savedInterpretationsList = workspace.querySelector("[data-ai-saved-interpretations-list]");
   const readiness = workspace.querySelector("[data-ai-interpretation-readiness]");
+  const providerMenu = workspace.querySelector("[data-ai-provider-menu]");
+  const providerLabel = workspace.querySelector("[data-ai-provider-label]");
   const starterButtons = [...dialog?.querySelectorAll("[data-ai-starter]") || []];
   const analysisId = Number(workspace.dataset.analysisId) || null;
   const revisionId = Number(workspace.dataset.analysisRevisionId) || null;
   const enabled = workspace.dataset.llmEnabled === "1";
   const canRequest = workspace.dataset.llmCanRequest === "1";
   let latestInterpretationPayload = null;
+  let selectedProviderProfileId = Number(providerMenu?.querySelector("[data-ai-provider-option].is-current")?.dataset.providerProfileId) || null;
   if (!open || !dialog) return;
 
   const savedInterpretationsData = parseJsonScript("#analysis-saved-ai-interpretations", []);
@@ -338,6 +341,7 @@ function bindAiInterpretation(workspace, csrfToken) {
           analysisId,
           revisionId,
           question: questionText || undefined,
+          providerProfileId: selectedProviderProfileId || undefined,
           locale: navigator.language || "en"
         })
       });
@@ -427,6 +431,14 @@ function bindAiInterpretation(workspace, csrfToken) {
     button.addEventListener("click", () => {
       const starter = button.dataset.aiStarter || "";
       if (question) question.value = starter;
+    });
+  });
+  providerMenu?.querySelectorAll("[data-ai-provider-option]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedProviderProfileId = Number(button.dataset.providerProfileId) || null;
+      if (providerLabel) providerLabel.textContent = button.dataset.providerLabel || "AI model";
+      providerMenu.querySelectorAll("[data-ai-provider-option]").forEach((option) => option.classList.toggle("is-current", option === button));
+      providerMenu.open = false;
     });
   });
 }
