@@ -41,6 +41,101 @@ npm run dev
 ```
 Open `http://localhost:3000`.
 
+### Configuration
+
+Copy `.env.example` to `.env` and set the secrets before starting the server.
+The real `.env`, SQLite files, and uploaded files must not be committed.
+
+Important settings:
+
+```dotenv
+NODE_ENV=production
+PORT=3000
+DB_PATH=/app/data/im_doe.sqlite
+SESSION_SECRET=<random-secret>
+ADMIN_EMAIL=admin@example.com
+ADMIN_TEMP_PASSWORD=<temporary-password>
+TRUST_PROXY=1
+
+# DOE Analysis V2
+DOE_ANALYSIS_V2_ENABLED=true
+DOE_ANALYTICS_MODE=http
+DOE_ANALYTICS_URL=http://analytics-r:8000
+DOE_ANALYTICS_TIMEOUT_MS=15000
+
+# Optional DOE AI assistant
+DOE_ANALYSIS_LLM_ENABLED=true
+LLM_SETTINGS_ENCRYPTION_KEY=<32-byte-base64-key>
+```
+
+`DOE_ANALYSIS_V2_ENABLED` controls the new analysis workspace. The R analytics
+service is selected with `DOE_ANALYTICS_MODE=http`; `mock` is only for a
+contract-only fallback. `LLM_SETTINGS_ENCRYPTION_KEY` is required when an
+administrator stores an API key in Admin → AI providers. Generate it with:
+
+```sh
+openssl rand -base64 32
+```
+
+Keep this encryption key permanently. Changing it makes provider keys already
+stored in SQLite unreadable until they are entered again.
+
+### Docker deployment
+
+For a server deployment using the published images, use
+`docker-compose-ghcr.yml` in Portainer or Docker Compose:
+
+```sh
+docker compose -f docker-compose-ghcr.yml pull
+docker compose -f docker-compose-ghcr.yml up -d
+```
+
+The file starts two services:
+
+- `planner` — the web application on container port `3000`;
+- `analytics-r` — the private R analytics service on container port `8000`.
+
+Planner reaches R as `http://analytics-r:8000` through the private Compose
+network. The analytics service does not need a host port mapping, and port
+`8000` can be occupied on the host. The public reverse proxy should expose only
+Planner (normally host port `3000`, or whatever port the proxy maps to it).
+
+The GHCR compose file uses:
+
+```yaml
+planner:
+  image: ghcr.io/ksider/polymer-planner:latest
+analytics-r:
+  image: ghcr.io/ksider/polymer-planner-analytics:latest
+```
+
+Both images are published by the repository GitHub Actions workflow. Updating
+the deployment means pulling the new images and recreating both services; the
+named volumes `planner_data` and `planner_uploads` preserve the database and
+uploads.
+
+After the first login, configure a provider in **Admin → AI providers**:
+
+| Provider | Profile type | Base URL | API key |
+| --- | --- | --- | --- |
+| Mistral | OpenAI-compatible | `https://api.mistral.ai/v1` | Mistral API key |
+| Gemini | OpenAI-compatible | `https://generativelanguage.googleapis.com/v1beta/openai` | Gemini API key |
+| Ollama | Ollama | `http://ollama:11434` or the reachable Ollama URL | not required |
+
+Set one enabled profile as **DOE default**. The URL is the provider base URL;
+Planner appends the chat endpoint itself. For a Gemini or Mistral profile,
+choose a model supported by that provider and set the maximum output tokens
+high enough for the structured interpretation response.
+
+Do not run `npm run analytics:r:setup` inside this production deployment. That
+command is only for local development when Docker is not being used. The local
+R service can be tested with:
+
+```sh
+npm run analytics:r:setup
+npm run analytics:r:test
+```
+
 ## Project Structure
 ```text
 .
@@ -57,6 +152,10 @@ Open `http://localhost:3000`.
 │  │  ├─ chemical_structure_editor.js  # Shared chemical-editor adapter
 │  │  └─ ketcher/             # Self-hosted Ketcher standalone application
 │  └─ tests/                  # Integration tests
+├─ analytics-r/               # Stateless R DOE analytics service
+├─ contracts/                 # Cross-service data contracts
+├─ docker-compose-ghcr.yml    # Production stack using GHCR images
+├─ docker-compose.yml         # Local Docker build of both services
 ├─ dist/                      # Compiled output (`npm run build`)
 ├─ data/im_doe.sqlite         # Runtime SQLite database (never commit it)
 └─ README.md
@@ -248,11 +347,53 @@ Implementation notes:
 - Each qualification step is edited independently (`/experiments/:id/qualification/:step`): runs, values, assignee, and step fields are isolated per step.
 
 ## DOE (Shared Engine, Process-Specific Defaults)
-- DOE generation/analysis uses one shared module across process types.
-- Defaults are process-specific:
-  - active factors by `process_type`,
-  - active measured outputs by `process_type`.
-- Analysis reads `analysis_run_values` first, and falls back to `run_values` by field code when needed (useful for migration/demo data).
+- DOE generation and analysis use one shared module across process types.
+- Defaults are process-specific: active factors, measured responses, and model
+  templates are selected by process type.
+- Measured responses are configured on the DOE Design page before runs are
+  generated and can also be added later without regenerating runs.
+- Analysis V2 stores named analyses and immutable calculation revisions bound to
+  a dataset snapshot. It includes:
+  - overview of completeness, factors, responses, blocks, and provenance;
+  - hierarchical model terms, transforms, categorical blocks, and derived
+    responses;
+  - ANOVA, coefficients, model quality, lack-of-fit/pure-error diagnostics,
+    residual diagnostics, Q-Q and run-order plots;
+  - main effects, interaction, mean-with-confidence-interval, contour, and 3D
+    response-surface views;
+  - single- and multi-response optimization with confirmation-run warnings;
+  - saved graph views, copyable tables, and analysis-ready CSV export for other
+    DOE software;
+  - deterministic p-value significance labels in ANOVA and coefficient tables.
+- Analysis reads `analysis_run_values` first and falls back to `run_values` by
+  field code when needed for migration/demo data.
+
+### DOE AI assistant
+
+The optional AI assistant is read-only with respect to the statistical model.
+It can interpret only a saved analysis with a successful calculation revision;
+it cannot change runs, factors, responses, model terms, or calculated results.
+
+- Open it with the sparkle button beside **Calculation result**.
+- Opening the dialog does not call a provider. A request is sent only after
+  **Generate interpretation** is pressed.
+- The provider receives compact calculated evidence, the experiment description
+  when present, and the user's optional question — not the worksheet or API
+  secrets.
+- Results must pass the structured DOE response contract and evidence IDs are
+  linked back to the existing result tables and charts.
+- **Save interpretation** creates an immutable artifact tied to the exact
+  analysis revision. Artifacts become visibly stale after recalculation.
+- Provider API keys are configured by an administrator in **Admin → AI
+  providers** and encrypted in SQLite. Supported profile types are
+  OpenAI-compatible and Ollama.
+- Gemini OpenAI-compatible profiles use
+  `https://generativelanguage.googleapis.com/v1beta/openai` as the base URL;
+  Planner appends `/chat/completions` automatically. Mistral and Gemini use a
+  strict JSON schema response format.
+- Personal token usage is available at `/me`; administrators see aggregate and
+  per-user/provider/model usage in `/admin`. The views support 7-day, 30-day,
+  90-day, and all-time periods.
 
 ## Roadmap
 
