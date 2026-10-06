@@ -566,28 +566,38 @@
             </label>
           </fieldset>
 
-          <fieldset class="doe-analysis-fieldset" data-optimization-controls>
-            <legend>Optimize this response</legend>
-            <p class="small-note">Optional. Recommendations stay within the physical factor bounds below and are saved with the calculation revision.</p>
-            <label for="optimizationObjective">Goal</label>
-            <select id="optimizationObjective" name="optimizationObjective" <%= analysisArchived ? 'disabled' : '' %>>
-              <option value="">No optimization</option>
-              <option value="maximize" <%= defaultSpecification.optimization?.objective === 'maximize' ? 'selected' : '' %>>Maximize response</option>
-              <option value="minimize" <%= defaultSpecification.optimization?.objective === 'minimize' ? 'selected' : '' %>>Minimize response</option>
-              <option value="target" <%= defaultSpecification.optimization?.objective === 'target' ? 'selected' : '' %>>Hit a target</option>
-            </select>
-            <label data-optimization-target for="optimizationTarget">Target value</label>
-            <input data-optimization-target id="optimizationTarget" name="optimizationTarget" type="number" step="any" value="<%= defaultSpecification.optimization?.target ?? '' %>" <%= analysisArchived ? 'disabled' : '' %>>
-            <div class="doe-analysis-optimization-bounds" data-optimization-bounds>
-              <% factors.forEach((factor) => { const levels = factor.factor?.levels || []; const configured = defaultSpecification.optimization?.factorBounds?.[factor.key]; const low = configured?.min ?? levels[0] ?? ''; const high = configured?.max ?? levels[levels.length - 1] ?? ''; %>
-                <div data-optimization-factor="<%= factor.key %>">
-                  <strong><%- formatInline(factor.label) %><%= factor.unit ? ` (${factor.unit})` : '' %></strong>
-                  <label>Min <input name="optimizationMin:<%= factor.key %>" type="number" step="any" value="<%= low %>" <%= analysisArchived ? 'disabled' : '' %>></label>
-                  <label>Max <input name="optimizationMax:<%= factor.key %>" type="number" step="any" value="<%= high %>" <%= analysisArchived ? 'disabled' : '' %>></label>
-                </div>
-              <% }); %>
+          <section class="doe-analysis-optimization-summary" data-optimization-controls>
+            <div>
+              <strong>Optimization</strong>
+              <span class="small-note" data-optimization-summary>No optimization configured</span>
             </div>
-          </fieldset>
+            <button class="pure-button button-small" type="button" data-open-optimization <%= analysisArchived ? 'disabled' : '' %>>Configure</button>
+            <dialog class="modal-frame doe-analysis-dialog" data-optimization-dialog>
+              <div class="modal-header"><h2>Optimize this response</h2><button class="icon-button" type="button" data-close-optimization aria-label="Close"><span class="material-symbols-rounded" aria-hidden="true">close</span></button></div>
+              <div class="modal-body">
+                <p class="small-note">Recommendations stay within the physical factor bounds below and are saved with the calculation revision.</p>
+                <label for="optimizationObjective">Goal</label>
+                <select id="optimizationObjective" name="optimizationObjective" <%= analysisArchived ? 'disabled' : '' %>>
+                  <option value="">No optimization</option>
+                  <option value="maximize" <%= defaultSpecification.optimization?.objective === 'maximize' ? 'selected' : '' %>>Maximize response</option>
+                  <option value="minimize" <%= defaultSpecification.optimization?.objective === 'minimize' ? 'selected' : '' %>>Minimize response</option>
+                  <option value="target" <%= defaultSpecification.optimization?.objective === 'target' ? 'selected' : '' %>>Hit a target</option>
+                </select>
+                <label data-optimization-target for="optimizationTarget">Target value</label>
+                <input data-optimization-target id="optimizationTarget" name="optimizationTarget" type="number" step="any" value="<%= defaultSpecification.optimization?.target ?? '' %>" <%= analysisArchived ? 'disabled' : '' %>>
+                <div class="doe-analysis-optimization-bounds" data-optimization-bounds>
+                  <% factors.forEach((factor) => { const levels = factor.factor?.levels || []; const configured = defaultSpecification.optimization?.factorBounds?.[factor.key]; const low = configured?.min ?? levels[0] ?? ''; const high = configured?.max ?? levels[levels.length - 1] ?? ''; %>
+                    <div data-optimization-factor="<%= factor.key %>">
+                      <strong><%- formatInline(factor.label) %><%= factor.unit ? ` (${factor.unit})` : '' %></strong>
+                      <label>Min <input name="optimizationMin:<%= factor.key %>" type="number" step="any" value="<%= low %>" <%= analysisArchived ? 'disabled' : '' %>></label>
+                      <label>Max <input name="optimizationMax:<%= factor.key %>" type="number" step="any" value="<%= high %>" <%= analysisArchived ? 'disabled' : '' %>></label>
+                    </div>
+                  <% }); %>
+                </div>
+              </div>
+              <div class="modal-footer"><button class="pure-button" type="button" data-close-optimization>Done</button></div>
+            </dialog>
+          </section>
 
           <label for="analysisConfidence">Confidence level</label>
           <select id="analysisConfidence" name="confidenceLevel" <%= analysisArchived ? 'disabled' : '' %>>
@@ -596,12 +606,12 @@
             <option value="0.99" <%= defaultSpecification.confidenceLevel === 0.99 ? 'selected' : '' %>>99%</option>
           </select>
 
-          <label for="analysisResponseTransform">Response transformation</label>
-          <select id="analysisResponseTransform" name="responseTransform" <%= analysisArchived ? 'disabled' : '' %>>
-            <option value="none" <%= defaultSpecification.responseTransform === 'none' ? 'selected' : '' %>>None</option>
-            <option value="log" <%= defaultSpecification.responseTransform === 'log' ? 'selected' : '' %>>log(response)</option>
-            <option value="sqrt" <%= defaultSpecification.responseTransform === 'sqrt' ? 'selected' : '' %>>sqrt(response)</option>
-          </select>
+          <fieldset class="doe-analysis-fieldset">
+            <legend>Response transformation</legend>
+            <label class="pure-checkbox"><input type="radio" name="responseTransform" value="none" <%= defaultSpecification.responseTransform === 'none' ? 'checked' : '' %> <%= analysisArchived ? 'disabled' : '' %>> None</label>
+            <label class="pure-checkbox"><input type="radio" name="responseTransform" value="log" <%= defaultSpecification.responseTransform === 'log' ? 'checked' : '' %> <%= analysisArchived ? 'disabled' : '' %>> log(response)</label>
+            <label class="pure-checkbox"><input type="radio" name="responseTransform" value="sqrt" <%= defaultSpecification.responseTransform === 'sqrt' ? 'checked' : '' %> <%= analysisArchived ? 'disabled' : '' %>> sqrt(response)</label>
+          </fieldset>
           <p class="small-note">A transformation changes the fitted response scale and is saved with this analysis revision.</p>
 
           <% if (numericResponses.length >= 2) { const derived = defaultSpecification.derivedResponse; const derivedLeftKey = derived?.leftKey || numericResponses.find((response) => response.key === primaryResponseKey)?.key || numericResponses[0].key; const derivedRightKey = derived?.rightKey || numericResponses.find((response) => response.key !== derivedLeftKey)?.key || derivedLeftKey; %>

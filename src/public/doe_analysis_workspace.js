@@ -104,7 +104,7 @@ let analysisUsesCodedFactors = false;
       if (engineStatus) {
         engineStatus.textContent = body.engine?.mode === "mock"
           ? "Contract mock · R is not connected"
-          : `${body.engine?.name || "R engine"} · ${body.engine?.version || "unknown version"}`;
+          : "DOE analysis";
         engineStatus.classList.toggle("is-mock", body.engine?.mode === "mock");
       }
       const empty = workspace.querySelector("[data-results-empty]");
@@ -739,8 +739,7 @@ function responseLabelForSpecification(specification, fallback) {
 function bindResponseControls(form, archivedAnalysis) {
   if (!form) return;
   const response = form.elements.namedItem("responseKey");
-  const transform = form.elements.namedItem("responseTransform");
-  if (!(response instanceof HTMLSelectElement) || !(transform instanceof HTMLSelectElement)) return;
+  if (!(response instanceof HTMLSelectElement)) return;
   const responseType = () => analysisDataset?.columns?.find((column) => column.key === response.value)?.dataType;
   const tagControls = form.querySelector("[data-tag-response-controls]");
   const tagSelector = form.elements.namedItem("tagResponseTag");
@@ -821,6 +820,10 @@ function bindOptimizationControls(form, archivedAnalysis) {
   if (!form) return;
   const objective = form.elements.namedItem("optimizationObjective");
   if (!(objective instanceof HTMLSelectElement)) return;
+  const dialog = form.querySelector("[data-optimization-dialog]");
+  const open = form.querySelector("[data-open-optimization]");
+  const close = form.querySelector("[data-close-optimization]");
+  const summary = form.querySelector("[data-optimization-summary]");
   const targetControls = [...form.querySelectorAll("[data-optimization-target]")];
   const factorControls = [...form.querySelectorAll('input[name="factorKeys"]')];
   const sync = () => {
@@ -831,9 +834,27 @@ function bindOptimizationControls(form, archivedAnalysis) {
       row.hidden = !enabled;
       row.querySelectorAll("input").forEach((input) => { input.disabled = archivedAnalysis || !enabled; });
     });
+    if (summary) {
+      if (!active) {
+        summary.textContent = "No optimization configured";
+      } else {
+        const goal = objective.value === "target" ? "Target" : objective.value === "maximize" ? "Maximize" : "Minimize";
+        const target = form.elements.namedItem("optimizationTarget");
+        const targetText = objective.value === "target" && target instanceof HTMLInputElement && target.value
+          ? ` · ${target.value}`
+          : "";
+        const selected = [...form.querySelectorAll("[data-optimization-factor]")]
+          .filter((row) => !row.hidden)
+          .map((row) => row.querySelector("strong")?.textContent?.trim())
+          .filter(Boolean);
+        summary.textContent = `${goal}${targetText} · ${selected.length} factor bound${selected.length === 1 ? "" : "s"}`;
+      }
+    }
   };
   objective.addEventListener("change", sync);
   factorControls.forEach((control) => control.addEventListener("change", sync));
+  open?.addEventListener("click", () => dialog instanceof HTMLDialogElement && dialog.showModal());
+  close?.addEventListener("click", () => dialog instanceof HTMLDialogElement && dialog.close());
   sync();
 }
 
@@ -1008,7 +1029,9 @@ function applySpecificationToForm(form, specification) {
   const incomplete = form.elements.namedItem("includeIncomplete"); if (incomplete instanceof HTMLInputElement) incomplete.checked = specification.includeIncomplete === true;
   const excluded = form.elements.namedItem("includeExcluded"); if (excluded instanceof HTMLInputElement) excluded.checked = specification.includeExcluded === true;
   setValue("confidenceLevel", specification.confidenceLevel);
-  setValue("responseTransform", specification.responseTransform);
+  form.querySelectorAll('[name="responseTransform"]').forEach((field) => {
+    if (field instanceof HTMLInputElement) field.checked = field.value === specification.responseTransform;
+  });
   setValue("derivedOperation", specification.derivedResponse?.operation || "");
   setValue("derivedLeftKey", specification.derivedResponse?.leftKey || "");
   setValue("derivedRightKey", specification.derivedResponse?.rightKey || "");
@@ -1400,13 +1423,13 @@ function renderCharts(workspace, result) {
     chart.setOption({
       animationDuration: 250,
       aria: { enabled: true },
-      grid: { left: 58, right: 24, top: 12, bottom: 34, containLabel: true },
+      grid: { left: 132, right: 24, top: 12, bottom: 34, containLabel: true },
       tooltip: {
         trigger: "item",
         formatter: (item) => `${item.name}<br>Effect strength: ${formatNumber(item.value)}<br>Select to link the statistical rows.`
       },
       xAxis: { type: "value", name: "Effect strength", nameLocation: "middle", nameGap: 22, axisLabel: numericAxisLabels() },
-      yAxis: { type: "category", name: "Model term", nameLocation: "middle", nameGap: 42, data: effects.map((effect) => effect.term), axisLabel: { width: 150, overflow: "truncate" } },
+      yAxis: { type: "category", data: effects.map((effect) => effect.term), axisLabel: { width: 112, overflow: "truncate", ellipsis: "…" } },
       series: [{
         type: "bar",
         data: effects.map((effect) => ({
@@ -2301,7 +2324,7 @@ function appendPValueSignificance(cell, row, context) {
   const significance = pValueSignificance(pValue, String(row?.term || ""), context);
   const badge = document.createElement("span");
   badge.className = `doe-analysis-significance doe-analysis-significance--${significance.level}`;
-  badge.textContent = significance.label;
+  badge.textContent = significance.value;
   badge.title = significance.description;
   badge.setAttribute("aria-label", significance.description);
   cell.append(" ", badge);
@@ -2312,22 +2335,22 @@ function pValueSignificance(pValue, term, context) {
   const displayedP = pValue < 0.001 ? "p < 0.001" : `p = ${formatNumber(pValue)}`;
   if (pValue < 0.001) {
     return lackOfFit
-      ? { level: "warning", label: "model concern", description: `Lack of fit is statistically significant (${displayedP}); the selected model form may be inadequate.` }
-      : { level: "strong", label: "highly significant", description: `Statistically significant (${displayedP}).` };
+      ? { level: "warning", value: displayedP, description: `Lack of fit is statistically significant (${displayedP}); the selected model form may be inadequate.` }
+      : { level: "strong", value: displayedP, description: `Highly significant (${displayedP}).` };
   }
   if (pValue < 0.01) {
     return lackOfFit
-      ? { level: "warning", label: "model concern", description: `Lack of fit is statistically significant (${displayedP}); the selected model form may be inadequate.` }
-      : { level: "strong", label: "highly significant", description: `Statistically significant (${displayedP}).` };
+      ? { level: "warning", value: displayedP, description: `Lack of fit is statistically significant (${displayedP}); the selected model form may be inadequate.` }
+      : { level: "strong", value: displayedP, description: `Highly significant (${displayedP}).` };
   }
   if (pValue < 0.05) {
     return lackOfFit
-      ? { level: "warning", label: "model concern", description: `Lack of fit is statistically significant (${displayedP}); the selected model form may be inadequate.` }
-      : { level: "significant", label: "significant", description: `Statistically significant at the 0.05 level (${displayedP}).` };
+      ? { level: "warning", value: displayedP, description: `Lack of fit is statistically significant (${displayedP}); the selected model form may be inadequate.` }
+      : { level: "significant", value: displayedP, description: `Significant at the 0.05 level (${displayedP}).` };
   }
   return {
     level: "not-significant",
-    label: "not significant",
+    value: displayedP,
     description: `Not statistically significant at the 0.05 level (${displayedP}).`
   };
 }

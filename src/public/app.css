@@ -6483,6 +6483,8 @@ body.notes-drawer-open {
   white-space: nowrap;
 }
 
+.doe-analysis-significance[title] { cursor: help; }
+
 .doe-analysis-significance--strong {
   border-color: #397450;
   background: #e7f4e9;
@@ -6595,6 +6597,21 @@ body.notes-drawer-open {
 
 .doe-analysis-optimization-bounds label { margin: 0; }
 .doe-analysis-optimization-bounds input { max-width: 100%; }
+
+.doe-analysis-optimization-summary {
+  align-items: center;
+  border: 1px solid #e1e1da;
+  border-radius: 9px;
+  display: flex;
+  gap: 0.65rem;
+  justify-content: space-between;
+  margin: 0.8rem 0;
+  padding: 0.6rem 0.7rem;
+}
+
+.doe-analysis-optimization-summary > div { display: grid; gap: 0.15rem; min-width: 0; }
+.doe-analysis-optimization-summary .small-note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doe-analysis-optimization-summary dialog { max-width: 34rem; width: min(34rem, calc(100vw - 2rem)); }
 
 .doe-analysis-chart-card h3,
 .doe-analysis-chart-card p {
