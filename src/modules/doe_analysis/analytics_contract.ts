@@ -4,6 +4,11 @@ import type { DoeAnalysisDataset } from "./types.js";
 export const DOE_ANALYTICS_CONTRACT_VERSION = "1.0" as const;
 
 export type DoeAnalysisModelFamily = "factorial" | "response_surface" | "regression";
+export type DoeAnalysisModelFamilyOption = {
+  value: DoeAnalysisModelFamily;
+  label: string;
+  description: string;
+};
 export type DoeAnalysisResponseTransform = "none" | "log" | "sqrt";
 export type DoeAnalysisResponseModel = "continuous" | "binary";
 export type DoeAnalysisDerivedResponseOperation = "difference" | "sum" | "ratio";
@@ -211,6 +216,66 @@ export class DoeAnalyticsValidationError extends Error {
   }
 }
 
+/**
+ * The model picker is intentionally driven by the DOE design, rather than by
+ * the capabilities of the R service. R can fit all three formula families to
+ * arbitrary numeric data, but that does not make each one a sound DOE method.
+ */
+export function modelFamilyOptionsForDataset(dataset: DoeAnalysisDataset): DoeAnalysisModelFamilyOption[] {
+  switch (dataset.doe.designType) {
+    case "FFA":
+      return [
+        {
+          value: "factorial",
+          label: "Factorial",
+          description: "Main effects and two-factor interactions for a full-factorial design."
+        },
+        {
+          value: "regression",
+          label: "Main-effects regression",
+          description: "A reduced model containing only the main effects."
+        }
+      ];
+    case "BBD":
+      return [
+        {
+          value: "response_surface",
+          label: "Response surface",
+          description: "Quadratic response-surface model for a Box–Behnken design."
+        },
+        {
+          value: "regression",
+          label: "Main-effects regression",
+          description: "A reduced first-order model without curvature or interactions."
+        }
+      ];
+    case "SCREEN":
+      return [{
+        value: "regression",
+        label: "Screening (main effects)",
+        description: "Screening designs estimate main effects; interactions may be aliased and are not offered."
+      }];
+    case "SIM":
+    default:
+      return [{
+        value: "regression",
+        label: "Regression",
+        description: "Exploratory main-effects model for this simulated or custom design."
+      }];
+  }
+}
+
+export function isModelFamilySupportedByDataset(
+  dataset: DoeAnalysisDataset,
+  modelFamily: DoeAnalysisModelFamily
+): boolean {
+  return modelFamilyOptionsForDataset(dataset).some((option) => option.value === modelFamily);
+}
+
+type NormalizeAnalysisSpecificationOptions = {
+  enforceModelFamilyCompatibility?: boolean;
+};
+
 export function defaultAnalysisSpecification(dataset: DoeAnalysisDataset): DoeAnalysisSpecification {
   const supportedResponses = dataset.columns.filter(
     (column) => column.role === "response" && column.active && (
@@ -236,11 +301,7 @@ export function defaultAnalysisSpecification(dataset: DoeAnalysisDataset): DoeAn
   if (!response) {
     throw new DoeAnalyticsValidationError(["The DOE has no active numeric, boolean, or configured tag response."]);
   }
-  const modelFamily: DoeAnalysisModelFamily = dataset.doe.designType === "BBD"
-    ? "response_surface"
-    : dataset.doe.designType === "FFA" || dataset.doe.designType === "SCREEN"
-      ? "factorial"
-      : "regression";
+  const modelFamily = modelFamilyOptionsForDataset(dataset)[0].value;
   return {
     responseKey: response.key,
     factorKeys: factors.map((column) => column.key),
@@ -268,7 +329,8 @@ function populatedNumericCount(dataset: DoeAnalysisDataset, columnKey: string): 
 
 export function normalizeAnalysisSpecification(
   dataset: DoeAnalysisDataset,
-  input: Partial<DoeAnalysisSpecification> | null | undefined
+  input: Partial<DoeAnalysisSpecification> | null | undefined,
+  options: NormalizeAnalysisSpecificationOptions = {}
 ): DoeAnalysisSpecification {
   const defaults = defaultAnalysisSpecification(dataset);
   const responseKey = typeof input?.responseKey === "string" ? input.responseKey : defaults.responseKey;
@@ -310,13 +372,14 @@ export function normalizeAnalysisSpecification(
     ),
     optimization: normalizeOptimization(input?.optimization)
   };
-  validateAnalysisSpecification(dataset, specification);
+  validateAnalysisSpecification(dataset, specification, options);
   return specification;
 }
 
 export function validateAnalysisSpecification(
   dataset: DoeAnalysisDataset,
-  specification: DoeAnalysisSpecification
+  specification: DoeAnalysisSpecification,
+  options: NormalizeAnalysisSpecificationOptions = {}
 ): void {
   const issues: string[] = [];
   const response = dataset.columns.find((column) => column.key === specification.responseKey);
@@ -394,6 +457,9 @@ export function validateAnalysisSpecification(
 
   if (!["factorial", "response_surface", "regression"].includes(specification.modelFamily)) {
     issues.push(`Unsupported model family: ${String(specification.modelFamily)}.`);
+  } else if (options.enforceModelFamilyCompatibility && !isModelFamilySupportedByDataset(dataset, specification.modelFamily)) {
+    const supported = modelFamilyOptionsForDataset(dataset).map((option) => option.label).join(", ");
+    issues.push(`${specification.modelFamily} is not applicable to a ${dataset.doe.designType} design. Choose: ${supported}.`);
   }
   if (!(specification.confidenceLevel > 0.5 && specification.confidenceLevel < 1)) {
     issues.push("Confidence level must be greater than 0.5 and less than 1.");
@@ -514,7 +580,7 @@ export function createAnalyticsRequest(
     contractVersion: DOE_ANALYTICS_CONTRACT_VERSION,
     requestId,
     dataset,
-    specification: normalizeAnalysisSpecification(dataset, input)
+    specification: normalizeAnalysisSpecification(dataset, input, { enforceModelFamilyCompatibility: true })
   };
 }
 

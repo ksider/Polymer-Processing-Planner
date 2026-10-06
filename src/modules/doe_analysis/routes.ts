@@ -18,6 +18,7 @@ import {
   createAnalyticsRequest,
   defaultAnalysisSpecification,
   DoeAnalyticsValidationError,
+  modelFamilyOptionsForDataset,
   normalizeAnalysisSpecification,
   type DoeAnalysisSpecification
 } from "./analytics_contract.js";
@@ -147,6 +148,7 @@ export function createDoeAnalysisRouter(
           dataset,
           responses,
           factors,
+          modelFamilyOptions: modelFamilyOptionsForDataset(dataset),
           defaultSpecification,
           overview,
           analyses: analysisItems,
@@ -362,7 +364,7 @@ export function createDoeAnalysisRouter(
       if (!name || name.length > 120) return res.status(400).json({ error: "Template name must contain 1 to 120 characters." });
       try {
         const dataset = buildDoeAnalysisDataset(db, Number(req.params.id), Number(req.params.doeId));
-        const specification = normalizeAnalysisSpecification(dataset, req.body?.specification as Partial<DoeAnalysisSpecification> | undefined);
+        const specification = normalizeAnalysisSpecification(dataset, req.body?.specification as Partial<DoeAnalysisSpecification> | undefined, { enforceModelFamilyCompatibility: true });
         const template = createDoeAnalysisTemplate(db, {
           processTypeId,
           name,
@@ -448,7 +450,8 @@ export function createDoeAnalysisRouter(
         }
         const specification = normalizeAnalysisSpecification(
           dataset,
-          req.body?.specification as Partial<DoeAnalysisSpecification> | undefined
+          req.body?.specification as Partial<DoeAnalysisSpecification> | undefined,
+          { enforceModelFamilyCompatibility: true }
         );
         const analysis = createDoeAnalysis(db, {
           doeId,
@@ -521,7 +524,7 @@ export function createDoeAnalysisRouter(
           doeId,
           name,
           description: source.description,
-          specification: normalizeAnalysisSpecification(dataset, source.specification),
+          specification: normalizeAnalysisSpecification(dataset, source.specification, { enforceModelFamilyCompatibility: true }),
           createdByUserId: req.user?.id ?? null
         });
         recordDoeAnalysisEvent(db, {
@@ -605,7 +608,8 @@ export function createDoeAnalysisRouter(
         const dataset = buildDoeAnalysisDataset(db, experimentId, doeId);
         const specification = normalizeAnalysisSpecification(
           dataset,
-          (req.body?.specification ?? analysis.specification) as Partial<DoeAnalysisSpecification>
+          (req.body?.specification ?? analysis.specification) as Partial<DoeAnalysisSpecification>,
+          { enforceModelFamilyCompatibility: true }
         );
         updateDoeAnalysisSpecification(db, analysis.id, specification);
         const job = calculationQueue.enqueue({

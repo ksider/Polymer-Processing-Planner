@@ -155,7 +155,7 @@ export function templateToSpecification(
     } : undefined,
     tagResponse: template.tagResponse,
     optimization: template.optimization ? { ...template.optimization, factorBounds } : undefined
-  });
+  }, { enforceModelFamilyCompatibility: true });
 }
 
 function mapTemplate(row: TemplateRow): DoeAnalysisTemplateRecord {

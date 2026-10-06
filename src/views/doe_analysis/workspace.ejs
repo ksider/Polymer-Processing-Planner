@@ -492,10 +492,16 @@
 
           <label for="analysisFamily">Model family</label>
           <select id="analysisFamily" name="modelFamily" <%= analysisArchived ? 'disabled' : '' %>>
-            <option value="factorial" <%= defaultSpecification.modelFamily === 'factorial' ? 'selected' : '' %>>Factorial</option>
-            <option value="response_surface" <%= defaultSpecification.modelFamily === 'response_surface' ? 'selected' : '' %>>Response surface</option>
-            <option value="regression" <%= defaultSpecification.modelFamily === 'regression' ? 'selected' : '' %>>Regression</option>
+            <% const hasCurrentModelFamily = modelFamilyOptions.some((option) => option.value === defaultSpecification.modelFamily); %>
+            <% if (!hasCurrentModelFamily) { %>
+              <option value="<%= defaultSpecification.modelFamily %>" selected disabled>Legacy: <%= defaultSpecification.modelFamily %> (not applicable to <%= doe.designType %>)</option>
+            <% } %>
+            <% modelFamilyOptions.forEach((option) => { %>
+              <option value="<%= option.value %>" title="<%= option.description %>" <%= defaultSpecification.modelFamily === option.value ? 'selected' : '' %>><%= option.label %></option>
+            <% }); %>
           </select>
+          <% const activeModelOption = modelFamilyOptions.find((option) => option.value === defaultSpecification.modelFamily); %>
+          <p class="small-note"><%= activeModelOption?.description || `This legacy model is retained for review, but cannot be recalculated for a ${doe.designType} design.` %></p>
 
           <fieldset class="doe-analysis-fieldset">
             <legend>Factors</legend>

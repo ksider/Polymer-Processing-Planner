@@ -5,6 +5,8 @@ import {
   createDoeAnalyticsClient,
   defaultAnalysisSpecification,
   DoeAnalyticsValidationError,
+  isModelFamilySupportedByDataset,
+  modelFamilyOptionsForDataset,
   MockDoeAnalyticsClient,
   isDoeAnalysisV2Enabled,
   normalizeAnalysisSpecification,
@@ -51,6 +53,29 @@ test("analytics contract chooses design-aware defaults and mock preserves reques
   assert.equal(result.summary.rowsUsed, 1);
   assert.equal(result.summary.rowsExcluded, 2);
   assert.equal(result.warnings[0]?.code, "MOCK_ENGINE");
+});
+
+test("model families are constrained by DOE design and SCREEN defaults to main effects", () => {
+  const expected = {
+    SIM: ["regression"],
+    FFA: ["factorial", "regression"],
+    BBD: ["response_surface", "regression"],
+    SCREEN: ["regression"]
+  } as const;
+  for (const [designType, families] of Object.entries(expected)) {
+    const dataset = fixtureDataset(designType);
+    assert.deepEqual(modelFamilyOptionsForDataset(dataset).map((option) => option.value), families);
+    assert.equal(defaultAnalysisSpecification(dataset).modelFamily, families[0]);
+  }
+
+  const screen = fixtureDataset("SCREEN");
+  assert.equal(isModelFamilySupportedByDataset(screen, "factorial"), false);
+  assert.doesNotThrow(() => normalizeAnalysisSpecification(screen, { modelFamily: "factorial" }));
+  assert.throws(
+    () => createAnalyticsRequest(screen, { modelFamily: "factorial" }),
+    (error: unknown) => error instanceof DoeAnalyticsValidationError &&
+      error.issues.includes("factorial is not applicable to a SCREEN design. Choose: Screening (main effects).")
+  );
 });
 
 test("analytics specification rejects unknown columns and invalid model options", () => {
