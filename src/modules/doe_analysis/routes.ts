@@ -137,10 +137,17 @@ export function createDoeAnalysisRouter(
           ? findActiveDoeAnalysisJob(db, selectedAnalysis.id)
           : null;
         const savedAiInterpretations = selectedAnalysis
-          ? listDoeAiInterpretations(db, selectedAnalysis.id).map((artifact) => ({
-            ...artifact,
-            stale: artifact.analysisRevisionId !== latestSuccessfulRevision?.id
-          }))
+          ? listDoeAiInterpretations(db, selectedAnalysis.id).map((artifact) => {
+            const artifactRevision = getDoeAnalysisRevision(db, selectedAnalysis.id, artifact.analysisRevisionId);
+            const evidence = artifactRevision?.status === "SUCCEEDED"
+              ? buildDoeInterpretationContext(artifactRevision, { experimentDescription: experiment.notes }).evidence
+              : [];
+            return {
+              ...artifact,
+              evidence,
+              stale: artifact.analysisRevisionId !== latestSuccessfulRevision?.id
+            };
+          })
           : [];
         return res.render("doe_analysis/workspace", {
           experiment,

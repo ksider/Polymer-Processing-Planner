@@ -395,14 +395,7 @@
           </section>
           <section class="doe-ai-saved-interpretations" data-ai-saved-interpretations <%= savedAiInterpretations.length ? '' : 'hidden' %>>
             <h3>Saved interpretations</h3>
-            <div data-ai-saved-interpretations-list>
-              <% savedAiInterpretations.forEach((artifact) => { %>
-                <article class="doe-ai-saved-interpretation">
-                  <div><strong><%= artifact.stale ? 'Stale interpretation' : 'Saved interpretation' %></strong><span class="small-note">#<%= artifact.id %> · <%= new Date(artifact.createdAt).toLocaleString() %><%= artifact.providerName ? ` · ${artifact.providerName}` : '' %><%= artifact.model ? ` / ${artifact.model}` : '' %></span></div>
-                  <p><%= artifact.response.summary %></p>
-                </article>
-              <% }); %>
-            </div>
+            <div data-ai-saved-interpretations-list></div>
           </section>
         </div>
       </aside>
@@ -733,6 +726,7 @@
 <script nonce="<%= cspNonce %>" id="analysis-column-labels" type="application/json"><%- jsonForScript(Object.fromEntries(dataset.columns.map((column) => [column.key, column.label]))) %></script>
 <script nonce="<%= cspNonce %>" id="analysis-column-units" type="application/json"><%- jsonForScript(Object.fromEntries(dataset.columns.map((column) => [column.key, column.unit]))) %></script>
 <script nonce="<%= cspNonce %>" id="analysis-dataset" type="application/json"><%- jsonForScript(dataset) %></script>
+<script nonce="<%= cspNonce %>" id="analysis-saved-ai-interpretations" type="application/json"><%- jsonForScript(savedAiInterpretations) %></script>
 <script nonce="<%= cspNonce %>" src="/vendor/echarts/dist/echarts.min.js" defer></script>
 <script nonce="<%= cspNonce %>" src="/vendor/echarts-gl/dist/echarts-gl.min.js?v=2.0.9" defer></script>
 <script nonce="<%= cspNonce %>" src="/doe_analysis_workspace.js?v=20261005-ai-interpretation7" defer></script>

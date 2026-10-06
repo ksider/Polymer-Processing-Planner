@@ -266,6 +266,11 @@ function bindAiInterpretation(workspace, csrfToken) {
   let latestInterpretationPayload = null;
   if (!open || !dialog) return;
 
+  const savedInterpretationsData = parseJsonScript("#analysis-saved-ai-interpretations", []);
+  if (Array.isArray(savedInterpretationsData) && savedInterpretationsList) {
+    savedInterpretationsData.forEach((artifact) => appendSavedInterpretation(savedInterpretations, savedInterpretationsList, artifact, workspace));
+  }
+
   const setAiSplitMode = (active) => {
     if (active) window.scrollTo(0, 0);
     workspace.classList.toggle("is-ai-split-mode", active);
@@ -407,7 +412,10 @@ function bindAiInterpretation(workspace, csrfToken) {
       if (!response.ok || !payload.artifact) throw new Error(payload.error || "Interpretation could not be saved.");
       saveButton.textContent = "Saved";
       if (saveStatus) saveStatus.textContent = `Saved interpretation #${payload.artifact.id}.`;
-      appendSavedInterpretation(savedInterpretations, savedInterpretationsList, payload.artifact);
+      appendSavedInterpretation(savedInterpretations, savedInterpretationsList, {
+        ...payload.artifact,
+        evidence: latestInterpretationPayload.evidence || []
+      }, workspace);
       console.info("[DOE AI] interpretation saved", { artifactId: payload.artifact.id, analysisId, revisionId });
     } catch (error) {
       saveButton.disabled = false;
@@ -423,21 +431,51 @@ function bindAiInterpretation(workspace, csrfToken) {
   });
 }
 
-function appendSavedInterpretation(container, list, artifact) {
+function parseJsonScript(selector, fallback) {
+  const node = document.querySelector(selector);
+  if (!node?.textContent) return fallback;
+  try {
+    return JSON.parse(node.textContent);
+  } catch {
+    return fallback;
+  }
+}
+
+function appendSavedInterpretation(container, list, artifact, workspace) {
   if (!container || !list || !artifact) return;
   container.hidden = false;
   const article = document.createElement("article");
   article.className = "doe-ai-saved-interpretation";
+  const details = document.createElement("details");
+  details.className = "doe-ai-saved-interpretation-details";
+  const summary = document.createElement("summary");
   const heading = document.createElement("div");
   const title = document.createElement("strong");
-  title.textContent = "Saved interpretation";
+  title.textContent = artifact.stale ? "Stale interpretation" : "Saved interpretation";
   const meta = document.createElement("span");
   meta.className = "small-note";
   meta.textContent = `#${artifact.id} · ${new Date(artifact.createdAt).toLocaleString()}${artifact.providerName ? ` · ${artifact.providerName}` : ""}${artifact.model ? ` / ${artifact.model}` : ""}`;
   heading.append(title, meta);
-  const summary = document.createElement("p");
-  summary.textContent = artifact.response?.summary || "";
-  article.append(heading, summary);
+  const preview = document.createElement("p");
+  preview.textContent = artifact.response?.summary || "";
+  summary.append(heading, preview);
+
+  const full = document.createElement("section");
+  full.className = "doe-ai-saved-interpretation-content";
+  const fullSummary = document.createElement("h4");
+  fullSummary.textContent = artifact.response?.summary || "";
+  full.append(fullSummary);
+  const evidenceById = new Map((Array.isArray(artifact.evidence) ? artifact.evidence : []).map((item) => [item.id, item]));
+  const findings = document.createElement("div");
+  const cautions = document.createElement("div");
+  const nextSteps = document.createElement("div");
+  renderInterpretationItems(findings, "Findings", artifact.response?.findings, (item) => [item.claim, item.interpretation], evidenceById, workspace);
+  renderInterpretationItems(cautions, "Cautions", artifact.response?.cautions, (item) => [item.text], evidenceById, workspace);
+  renderInterpretationItems(nextSteps, "Suggested next steps", artifact.response?.nextSteps, (item) => [item.text], evidenceById, workspace);
+  appendClarifyingQuestions(nextSteps, artifact.response?.clarifyingQuestions);
+  full.append(findings, cautions, nextSteps);
+  details.append(summary, full);
+  article.append(details);
   list.prepend(article);
 }
 
@@ -467,17 +505,20 @@ function renderAiInterpretation(workspace, interpretation, evidence) {
   renderInterpretationItems(findings, "Findings", interpretation.findings, (item) => [item.claim, item.interpretation], evidenceById, workspace);
   renderInterpretationItems(cautions, "Cautions", interpretation.cautions, (item) => [item.text], evidenceById, workspace);
   renderInterpretationItems(nextSteps, "Suggested next steps", interpretation.nextSteps, (item) => [item.text], evidenceById, workspace);
-  const questions = Array.isArray(interpretation.clarifyingQuestions) ? interpretation.clarifyingQuestions : [];
-  if (questions.length && nextSteps) {
-    const heading = document.createElement("h4");
-    heading.textContent = "Clarification";
-    nextSteps.append(heading, ...questions.map((item) => {
-      const note = document.createElement("p");
-      note.textContent = item.question;
-      return note;
-    }));
-  }
+  appendClarifyingQuestions(nextSteps, interpretation.clarifyingQuestions);
   if (result) result.hidden = false;
+}
+
+function appendClarifyingQuestions(container, questions) {
+  const source = Array.isArray(questions) ? questions : [];
+  if (!source.length || !container) return;
+  const heading = document.createElement("h4");
+  heading.textContent = "Clarification";
+  container.append(heading, ...source.map((item) => {
+    const note = document.createElement("p");
+    note.textContent = item.question;
+    return note;
+  }));
 }
 
 function renderInterpretationItems(container, headingText, items, textForItem, evidenceById, workspace) {

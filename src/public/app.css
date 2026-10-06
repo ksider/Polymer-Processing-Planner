@@ -6376,19 +6376,41 @@ body.notes-drawer-open {
 .doe-ai-saved-interpretation {
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 0.65rem 0.75rem;
   margin-top: 0.5rem;
 }
 
-.doe-ai-saved-interpretation > div {
+.doe-ai-saved-interpretation-details > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.65rem 0.75rem;
+}
+
+.doe-ai-saved-interpretation-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.doe-ai-saved-interpretation-details > summary > div {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem 0.5rem;
   align-items: baseline;
 }
 
-.doe-ai-saved-interpretation p {
+.doe-ai-saved-interpretation-details > summary p {
   margin: 0.35rem 0 0;
+}
+
+.doe-ai-saved-interpretation-details[open] > summary {
+  border-bottom: 1px solid var(--border);
+  background: #f7faf6;
+}
+
+.doe-ai-saved-interpretation-content {
+  padding: 0.1rem 0.75rem 0.65rem;
+}
+
+.doe-ai-saved-interpretation-content > h4 {
+  margin: 0.75rem 0 0;
 }
 
 .doe-analysis-link {
