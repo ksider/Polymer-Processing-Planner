@@ -608,9 +608,11 @@
 
           <fieldset class="doe-analysis-fieldset">
             <legend>Response transformation</legend>
-            <label class="pure-checkbox"><input type="radio" name="responseTransform" value="none" <%= defaultSpecification.responseTransform === 'none' ? 'checked' : '' %> <%= analysisArchived ? 'disabled' : '' %>> None</label>
-            <label class="pure-checkbox"><input type="radio" name="responseTransform" value="log" <%= defaultSpecification.responseTransform === 'log' ? 'checked' : '' %> <%= analysisArchived ? 'disabled' : '' %>> log(response)</label>
-            <label class="pure-checkbox"><input type="radio" name="responseTransform" value="sqrt" <%= defaultSpecification.responseTransform === 'sqrt' ? 'checked' : '' %> <%= analysisArchived ? 'disabled' : '' %>> sqrt(response)</label>
+            <div class="doe-analysis-choice-tabs" role="radiogroup" aria-label="Response transformation">
+              <label><input type="radio" name="responseTransform" value="none" <%= defaultSpecification.responseTransform === 'none' ? 'checked' : '' %> <%= analysisArchived ? 'disabled' : '' %>><span>None</span></label>
+              <label><input type="radio" name="responseTransform" value="log" <%= defaultSpecification.responseTransform === 'log' ? 'checked' : '' %> <%= analysisArchived ? 'disabled' : '' %>><span>log(response)</span></label>
+              <label><input type="radio" name="responseTransform" value="sqrt" <%= defaultSpecification.responseTransform === 'sqrt' ? 'checked' : '' %> <%= analysisArchived ? 'disabled' : '' %>><span>sqrt(response)</span></label>
+            </div>
           </fieldset>
           <p class="small-note">A transformation changes the fitted response scale and is saved with this analysis revision.</p>
 

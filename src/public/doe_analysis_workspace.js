@@ -1429,13 +1429,13 @@ function renderCharts(workspace, result) {
     chart.setOption({
       animationDuration: 250,
       aria: { enabled: true },
-      grid: { left: 132, right: 24, top: 12, bottom: 34, containLabel: true },
+      grid: { left: 220, right: 24, top: 12, bottom: 34, containLabel: true },
       tooltip: {
         trigger: "item",
         formatter: (item) => `${item.name}<br>Effect strength: ${formatNumber(item.value)}<br>Select to link the statistical rows.`
       },
       xAxis: { type: "value", name: "Effect strength", nameLocation: "middle", nameGap: 22, axisLabel: numericAxisLabels() },
-      yAxis: { type: "category", data: effects.map((effect) => effect.term), axisLabel: { width: 112, overflow: "truncate", ellipsis: "…" } },
+      yAxis: { type: "category", data: effects.map((effect) => effect.term), axisLabel: { width: 190, overflow: "break", lineHeight: 16 } },
       series: [{
         type: "bar",
         data: effects.map((effect) => ({
@@ -2341,7 +2341,7 @@ function appendPValueSignificance(cell, row, context) {
 
 function pValueSignificance(pValue, term, context) {
   const lackOfFit = context === "anova" && /^lack of fit$/i.test(term.trim());
-  const displayedP = pValue < 0.001 ? "p < 0.001" : `p = ${formatNumber(pValue)}`;
+  const displayedP = formatNumber(pValue);
   if (pValue < 0.001) {
     return lackOfFit
       ? { level: "warning", value: displayedP, description: `Lack of fit is statistically significant (${displayedP}); the selected model form may be inadequate.` }
