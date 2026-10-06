@@ -784,9 +784,12 @@ function bindResponseControls(form, archivedAnalysis) {
   const sync = () => {
     const type = responseType();
     const binary = type === "boolean" || type === "tags";
-    [...transform.options].forEach((option) => { option.disabled = binary && option.value !== "none"; });
-    if (binary) transform.value = "none";
-    transform.disabled = archivedAnalysis || binary;
+    const transformControls = [...form.querySelectorAll('[name="responseTransform"]')];
+    transformControls.forEach((control) => {
+      if (!(control instanceof HTMLInputElement)) return;
+      control.disabled = archivedAnalysis || (binary && control.value !== "none");
+      if (binary) control.checked = control.value === "none";
+    });
     if (tagSelector instanceof HTMLSelectElement) {
       const tagResponse = type === "tags";
       if (tagControls instanceof HTMLElement) tagControls.hidden = !tagResponse;
