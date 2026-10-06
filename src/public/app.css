@@ -4875,6 +4875,99 @@ textarea {
   width: min(1080px, calc(100vw - 2rem));
 }
 
+body.is-ai-split-mode { overflow: hidden; }
+body.is-ai-split-mode .site-footer { display: none; }
+
+body.is-ai-split-mode .doe-analysis-page {
+  height: 100vh;
+  max-width: none;
+  overflow: hidden;
+  padding: 0;
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  margin: 0;
+}
+
+body.is-ai-split-mode .doe-analysis-layout {
+  display: block;
+  height: 100%;
+}
+
+body.is-ai-split-mode .doe-analysis-inspector,
+body.is-ai-split-mode .doe-analysis-header,
+body.is-ai-split-mode .doe-analysis-section-nav,
+body.is-ai-split-mode #analysis-overview,
+body.is-ai-split-mode #analysis-custom-graph,
+body.is-ai-split-mode #analysis-data,
+body.is-ai-split-mode .doe-analysis-canvas > dialog { display: none; }
+
+body.is-ai-split-mode .doe-analysis-canvas {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(20rem, 1fr);
+  gap: 1rem;
+  height: 100%;
+  overflow: hidden;
+}
+
+body.is-ai-split-mode #analysis-results {
+  grid-column: 1;
+  height: 100%;
+  margin: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.doe-ai-drawer {
+  box-sizing: border-box;
+  align-self: stretch;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 12px 26px var(--shadow);
+  display: flex;
+  flex-direction: column;
+  grid-column: 2;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.doe-ai-drawer[hidden] { display: none !important; }
+body.is-ai-split-mode .doe-ai-drawer { animation: doe-ai-drawer-in 280ms ease-out both; }
+.doe-ai-drawer .modal-header { flex: 0 0 auto; min-width: 0; position: sticky; top: 0; z-index: 2; }
+.doe-ai-drawer .modal-header > * { min-width: 0; }
+.doe-ai-drawer .modal-body { box-sizing: border-box; flex: 1 1 auto; min-height: 0; min-width: 0; max-width: 100%; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+.doe-ai-drawer .doe-analysis-section-actions { flex-wrap: wrap; min-width: 0; max-width: 100%; }
+.doe-ai-drawer .doe-analysis-section-actions > * { min-width: 0; max-width: 100%; }
+.doe-ai-drawer .doe-analysis-section-actions .pure-button { white-space: normal; text-align: left; }
+.doe-ai-drawer .doe-ai-context-preview-text,
+.doe-ai-drawer [data-ai-saved-interpretations-list] { overflow-wrap: anywhere; }
+
+@keyframes doe-ai-drawer-in {
+  from { opacity: 0; transform: translateX(2rem); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@media (max-width: 760px) {
+  body.is-ai-split-mode .doe-analysis-header,
+  body.is-ai-split-mode #analysis-results { display: none; }
+  body.is-ai-split-mode .doe-analysis-layout,
+  body.is-ai-split-mode .doe-analysis-canvas { display: block; height: 100vh; }
+  body.is-ai-split-mode .doe-ai-drawer {
+    border-radius: 0;
+    height: 100vh;
+    inset: 0;
+    position: fixed;
+    width: 100vw;
+    z-index: 30;
+  }
+}
+
 .doe-dialog-body {
   min-width: min(620px, calc(100vw - 4rem));
 }
@@ -6923,5 +7016,84 @@ body.notes-drawer-open {
   .doe-analysis-result-grid,
   .doe-analysis-chart-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* AI interpretation is a focused, full-viewport workspace.  Keep these
+   overrides last: regular DOE workspace rules are declared above. */
+body.is-ai-split-mode .doe-analysis-page {
+  box-sizing: border-box;
+  height: 100vh;
+  max-width: none;
+  min-height: 0;
+  width: 100vw;
+  margin: 0;
+  padding: 0;
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+}
+
+body.is-ai-split-mode .doe-analysis-layout {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}
+
+body.is-ai-split-mode .doe-analysis-canvas {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(20rem, 1fr);
+  gap: 1rem;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+body.is-ai-split-mode #analysis-results,
+body.is-ai-split-mode .doe-ai-drawer {
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
+}
+
+body.is-ai-split-mode #analysis-results {
+  grid-column: 1;
+  margin: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+body.is-ai-split-mode .doe-ai-drawer {
+  grid-column: 2;
+  overflow: hidden;
+}
+
+body.is-ai-split-mode .doe-ai-drawer .modal-header {
+  flex: 0 0 auto;
+  position: relative;
+  top: auto;
+  z-index: 2;
+}
+
+@media (max-width: 760px) {
+  body.is-ai-split-mode .doe-analysis-page,
+  body.is-ai-split-mode .doe-analysis-layout,
+  body.is-ai-split-mode .doe-analysis-canvas,
+  body.is-ai-split-mode .doe-ai-drawer {
+    height: 100vh;
+  }
+
+  body.is-ai-split-mode .doe-analysis-canvas {
+    display: block;
+  }
+
+  body.is-ai-split-mode .doe-ai-drawer {
+    inset: 0;
+    position: fixed;
+    width: 100vw;
+    z-index: 1301;
   }
 }

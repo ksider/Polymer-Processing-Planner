@@ -266,6 +266,20 @@ function bindAiInterpretation(workspace, csrfToken) {
   let latestInterpretationPayload = null;
   if (!open || !dialog) return;
 
+  const setAiSplitMode = (active) => {
+    if (active) window.scrollTo(0, 0);
+    workspace.classList.toggle("is-ai-split-mode", active);
+    document.body.classList.toggle("is-ai-split-mode", active);
+    const footer = document.querySelector(".site-footer");
+    if (footer instanceof HTMLElement) footer.hidden = active;
+    window.dispatchEvent(new Event("resize"));
+  };
+
+  const closeAiPanel = () => {
+    dialog.hidden = true;
+    setAiSplitMode(false);
+  };
+
   const setInteractionDisabled = (disabled) => {
     if (requestButton) requestButton.disabled = disabled;
     if (question) question.disabled = disabled;
@@ -360,10 +374,14 @@ function bindAiInterpretation(workspace, csrfToken) {
   };
 
   open.addEventListener("click", () => {
-    dialog.showModal();
+    dialog.hidden = false;
+    setAiSplitMode(true);
     showUnavailable();
   });
-  dialog.querySelector("[data-close-ai-interpretation]")?.addEventListener("click", () => dialog.close());
+  dialog.querySelector("[data-close-ai-interpretation]")?.addEventListener("click", closeAiPanel);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !dialog.hidden) closeAiPanel();
+  });
   requestButton?.addEventListener("click", () => requestInterpretation());
   saveButton?.addEventListener("click", async () => {
     if (!latestInterpretationPayload || !analysisId || !revisionId) return;
