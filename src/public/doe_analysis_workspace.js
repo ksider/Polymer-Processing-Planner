@@ -104,7 +104,7 @@ let analysisUsesCodedFactors = false;
       if (engineStatus) {
         engineStatus.textContent = body.engine?.mode === "mock"
           ? "Contract mock · R is not connected"
-          : `${body.engine?.name || "R engine"} · ${body.engine?.version || "unknown version"}`;
+          : `DOE server ${String(body.engine?.version || "0.1").replace(/\.0$/, "")}`;
         engineStatus.classList.toggle("is-mock", body.engine?.mode === "mock");
       }
       const empty = workspace.querySelector("[data-results-empty]");
