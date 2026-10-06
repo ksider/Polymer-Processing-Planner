@@ -576,13 +576,13 @@
               <div class="modal-header"><h2>Optimize this response</h2><button class="icon-button" type="button" data-close-optimization aria-label="Close"><span class="material-symbols-rounded" aria-hidden="true">close</span></button></div>
               <div class="modal-body">
                 <p class="small-note">Recommendations stay within the physical factor bounds below and are saved with the calculation revision.</p>
-                <label for="optimizationObjective">Goal</label>
-                <select id="optimizationObjective" name="optimizationObjective" <%= analysisArchived ? 'disabled' : '' %>>
-                  <option value="">No optimization</option>
-                  <option value="maximize" <%= defaultSpecification.optimization?.objective === 'maximize' ? 'selected' : '' %>>Maximize response</option>
-                  <option value="minimize" <%= defaultSpecification.optimization?.objective === 'minimize' ? 'selected' : '' %>>Minimize response</option>
-                  <option value="target" <%= defaultSpecification.optimization?.objective === 'target' ? 'selected' : '' %>>Hit a target</option>
-                </select>
+                <span class="optimization-goal-label">Goal</span>
+                <div class="doe-analysis-choice-tabs" role="radiogroup" aria-label="Optimization goal">
+                  <label><input type="radio" name="optimizationObjective" value="" <%= !defaultSpecification.optimization ? 'checked' : '' %> <%= analysisArchived ? 'disabled' : '' %>><span>None</span></label>
+                  <label><input type="radio" name="optimizationObjective" value="maximize" <%= defaultSpecification.optimization?.objective === 'maximize' ? 'checked' : '' %> <%= analysisArchived ? 'disabled' : '' %>><span>Maximize</span></label>
+                  <label><input type="radio" name="optimizationObjective" value="minimize" <%= defaultSpecification.optimization?.objective === 'minimize' ? 'checked' : '' %> <%= analysisArchived ? 'disabled' : '' %>><span>Minimize</span></label>
+                  <label><input type="radio" name="optimizationObjective" value="target" <%= defaultSpecification.optimization?.objective === 'target' ? 'checked' : '' %> <%= analysisArchived ? 'disabled' : '' %>><span>Target</span></label>
+                </div>
                 <label data-optimization-target for="optimizationTarget">Target value</label>
                 <input data-optimization-target id="optimizationTarget" name="optimizationTarget" type="number" step="any" value="<%= defaultSpecification.optimization?.target ?? '' %>" <%= analysisArchived ? 'disabled' : '' %>>
                 <div class="doe-analysis-optimization-bounds" data-optimization-bounds>

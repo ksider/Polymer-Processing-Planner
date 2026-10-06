@@ -104,7 +104,7 @@ let analysisUsesCodedFactors = false;
       if (engineStatus) {
         engineStatus.textContent = body.engine?.mode === "mock"
           ? "Contract mock · R is not connected"
-          : "DOE analysis";
+          : `${body.engine?.name || "R engine"} · ${body.engine?.version || "unknown version"}`;
         engineStatus.classList.toggle("is-mock", body.engine?.mode === "mock");
       }
       const empty = workspace.querySelector("[data-results-empty]");
@@ -818,8 +818,8 @@ function bindResponseControls(form, archivedAnalysis) {
 
 function bindOptimizationControls(form, archivedAnalysis) {
   if (!form) return;
-  const objective = form.elements.namedItem("optimizationObjective");
-  if (!(objective instanceof HTMLSelectElement)) return;
+  const objectiveControls = [...form.querySelectorAll('[name="optimizationObjective"]')];
+  if (!objectiveControls.length) return;
   const dialog = form.querySelector("[data-optimization-dialog]");
   const open = form.querySelector("[data-open-optimization]");
   const close = form.querySelector("[data-close-optimization]");
@@ -827,8 +827,9 @@ function bindOptimizationControls(form, archivedAnalysis) {
   const targetControls = [...form.querySelectorAll("[data-optimization-target]")];
   const factorControls = [...form.querySelectorAll('input[name="factorKeys"]')];
   const sync = () => {
-    const active = objective.value !== "";
-    targetControls.forEach((control) => { control.hidden = objective.value !== "target"; });
+    const objective = form.querySelector('[name="optimizationObjective"]:checked')?.value || "";
+    const active = objective !== "";
+    targetControls.forEach((control) => { control.hidden = objective !== "target"; });
     form.querySelectorAll("[data-optimization-factor]").forEach((row) => {
       const enabled = active && factorControls.some((control) => control.checked && control.value === row.dataset.optimizationFactor);
       row.hidden = !enabled;
@@ -838,9 +839,9 @@ function bindOptimizationControls(form, archivedAnalysis) {
       if (!active) {
         summary.textContent = "No optimization configured";
       } else {
-        const goal = objective.value === "target" ? "Target" : objective.value === "maximize" ? "Maximize" : "Minimize";
+        const goal = objective === "target" ? "Target" : objective === "maximize" ? "Maximize" : "Minimize";
         const target = form.elements.namedItem("optimizationTarget");
-        const targetText = objective.value === "target" && target instanceof HTMLInputElement && target.value
+        const targetText = objective === "target" && target instanceof HTMLInputElement && target.value
           ? ` · ${target.value}`
           : "";
         const selected = [...form.querySelectorAll("[data-optimization-factor]")]
@@ -851,7 +852,7 @@ function bindOptimizationControls(form, archivedAnalysis) {
       }
     }
   };
-  objective.addEventListener("change", sync);
+  objectiveControls.forEach((control) => control.addEventListener("change", sync));
   factorControls.forEach((control) => control.addEventListener("change", sync));
   open?.addEventListener("click", () => dialog instanceof HTMLDialogElement && dialog.showModal());
   close?.addEventListener("click", () => dialog instanceof HTMLDialogElement && dialog.close());
@@ -1036,14 +1037,16 @@ function applySpecificationToForm(form, specification) {
   setValue("derivedLeftKey", specification.derivedResponse?.leftKey || "");
   setValue("derivedRightKey", specification.derivedResponse?.rightKey || "");
   setValue("tagResponseTag", specification.tagResponse?.tag || "");
-  setValue("optimizationObjective", specification.optimization?.objective || "");
+  form.querySelectorAll('[name="optimizationObjective"]').forEach((field) => {
+    if (field instanceof HTMLInputElement) field.checked = field.value === (specification.optimization?.objective || "");
+  });
   setValue("optimizationTarget", specification.optimization?.target ?? "");
   for (const [key, bounds] of Object.entries(specification.optimization?.factorBounds || {})) {
     setValue(`optimizationMin:${key}`, bounds.min);
     setValue(`optimizationMax:${key}`, bounds.max);
   }
   form.elements.namedItem("modelFamily")?.dispatchEvent(new Event("change"));
-  form.elements.namedItem("optimizationObjective")?.dispatchEvent(new Event("change"));
+  form.querySelector('[name="optimizationObjective"]:checked')?.dispatchEvent(new Event("change"));
   form.elements.namedItem("derivedOperation")?.dispatchEvent(new Event("change"));
 }
 
@@ -2310,8 +2313,11 @@ function fillTable(body, rows, keys, options = {}) {
         : key === "runId"
           ? String(sourceRow[key] ?? "—")
           : formatNumber(sourceRow[key]);
-      cell.textContent = value;
-      if (key === "pValue") appendPValueSignificance(cell, sourceRow, options.pValueContext);
+      if (key === "pValue") {
+        appendPValueSignificance(cell, sourceRow, options.pValueContext);
+      } else {
+        cell.textContent = value;
+      }
       row.append(cell);
     }
     return row;
@@ -2327,7 +2333,7 @@ function appendPValueSignificance(cell, row, context) {
   badge.textContent = significance.value;
   badge.title = significance.description;
   badge.setAttribute("aria-label", significance.description);
-  cell.append(" ", badge);
+  cell.append(badge);
 }
 
 function pValueSignificance(pValue, term, context) {
