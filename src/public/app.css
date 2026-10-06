@@ -6558,7 +6558,6 @@ body.notes-drawer-open {
   min-width: 0;
 }
 
-.doe-analysis-effect-card { grid-column: 1 / -1; }
 
 .doe-analysis-optimizer {
   align-items: start;

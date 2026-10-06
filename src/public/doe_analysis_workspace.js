@@ -1429,13 +1429,13 @@ function renderCharts(workspace, result) {
     chart.setOption({
       animationDuration: 250,
       aria: { enabled: true },
-      grid: { left: 176, right: 24, top: 12, bottom: 34, containLabel: true },
+      grid: { left: 58, right: 24, top: 12, bottom: 34, containLabel: true },
       tooltip: {
         trigger: "item",
         formatter: (item) => `${item.name}<br>Effect strength: ${formatNumber(item.value)}<br>Select to link the statistical rows.`
       },
       xAxis: { type: "value", name: "Effect strength", nameLocation: "middle", nameGap: 22, axisLabel: numericAxisLabels() },
-      yAxis: { type: "category", data: effects.map((effect) => effect.term), axisLabel: { width: 148, overflow: "break", lineHeight: 16 } },
+      yAxis: { type: "category", data: effects.map((effect) => effect.term), axisLabel: { width: 150, overflow: "truncate", ellipsis: "…" } },
       series: [{
         type: "bar",
         data: effects.map((effect) => ({
