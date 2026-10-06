@@ -59,7 +59,6 @@ Open `http://localhost:3000`.
 │  └─ tests/                  # Integration tests
 ├─ dist/                      # Compiled output (`npm run build`)
 ├─ data/im_doe.sqlite         # Runtime SQLite database (never commit it)
-├─ plan.md                    # Product/feature roadmap
 └─ README.md
 ```
 
@@ -254,6 +253,49 @@ Implementation notes:
   - active factors by `process_type`,
   - active measured outputs by `process_type`.
 - Analysis reads `analysis_run_values` first, and falls back to `run_values` by field code when needed (useful for migration/demo data).
+
+## Roadmap
+
+The current product direction is to keep experiment design and execution in
+Planner while making DOE analysis a reproducible, saved workspace comparable to
+Minitab or Origin.
+
+### Completed
+
+- Process-aware experiments, qualification packs, runs, assignments, calendar,
+  messenger, notes, controlled reports, and audit/access controls.
+- Analysis V2 with named analyses, immutable calculation revisions, dataset
+  snapshots, ANOVA, coefficients, diagnostics, response surfaces, 2D/3D plots,
+  saved graphs, optimizers, derived responses, templates, and analysis-ready
+  CSV export.
+- Separate R analytics service with a local contract-compatible fallback for
+  development without Docker or R.
+- Optional DOE AI assistant that interprets only saved successful revisions.
+  Requests are explicit, responses can be saved as immutable interpretations,
+  stale results are labelled, and token usage is visible to users and admins.
+
+### In progress
+
+- Validate the R and AI provider paths with production-shaped DOE data.
+- Validate Gemini, Mistral, Ollama, and other OpenAI-compatible profiles through
+  the same structured response contract.
+- Improve provider-failure diagnostics, accessibility, retention controls, and
+  operational deployment checks.
+
+### Next
+
+- Extend multi-response desirability to calculated and binary responses.
+- Add bounded derived-column expressions and before/after model diagnostics.
+- Improve process-type template governance and advanced DOE diagnostics only
+  where real workflows require them.
+- Resume report insertion of saved analysis and AI artifacts after the analysis
+  contract is stable.
+- Remove the legacy DOE analysis only after parity, migration, and production
+  verification.
+
+The detailed implementation plans are intentionally kept as local working
+documents and are excluded from version control; this README is the public
+roadmap.
 
 Reference book (Amazon search):
 - Robust Process Development and Scientific Molding (Suhas Kulkarni): https://a.co/d/aDv52KL

@@ -39,7 +39,11 @@ im_doe.sqlite-shm
 im_doe.sqlite-wal
 /vid*
 /info
-plan.md
 .ai
 /docs/*
-!/docs/DOE_ANALYSIS_V2_PLAN.md
+
+# Local planning documents are working notes, not release documentation.
+plan.md
+**/*PLAN*.md
+**/*Plan*.md
+**/*plan*.md
