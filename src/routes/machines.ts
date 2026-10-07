@@ -252,9 +252,15 @@ export function createMachinesRouter(db: Db) {
       syncMachineParams(db, id, mergedParams);
       allMachineParams = listMachineParams(db, id);
     }
-    const machineParams = allMachineParams.filter(
-      (param) => !(param.code && baseMachineCodes.has(param.code))
-    );
+    const machineParams = allMachineParams
+      .filter((param) => !(param.code && baseMachineCodes.has(param.code)))
+      .map((param) => ({
+        id: String(param.id),
+        code: param.code || "",
+        label: param.label,
+        unit: param.unit || "",
+        value: param.value_text ?? ""
+      }));
     const machineParamByCode = Object.fromEntries(
       allMachineParams
         .filter((param) => param.code)
