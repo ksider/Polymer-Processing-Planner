@@ -10,6 +10,65 @@
     .replace(/'/g, "&#39;");
   root.escapeHtml = escapeHtml;
 
+  const toastTypes = {
+    success: { icon: "check_circle", title: "Done", dismissAfter: 4500, iconClasses: "bg-green-100 text-green-500" },
+    info: { icon: "info", title: "Information", dismissAfter: 5000, iconClasses: "bg-blue-100 text-blue-500" },
+    warning: { icon: "warning", title: "Attention", dismissAfter: 7000, iconClasses: "bg-orange-100 text-orange-500" },
+    error: { icon: "error", title: "Action failed", dismissAfter: 0, iconClasses: "bg-red-100 text-red-500" }
+  };
+
+  /**
+   * Display a deduplicated, accessible application notification. It is
+   * intentionally framework-agnostic so legacy pages and new Flowbite pages
+   * use the same API during migration.
+   */
+  root.notify = ({ type = "info", title, message, dismissAfter } = {}) => {
+    const config = toastTypes[type] || toastTypes.info;
+    const text = normalizeText(message);
+    if (!text) return null;
+    const viewport = document.getElementById("appToastViewport");
+    if (!viewport) return null;
+    const fingerprint = `${type}:${normalizeText(title || config.title)}:${text}`;
+    const duplicate = Array.from(viewport.children).find((node) => node.dataset.toastFingerprint === fingerprint);
+    if (duplicate) return duplicate;
+
+    while (viewport.children.length >= 3) viewport.firstElementChild?.remove();
+
+    const toast = document.createElement("div");
+    toast.className = "pointer-events-auto flex w-full items-start rounded-lg bg-white p-4 text-gray-500 shadow-sm ring-1 ring-gray-200";
+    toast.dataset.toastFingerprint = fingerprint;
+    toast.setAttribute("role", type === "error" ? "alert" : "status");
+
+    const icon = document.createElement("span");
+    icon.className = `material-symbols-rounded inline-flex size-8 shrink-0 items-center justify-center rounded-lg ${config.iconClasses}`;
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = config.icon;
+
+    const content = document.createElement("div");
+    content.className = "ms-3 min-w-0 text-sm";
+    const heading = document.createElement("strong");
+    heading.className = "block font-medium text-gray-900";
+    heading.textContent = normalizeText(title || config.title);
+    const body = document.createElement("span");
+    body.className = "mt-1 block text-gray-500";
+    body.textContent = text;
+    content.append(heading, body);
+
+    const close = document.createElement("button");
+    close.className = "-mx-1.5 -my-1.5 ms-auto inline-flex size-8 items-center justify-center rounded-lg bg-white p-1.5 text-sm text-gray-400 hover:bg-gray-100 hover:text-gray-900 focus:ring-2 focus:ring-gray-300";
+    close.type = "button";
+    close.setAttribute("aria-label", "Dismiss notification");
+    close.textContent = "×";
+    close.addEventListener("click", () => toast.remove());
+
+    toast.append(icon, content, close);
+    viewport.appendChild(toast);
+
+    const timeout = Number.isFinite(Number(dismissAfter)) ? Number(dismissAfter) : config.dismissAfter;
+    if (timeout > 0) window.setTimeout(() => toast.remove(), timeout);
+    return toast;
+  };
+
   // CSRF Protection
   const getCsrfToken = () => {
     const meta = document.querySelector('meta[name="csrf-token"]');
@@ -110,24 +169,37 @@
         preview.dataset.templatePreview = "1";
         input.insertAdjacentElement("afterend", preview);
       }
+      const useFlowbitePreview = preview.dataset.templatePreviewUi === "flowbite";
       const update = () => {
         const raw = input.value || "";
         if (!/%\d+:\d+%/.test(raw)) {
           preview.textContent = "";
-          preview.classList.remove("is-visible", "is-missing");
+          if (useFlowbitePreview) {
+            preview.className = "mt-2 hidden rounded-lg border px-3 py-2 text-xs";
+          } else {
+            preview.classList.remove("is-visible", "is-missing");
+          }
           return;
         }
         // Inline preview (green when resolved, red when missing).
         const { resolved, missing } = resolveTemplate(raw);
         if (missing.length) {
           preview.textContent = `Missing: ${missing.join(", ")}`;
-          preview.classList.add("is-visible", "is-missing");
-          preview.classList.remove("is-resolved");
+          if (useFlowbitePreview) {
+            preview.className = "mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700";
+          } else {
+            preview.classList.add("is-visible", "is-missing");
+            preview.classList.remove("is-resolved");
+          }
           return;
         }
         preview.textContent = `= ${resolved}`;
-        preview.classList.add("is-visible", "is-resolved");
-        preview.classList.remove("is-missing");
+        if (useFlowbitePreview) {
+          preview.className = "mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700";
+        } else {
+          preview.classList.add("is-visible", "is-resolved");
+          preview.classList.remove("is-missing");
+        }
       };
       if (!input.dataset.templateBound) {
         input.addEventListener("input", update);
@@ -653,7 +725,8 @@
   root.createCustomFieldManager = ({
     listEl,
     onChange,
-    rowClass = "setup-field-row"
+    rowClass = "setup-field-row",
+    ui = "legacy"
   }) => {
     if (!listEl) return null;
     const showMachineCode = listEl.dataset.showMachineCode === "1";
@@ -671,10 +744,32 @@
 
     const buildRow = (data = {}) => {
       const row = document.createElement("div");
-      row.className = showMachineCode ? `${rowClass} has-code` : rowClass;
       row.dataset.customField = "1";
       row.dataset.fieldId = data.id || `custom_${Date.now()}`;
       const codeToken = showMachineCode ? makeMachineToken(data.id) : "";
+      if (ui === "flowbite") {
+        row.className = rowClass;
+        row.innerHTML = `
+          <div>
+            <label class="mb-2 block text-xs font-medium text-gray-700">Label</label>
+            <input class="block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="text" data-custom-label value="${escapeHtml(normalizeText(data.label))}" placeholder="Label">
+          </div>
+          <div>
+            <label class="mb-2 block text-xs font-medium text-gray-700">Unit</label>
+            <input class="block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="text" data-custom-unit value="${escapeHtml(normalizeText(data.unit))}" placeholder="Unit">
+          </div>
+          <div class="md:col-span-2 xl:col-span-1">
+            <label class="mb-2 block text-xs font-medium text-gray-700">Value</label>
+            <input class="block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="text" data-custom-value data-template-input value="${escapeHtml(normalizeText(data.value))}" placeholder="Value">
+            <div class="mt-2 hidden rounded-lg border px-3 py-2 text-xs" data-template-preview data-template-preview-ui="flowbite"></div>
+          </div>
+          ${showMachineCode ? `<div><label class="mb-2 block text-xs font-medium text-gray-700">Token</label><input class="block w-full rounded-lg border border-gray-200 bg-gray-100 p-2.5 font-mono text-xs text-gray-600" type="text" value="${codeToken}" readonly title="Token"></div>` : ""}
+          <div class="flex items-end"><button class="inline-flex size-10 items-center justify-center rounded-lg text-red-600 hover:bg-red-50 focus:outline-none focus:ring-4 focus:ring-red-100" type="button" data-remove-field aria-label="Remove field" title="Remove field"><span class="material-symbols-rounded" aria-hidden="true">delete</span></button></div>
+          <input type="hidden" data-custom-code value="${escapeHtml(normalizeText(data.code))}">
+        `;
+        return row;
+      }
+      row.className = showMachineCode ? `${rowClass} has-code` : rowClass;
       row.innerHTML = `
         <input type="text" data-custom-label value="${escapeHtml(normalizeText(data.label))}" placeholder="Label">
         <input type="text" data-custom-unit value="${escapeHtml(normalizeText(data.unit))}" placeholder="Unit">
@@ -737,4 +832,17 @@
 
     return { addRow, addFromLibrary, collect };
   };
+
+  // Admin sidebar sections switch in-place on /admin. On standalone admin
+  // library pages they must still be usable and lead back to that section.
+  if (!document.querySelector('[data-admin-panel]')) {
+    document.querySelectorAll('[data-admin-section]').forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        const section = button.dataset.adminSection;
+        if (section) window.location.assign(`/admin#${encodeURIComponent(section)}`);
+      });
+    });
+  }
+
 })();

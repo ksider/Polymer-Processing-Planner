@@ -234,6 +234,9 @@ app.use(csrfTokenMiddleware);
 app.use(xssProtectionMiddleware);
 app.use((req, res, next) => {
   res.locals.currentUser = req.user ?? null;
+  res.locals.activeAdminPath = ["/machines", "/param-library", "/audit"].includes(req.path)
+    ? req.path
+    : "";
   const wantsHtml = req.accepts(["html", "json"]) === "html";
   res.locals.breadcrumbs = wantsHtml ? buildBreadcrumbs(db, req) : [];
   res.locals.unreadNotifications = wantsHtml && req.user?.id

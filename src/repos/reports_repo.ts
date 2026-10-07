@@ -23,6 +23,27 @@ type ReportConfigRow = {
   signed_by_user_id: number | null;
 };
 
+export type AdminReportRow = ReportConfigRow & {
+  experiment_name: string;
+  author_name: string | null;
+  author_email: string | null;
+  responsible_name: string | null;
+  responsible_email: string | null;
+};
+
+export function listReportConfigsForAdmin(db: Db): AdminReportRow[] {
+  return db.prepare(
+    `SELECT rc.*, e.name AS experiment_name,
+            author.name AS author_name, author.email AS author_email,
+            responsible.name AS responsible_name, responsible.email AS responsible_email
+     FROM report_configs rc
+     JOIN experiments e ON e.id = rc.experiment_id
+     LEFT JOIN users author ON author.id = rc.author_user_id
+     LEFT JOIN users responsible ON responsible.id = rc.responsible_user_id
+     ORDER BY COALESCE(rc.due_at, '9999-12-31') ASC, rc.id DESC`
+  ).all() as AdminReportRow[];
+}
+
 export function listReportConfigs(db: Db, experimentId: number): ReportConfigRow[] {
   return db
     .prepare("SELECT * FROM report_configs WHERE experiment_id = ? ORDER BY id DESC")

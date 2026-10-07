@@ -29,6 +29,32 @@ export type ExperimentListRow = Experiment & {
   qual_run_value_count: number;
 };
 
+export type AdminExperimentRow = ExperimentListRow & {
+  doe_count: number;
+  report_count: number;
+  signed_report_count: number;
+  active_assignment_count: number;
+};
+
+export function listExperimentsForAdmin(db: Db): AdminExperimentRow[] {
+  return db.prepare(
+    `SELECT experiments.*, users.name as owner_name, users.email as owner_email,
+            processes.name as process_name, processes.route_code as process_route_code,
+            process_types.code as process_type_code, process_types.name as process_type_name,
+            (SELECT COUNT(DISTINCT step_number) FROM qual_step_summary WHERE experiment_id = experiments.id) as qual_summary_count,
+            (SELECT COUNT(*) FROM qual_run_values JOIN qual_runs ON qual_runs.id = qual_run_values.run_id WHERE qual_runs.experiment_id = experiments.id) as qual_run_value_count,
+            (SELECT COUNT(*) FROM doe_studies WHERE experiment_id = experiments.id) as doe_count,
+            (SELECT COUNT(*) FROM report_configs WHERE experiment_id = experiments.id) as report_count,
+            (SELECT COUNT(*) FROM report_configs WHERE experiment_id = experiments.id AND signed_at IS NOT NULL) as signed_report_count,
+            (SELECT COUNT(*) FROM entity_assignments WHERE experiment_id = experiments.id AND status = 'active') as active_assignment_count
+     FROM experiments
+     LEFT JOIN users ON users.id = experiments.owner_user_id
+     LEFT JOIN processes ON processes.id = experiments.process_id
+     LEFT JOIN process_types ON process_types.id = processes.process_type_id
+     ORDER BY experiments.id DESC`
+  ).all() as AdminExperimentRow[];
+}
+
 export function listExperiments(db: Db, includeArchived = false): Experiment[] {
   if (includeArchived) {
     return db.prepare("SELECT * FROM experiments ORDER BY id DESC").all() as Experiment[];

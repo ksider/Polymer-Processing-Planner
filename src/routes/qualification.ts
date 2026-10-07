@@ -1055,7 +1055,7 @@ export function createQualificationRouter(db: Db) {
       return res.status(403).send("Forbidden");
     }
     const params = listGlobalParamDefinitions(db);
-    res.render("param_library", { params });
+    res.render("param_library", { params, activeAdminPath: "/param-library" });
   });
 
   return router;

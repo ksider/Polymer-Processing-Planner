@@ -1,4 +1,15 @@
-  <% if (typeof hideSiteFooter === 'undefined' || !hideSiteFooter) { %>
+  <div id="appToastViewport" class="pointer-events-none fixed right-4 top-4 z-[10000] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-3 sm:w-full" aria-live="polite" aria-relevant="additions" aria-atomic="false"></div>
+  <% if (typeof uiKit !== 'undefined' && uiKit) { %>
+    <footer class="border-t border-gray-200 bg-white" aria-label="Site footer">
+      <div class="flex flex-col gap-3 px-4 py-5 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <% if (currentUser && (currentUser.role === "admin" || currentUser.role === "manager" || currentUser.role === "engineer")) { %><a class="text-gray-500 no-underline hover:text-blue-700" href="/param-library">Parameters</a><% } %>
+          <% if (currentUser && currentUser.role === "admin") { %><a class="text-gray-500 no-underline hover:text-blue-700" href="/admin">Administration</a><% } %>
+        </div>
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2"><a class="text-gray-500 no-underline hover:text-blue-700" href="https://nikolaisemenov.com" target="_blank" rel="noopener">nikolaisemenov.com</a><a class="text-gray-500 no-underline hover:text-blue-700" href="https://www.linkedin.com/in/nikolay-semenov/" target="_blank" rel="noopener">LinkedIn</a></div>
+      </div>
+    </footer>
+  <% } else if (typeof hideSiteFooter === 'undefined' || !hideSiteFooter) { %>
     <footer class="site-footer">
       <div class="site-footer-inner">
          <div class="footer-brand">

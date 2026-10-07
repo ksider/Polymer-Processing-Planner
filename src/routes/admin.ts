@@ -2,7 +2,7 @@ import express from "express";
 import type { Db } from "../db.js";
 import { ADMIN_ACTION_LIMITER, FILE_UPLOAD_LIMITER, createRateLimiter } from "../middleware/rate_limit.js";
 import { getAdminSettings, updateAllowedDomain, updateRequireHttps } from "../repos/admin_settings_repo.js";
-import { insertAudit } from "../repos/audit_repo.js";
+import { insertAudit, listRecentAuditForUsers } from "../repos/audit_repo.js";
 import {
   createUser,
   createPasswordSetupToken,
@@ -15,12 +15,12 @@ import {
 } from "../repos/users_repo.js";
 import { isEmailConfigured, sendPasswordSetupEmail } from "../services/email.js";
 import {
-  listExperimentsWithMeta,
+  listExperimentsForAdmin,
   updateExperimentOwner,
   restoreExperiment,
   getExperiment,
   deleteExperiment,
-  type ExperimentListRow
+  type AdminExperimentRow
 } from "../repos/experiments_repo.js";
 import {
   listProcessesWithStats,
@@ -39,9 +39,12 @@ import {
   updateLlmProviderProfile,
   type LlmProviderKind,
   type LlmProviderProfile,
+  type LlmUsageAdminBreakdownRow,
+  type LlmUsageTotals,
   type SaveLlmProviderProfileInput
 } from "../modules/llm/provider_profiles_repo.js";
 import { hasLlmSettingsEncryptionKey, LlmSettingsEncryptionError } from "../modules/llm/settings_crypto.js";
+import { listReportConfigsForAdmin } from "../repos/reports_repo.js";
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -51,8 +54,50 @@ function wantsJson(req: express.Request) {
   return req.headers["x-requested-with"] === "fetch";
 }
 
+type AiUsageUserGroup = LlmUsageTotals & {
+  userId: number;
+  userName: string | null;
+  userEmail: string;
+  failedRequestCount: number;
+  models: LlmUsageAdminBreakdownRow[];
+};
+
+function groupAiUsageByUser(rows: LlmUsageAdminBreakdownRow[]): AiUsageUserGroup[] {
+  const users = new Map<number, AiUsageUserGroup>();
+  rows.forEach((row) => {
+    const existing = users.get(row.userId) ?? {
+      userId: row.userId,
+      userName: row.userName,
+      userEmail: row.userEmail,
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      requestCount: 0,
+      failedRequestCount: 0,
+      models: []
+    };
+    existing.inputTokens += Number(row.inputTokens || 0);
+    existing.outputTokens += Number(row.outputTokens || 0);
+    existing.totalTokens += Number(row.totalTokens || 0);
+    existing.requestCount += Number(row.requestCount || 0);
+    existing.failedRequestCount += Number(row.failedRequestCount || 0);
+    existing.models.push(row);
+    users.set(row.userId, existing);
+  });
+  return Array.from(users.values()).sort((left, right) => right.totalTokens - left.totalTokens);
+}
+
 export function createAdminRouter(db: Db) {
   const router = express.Router();
+
+  router.get("/ai-usage", (req, res) => {
+    const aiUsagePeriod = aiUsagePeriodFromQuery(req.query.period);
+    return res.json({
+      period: aiUsagePeriod,
+      totals: getLlmUsageTotalsForAdmin(db, aiUsagePeriod.from),
+      breakdown: groupAiUsageByUser(getLlmUsageBreakdownForAdmin(db, aiUsagePeriod.from))
+    });
+  });
 
   router.get("/", (req, res) => {
     const settings = getAdminSettings(db);
@@ -60,13 +105,22 @@ export function createAdminRouter(db: Db) {
     const llmProviderProfiles = listLlmProviderProfiles(db);
     const aiUsagePeriod = aiUsagePeriodFromQuery(req.query.ai_usage_period);
     const llmUsageTotals = getLlmUsageTotalsForAdmin(db, aiUsagePeriod.from);
-    const llmUsageBreakdown = getLlmUsageBreakdownForAdmin(db, aiUsagePeriod.from);
+    const llmUsageBreakdown = groupAiUsageByUser(getLlmUsageBreakdownForAdmin(db, aiUsagePeriod.from));
+    const reports = listReportConfigsForAdmin(db);
+    const userAudit = listRecentAuditForUsers(db);
+    const userActivity = new Map<number, typeof userAudit>();
+    userAudit.forEach((event) => {
+      if (!event.actor_user_id) return;
+      const events = userActivity.get(event.actor_user_id) ?? [];
+      events.push(event);
+      userActivity.set(event.actor_user_id, events);
+    });
     const processes = listProcessesWithStats(db).map((process) => ({
       ...process,
       show_on_home: Number(process.show_on_home ?? 1) === 1 ? 1 : 0
     }));
-    const experimentsRaw = listExperimentsWithMeta(db, true);
-    const experiments = experimentsRaw.map((exp: ExperimentListRow) => {
+    const experimentsRaw = listExperimentsForAdmin(db);
+    const experiments = experimentsRaw.map((exp: AdminExperimentRow) => {
       const summaryCount = Number(exp.qual_summary_count || 0);
       const valueCount = Number(exp.qual_run_value_count || 0);
       let status = "not_started";
@@ -92,6 +146,8 @@ export function createAdminRouter(db: Db) {
       aiUsagePeriod,
       users,
       processes,
+      reports,
+      userActivity,
       experiments,
       notice,
       error

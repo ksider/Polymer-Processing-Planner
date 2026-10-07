@@ -7,6 +7,9 @@
   <link rel="stylesheet" href="/vendor/purecss/build/pure-min.css">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:wght@400">
   <link rel="stylesheet" href="/app.css">
+  <% if (typeof uiKit !== "undefined" && uiKit) { %>
+    <link rel="stylesheet" href="/ui.css">
+  <% } %>
   <script nonce="<%= cspNonce %>" type="importmap">
     {
       "imports": {
@@ -90,6 +93,9 @@
   </script>
   <script nonce="<%= cspNonce %>" src="/chemical_structure_editor.js" defer></script>
   <script nonce="<%= cspNonce %>" src="/app.js" defer></script>
+  <% if (typeof uiKit !== "undefined" && uiKit) { %>
+    <script nonce="<%= cspNonce %>" src="/vendor/flowbite/dist/flowbite.min.js" defer></script>
+  <% } %>
   <meta name="csrf-token" content="<%= csrfToken || '' %>">
 </head>
 <body>

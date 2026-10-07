@@ -21,7 +21,6 @@
     <a href="/recipes">Recipes</a>
     <% if (currentUser && (currentUser.role === "admin" || currentUser.role === "manager" || currentUser.role === "engineer")) { %>
     <% } %>
-    <a href="/machines">Machines</a>
   </div>
   <% if (currentUser) { %>
     <div class="nav-auth">

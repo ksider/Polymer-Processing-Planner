@@ -1,98 +1,119 @@
-<%- include("partials/head", { title: title }) %>
-<%- include("partials/nav", { currentUser: currentUser }) %>
-<div class="container">
-  <div class="card">
-    <h2 class="card-title">Admin Settings</h2>
-    <div class="admin-actions">
-      <button class="icon-btn icon-only" type="button" id="openSettingsDialog" title="Settings">
-        <span class="material-symbols-rounded" aria-hidden="true">settings</span>
-      </button>
-      <button class="icon-btn icon-only" type="button" id="openAddUserDialog" title="Add user">
-        <span class="material-symbols-rounded" aria-hidden="true">person_add</span>
-      </button>
-      <a class="icon-btn icon-only" href="/audit" title="Audit log">
-        <span class="material-symbols-rounded" aria-hidden="true">fact_check</span>
-      </a>
-    </div>
-  </div>
-
-  <section class="card admin-ai-usage" aria-labelledby="adminAiUsageTitle">
-    <div class="doe-analysis-section-heading">
-      <div>
-        <h2 class="card-title" id="adminAiUsageTitle">AI usage</h2>
-        <p class="small-note">Aggregate token accounting by user, provider, and model. Prompts, answers, and API keys are never included here.</p>
-      </div>
-      <span class="material-symbols-rounded profile-ai-usage-icon" aria-hidden="true">monitoring</span>
-    </div>
-    <nav class="profile-ai-usage-periods" aria-label="AI usage period">
-      <% [['7d', '7 days'], ['30d', '30 days'], ['90d', '90 days'], ['all', 'All time']].forEach(([key, label]) => { %>
-        <a class="<%= aiUsagePeriod?.key === key ? 'is-active' : '' %>" href="/admin?ai_usage_period=<%= key %>#adminAiUsageTitle" <%= aiUsagePeriod?.key === key ? 'aria-current="page"' : '' %>><%= label %></a>
-      <% }) %>
-    </nav>
-    <p class="small-note profile-ai-usage-period-label"><%= aiUsagePeriod?.label || 'All time' %></p>
-    <div class="admin-ai-usage-metrics" aria-label="Aggregate AI token totals">
-      <div><span class="small-note">Input</span><strong><%= Number(llmUsageTotals?.inputTokens || 0).toLocaleString() %></strong></div>
-      <div><span class="small-note">Output</span><strong><%= Number(llmUsageTotals?.outputTokens || 0).toLocaleString() %></strong></div>
-      <div><span class="small-note">Total</span><strong><%= Number(llmUsageTotals?.totalTokens || 0).toLocaleString() %></strong></div>
-      <div><span class="small-note">Requests</span><strong><%= Number(llmUsageTotals?.requestCount || 0).toLocaleString() %></strong></div>
-    </div>
-    <% if (llmUsageBreakdown && llmUsageBreakdown.length) { %>
-      <div class="table-wrap">
-        <table class="pure-table pure-table-striped table-compact">
-          <thead><tr><th>User</th><th>Provider</th><th>Model</th><th>Input</th><th>Output</th><th>Total</th><th>Requests</th></tr></thead>
-          <tbody>
-            <% llmUsageBreakdown.forEach((item) => { %>
-              <tr>
-                <td><strong><%= item.userName || item.userEmail %></strong><br><small><%= item.userEmail %></small></td>
-                <td><%= item.providerName %></td>
-                <td><code><%= item.model %></code></td>
-                <td><%= Number(item.inputTokens).toLocaleString() %></td>
-                <td><%= Number(item.outputTokens).toLocaleString() %></td>
-                <td><strong><%= Number(item.totalTokens).toLocaleString() %></strong></td>
-                <td><%= item.requestCount %><% if (item.failedRequestCount) { %><small> · <%= item.failedRequestCount %> failed</small><% } %></td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
-      </div>
-    <% } else { %>
-      <p class="small-note profile-ai-usage-empty">No AI provider requests in this period.</p>
-    <% } %>
+<%- include("partials/head", { title: title, uiKit: true }) %>
+<div class="min-h-screen w-full bg-gray-50 font-sans text-gray-900 antialiased">
+  <div class="flex min-h-screen w-full flex-col bg-gray-50 lg:flex-row">
+    <%- include("partials/admin_sidebar") %>
+    <main class="min-w-0 flex-1">
+      <header class="border-b border-gray-200 bg-white">
+        <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+          <div>
+            <p class="text-sm font-medium text-blue-700">Control center</p>
+            <h1 class="mt-0.5 text-2xl font-semibold tracking-tight text-gray-900">Administration</h1>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="inline-flex size-9 items-center justify-center rounded-lg text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-4 focus:ring-gray-200" type="button" data-admin-section="settings" title="Settings" aria-label="Open settings">
+              <span class="material-symbols-rounded" aria-hidden="true">settings</span>
+            </button>
+            <button class="inline-flex items-center rounded-lg bg-blue-700 px-3.5 py-2.5 text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300" type="button" data-open-add-user>
+              <span class="material-symbols-rounded text-[20px]" aria-hidden="true">person_add</span>
+              <span>Add user</span>
+            </button>
+            <a class="inline-flex size-9 items-center justify-center rounded-lg text-sm text-gray-500 no-underline hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-4 focus:ring-gray-200" href="/audit" title="Audit log" aria-label="Open audit log">
+              <span class="material-symbols-rounded" aria-hidden="true">receipt_long</span>
+            </a>
+          </div>
+        </div>
+      </header>
+      <div class="px-4 py-6 sm:px-6 lg:px-8">
+        <div class="space-y-6">
+  <section data-admin-panel="overview" class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+    <h2 class="text-lg font-semibold text-gray-900">Overview</h2>
+    <p class="mt-1 text-sm text-gray-500">Choose a section in the sidebar to manage users, AI usage, processes, and settings.</p>
+    <dl class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div class="rounded-lg border border-gray-200 bg-gray-50 p-4"><dt class="text-sm text-gray-500">Users</dt><dd class="mt-2 text-2xl font-semibold text-gray-900"><%= users.length %></dd></div>
+      <div class="rounded-lg border border-gray-200 bg-gray-50 p-4"><dt class="text-sm text-gray-500">Experiments</dt><dd class="mt-2 text-2xl font-semibold text-gray-900"><%= experiments.length %></dd></div>
+      <div class="rounded-lg border border-gray-200 bg-gray-50 p-4"><dt class="text-sm text-gray-500">AI requests</dt><dd class="mt-2 text-2xl font-semibold text-gray-900"><%= Number(llmUsageTotals?.requestCount || 0).toLocaleString() %></dd></div>
+      <div class="rounded-lg border border-gray-200 bg-gray-50 p-4"><dt class="text-sm text-gray-500">AI providers</dt><dd class="mt-2 text-2xl font-semibold text-gray-900"><%= llmProviderProfiles.length %></dd></div>
+    </dl>
   </section>
 
-  <div class="card">
-    <div class="doe-analysis-section-heading">
+  <section id="ai-monitor" data-admin-panel="ai" class="hidden overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm" aria-labelledby="adminAiUsageTitle">
+    <div class="flex flex-col gap-4 border-b border-gray-200 px-5 py-5 lg:flex-row lg:items-start lg:justify-between">
       <div>
-        <h2 class="card-title">AI providers</h2>
-        <p class="small-note">Server-side profiles for DOE interpretation. API keys are encrypted in the database and are never shown again.</p>
+        <div class="flex items-center gap-3">
+          <span class="inline-flex size-10 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+            <span class="material-symbols-rounded" aria-hidden="true">monitoring</span>
+          </span>
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900" id="adminAiUsageTitle">AI usage</h2>
+            <p class="mt-1 text-sm text-gray-500">Aggregate token accounting by user, provider, and model. Prompts, answers, and API keys are never included here.</p>
+          </div>
+        </div>
       </div>
-      <button class="pure-button pure-button-primary" type="button" id="openAiProviderDialog">Add provider</button>
+      <nav class="inline-flex w-fit rounded-lg bg-gray-100 p-1 text-sm font-medium" aria-label="AI usage period">
+        <% [['7d', '7 days'], ['30d', '30 days'], ['90d', '90 days'], ['all', 'All time']].forEach(([key, label]) => { %>
+        <button class="rounded-md px-3 py-1.5 transition <%= aiUsagePeriod?.key === key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900' %>" type="button" data-ai-usage-period="<%= key %>" <%= aiUsagePeriod?.key === key ? 'aria-current="page"' : '' %>><%= label %></button>
+        <% }) %>
+      </nav>
+    </div>
+    <div class="border-b border-gray-200 px-5 py-5">
+      <p class="mb-4 text-sm text-gray-500" data-ai-usage-period-label><%= aiUsagePeriod?.label || 'All time' %></p>
+      <dl class="grid grid-cols-2 gap-4 lg:grid-cols-4" aria-label="Aggregate AI token totals">
+        <div class="rounded-lg border border-gray-200 bg-gray-50 p-4"><dt class="text-sm font-medium text-gray-500">Input</dt><dd class="mt-2 text-2xl font-semibold text-gray-900" data-ai-usage-total="inputTokens"><%= Number(llmUsageTotals?.inputTokens || 0).toLocaleString() %></dd></div>
+        <div class="rounded-lg border border-gray-200 bg-gray-50 p-4"><dt class="text-sm font-medium text-gray-500">Output</dt><dd class="mt-2 text-2xl font-semibold text-gray-900" data-ai-usage-total="outputTokens"><%= Number(llmUsageTotals?.outputTokens || 0).toLocaleString() %></dd></div>
+        <div class="rounded-lg border border-gray-200 bg-gray-50 p-4"><dt class="text-sm font-medium text-gray-500">Total</dt><dd class="mt-2 text-2xl font-semibold text-gray-900" data-ai-usage-total="totalTokens"><%= Number(llmUsageTotals?.totalTokens || 0).toLocaleString() %></dd></div>
+        <div class="rounded-lg border border-gray-200 bg-gray-50 p-4"><dt class="text-sm font-medium text-gray-500">Requests</dt><dd class="mt-2 text-2xl font-semibold text-gray-900" data-ai-usage-total="requestCount"><%= Number(llmUsageTotals?.requestCount || 0).toLocaleString() %></dd></div>
+      </dl>
+    </div>
+    <div data-ai-usage-result>
+    <% if (llmUsageBreakdown && llmUsageBreakdown.length) { %>
+      <div class="divide-y divide-gray-200">
+        <% llmUsageBreakdown.forEach((user) => { %>
+          <details class="group">
+            <summary class="flex cursor-pointer list-none flex-col gap-3 px-5 py-4 hover:bg-gray-50 sm:flex-row sm:items-center sm:justify-between">
+              <div><div class="font-medium text-gray-900"><%= user.userName || user.userEmail %></div><div class="mt-0.5 text-xs text-gray-500"><%= user.userEmail %></div></div>
+              <div class="flex items-center gap-5 text-sm"><div><span class="block text-xs text-gray-500">Total tokens</span><strong class="font-semibold text-gray-900 tabular-nums"><%= Number(user.totalTokens).toLocaleString() %></strong></div><div><span class="block text-xs text-gray-500">Requests</span><strong class="font-semibold text-gray-900 tabular-nums"><%= user.requestCount %></strong><% if (user.failedRequestCount) { %><span class="ms-1 text-xs text-red-600">· <%= user.failedRequestCount %> failed</span><% } %></div><span class="material-symbols-rounded text-gray-500 transition-transform group-open:rotate-180" aria-hidden="true">expand_more</span></div>
+            </summary>
+            <div class="border-t border-gray-200 bg-gray-50 px-5 py-4"><p class="mb-3 text-xs font-medium uppercase tracking-wide text-gray-500">Models used</p><div class="relative overflow-x-auto rounded-lg border border-gray-200 bg-white"><table class="w-full text-left text-sm text-gray-500"><thead class="bg-gray-100 text-xs uppercase text-gray-700"><tr><th class="px-4 py-3">Provider</th><th class="px-4 py-3">Model</th><th class="px-4 py-3 text-right">Input</th><th class="px-4 py-3 text-right">Output</th><th class="px-4 py-3 text-right">Total</th><th class="px-4 py-3">Requests</th></tr></thead><tbody class="divide-y divide-gray-200"><% user.models.forEach((model) => { %><tr><td class="whitespace-nowrap px-4 py-3"><%= model.providerName %></td><td class="whitespace-nowrap px-4 py-3"><code class="rounded bg-gray-100 px-2 py-1 font-mono text-xs text-gray-700"><%= model.model %></code></td><td class="px-4 py-3 text-right tabular-nums"><%= Number(model.inputTokens).toLocaleString() %></td><td class="px-4 py-3 text-right tabular-nums"><%= Number(model.outputTokens).toLocaleString() %></td><td class="px-4 py-3 text-right font-medium text-gray-900 tabular-nums"><%= Number(model.totalTokens).toLocaleString() %></td><td class="px-4 py-3"><%= model.requestCount %><% if (model.failedRequestCount) { %><span class="text-xs text-red-600"> · <%= model.failedRequestCount %> failed</span><% } %></td></tr><% }) %></tbody></table></div></div>
+          </details>
+        <% }) %>
+      </div>
+    <% } else { %>
+      <div class="px-5 py-10 text-center" data-ai-usage-empty><span class="material-symbols-rounded text-3xl text-gray-400" aria-hidden="true">smart_toy</span><p class="mt-2 text-sm text-gray-500">No AI provider requests in this period.</p></div>
+    <% } %>
+    </div>
+  </section>
+
+  <section class="hidden overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm" id="ai-providers" data-admin-panel="ai" aria-labelledby="aiProvidersTitle">
+    <div class="flex flex-col gap-4 border-b border-gray-200 px-5 py-5 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <h2 class="text-lg font-semibold text-gray-900" id="aiProvidersTitle">Models &amp; providers</h2>
+        <p class="mt-1 text-sm text-gray-500">Create and manage the models available to the AI assistant. Configure provider, endpoint, model, limits, defaults, and availability. API keys are encrypted and are never shown again.</p>
+      </div>
+      <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3.5 py-2.5 text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300" type="button" id="openAiProviderDialog"><span class="material-symbols-rounded me-2 text-[20px]" aria-hidden="true">add</span>Add provider</button>
     </div>
     <% if (!llmSettingsEncryptionReady) { %>
-      <div class="doe-analysis-notice" role="status">
-        <strong>API-key storage is unavailable</strong>
-        <span>Set <code>LLM_SETTINGS_ENCRYPTION_KEY</code> in the Planner environment before saving a key. Keyless Ollama profiles can still be prepared.</span>
+      <div class="m-5 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800" role="status">
+        <span class="material-symbols-rounded mt-0.5 text-amber-600" aria-hidden="true">warning</span>
+        <div><strong class="font-semibold">API-key storage is unavailable.</strong><p class="mt-1">Set <code class="rounded bg-amber-100 px-1 py-0.5 font-mono text-xs">LLM_SETTINGS_ENCRYPTION_KEY</code> in the Planner environment before saving a key. Keyless Ollama profiles can still be prepared.</p></div>
       </div>
     <% } %>
     <% if (!llmProviderProfiles.length) { %>
-      <p class="small-note">No AI provider is configured. The DOE assistant remains disabled until a provider is enabled.</p>
+      <div class="px-5 py-10 text-center"><span class="material-symbols-rounded text-3xl text-gray-400" aria-hidden="true">dns</span><p class="mt-2 text-sm text-gray-500">No AI provider is configured. The DOE assistant remains disabled until a provider is enabled.</p></div>
     <% } else { %>
-      <div class="table-wrap">
-        <table class="pure-table pure-table-striped">
-          <thead>
-            <tr><th>Name</th><th>Provider</th><th>Model</th><th>Access</th><th>DOE default</th><th>Actions</th></tr>
-          </thead>
-          <tbody>
+      <div class="relative overflow-x-auto">
+        <table class="w-full text-left text-sm text-gray-500">
+          <thead class="bg-gray-50 text-xs uppercase text-gray-700"><tr><th scope="col" class="px-5 py-3">Name</th><th scope="col" class="px-5 py-3">Provider</th><th scope="col" class="px-5 py-3">Model</th><th scope="col" class="px-5 py-3">Access</th><th scope="col" class="px-5 py-3">DOE default</th><th scope="col" class="px-5 py-3"><span class="sr-only">Actions</span></th></tr></thead>
+          <tbody class="divide-y divide-gray-200">
             <% llmProviderProfiles.forEach((profile) => { %>
-              <tr>
-                <td><strong><%= profile.name %></strong><br><small><%= profile.baseUrl %></small></td>
-                <td><%= profile.providerKind === 'ollama' ? 'Ollama' : 'OpenAI-compatible' %></td>
-                <td><code><%= profile.model %></code></td>
-                <td><%= profile.hasApiKey ? 'API key stored' : 'No API key' %></td>
-                <td><%= profile.defaultForDoe ? 'Default' : '—' %><br><small><%= profile.enabled ? 'Enabled' : 'Disabled' %></small></td>
-                <td>
+              <tr class="bg-white hover:bg-gray-50">
+                <td class="px-5 py-4"><div class="font-medium text-gray-900"><%= profile.name %></div><div class="mt-0.5 max-w-xs truncate text-xs text-gray-500"><%= profile.baseUrl %></div></td>
+                <td class="whitespace-nowrap px-5 py-4"><%= profile.providerKind === 'ollama' ? 'Ollama' : 'OpenAI-compatible' %></td>
+                <td class="whitespace-nowrap px-5 py-4"><code class="rounded bg-gray-100 px-2 py-1 font-mono text-xs text-gray-700"><%= profile.model %></code></td>
+                <td class="whitespace-nowrap px-5 py-4"><span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium <%= profile.hasApiKey ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700' %>"><%= profile.hasApiKey ? 'API key stored' : 'No API key' %></span></td>
+                <td class="whitespace-nowrap px-5 py-4"><span class="font-medium text-gray-900"><%= profile.defaultForDoe ? 'Default' : '—' %></span><div class="mt-1 text-xs <%= profile.enabled ? 'text-green-700' : 'text-gray-500' %>"><%= profile.enabled ? 'Enabled' : 'Disabled' %></div></td>
+                <td class="whitespace-nowrap px-5 py-4"><div class="flex items-center justify-end gap-1">
                   <button
-                    class="icon-btn icon-only"
+                    class="inline-flex size-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-4 focus:ring-gray-200"
                     type="button"
                     title="Edit AI provider"
                     data-edit-ai-provider
@@ -109,135 +130,116 @@
                     data-has-api-key="<%= profile.hasApiKey ? '1' : '0' %>">
                     <span class="material-symbols-rounded" aria-hidden="true">edit</span>
                   </button>
-                  <form method="post" action="/admin/ai-providers/<%= profile.id %>/delete" class="pure-form inline-form" data-confirm="Delete this AI provider profile? Existing token usage records will be retained without its profile link.">
-                    <button class="icon-btn icon-only danger" type="submit" title="Delete AI provider">
+                  <form method="post" action="/admin/ai-providers/<%= profile.id %>/delete" class="inline" data-confirm="Delete this AI provider profile? Existing token usage records will be retained without its profile link.">
+                    <button class="inline-flex size-9 items-center justify-center rounded-lg text-red-600 hover:bg-red-50 focus:outline-none focus:ring-4 focus:ring-red-100" type="submit" title="Delete AI provider">
                       <span class="material-symbols-rounded" aria-hidden="true">delete</span>
                     </button>
                   </form>
-                </td>
+                </div></td>
               </tr>
             <% }); %>
           </tbody>
         </table>
       </div>
     <% } %>
-  </div>
+  </section>
 
-  <div class="card">
-    <h2 class="card-title">Users</h2>
+  <section class="hidden overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm" data-admin-panel="settings" aria-labelledby="applicationSettingsTitle">
+    <div class="border-b border-gray-200 px-5 py-5"><h2 class="text-lg font-semibold text-gray-900" id="applicationSettingsTitle">Application settings</h2><p class="mt-1 text-sm text-gray-500">Security and access settings for this Planner instance.</p></div>
+    <div class="grid gap-6 p-5 lg:grid-cols-2">
+      <form method="post" action="/admin/domain" class="space-y-4 rounded-lg border border-gray-200 p-5 ajax-form">
+        <div><h3 class="font-medium text-gray-900">Allowed Google domain</h3><p class="mt-1 text-sm text-gray-500">Limit Google sign-in to a company domain. Leave empty to allow any domain.</p></div>
+        <div><label class="mb-2 block text-sm font-medium text-gray-900" for="allowed_domain">Domain</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="allowed_domain" name="allowed_domain" type="text" value="<%= settings.allowed_domain ?? '' %>" placeholder="example.com"></div>
+        <button class="rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300" type="submit">Save domain</button>
+      </form>
+      <form method="post" action="/admin/https" class="space-y-4 rounded-lg border border-gray-200 p-5 ajax-form">
+        <div><h3 class="font-medium text-gray-900">HTTPS requirement</h3><p class="mt-1 text-sm text-gray-500">Enable only when Planner is served through an HTTPS reverse proxy.</p></div>
+        <label class="flex cursor-pointer items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700"><input class="size-4 rounded border-gray-300 bg-gray-100 text-blue-600 focus:ring-2 focus:ring-blue-500" type="checkbox" name="require_https" <%= settings.require_https ? 'checked' : '' %>><span>Require HTTPS</span></label>
+        <button class="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-gray-100" type="submit">Update security setting</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="hidden overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm" id="users" data-admin-panel="users" aria-labelledby="usersTitle">
+    <div class="flex flex-col gap-4 border-b border-gray-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 class="text-lg font-semibold text-gray-900" id="usersTitle">Users</h2><p class="mt-1 text-sm text-gray-500">Manage account details, roles, and active access.</p></div><button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3.5 py-2.5 text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300" type="button" data-open-add-user><span class="material-symbols-rounded me-2 text-[20px]" aria-hidden="true">person_add</span>Add user</button></div>
     <% if (notice) { %>
-      <div class="toast toast-success toast-inline">
-        <span><%= notice %></span>
-        <button type="button" class="toast-close" aria-label="Close">×</button>
-      </div>
+      <div class="m-5 flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800"><span class="material-symbols-rounded" aria-hidden="true">check_circle</span><span><%= notice %></span></div>
     <% } %>
     <% if (error) { %>
-      <div class="toast toast-error toast-inline">
-        <span><%= error %></span>
-        <button type="button" class="toast-close" aria-label="Close">×</button>
-      </div>
+      <div class="m-5 flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800"><span class="material-symbols-rounded" aria-hidden="true">error</span><span><%= error %></span></div>
     <% } %>
     <div id="adminToastArea"></div>
-    <div class="table-wrap">
-      <table class="pure-table pure-table-striped">
-        <thead>
-          <tr>
-            <th>User</th>
-            <th>Role</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
+    <div class="relative overflow-x-auto">
+      <table class="w-full text-left text-sm text-gray-500"><thead class="bg-gray-50 text-xs uppercase text-gray-700"><tr><th class="px-5 py-3">User</th><th class="px-5 py-3">Role</th><th class="px-5 py-3">Last login</th><th class="px-5 py-3"><span class="sr-only">Actions</span></th></tr></thead><tbody class="divide-y divide-gray-200">
           <% users.forEach(function(user) { %>
-            <tr class="<%= user.status === 'DISABLED' ? 'row-banned' : '' %>">
-              <td>
-                <div class="pure-form inline-form">
-                  <span class="status-dot <%= user.status === 'ACTIVE' ? 'online' : 'offline' %>" title="<%= user.status %>"></span>
-                  <input name="name" type="text" value="<%= user.name ?? '' %>" placeholder="Name" form="userForm-<%= user.id %>" data-autosave="userForm-<%= user.id %>">
-                  <input name="email" type="email" value="<%= user.email %>" form="userForm-<%= user.id %>" data-autosave="userForm-<%= user.id %>">
-                </div>
+            <tr class="<%= user.status === 'DISABLED' ? 'bg-red-50' : 'bg-white' %> hover:bg-gray-50">
+              <% const avatarTone = user.role === 'admin' ? 'ring-red-200' : user.role === 'manager' ? 'ring-violet-200' : user.role === 'engineer' ? 'ring-blue-200' : user.role === 'operator' ? 'ring-amber-200' : 'ring-gray-200'; %>
+              <td class="min-w-[34rem] px-5 py-3"><div class="flex items-center gap-2"><img class="size-9 shrink-0 rounded-full bg-gray-100 ring-2 <%= avatarTone %>" src="<%= avatarUrl(user.id) %>" alt=""><input class="block w-36 rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" name="name" type="text" value="<%= user.name ?? '' %>" placeholder="Name" form="userForm-<%= user.id %>" data-autosave="userForm-<%= user.id %>" aria-label="User name"><input class="block w-52 rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" name="email" type="email" value="<%= user.email %>" form="userForm-<%= user.id %>" data-autosave="userForm-<%= user.id %>" aria-label="Email"><span class="inline-flex shrink-0 rounded-full px-2.5 py-1 text-xs font-medium <%= user.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' %>"><%= user.status %></span></div><% const activity = userActivity.get(user.id) || []; if (activity.length) { %><details class="mt-2 text-xs text-gray-500"><summary class="cursor-pointer hover:text-gray-900">Recent activity · <%= activity.length %> events</summary><ul class="mt-2 space-y-1 rounded-lg bg-gray-50 p-3"><% activity.forEach((event) => { %><li><span class="font-medium text-gray-700"><%= event.action %></span> · <%= event.created_at %></li><% }); %></ul></details><% } %>
               </td>
-              <td>
-                <div class="pure-form inline-form">
-                  <select name="role" form="userForm-<%= user.id %>" data-autosave="userForm-<%= user.id %>">
+              <td class="align-top px-5 py-4"><select class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" name="role" form="userForm-<%= user.id %>" data-autosave="userForm-<%= user.id %>">
                   <option value="" <%= !user.role ? 'selected' : '' %>>none</option>
                   <option value="admin" <%= user.role === 'admin' ? 'selected' : '' %>>admin</option>
                   <option value="manager" <%= user.role === 'manager' ? 'selected' : '' %>>manager</option>
                   <option value="engineer" <%= user.role === 'engineer' ? 'selected' : '' %>>engineer</option>
                   <option value="operator" <%= user.role === 'operator' ? 'selected' : '' %>>operator</option>
                   <option value="viewer" <%= user.role === 'viewer' ? 'selected' : '' %>>viewer</option>
-                  </select>
-                </div>
-              </td>
-              <td>
-                <form id="userForm-<%= user.id %>" method="post" action="/admin/users/<%= user.id %>" class="pure-form inline-form autosave-form ajax-form"></form>
-                <form method="post" action="/admin/users/<%= user.id %>/reset-password" class="pure-form inline-form reset-form">
+                  </select></td>
+              <td class="align-top whitespace-nowrap px-5 py-4 text-xs text-gray-500"><%= user.last_login_at || 'Never' %></td>
+              <td class="align-top whitespace-nowrap px-5 py-4"><div class="flex items-center justify-end gap-1"><form id="userForm-<%= user.id %>" method="post" action="/admin/users/<%= user.id %>" class="autosave-form ajax-form"></form><a class="inline-flex size-9 items-center justify-center rounded-lg text-blue-700 no-underline hover:bg-blue-50 focus:outline-none focus:ring-4 focus:ring-blue-100" href="/messages?view=chat&amp;user_id=<%= user.id %>" data-tooltip-target="userChatTip-<%= user.id %>" aria-label="Open chat"><span class="material-symbols-rounded" aria-hidden="true">chat</span></a><div id="userChatTip-<%= user.id %>" role="tooltip" class="tooltip invisible absolute z-10 inline-block rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Open chat<div class="tooltip-arrow" data-popper-arrow></div></div><form method="post" action="/admin/users/<%= user.id %>/reset-password" class="inline-flex reset-form">
                   <input type="hidden" name="email" value="<%= user.email %>">
-                  <button type="submit" class="icon-btn icon-only reset-btn" title="Reset password">
+                  <button type="submit" class="relative inline-flex size-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-4 focus:ring-gray-200" data-tooltip-target="userResetTip-<%= user.id %>" aria-label="Reset password">
                     <span class="material-symbols-rounded" aria-hidden="true">restart_alt</span>
                     <% if (user.reset_requested_at) { %>
-                      <span class="alert-dot" title="Reset requested"></span>
+                      <span class="absolute ms-2 mt-0.5 size-2 rounded-full bg-amber-400 ring-2 ring-white" title="Reset requested"></span>
                     <% } %>
                   </button>
-                </form>
+                </form><div id="userResetTip-<%= user.id %>" role="tooltip" class="tooltip invisible absolute z-10 inline-block rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Reset password<div class="tooltip-arrow" data-popper-arrow></div></div>
                 <% if (user.status === 'DISABLED') { %>
-                  <form method="post" action="/admin/users/<%= user.id %>/unban" class="pure-form inline-form ajax-form">
-                    <button type="submit" class="icon-btn icon-only" title="Unban user" data-ban-toggle="unban">
+                  <form method="post" action="/admin/users/<%= user.id %>/unban" class="inline-flex ajax-form"><button type="submit" class="inline-flex size-9 items-center justify-center rounded-lg text-green-700 hover:bg-green-50 focus:outline-none focus:ring-4 focus:ring-green-100" data-ban-toggle="unban" data-tooltip-target="userAccessTip-<%= user.id %>" aria-label="Enable user">
                       <span class="material-symbols-rounded" aria-hidden="true">lock_open</span>
                     </button>
-                  </form>
+                  </form><div id="userAccessTip-<%= user.id %>" role="tooltip" class="tooltip invisible absolute z-10 inline-block rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Enable user<div class="tooltip-arrow" data-popper-arrow></div></div>
                 <% } else { %>
-                  <form method="post" action="/admin/users/<%= user.id %>/ban" class="pure-form inline-form ajax-form">
-                    <button type="submit" class="icon-btn icon-only warn" title="Ban user" data-ban-toggle="ban">
+                  <form method="post" action="/admin/users/<%= user.id %>/ban" class="inline-flex ajax-form"><button type="submit" class="inline-flex size-9 items-center justify-center rounded-lg text-amber-700 hover:bg-amber-50 focus:outline-none focus:ring-4 focus:ring-amber-100" data-ban-toggle="ban" data-tooltip-target="userAccessTip-<%= user.id %>" aria-label="Disable user">
                       <span class="material-symbols-rounded" aria-hidden="true">block</span>
                     </button>
-                  </form>
+                  </form><div id="userAccessTip-<%= user.id %>" role="tooltip" class="tooltip invisible absolute z-10 inline-block rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Disable user<div class="tooltip-arrow" data-popper-arrow></div></div>
                 <% } %>
-                <form method="post" action="/admin/users/<%= user.id %>/force-logout" class="pure-form inline-form ajax-form">
-                  <button type="submit" class="icon-btn icon-only" title="Force logout">
+                <form method="post" action="/admin/users/<%= user.id %>/force-logout" class="inline-flex ajax-form"><button type="submit" class="inline-flex size-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-4 focus:ring-gray-200" data-tooltip-target="userLogoutTip-<%= user.id %>" aria-label="Force logout">
                     <span class="material-symbols-rounded" aria-hidden="true">logout</span>
                   </button>
-                </form>
-                <form method="post" action="/admin/users/<%= user.id %>/delete" class="pure-form inline-form ajax-form" data-confirm="Delete user?">
-                  <button type="submit" class="icon-btn icon-only danger" title="Delete user">
+                </form><div id="userLogoutTip-<%= user.id %>" role="tooltip" class="tooltip invisible absolute z-10 inline-block rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Force logout<div class="tooltip-arrow" data-popper-arrow></div></div>
+                <form method="post" action="/admin/users/<%= user.id %>/delete" class="inline-flex ajax-form" data-confirm="Delete user?"><button type="submit" class="inline-flex size-9 items-center justify-center rounded-lg text-red-600 hover:bg-red-50 focus:outline-none focus:ring-4 focus:ring-red-100" data-tooltip-target="userDeleteTip-<%= user.id %>" aria-label="Delete user">
                     <span class="material-symbols-rounded" aria-hidden="true">delete</span>
                   </button>
-                </form>
-              </td>
+                </form><div id="userDeleteTip-<%= user.id %>" role="tooltip" class="tooltip invisible absolute z-10 inline-block rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Delete user<div class="tooltip-arrow" data-popper-arrow></div></div>
+              </div></td>
             </tr>
           <% }); %>
         </tbody>
       </table>
     </div>
-  </div>
+  </section>
 
-  <div class="card">
-    <h2 class="card-title">Experiments</h2>
-    <div class="tab-row">
-      <button class="tab-btn is-active" type="button" data-exp-tab="active">Active</button>
-      <button class="tab-btn" type="button" data-exp-tab="archived">Archived</button>
-    </div>
+  <section class="hidden overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm" id="experiments" data-admin-panel="experiments" aria-labelledby="experimentsTitle">
+    <div class="flex flex-col gap-4 border-b border-gray-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 class="text-lg font-semibold text-gray-900" id="experimentsTitle">Experiments</h2><p class="mt-1 text-sm text-gray-500">Manage ownership, archive state, and experiment progress.</p></div><div class="inline-flex w-fit rounded-lg bg-gray-100 p-1 text-sm font-medium" role="tablist" aria-label="Experiment status"><button class="rounded-md bg-white px-3 py-1.5 text-gray-900 shadow-sm" type="button" data-exp-tab="active" role="tab" aria-selected="true">Active</button><button class="rounded-md px-3 py-1.5 text-gray-500 hover:text-gray-900" type="button" data-exp-tab="archived" role="tab" aria-selected="false">Archived</button></div></div>
     <div id="adminExperimentToastArea"></div>
-    <div class="table-wrap">
-      <table class="pure-table pure-table-striped">
-        <thead>
+    <div class="relative overflow-x-auto">
+      <table class="w-full text-left text-sm text-gray-500">
+        <thead class="bg-gray-50 text-xs uppercase text-gray-700">
           <tr>
-            <th>ID</th>
-            <th>Name</th>
-            <th>Owner</th>
-            <th>Status</th>
-            <th>Progress</th>
+            <th class="px-5 py-3">ID</th><th class="px-5 py-3">Experiment</th><th class="px-5 py-3">Owner</th><th class="px-5 py-3">Scope &amp; workflow</th><th class="px-5 py-3">Archive</th><th class="px-5 py-3">Progress</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class="divide-y divide-gray-200">
           <% experiments.forEach(function(exp) { %>
-            <tr data-exp-id="<%= exp.id %>" data-exp-status="<%= exp.archived_at ? 'archived' : 'active' %>">
-              <td><%= exp.id %></td>
-              <td><a href="/experiments/<%= exp.id %>"><%= exp.name %></a></td>
-              <td>
+            <tr class="bg-white hover:bg-gray-50" data-exp-id="<%= exp.id %>" data-exp-status="<%= exp.archived_at ? 'archived' : 'active' %>">
+              <td class="whitespace-nowrap px-5 py-4 font-mono text-xs text-gray-500"><%= exp.id %></td>
+              <td class="min-w-64 px-5 py-4"><a class="font-medium text-blue-700 no-underline hover:underline" href="/experiments/<%= exp.id %>"><%= exp.name %></a><div class="mt-1 text-xs text-gray-500"><%= exp.process_name || exp.process_type_name || 'No process assigned' %> · <%= exp.design_type %></div></td>
+              <td class="px-5 py-4">
                 <% if (exp.archived_at) { %>
-                  <form method="post" action="/admin/experiments/<%= exp.id %>/restore" class="pure-form inline-form ajax-form" data-exp-action="restore">
-                    <select name="owner_user_id">
+                  <form id="experimentOwnerForm-<%= exp.id %>" method="post" action="/admin/experiments/<%= exp.id %>/restore" class="ajax-form" data-exp-action="restore">
+                    <select class="block min-w-40 rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" name="owner_user_id">
                       <option value="">No owner</option>
                       <% users.forEach(function(user) { %>
                         <option value="<%= user.id %>" <%= exp.owner_user_id === user.id ? 'selected' : '' %>>
@@ -245,11 +247,10 @@
                         </option>
                       <% }); %>
                     </select>
-                    <button type="submit" class="pure-button">Restore</button>
                   </form>
                 <% } else { %>
-                <form method="post" action="/admin/experiments/<%= exp.id %>/owner" class="pure-form inline-form ajax-form autosave-form" data-exp-action="owner-update">
-                  <select name="owner_user_id">
+                <form id="experimentOwnerForm-<%= exp.id %>" method="post" action="/admin/experiments/<%= exp.id %>/owner" class="ajax-form autosave-form" data-exp-action="owner-update">
+                  <select class="block min-w-40 rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" name="owner_user_id">
                     <option value="">No owner</option>
                     <% users.forEach(function(user) { %>
                       <option value="<%= user.id %>" <%= exp.owner_user_id === user.id ? 'selected' : '' %>>
@@ -260,64 +261,72 @@
                 </form>
                 <% } %>
               </td>
-              <td data-exp-status-cell>
+              <td class="min-w-60 px-5 py-4"><div class="flex flex-wrap gap-2"><span class="inline-flex rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-800"><%= exp.doe_count %> DOE</span><span class="inline-flex rounded-full bg-violet-100 px-2.5 py-1 text-xs font-medium text-violet-800"><%= exp.report_count %> reports<%= exp.report_count ? ` · ${exp.signed_report_count} signed` : '' %></span><span class="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700"><%= exp.active_assignment_count %> assignments</span></div><details class="mt-2 text-xs text-gray-500"><summary class="cursor-pointer hover:text-gray-900">Design settings</summary><dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg bg-gray-50 p-3"><div><dt class="text-gray-400">Center points</dt><dd class="font-medium text-gray-700"><%= exp.center_points %></dd></div><div><dt class="text-gray-400">Max runs</dt><dd class="font-medium text-gray-700"><%= exp.max_runs %></dd></div><div><dt class="text-gray-400">Replicates</dt><dd class="font-medium text-gray-700"><%= exp.replicate_count %></dd></div><div><dt class="text-gray-400">Recipe block</dt><dd class="font-medium text-gray-700"><%= exp.recipe_as_block ? 'On' : 'Off' %></dd></div></dl></details></td>
+              <td class="px-5 py-4" data-exp-status-cell>
                 <% if (exp.archived_at) { %>
-                  <form method="post" action="/admin/experiments/<%= exp.id %>/delete" class="pure-form inline-form ajax-form" data-exp-action="delete" data-confirm="Delete this archived experiment? This cannot be undone.">
-                    <button type="submit" class="icon-btn icon-only danger" title="Delete permanently">
+                  <button type="submit" form="experimentOwnerForm-<%= exp.id %>" class="inline-flex size-9 items-center justify-center rounded-lg text-green-700 hover:bg-green-50 focus:outline-none focus:ring-4 focus:ring-green-100" data-tooltip-target="experimentRestoreTip-<%= exp.id %>" aria-label="Restore experiment"><span class="material-symbols-rounded" aria-hidden="true">restore</span></button><div id="experimentRestoreTip-<%= exp.id %>" role="tooltip" class="tooltip invisible absolute z-10 inline-block rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Restore experiment<div class="tooltip-arrow" data-popper-arrow></div></div>
+                  <form method="post" action="/admin/experiments/<%= exp.id %>/delete" class="inline-flex ajax-form" data-exp-action="delete" data-confirm="Delete this archived experiment? This cannot be undone.">
+                    <button type="submit" class="inline-flex size-9 items-center justify-center rounded-lg text-red-600 hover:bg-red-50 focus:outline-none focus:ring-4 focus:ring-red-100" data-tooltip-target="experimentDeleteTip-<%= exp.id %>" aria-label="Delete permanently">
                       <span class="material-symbols-rounded" aria-hidden="true">delete</span>
                     </button>
-                  </form>
+                  </form><div id="experimentDeleteTip-<%= exp.id %>" role="tooltip" class="tooltip invisible absolute z-10 inline-block rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Delete permanently<div class="tooltip-arrow" data-popper-arrow></div></div>
                 <% } else { %>
-                  <form method="post" action="/experiments/<%= exp.id %>/archive" class="pure-form inline-form ajax-form" data-exp-action="archive" data-confirm="Archive this experiment?">
-                    <button type="submit" class="icon-btn icon-only warn" title="Archive">
+                  <form method="post" action="/experiments/<%= exp.id %>/archive" class="inline-flex ajax-form" data-exp-action="archive" data-confirm="Archive this experiment?">
+                    <button type="submit" class="inline-flex size-9 items-center justify-center rounded-lg text-amber-700 hover:bg-amber-50 focus:outline-none focus:ring-4 focus:ring-amber-100" data-tooltip-target="experimentArchiveTip-<%= exp.id %>" aria-label="Archive experiment">
                       <span class="material-symbols-rounded" aria-hidden="true">archive</span>
                     </button>
-                  </form>
+                  </form><div id="experimentArchiveTip-<%= exp.id %>" role="tooltip" class="tooltip invisible absolute z-10 inline-block rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Archive experiment<div class="tooltip-arrow" data-popper-arrow></div></div>
                 <% } %>
               </td>
-              <td><span class="status-pill status-<%= exp.status %>"><%= exp.statusLabel %></span></td>
+              <td class="whitespace-nowrap px-5 py-4"><span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium <%= exp.status === 'done' ? 'bg-green-100 text-green-800' : exp.status === 'in_progress' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700' %>"><%= exp.statusLabel %></span></td>
             </tr>
           <% }); %>
         </tbody>
       </table>
     </div>
-  </div>
+  </section>
 
-  <div class="card">
-    <h2 class="card-title">Processes on Home</h2>
+  <section class="hidden overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm" id="reports" data-admin-panel="reports" aria-labelledby="reportsTitle">
+    <div class="flex flex-col gap-4 border-b border-gray-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 class="text-lg font-semibold text-gray-900" id="reportsTitle">Reports</h2><p class="mt-1 text-sm text-gray-500">Monitor ownership, deadlines, document readiness, and signature workflow across experiments.</p></div><span class="inline-flex w-fit rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700"><%= reports.length %> total</span></div>
+    <% if (!reports.length) { %>
+      <div class="px-5 py-12 text-center"><span class="material-symbols-rounded text-3xl text-gray-400" aria-hidden="true">description</span><p class="mt-2 text-sm text-gray-500">No reports have been created yet.</p></div>
+    <% } else { %>
+      <div class="relative overflow-x-auto"><table class="w-full text-left text-sm text-gray-500"><thead class="bg-gray-50 text-xs uppercase text-gray-700"><tr><th class="px-5 py-3">Report</th><th class="px-5 py-3">People</th><th class="px-5 py-3">Deadline</th><th class="px-5 py-3">Workflow</th><th class="px-5 py-3"><span class="sr-only">Actions</span></th></tr></thead><tbody class="divide-y divide-gray-200"><% reports.forEach((report) => { const workflow = report.signed_at ? { label: 'Signed', tone: 'bg-green-100 text-green-800' } : report.submitted_for_signature_at ? { label: 'Awaiting signature', tone: 'bg-amber-100 text-amber-800' } : { label: 'Draft', tone: 'bg-gray-100 text-gray-700' }; %><tr class="bg-white hover:bg-gray-50"><td class="px-5 py-4"><a class="font-medium text-blue-700 no-underline hover:underline" href="/reports/<%= report.id %>"><%= report.name %></a><div class="mt-1 text-xs text-gray-500"><a class="text-gray-500 no-underline hover:underline" href="/experiments/<%= report.experiment_id %>"><%= report.experiment_name %></a> · <%= report.report_number || `Report #${report.id}` %> · <%= report.report_type %></div></td><td class="px-5 py-4 text-xs"><div><span class="text-gray-400">Author:</span> <span class="font-medium text-gray-700"><%= report.author_name || report.author_email || 'Unassigned' %></span></div><div class="mt-1"><span class="text-gray-400">Signer:</span> <span class="font-medium text-gray-700"><%= report.responsible_name || report.responsible_email || 'Unassigned' %></span></div></td><td class="whitespace-nowrap px-5 py-4"><div class="font-medium text-gray-700"><%= report.due_at || 'No author deadline' %></div><div class="mt-1 text-xs text-gray-500"><%= report.signature_due_at ? `Signature: ${report.signature_due_at}` : 'No signature deadline' %></div></td><td class="whitespace-nowrap px-5 py-4"><span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium <%= workflow.tone %>"><%= workflow.label %></span><% if (report.signed_at) { %><div class="mt-1 text-xs text-gray-500"><%= report.signed_at %></div><% } %></td><td class="whitespace-nowrap px-5 py-4"><div class="flex items-center justify-end gap-1"><a class="inline-flex size-9 items-center justify-center rounded-lg text-gray-500 no-underline hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-4 focus:ring-gray-200" href="/reports/<%= report.id %>" data-tooltip-target="reportSetupTip-<%= report.id %>" aria-label="Open report setup"><span class="material-symbols-rounded" aria-hidden="true">settings</span></a><div id="reportSetupTip-<%= report.id %>" role="tooltip" class="tooltip invisible absolute z-10 inline-block rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Report setup<div class="tooltip-arrow" data-popper-arrow></div></div><a class="inline-flex size-9 items-center justify-center rounded-lg text-blue-700 no-underline hover:bg-blue-50 focus:outline-none focus:ring-4 focus:ring-blue-100" href="/reports/<%= report.id %>/editor" data-tooltip-target="reportEditorTip-<%= report.id %>" aria-label="Open report editor"><span class="material-symbols-rounded" aria-hidden="true">edit_document</span></a><div id="reportEditorTip-<%= report.id %>" role="tooltip" class="tooltip invisible absolute z-10 inline-block rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Open editor<div class="tooltip-arrow" data-popper-arrow></div></div></div></td></tr><% }); %></tbody></table></div>
+    <% } %>
+  </section>
+
+  <section class="hidden overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm" id="processes" data-admin-panel="processes" aria-labelledby="processesTitle">
+    <div class="border-b border-gray-200 px-5 py-5"><h2 class="text-lg font-semibold text-gray-900" id="processesTitle">Processes on Home</h2><p class="mt-1 text-sm text-gray-500">Set the address, owner, and home-page visibility for each process.</p></div>
     <div id="adminProcessToastArea"></div>
-    <div class="table-wrap">
-      <table class="pure-table pure-table-striped">
-        <thead>
+    <div class="relative overflow-x-auto">
+      <table class="w-full text-left text-sm text-gray-500">
+        <thead class="bg-gray-50 text-xs uppercase text-gray-700">
           <tr>
-            <th>Process</th>
-            <th>Route</th>
-            <th>Owner</th>
-            <th>Visible on Home</th>
+            <th class="px-5 py-3">Process</th><th class="px-5 py-3">Route</th><th class="px-5 py-3">Owner</th><th class="px-5 py-3">Visible on Home</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class="divide-y divide-gray-200">
           <% (processes || []).forEach((process) => { %>
-            <tr>
-              <td>
-                <strong><%- formatInline(process.name) %></strong>
-                <span class="small-note">(<%- formatInline(process.process_type_name || 'Process') %>)</span>
+            <tr class="bg-white hover:bg-gray-50">
+              <td class="px-5 py-4">
+                <div class="font-medium text-gray-900"><%- formatInline(process.name) %></div>
+                <div class="mt-1 text-xs text-gray-500"><%- formatInline(process.process_type_name || 'Process') %></div>
               </td>
-              <td>
-                <form id="processSettingsForm-<%= process.id %>" method="post" action="/admin/processes/<%= process.id %>/settings" class="pure-form inline-form autosave-form ajax-form" data-admin-scope="processes">
+              <td class="px-5 py-4">
+                <form id="processSettingsForm-<%= process.id %>" method="post" action="/admin/processes/<%= process.id %>/settings" class="autosave-form ajax-form" data-admin-scope="processes">
                   <input
+                    class="block min-w-40 rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500"
                     type="text"
                     name="route_code"
                     value="<%= process.route_code || process.process_type_code || '' %>"
                     pattern="[a-z0-9][a-z0-9_-]*"
                     data-autosave="processSettingsForm-<%= process.id %>"
-                    style="min-width: 140px;"
                   />
                 </form>
               </td>
-              <td>
-                <form class="pure-form inline-form">
-                  <select name="owner_user_id" form="processSettingsForm-<%= process.id %>" data-autosave="processSettingsForm-<%= process.id %>">
+              <td class="px-5 py-4">
+                <form>
+                  <select class="block min-w-40 rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" name="owner_user_id" form="processSettingsForm-<%= process.id %>" data-autosave="processSettingsForm-<%= process.id %>">
                     <option value="">Unassigned</option>
                     <% users.forEach((user) => { %>
                       <option value="<%= user.id %>" <%= process.owner_user_id === user.id ? 'selected' : '' %>>
@@ -327,11 +336,11 @@
                   </select>
                 </form>
               </td>
-              <td>
-                <form class="pure-form inline-form">
-                  <label class="pure-checkbox">
-                    <input type="checkbox" name="show_on_home" form="processSettingsForm-<%= process.id %>" data-autosave="processSettingsForm-<%= process.id %>" <%= Number(process.show_on_home || 0) === 1 ? 'checked' : '' %>>
-                    show
+              <td class="px-5 py-4">
+                <form>
+                  <label class="inline-flex cursor-pointer items-center">
+                    <input class="peer sr-only" type="checkbox" name="show_on_home" form="processSettingsForm-<%= process.id %>" data-autosave="processSettingsForm-<%= process.id %>" <%= Number(process.show_on_home || 0) === 1 ? 'checked' : '' %>>
+                    <span class="relative h-6 w-11 rounded-full bg-gray-200 after:absolute after:start-[2px] after:top-[2px] after:size-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all peer-checked:bg-blue-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300"></span><span class="ms-3 text-sm font-medium text-gray-700">Show</span>
                   </label>
                 </form>
               </td>
@@ -340,127 +349,80 @@
         </tbody>
       </table>
     </div>
+  </section>
+        </div>
+      </div>
+    </main>
   </div>
 </div>
-<%- include("partials/foot") %>
 
-<dialog class="modal-frame" id="settingsDialog">
-  <div class="modal-header">
-    <strong>Settings</strong>
-    <button class="pure-button" type="button" data-close>Close</button>
-  </div>
-  <div class="modal-body">
-    <form method="post" action="/admin/domain" class="pure-form ajax-form">
-      <label for="allowed_domain">Allowed Google domain</label>
-      <input id="allowed_domain" name="allowed_domain" type="text" value="<%= settings.allowed_domain ?? '' %>" placeholder="example.com">
-      <button type="submit" class="pure-button pure-button-primary">Save</button>
-    </form>
-    <form method="post" action="/admin/https" class="pure-form ajax-form">
-      <label class="pure-checkbox">
-        <input type="checkbox" name="require_https" <%= settings.require_https ? 'checked' : '' %>>
-        Require HTTPS (only useful behind a reverse proxy)
-      </label>
-      <button type="submit" class="pure-button">Update</button>
+<dialog class="fixed left-1/2 top-1/2 m-0 max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border-0 bg-transparent p-0 shadow-xl backdrop:bg-gray-900/50" id="aiProviderDialog">
+  <div class="rounded-lg bg-white shadow-sm">
+    <div class="flex items-center justify-between rounded-t border-b border-gray-200 p-5">
+      <h2 class="text-xl font-semibold text-gray-900" id="aiProviderDialogTitle">Add AI provider</h2>
+      <button class="inline-flex size-8 items-center justify-center rounded-lg text-sm text-gray-400 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-4 focus:ring-gray-200" type="button" data-close aria-label="Close"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
+    </div>
+    <form id="aiProviderForm" method="post" action="/admin/ai-providers" class="space-y-5 p-5">
+      <div><label class="mb-2 block text-sm font-medium text-gray-900" for="aiProviderName">Profile name</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="aiProviderName" name="name" maxlength="120" required placeholder="Production interpretation model"></div>
+      <div><label class="mb-2 block text-sm font-medium text-gray-900" for="aiProviderKind">Provider API</label><select class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="aiProviderKind" name="provider_kind" required><option value="openai_compatible">OpenAI-compatible</option><option value="ollama">Ollama</option></select></div>
+      <div><label class="mb-2 block text-sm font-medium text-gray-900" for="aiProviderUrl">Base URL</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="aiProviderUrl" name="base_url" type="url" required placeholder="https://api.example.com/v1"><p class="mt-2 text-sm text-gray-500">The connection itself is tested only when the provider adapter is enabled. Do not put credentials in this URL.</p></div>
+      <div><label class="mb-2 block text-sm font-medium text-gray-900" for="aiProviderModel">Model</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="aiProviderModel" name="model" maxlength="200" required placeholder="model-name"></div>
+      <div><label class="mb-2 block text-sm font-medium text-gray-900" for="aiProviderKey">API key <span class="font-normal text-gray-500" id="aiProviderKeyHint">(optional for local Ollama)</span></label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="aiProviderKey" name="api_key" type="password" autocomplete="new-password" placeholder="Leave empty to keep the current key when editing"><label class="mt-3 flex items-center gap-2 text-sm text-gray-700" id="clearAiProviderKeyRow" hidden><input class="size-4 rounded border-gray-300 bg-gray-100 text-blue-600 focus:ring-2 focus:ring-blue-500" id="clearAiProviderKey" name="clear_api_key" type="checkbox">Remove the stored API key</label></div>
+      <div class="grid gap-5 sm:grid-cols-3"><div><label class="mb-2 block text-sm font-medium text-gray-900" for="aiProviderOutputTokens">Max output tokens</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="aiProviderOutputTokens" name="max_output_tokens" type="number" min="64" max="32768" step="1" value="1200" required></div><div><label class="mb-2 block text-sm font-medium text-gray-900" for="aiProviderTemperature">Temperature</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="aiProviderTemperature" name="temperature" type="number" min="0" max="2" step="0.1" value="0.2" required></div><div><label class="mb-2 block text-sm font-medium text-gray-900" for="aiProviderTimeout">Timeout (ms)</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="aiProviderTimeout" name="timeout_ms" type="number" min="1000" max="120000" step="1000" value="30000" required></div></div>
+      <div class="space-y-3"><label class="flex items-center gap-2 text-sm text-gray-700"><input class="size-4 rounded border-gray-300 bg-gray-100 text-blue-600 focus:ring-2 focus:ring-blue-500" id="aiProviderEnabled" name="enabled" type="checkbox">Enable this provider</label><label class="flex items-center gap-2 text-sm text-gray-700"><input class="size-4 rounded border-gray-300 bg-gray-100 text-blue-600 focus:ring-2 focus:ring-blue-500" id="aiProviderDefault" name="default_for_doe" type="checkbox">Use as default for DOE interpretation</label></div>
+      <div class="flex justify-end gap-3 border-t border-gray-200 pt-5"><button class="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-gray-100" type="button" data-close>Cancel</button><button class="rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300" type="submit">Save provider</button></div>
     </form>
   </div>
 </dialog>
 
-<dialog class="modal-frame" id="aiProviderDialog">
-  <div class="modal-header">
-    <strong id="aiProviderDialogTitle">Add AI provider</strong>
-    <button class="pure-button" type="button" data-close>Close</button>
-  </div>
-  <div class="modal-body">
-    <form id="aiProviderForm" method="post" action="/admin/ai-providers" class="pure-form pure-form-stacked">
-      <label for="aiProviderName">Profile name</label>
-      <input id="aiProviderName" name="name" maxlength="120" required placeholder="Production interpretation model">
-
-      <label for="aiProviderKind">Provider API</label>
-      <select id="aiProviderKind" name="provider_kind" required>
-        <option value="openai_compatible">OpenAI-compatible</option>
-        <option value="ollama">Ollama</option>
-      </select>
-
-      <label for="aiProviderUrl">Base URL</label>
-      <input id="aiProviderUrl" name="base_url" type="url" required placeholder="https://api.example.com/v1">
-      <p class="small-note">The connection itself is tested only when the provider adapter is enabled. Do not put credentials in this URL.</p>
-
-      <label for="aiProviderModel">Model</label>
-      <input id="aiProviderModel" name="model" maxlength="200" required placeholder="model-name">
-
-      <label for="aiProviderKey">API key <span class="small-note" id="aiProviderKeyHint">(optional for local Ollama)</span></label>
-      <input id="aiProviderKey" name="api_key" type="password" autocomplete="new-password" placeholder="Leave empty to keep the current key when editing">
-      <label class="pure-checkbox" id="clearAiProviderKeyRow" hidden>
-        <input id="clearAiProviderKey" name="clear_api_key" type="checkbox">
-        Remove the stored API key
-      </label>
-
-      <div class="pure-g">
-        <div class="pure-u-1 pure-u-md-1-3"><label for="aiProviderOutputTokens">Max output tokens</label><input id="aiProviderOutputTokens" name="max_output_tokens" type="number" min="64" max="32768" step="1" value="1200" required></div>
-        <div class="pure-u-1 pure-u-md-1-3"><label for="aiProviderTemperature">Temperature</label><input id="aiProviderTemperature" name="temperature" type="number" min="0" max="2" step="0.1" value="0.2" required></div>
-        <div class="pure-u-1 pure-u-md-1-3"><label for="aiProviderTimeout">Timeout (ms)</label><input id="aiProviderTimeout" name="timeout_ms" type="number" min="1000" max="120000" step="1000" value="30000" required></div>
-      </div>
-
-      <label class="pure-checkbox"><input id="aiProviderEnabled" name="enabled" type="checkbox"> Enable this provider</label>
-      <label class="pure-checkbox"><input id="aiProviderDefault" name="default_for_doe" type="checkbox"> Use as default for DOE interpretation</label>
-      <button class="pure-button pure-button-primary" type="submit">Save provider</button>
-    </form>
-  </div>
-</dialog>
-
-<dialog class="modal-frame" id="addUserDialog">
-  <div class="modal-header">
-    <strong>Add User</strong>
-    <button class="pure-button" type="button" data-close>Close</button>
-  </div>
-  <div class="modal-body">
-    <form id="addUserForm" method="post" action="/admin/users" class="pure-form pure-form-stacked">
-      <label for="new_user_name">Name</label>
-      <input id="new_user_name" name="name" type="text" placeholder="User name">
-      <label for="new_user_email">Email</label>
-      <input id="new_user_email" name="email" type="email" placeholder="user@example.com" required>
-      <label for="new_user_role">Role</label>
-      <select id="new_user_role" name="role">
+<dialog class="fixed left-1/2 top-1/2 m-0 max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border-0 bg-transparent p-0 shadow-xl backdrop:bg-gray-900/50" id="addUserDialog">
+  <div class="rounded-lg bg-white shadow-sm">
+    <div class="flex items-center justify-between border-b border-gray-200 p-5">
+      <h2 class="text-xl font-semibold text-gray-900">Add user</h2>
+      <button class="inline-flex size-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-4 focus:ring-gray-200" type="button" data-close aria-label="Close"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
+    </div>
+    <form id="addUserForm" method="post" action="/admin/users" class="space-y-5 p-5">
+      <div><label class="mb-2 block text-sm font-medium text-gray-900" for="new_user_name">Name</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="new_user_name" name="name" type="text" placeholder="User name"></div>
+      <div><label class="mb-2 block text-sm font-medium text-gray-900" for="new_user_email">Email</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="new_user_email" name="email" type="email" placeholder="user@example.com" required></div>
+      <div><label class="mb-2 block text-sm font-medium text-gray-900" for="new_user_role">Role</label><select class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="new_user_role" name="role">
         <option value="">role (optional)</option>
         <option value="admin">admin</option>
         <option value="manager">manager</option>
         <option value="engineer">engineer</option>
         <option value="operator">operator</option>
         <option value="viewer">viewer</option>
-      </select>
-      <label for="new_user_status">Status</label>
-      <select id="new_user_status" name="status">
+      </select></div>
+      <div><label class="mb-2 block text-sm font-medium text-gray-900" for="new_user_status">Status</label><select class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="new_user_status" name="status">
         <option value="ACTIVE">ACTIVE</option>
         <option value="DISABLED">DISABLED</option>
-      </select>
-      <button type="submit" class="pure-button pure-button-primary">Create</button>
+      </select></div>
+      <div class="flex justify-end gap-3 border-t border-gray-200 pt-5"><button class="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-gray-100" type="button" data-close>Cancel</button><button type="submit" class="rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">Create user</button></div>
     </form>
-    <p class="muted">A one-time password setup link is emailed when SMTP is configured. Otherwise, copy it and send it through a secure channel.</p>
+    <p class="border-t border-gray-200 px-5 py-4 text-sm text-gray-500">A one-time password setup link is emailed when SMTP is configured. Otherwise, copy it and send it through a secure channel.</p>
   </div>
 </dialog>
 
-<dialog class="modal-frame" id="passwordSetupDialog">
-  <div class="modal-header">
-    <strong>Password setup link</strong>
-    <button class="pure-button" type="button" data-close>Close</button>
-  </div>
-  <div class="modal-body">
-    <p class="muted">This link is shown only now, expires in 30 minutes, and can be used once.</p>
-    <label for="passwordSetupLink">One-time link</label>
-    <input id="passwordSetupLink" type="text" readonly autocomplete="off" style="width:100%">
-    <button id="copyPasswordSetupLink" type="button" class="pure-button pure-button-primary">Copy link</button>
+<dialog class="fixed left-1/2 top-1/2 m-0 max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border-0 bg-transparent p-0 shadow-xl backdrop:bg-gray-900/50" id="passwordSetupDialog">
+  <div class="rounded-lg bg-white shadow-sm">
+    <div class="flex items-center justify-between border-b border-gray-200 p-5">
+      <h2 class="text-xl font-semibold text-gray-900">Password setup link</h2>
+      <button class="inline-flex size-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-4 focus:ring-gray-200" type="button" data-close aria-label="Close"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
+    </div>
+    <div class="space-y-4 p-5">
+      <p class="text-sm text-gray-500">This link is shown only now, expires in 30 minutes, and can be used once.</p>
+      <div><label class="mb-2 block text-sm font-medium text-gray-900" for="passwordSetupLink">One-time link</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 font-mono text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="passwordSetupLink" type="text" readonly autocomplete="off"></div>
+      <div class="flex justify-end gap-3 border-t border-gray-200 pt-5"><button class="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-gray-100" type="button" data-close>Close</button><button id="copyPasswordSetupLink" type="button" class="rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">Copy link</button></div>
+    </div>
   </div>
 </dialog>
 
 <script nonce="<%= cspNonce %>">
-  const settingsDialog = document.getElementById('settingsDialog');
   const aiProviderDialog = document.getElementById('aiProviderDialog');
   const aiProviderForm = document.getElementById('aiProviderForm');
   const aiProviderDialogTitle = document.getElementById('aiProviderDialogTitle');
   const addUserDialog = document.getElementById('addUserDialog');
   const passwordSetupDialog = document.getElementById('passwordSetupDialog');
   const passwordSetupLink = document.getElementById('passwordSetupLink');
-  document.getElementById('openSettingsDialog')?.addEventListener('click', () => settingsDialog?.showModal());
   document.getElementById('openAiProviderDialog')?.addEventListener('click', () => {
     if (!aiProviderForm) return;
     aiProviderForm.reset();
@@ -494,14 +456,11 @@
       aiProviderDialog?.showModal();
     });
   });
-  document.getElementById('openAddUserDialog')?.addEventListener('click', () => addUserDialog?.showModal());
+  document.querySelectorAll('[data-open-add-user]').forEach((button) => {
+    button.addEventListener('click', () => addUserDialog?.showModal());
+  });
   document.querySelectorAll('[data-close]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      settingsDialog?.close();
-      aiProviderDialog?.close();
-      addUserDialog?.close();
-      passwordSetupDialog?.close();
-    });
+    btn.addEventListener('click', () => btn.closest('dialog')?.close());
   });
 
   const showPasswordSetupLink = (setupPath) => {
@@ -586,29 +545,8 @@
   };
   bindAutosaveSelects();
 
-  const toastArea = document.getElementById('adminToastArea');
-  const expToastArea = document.getElementById('adminExperimentToastArea');
-  const processToastArea = document.getElementById('adminProcessToastArea');
-  const showToast = (message, kind = 'success', target = 'users') => {
-    const area = target === 'experiments'
-      ? expToastArea
-      : target === 'processes'
-        ? processToastArea
-        : toastArea;
-    if (!area) return;
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${kind} toast-inline`;
-    const text = document.createElement('span');
-    text.textContent = message;
-    const close = document.createElement('button');
-    close.type = 'button';
-    close.className = 'toast-close';
-    close.setAttribute('aria-label', 'Close');
-    close.textContent = '×';
-    toast.append(text, close);
-    area.appendChild(toast);
-    toast.querySelector('.toast-close')?.addEventListener('click', () => toast.remove());
-    setTimeout(() => toast.remove(), 4000);
+  const showToast = (message, kind = 'success') => {
+    window.IMPlanner?.notify?.({ type: kind, message });
   };
 
   const bindAjaxForms = (root = document) => {
@@ -692,7 +630,7 @@
         body: payload
       });
       if (!resp.ok) {
-        alert('Reset failed');
+        showToast('Password reset failed. Please try again.', 'error');
         return;
       }
       const data = await resp.json();
@@ -706,11 +644,11 @@
     const form = document.createElement('form');
     form.method = 'post';
     form.action = `/experiments/${experimentId}/archive`;
-    form.className = 'pure-form inline-form ajax-form';
+    form.className = 'inline-flex ajax-form';
     form.setAttribute('data-exp-action', 'archive');
     form.onsubmit = () => confirm('Archive this experiment?');
     form.innerHTML = `
-      <button type="submit" class="icon-btn icon-only warn" title="Archive">
+      <button type="submit" class="inline-flex size-9 items-center justify-center rounded-lg text-amber-700 hover:bg-amber-50 focus:outline-none focus:ring-4 focus:ring-amber-100" title="Archive">
         <span class="material-symbols-rounded" aria-hidden="true">archive</span>
       </button>
     `;
@@ -720,15 +658,25 @@
     const form = document.createElement('form');
     form.method = 'post';
     form.action = `/admin/experiments/${experimentId}/delete`;
-    form.className = 'pure-form inline-form ajax-form';
+    form.className = 'inline-flex ajax-form';
     form.setAttribute('data-exp-action', 'delete');
     form.onsubmit = () => confirm('Delete this archived experiment? This cannot be undone.');
     form.innerHTML = `
-      <button type="submit" class="icon-btn icon-only danger" title="Delete permanently">
+      <button type="submit" class="inline-flex size-9 items-center justify-center rounded-lg text-red-600 hover:bg-red-50 focus:outline-none focus:ring-4 focus:ring-red-100" title="Delete permanently">
         <span class="material-symbols-rounded" aria-hidden="true">delete</span>
       </button>
     `;
     return form;
+  };
+  const buildRestoreButton = (experimentId) => {
+    const button = document.createElement('button');
+    button.type = 'submit';
+    button.form = `experimentOwnerForm-${experimentId}`;
+    button.className = 'inline-flex size-9 items-center justify-center rounded-lg text-green-700 hover:bg-green-50 focus:outline-none focus:ring-4 focus:ring-green-100';
+    button.title = 'Restore experiment';
+    button.setAttribute('aria-label', 'Restore experiment');
+    button.innerHTML = '<span class="material-symbols-rounded" aria-hidden="true">restore</span>';
+    return button;
   };
   const switchRowToArchived = (row) => {
     const experimentId = row.dataset.expId;
@@ -737,18 +685,11 @@
       ownerForm.classList.remove('autosave-form');
       ownerForm.setAttribute('data-exp-action', 'restore');
       ownerForm.action = `/admin/experiments/${experimentId}/restore`;
-      let button = ownerForm.querySelector('button[type="submit"]');
-      if (!button) {
-        button = document.createElement('button');
-        button.type = 'submit';
-        button.className = 'pure-button';
-        ownerForm.appendChild(button);
-      }
-      button.textContent = 'Restore';
     }
     const statusCell = row.querySelector('[data-exp-status-cell]');
     if (statusCell && experimentId) {
       statusCell.innerHTML = '';
+      statusCell.appendChild(buildRestoreButton(experimentId));
       statusCell.appendChild(buildDeleteForm(experimentId));
       bindAjaxForms(statusCell);
     }
@@ -760,8 +701,6 @@
       ownerForm.classList.add('autosave-form');
       ownerForm.setAttribute('data-exp-action', 'owner-update');
       ownerForm.action = `/admin/experiments/${experimentId}/owner`;
-      const button = ownerForm.querySelector('button[type="submit"]');
-      if (button) button.remove();
       bindAutosaveSelects(ownerForm);
     }
     const statusCell = row.querySelector('[data-exp-status-cell]');
@@ -773,7 +712,12 @@
   };
   const setExpTab = (tab) => {
     expTabButtons.forEach((btn) => {
-      btn.classList.toggle('is-active', btn.dataset.expTab === tab);
+      const active = btn.dataset.expTab === tab;
+      btn.classList.toggle('bg-white', active);
+      btn.classList.toggle('text-gray-900', active);
+      btn.classList.toggle('shadow-sm', active);
+      btn.classList.toggle('text-gray-500', !active);
+      btn.setAttribute('aria-selected', active ? 'true' : 'false');
     });
     document.querySelectorAll('tr[data-exp-status]').forEach((row) => {
       const status = row.dataset.expStatus;
@@ -784,4 +728,92 @@
     btn.addEventListener('click', () => setExpTab(btn.dataset.expTab || 'active'));
   });
   setExpTab('active');
+
+  const adminPanels = Array.from(document.querySelectorAll('[data-admin-panel]'));
+  const adminSectionButtons = Array.from(document.querySelectorAll('[data-admin-section]'));
+  const adminSectionNames = new Set(adminPanels.map((panel) => panel.dataset.adminPanel));
+  const setAdminSection = (requestedSection, writeHash = true) => {
+    const section = adminSectionNames.has(requestedSection) ? requestedSection : 'overview';
+    adminPanels.forEach((panel) => panel.classList.toggle('hidden', panel.dataset.adminPanel !== section));
+    adminSectionButtons.forEach((button) => {
+      const active = button.dataset.adminSection === section;
+      if (active) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+    if (writeHash && window.location.hash !== `#${section}`) history.pushState(null, '', `#${section}`);
+  };
+  adminSectionButtons.forEach((button) => button.addEventListener('click', (event) => { event.preventDefault(); setAdminSection(button.dataset.adminSection); }));
+  window.addEventListener('popstate', () => setAdminSection(window.location.hash.slice(1), false));
+  setAdminSection(window.location.hash.slice(1), false);
+
+  const aiUsageResult = document.querySelector('[data-ai-usage-result]');
+  const aiUsagePeriodLabel = document.querySelector('[data-ai-usage-period-label]');
+  const aiUsagePeriodButtons = Array.from(document.querySelectorAll('[data-ai-usage-period]'));
+  const numberFormatter = new Intl.NumberFormat();
+  const renderAiUsageBreakdown = (breakdown) => {
+    if (!aiUsageResult) return;
+    aiUsageResult.replaceChildren();
+    if (!Array.isArray(breakdown) || breakdown.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'px-5 py-10 text-center';
+      empty.innerHTML = '<span class="material-symbols-rounded text-3xl text-gray-400" aria-hidden="true">smart_toy</span><p class="mt-2 text-sm text-gray-500">No AI provider requests in this period.</p>';
+      aiUsageResult.appendChild(empty);
+      return;
+    }
+    const list = document.createElement('div');
+    list.className = 'divide-y divide-gray-200';
+    breakdown.forEach((user) => {
+      const details = document.createElement('details');
+      details.className = 'group';
+      const summary = document.createElement('summary');
+      summary.className = 'flex cursor-pointer list-none flex-col gap-3 px-5 py-4 hover:bg-gray-50 sm:flex-row sm:items-center sm:justify-between';
+      const identity = document.createElement('div');
+      identity.innerHTML = '<div class="font-medium text-gray-900"></div><div class="mt-0.5 text-xs text-gray-500"></div>';
+      identity.children[0].textContent = user.userName || user.userEmail || 'Unknown user';
+      identity.children[1].textContent = user.userEmail || '';
+      const metrics = document.createElement('div');
+      metrics.className = 'flex items-center gap-5 text-sm';
+      metrics.innerHTML = '<div><span class="block text-xs text-gray-500">Total tokens</span><strong class="font-semibold text-gray-900 tabular-nums"></strong></div><div><span class="block text-xs text-gray-500">Requests</span><strong class="font-semibold text-gray-900 tabular-nums"></strong></div><span class="material-symbols-rounded text-gray-500 transition-transform group-open:rotate-180" aria-hidden="true">expand_more</span>';
+      metrics.querySelectorAll('strong')[0].textContent = numberFormatter.format(Number(user.totalTokens || 0));
+      metrics.querySelectorAll('strong')[1].textContent = numberFormatter.format(Number(user.requestCount || 0));
+      if (user.failedRequestCount) { const failed = document.createElement('span'); failed.className = 'ms-1 text-xs text-red-600'; failed.textContent = `· ${user.failedRequestCount} failed`; metrics.children[1].appendChild(failed); }
+      summary.append(identity, metrics);
+      const models = document.createElement('div');
+      models.className = 'border-t border-gray-200 bg-gray-50 px-5 py-4';
+      const title = document.createElement('p'); title.className = 'mb-3 text-xs font-medium uppercase tracking-wide text-gray-500'; title.textContent = 'Models used';
+      const modelList = document.createElement('div'); modelList.className = 'space-y-2';
+      (user.models || []).forEach((model) => { const row = document.createElement('div'); row.className = 'grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm'; const name = document.createElement('div'); name.innerHTML = '<div class="font-medium text-gray-900"></div><div class="mt-1 text-xs text-gray-500"></div>'; name.children[0].textContent = model.model || '—'; name.children[1].textContent = model.providerName || '—'; const stats = document.createElement('div'); stats.className = 'text-right text-xs text-gray-500'; stats.textContent = `${numberFormatter.format(Number(model.totalTokens || 0))} tokens · ${model.requestCount || 0} requests${model.failedRequestCount ? ` · ${model.failedRequestCount} failed` : ''}`; row.append(name, stats); modelList.appendChild(row); });
+      models.append(title, modelList); details.append(summary, models); list.appendChild(details);
+    });
+    aiUsageResult.appendChild(list);
+  };
+  aiUsagePeriodButtons.forEach((button) => button.addEventListener('click', async () => {
+    const period = button.dataset.aiUsagePeriod;
+    if (!period || button.disabled) return;
+    aiUsagePeriodButtons.forEach((item) => { item.disabled = true; item.classList.add('opacity-60'); });
+    try {
+      const response = await fetch(`/admin/ai-usage?period=${encodeURIComponent(period)}`);
+      if (!response.ok) throw new Error('AI usage request failed');
+      const payload = await response.json();
+      aiUsagePeriodLabel.textContent = payload?.period?.label || 'All time';
+      ['inputTokens', 'outputTokens', 'totalTokens', 'requestCount'].forEach((key) => {
+        const output = document.querySelector(`[data-ai-usage-total="${key}"]`);
+        if (output) output.textContent = numberFormatter.format(Number(payload?.totals?.[key] || 0));
+      });
+      renderAiUsageBreakdown(payload?.breakdown || []);
+      aiUsagePeriodButtons.forEach((item) => {
+        const active = item.dataset.aiUsagePeriod === payload?.period?.key;
+        item.classList.toggle('bg-white', active);
+        item.classList.toggle('text-gray-900', active);
+        item.classList.toggle('shadow-sm', active);
+        item.classList.toggle('text-gray-500', !active);
+        item.setAttribute('aria-current', active ? 'page' : 'false');
+      });
+    } catch {
+      window.IMPlanner?.notify?.({ type: 'error', message: 'Could not update AI usage. Please try again.' });
+    } finally {
+      aiUsagePeriodButtons.forEach((item) => { item.disabled = false; item.classList.remove('opacity-60'); });
+    }
+  }));
 </script>
+<%- include("partials/foot", { uiKit: true }) %>

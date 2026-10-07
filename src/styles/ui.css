@@ -1,0 +1,18 @@
+/*
+ * Tailwind + Flowbite entry point for progressively migrated EJS pages.
+ *
+ * This stylesheet is loaded only by pages that opt in via `uiKit: true`, so
+ * Flowbite receives Tailwind's complete official base layer (Preflight) while
+ * legacy Pure.css pages remain untouched.
+ *
+ * New screens use Flowbite's published component markup and Tailwind utility
+ * classes directly; do not add app-specific visual component classes here.
+ */
+@import "tailwindcss";
+@import "flowbite/src/themes/default";
+
+@plugin "flowbite/plugin";
+
+@source "../views";
+@source "../public";
+@source "../../node_modules/flowbite";

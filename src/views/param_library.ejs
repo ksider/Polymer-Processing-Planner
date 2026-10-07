@@ -1,74 +1,20 @@
-<%- include('partials/head', { title: 'Polymer Processing Planner | Parameter Library' }) %>
-<%- include('partials/nav') %>
-<div class="container wide">
-  <div class="card">
-    <div class="card-header">
-      <a class="back-link" href="/" aria-label="Back to processes">
-        <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
-      </a>
-      <div>
-        <h1 class="card-title">Global Parameter Library</h1>
-        <p class="small-note">Shared parameters for qualification and detailed optimization.</p>
-      </div>
-    </div>
-  </div>
-
-  <div class="card">
+<%- include('partials/head', { title: 'Polymer Processing Planner | Parameter Library', uiKit: true }) %>
+<div class="min-h-screen w-full bg-gray-50 font-sans text-gray-900 antialiased"><div class="flex min-h-screen w-full flex-col bg-gray-50 lg:flex-row"><%- include('partials/admin_sidebar') %><main class="min-w-0 flex-1"><header class="border-b border-gray-200 bg-white"><div class="flex flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8"><div><p class="text-sm font-medium text-blue-700">Library</p><h1 class="mt-0.5 text-2xl font-semibold tracking-tight text-gray-900">Global parameters</h1><p class="mt-1 text-sm text-gray-500">Shared parameters for qualification and detailed optimization.</p></div><a class="inline-flex items-center rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 no-underline hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-gray-100" href="/"><span class="material-symbols-rounded me-2 text-[20px]" aria-hidden="true">arrow_back</span>Planner</a></div></header><div class="px-4 py-6 sm:px-6 lg:px-8"><section class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
     <% const groupSet = new Set(); params.forEach((param) => groupSet.add(param.group_label || 'General')); const groupList = Array.from(groupSet); %>
-    <div class="param-toolbar">
-      <div class="param-search">
-        <label>Search</label>
-        <input type="search" id="paramSearch" placeholder="Search code, label, unit...">
-      </div>
-      <div class="param-toolbar-actions">
-        <button class="pure-button pure-button-secondary" type="button" id="openParamCreate">Add parameter</button>
-      </div>
-    </div>
-
-    <div class="filter-block">
-      <div class="filter-row">
-        <div class="filter-label">Kind</div>
-        <div class="chip-group" data-kind-filter>
-          <button type="button" class="filter-chip active" data-kind="all">All</button>
-          <button type="button" class="filter-chip kind-input" data-kind="INPUT">Input</button>
-          <button type="button" class="filter-chip kind-output" data-kind="OUTPUT">Output</button>
-        </div>
-      </div>
-      <div class="filter-row">
-        <div class="filter-label">Type</div>
-        <div class="chip-group" data-type-filter>
-          <button type="button" class="filter-chip active" data-type="all">All</button>
-          <button type="button" class="filter-chip type-number" data-type="number">Number</button>
-          <button type="button" class="filter-chip type-text" data-type="text">Text</button>
-          <button type="button" class="filter-chip type-tag" data-type="tag">Tag</button>
-        </div>
-      </div>
-      <div class="filter-row">
-        <div class="filter-label">Group</div>
-        <div class="chip-group" data-group-filter>
-          <button type="button" class="filter-chip active" data-group="all">All</button>
+    <div class="flex flex-col gap-4 border-b border-gray-200 px-5 py-5 lg:flex-row lg:items-end lg:justify-between"><div class="w-full max-w-xl"><label class="mb-2 block text-sm font-medium text-gray-900" for="paramSearch">Search</label><div class="relative"><span class="material-symbols-rounded absolute start-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true">search</span><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 py-2.5 ps-10 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="search" id="paramSearch" placeholder="Search code, label, unit..."></div></div><button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3.5 py-2.5 text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300" type="button" id="openParamCreate"><span class="material-symbols-rounded me-2 text-[20px]" aria-hidden="true">add</span>Add parameter</button></div>
+    <div class="space-y-3 border-b border-gray-200 px-5 py-4 text-sm"><div class="flex flex-wrap items-center gap-3"><span class="w-12 font-medium text-gray-700">Kind</span><div class="flex flex-wrap gap-2" data-kind-filter><button type="button" class="filter-chip active rounded-lg bg-blue-700 px-3 py-1.5 font-medium text-white" data-kind="all">All</button><button type="button" class="filter-chip rounded-lg border border-gray-200 bg-white px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-100" data-kind="INPUT">Input</button><button type="button" class="filter-chip rounded-lg border border-gray-200 bg-white px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-100" data-kind="OUTPUT">Output</button></div></div><div class="flex flex-wrap items-center gap-3"><span class="w-12 font-medium text-gray-700">Type</span><div class="flex flex-wrap gap-2" data-type-filter><button type="button" class="filter-chip active rounded-lg bg-blue-700 px-3 py-1.5 font-medium text-white" data-type="all">All</button><button type="button" class="filter-chip rounded-lg border border-gray-200 bg-white px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-100" data-type="number">Number</button><button type="button" class="filter-chip rounded-lg border border-gray-200 bg-white px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-100" data-type="text">Text</button><button type="button" class="filter-chip rounded-lg border border-gray-200 bg-white px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-100" data-type="tag">Tag</button></div></div><div class="flex flex-wrap items-center gap-3"><span class="w-12 font-medium text-gray-700">Group</span><div class="flex flex-wrap gap-2" data-group-filter><button type="button" class="filter-chip active rounded-lg bg-blue-700 px-3 py-1.5 font-medium text-white" data-group="all">All</button>
           <% groupList.forEach((group) => { const groupKey = group.toLowerCase().replace(/[^a-z0-9]+/g, '-'); %>
-            <button type="button" class="filter-chip" data-group="<%= groupKey %>"><%- formatInline(group) %></button>
+            <button type="button" class="filter-chip rounded-lg border border-gray-200 bg-white px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-100" data-group="<%= groupKey %>"><%- formatInline(group) %></button>
           <% }); %>
-        </div>
-      </div>
-    </div>
+        </div></div></div>
 
-    <form class="pure-form" id="paramLibraryForm" autocomplete="off" data-client-only-form="true">
-      <table class="pure-table table-compact library-table">
-        <thead>
+    <form id="paramLibraryForm" autocomplete="off" data-client-only-form="true">
+      <div class="relative overflow-x-auto"><table class="w-full text-left text-sm text-gray-500"><thead class="bg-gray-50 text-xs uppercase text-gray-700">
           <tr>
-            <th>Code</th>
-            <th>Label</th>
-            <th>Kind</th>
-            <th>Type</th>
-            <th>Unit</th>
-            <th>Group</th>
-            <th>Allowed (tags)</th>
-            <th></th>
+            <th class="px-5 py-3">Code</th><th class="px-5 py-3">Label</th><th class="px-5 py-3">Kind</th><th class="px-5 py-3">Type</th><th class="px-5 py-3">Unit</th><th class="px-5 py-3">Group</th><th class="px-5 py-3">Allowed tags</th><th class="px-5 py-3"></th>
           </tr>
         </thead>
-        <tbody id="paramLibraryBody">
+        <tbody class="divide-y divide-gray-200" id="paramLibraryBody">
           <% params.forEach((param) => { const groupKey = (param.group_label || 'General').toLowerCase().replace(/[^a-z0-9]+/g, '-'); %>
             <tr
               data-param-row
@@ -79,92 +25,73 @@
               data-param-group="<%= groupKey %>"
               data-param-kind="<%= param.field_kind %>"
               data-param-type="<%= param.field_type %>"
-              class="group-row group-<%= groupKey %>"
+              class="border-s-4 bg-white hover:bg-gray-50"
             >
-              <td><input data-lib-code value="<%= param.code %>"></td>
-              <td><input data-lib-label value="<%= param.label %>"></td>
-              <td>
-                <span class="param-pill kind <%= param.field_kind === 'INPUT' ? 'kind-input' : 'kind-output' %>"><%= param.field_kind %></span>
-                <select data-lib-kind>
+              <td class="px-5 py-3"><input class="block min-w-28 rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" data-lib-code value="<%= param.code %>"></td><td class="px-5 py-3"><input class="block min-w-40 rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" data-lib-label value="<%= param.label %>"></td>
+              <td class="px-5 py-3"><select class="block rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" data-lib-kind>
                   <option value="INPUT" <%= param.field_kind === 'INPUT' ? 'selected' : '' %>>INPUT</option>
                   <option value="OUTPUT" <%= param.field_kind === 'OUTPUT' ? 'selected' : '' %>>OUTPUT</option>
                 </select>
               </td>
-              <td>
-                <span class="param-pill type type-<%= param.field_type %>"><%= param.field_type %></span>
-                <select data-lib-type>
+              <td class="px-5 py-3"><select class="block rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" data-lib-type>
                   <option value="number" <%= param.field_type === 'number' ? 'selected' : '' %>>number</option>
                   <option value="text" <%= param.field_type === 'text' ? 'selected' : '' %>>text</option>
                   <option value="tag" <%= param.field_type === 'tag' ? 'selected' : '' %>>tag</option>
                 </select>
               </td>
-              <td><input data-lib-unit value="<%= param.unit || '' %>"></td>
-              <td><input data-lib-group value="<%= param.group_label || '' %>"></td>
-              <td>
+              <td class="px-5 py-3"><input class="block w-24 rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" data-lib-unit value="<%= param.unit || '' %>"></td>
+              <td class="px-5 py-3"><input class="block w-32 rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" data-lib-group value="<%= param.group_label || '' %>"></td>
+              <td class="px-5 py-3">
                 <% let tags = ''; %>
                 <% if (param.allowed_values_json) { try { const parsed = JSON.parse(param.allowed_values_json); if (Array.isArray(parsed)) tags = parsed.join(', '); } catch {} } %>
-                <input data-lib-allowed value="<%= tags %>">
+                <input class="block min-w-44 rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" data-lib-allowed value="<%= tags %>">
               </td>
-              <td>
-                <button class="icon-button danger" type="button" data-delete-param title="Delete">
+              <td class="px-5 py-3"><button class="inline-flex size-9 items-center justify-center rounded-lg text-red-600 hover:bg-red-50 focus:outline-none focus:ring-4 focus:ring-red-100" type="button" data-delete-param aria-label="Delete parameter">
                   <span class="material-symbols-rounded" aria-hidden="true">delete</span>
                 </button>
               </td>
             </tr>
           <% }); %>
         </tbody>
-      </table>
+      </table></div>
     </form>
-  </div>
-</div>
+  </section></div></main></div></div>
 
-<dialog class="modal-frame" id="paramCreateDialog">
-  <div class="modal-header">
-    <strong>Add Parameter</strong>
-    <button class="pure-button" type="button" data-close>Close</button>
+<dialog class="fixed left-1/2 top-1/2 m-0 w-[calc(100vw-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-lg border-0 bg-transparent p-0 shadow-xl backdrop:bg-gray-900/50" id="paramCreateDialog">
+  <div class="rounded-lg bg-white shadow-sm"><div class="flex items-center justify-between border-b border-gray-200 p-5">
+    <h2 class="text-xl font-semibold text-gray-900">Add parameter</h2>
+    <button class="inline-flex size-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-900" type="button" data-close aria-label="Close"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
   </div>
-  <div class="modal-body">
-    <form class="pure-form pure-form-stacked" id="paramCreateForm">
-      <div class="field-grid">
+  <div class="p-5"><form class="space-y-5" id="paramCreateForm"><div class="grid gap-4 sm:grid-cols-2">
         <div>
-          <label>Code</label>
-          <input type="text" name="code" placeholder="custom_param" required>
+          <label class="mb-2 block text-sm font-medium text-gray-900">Code</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="text" name="code" placeholder="custom_param" required>
         </div>
         <div>
-          <label>Label</label>
-          <input type="text" name="label" placeholder="Custom Parameter" required>
+          <label class="mb-2 block text-sm font-medium text-gray-900">Label</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="text" name="label" placeholder="Custom Parameter" required>
         </div>
         <div>
-          <label>Unit</label>
-          <input type="text" name="unit">
+          <label class="mb-2 block text-sm font-medium text-gray-900">Unit</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="text" name="unit">
         </div>
         <div>
-          <label>Group</label>
-          <input type="text" name="group_label" placeholder="Outputs">
+          <label class="mb-2 block text-sm font-medium text-gray-900">Group</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="text" name="group_label" placeholder="Outputs">
         </div>
         <div>
-          <label>Kind</label>
-          <select name="field_kind">
+          <label class="mb-2 block text-sm font-medium text-gray-900">Kind</label><select class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" name="field_kind">
             <option value="INPUT">Input</option>
             <option value="OUTPUT">Output</option>
           </select>
         </div>
         <div>
-          <label>Type</label>
-          <select name="field_type">
+          <label class="mb-2 block text-sm font-medium text-gray-900">Type</label><select class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" name="field_type">
             <option value="number">Number</option>
             <option value="text">Text</option>
             <option value="tag">Tag</option>
           </select>
         </div>
-        <div>
-          <label>Allowed Tags (comma-separated)</label>
-          <input type="text" name="allowed_values" placeholder="good, ok, fail">
+        <div class="sm:col-span-2"><label class="mb-2 block text-sm font-medium text-gray-900">Allowed Tags (comma-separated)</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="text" name="allowed_values" placeholder="good, ok, fail">
         </div>
       </div>
-      <button class="pure-button pure-button-primary" type="submit">Add Field</button>
-    </form>
-  </div>
+      </div><div class="flex justify-end gap-3 border-t border-gray-200 pt-5"><button class="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-900 hover:bg-gray-100" type="button" data-close>Cancel</button><button class="rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-800" type="submit">Add parameter</button></div></form></div></div>
 </dialog>
 
 <script nonce="<%= cspNonce %>">
@@ -174,13 +101,6 @@
   const createForm = document.getElementById('paramCreateForm');
   const searchInput = document.getElementById('paramSearch');
   let librarySaveTimer = null;
-
-  const escapeHtml = (value) => String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
 
   const scheduleLibrarySave = (row) => {
     if (librarySaveTimer) clearTimeout(librarySaveTimer);
@@ -215,60 +135,14 @@
     row.dataset.paramKind = row.querySelector('[data-lib-kind]').value;
     row.dataset.paramType = row.querySelector('[data-lib-type]').value;
     scheduleLibrarySave(row);
-    updateRowPills(row);
     applyFilters();
-    applyGroupColors();
+    applyGroupAccents();
   });
 
   openParamCreate?.addEventListener('click', () => createDialog?.showModal());
   createDialog?.querySelectorAll('[data-close]').forEach((btn) => {
     btn.addEventListener('click', () => createDialog?.close());
   });
-
-  const appendParamRow = (data) => {
-    const row = document.createElement('tr');
-    const fieldKind = data.field_kind === 'OUTPUT' ? 'OUTPUT' : 'INPUT';
-    const fieldType = ['number', 'text', 'tag'].includes(data.field_type) ? data.field_type : 'text';
-    const groupKey = (data.group_label || 'General').toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    row.dataset.paramId = data.id;
-    row.dataset.paramLabel = data.label;
-    row.dataset.paramCode = data.code;
-    row.dataset.paramUnit = data.unit || '';
-    row.dataset.paramGroup = groupKey;
-    row.dataset.paramKind = fieldKind;
-    row.dataset.paramType = fieldType;
-    row.setAttribute('data-param-row', '');
-    row.className = `group-row group-${groupKey}`;
-    row.innerHTML = `
-      <td><input data-lib-code value="${escapeHtml(data.code)}"></td>
-      <td><input data-lib-label value="${escapeHtml(data.label)}"></td>
-      <td>
-        <span class="param-pill kind ${fieldKind === 'INPUT' ? 'kind-input' : 'kind-output'}">${fieldKind}</span>
-        <select data-lib-kind>
-          <option value="INPUT" ${fieldKind === 'INPUT' ? 'selected' : ''}>INPUT</option>
-          <option value="OUTPUT" ${fieldKind === 'OUTPUT' ? 'selected' : ''}>OUTPUT</option>
-        </select>
-      </td>
-      <td>
-        <span class="param-pill type type-${fieldType}">${fieldType}</span>
-        <select data-lib-type>
-          <option value="number" ${fieldType === 'number' ? 'selected' : ''}>number</option>
-          <option value="text" ${fieldType === 'text' ? 'selected' : ''}>text</option>
-          <option value="tag" ${fieldType === 'tag' ? 'selected' : ''}>tag</option>
-        </select>
-      </td>
-      <td><input data-lib-unit value="${escapeHtml(data.unit || '')}"></td>
-      <td><input data-lib-group value="${escapeHtml(data.group_label || '')}"></td>
-      <td><input data-lib-allowed value="${escapeHtml(data.allowed_values || '')}"></td>
-      <td>
-        <button class="icon-button danger" type="button" data-delete-param title="Delete">
-          <span class="material-symbols-rounded" aria-hidden="true">delete</span>
-        </button>
-      </td>
-    `;
-    libraryBody.appendChild(row);
-    applyGroupColors();
-  };
 
   createForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -290,40 +164,17 @@
       body: payload
     });
     if (!resp.ok) return;
-    const data = await resp.json();
-    appendParamRow({
-      id: data.id,
-      code: payload.get('code'),
-      label: payload.get('label'),
-      unit: payload.get('unit'),
-      group_label: payload.get('group_label'),
-      field_kind: payload.get('field_kind'),
-      field_type: payload.get('field_type'),
-      allowed_values: allowed
-    });
-    createForm.reset();
-    createDialog?.close();
-    applyFilters();
+    window.location.reload();
   });
 
-  const updateRowPills = (row) => {
-    const kind = row.dataset.paramKind;
-    const type = row.dataset.paramType;
-    const kindPill = row.querySelector('.param-pill.kind');
-    const typePill = row.querySelector('.param-pill.type');
-    if (kindPill) {
-      kindPill.textContent = kind;
-      kindPill.className = `param-pill kind ${kind === 'INPUT' ? 'kind-input' : 'kind-output'}`;
-    }
-    if (typePill) {
-      typePill.textContent = type;
-      typePill.className = `param-pill type type-${type}`;
-    }
-  };
-
   const setActiveChip = (container, target) => {
-    container.querySelectorAll('.filter-chip').forEach((chip) => chip.classList.remove('active'));
+    container.querySelectorAll('.filter-chip').forEach((chip) => {
+      chip.classList.remove('active', 'bg-blue-700', 'text-white', 'shadow-sm');
+      chip.classList.add('border', 'border-gray-200', 'bg-white', 'text-gray-700');
+    });
     target.classList.add('active');
+    target.classList.remove('border', 'border-gray-200', 'bg-white', 'text-gray-700');
+    target.classList.add('bg-blue-700', 'text-white', 'shadow-sm');
   };
 
   const getActiveValue = (selector, attr) => {
@@ -350,16 +201,17 @@
   };
 
   const groupPalette = [
-    { color: '#3b6e8c', bg: '#eef5fb' },
-    { color: '#8a5a44', bg: '#f9efe9' },
-    { color: '#3b7a57', bg: '#eef7f1' },
-    { color: '#6a4d86', bg: '#f4eef9' },
-    { color: '#9a6b21', bg: '#fbf3e3' },
-    { color: '#5a6b2e', bg: '#f2f6e8' },
-    { color: '#5f6a7a', bg: '#f2f4f8' }
+    ['border-s-sky-500', 'bg-sky-50/40'],
+    ['border-s-orange-500', 'bg-orange-50/40'],
+    ['border-s-emerald-500', 'bg-emerald-50/40'],
+    ['border-s-violet-500', 'bg-violet-50/40'],
+    ['border-s-amber-500', 'bg-amber-50/40'],
+    ['border-s-lime-600', 'bg-lime-50/40'],
+    ['border-s-slate-500', 'bg-slate-50/40']
   ];
+  const groupAccentClasses = groupPalette.flat();
 
-  const applyGroupColors = () => {
+  const applyGroupAccents = () => {
     const rows = Array.from(document.querySelectorAll('[data-param-row]'));
     const keys = Array.from(new Set(rows.map((row) => row.dataset.paramGroup || 'general')));
     keys.forEach((key, index) => {
@@ -367,9 +219,8 @@
       rows
         .filter((row) => (row.dataset.paramGroup || 'general') === key)
         .forEach((row) => {
-          row.style.setProperty('--group-color', palette.color);
-          row.style.setProperty('--group-bg', palette.bg);
-          row.classList.add('group-row');
+          row.classList.remove(...groupAccentClasses);
+          row.classList.add(...palette);
         });
     });
   };
@@ -408,6 +259,6 @@
     });
   });
   applyFilters();
-  applyGroupColors();
+  applyGroupAccents();
 </script>
-<%- include('partials/foot') %>
+<%- include('partials/foot', { uiKit: true }) %>

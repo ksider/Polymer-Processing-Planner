@@ -35,3 +35,16 @@ export function listAudit(db: Db, limit = 200): AuditRow[] {
      LIMIT ?`
   ).all(limit) as AuditRow[];
 }
+
+export function listRecentAuditForUsers(db: Db, limitPerUser = 5): AuditRow[] {
+  return db.prepare(
+    `SELECT id, actor_user_id, action, target_user_id, details_json, created_at, actor_email
+     FROM (
+       SELECT a.id, a.actor_user_id, a.action, a.target_user_id, a.details_json, a.created_at,
+              u.email AS actor_email,
+              ROW_NUMBER() OVER (PARTITION BY a.actor_user_id ORDER BY a.created_at DESC) AS row_number
+       FROM audit_log a LEFT JOIN users u ON u.id = a.actor_user_id
+       WHERE a.actor_user_id IS NOT NULL
+     ) WHERE row_number <= ? ORDER BY created_at DESC`
+  ).all(limitPerUser) as AuditRow[];
+}

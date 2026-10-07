@@ -1,201 +1,37 @@
-<%- include('partials/head', { title: 'Polymer Processing Planner | Machine' }) %>
-<%- include('partials/nav') %>
-<div class="container">
-  <div class="card">
-    <div class="card-header">
-      <a class="back-link" href="/machines" aria-label="Back to machines">
-        <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
-      </a>
-      <h1 class="card-title"><%= machine ? 'Edit Machine' : 'Add Machine' %></h1>
-    </div>
-    <form class="pure-form pure-form-stacked" action="<%= machine ? `/machines/${machine.id}` : '/machines' %>" method="post">
-      <div class="form-grid">
-        <div>
-          <label>Name</label>
-          <input type="text" name="name" required value="<%= machine?.name ?? '' %>">
-        </div>
-        <div>
-          <label>Image URL</label>
-          <input type="text" name="image_url" value="<%= machine?.image_url ?? '' %>">
-        </div>
-        <div>
-          <label>Vendor</label>
-          <input type="text" name="vendor" value="<%= machine?.vendor ?? '' %>">
-        </div>
-        <div>
-          <label>Model</label>
-          <input type="text" name="model" value="<%= machine?.model ?? '' %>">
-        </div>
-      </div>
-
-      <% const machineParamMap = machineParamByCode || {}; %>
-      <% const tokenFor = (code) => { const param = machineParamMap[code]; return machine?.id && param?.id ? `%${machine.id}:${param.id}%` : ''; }; %>
-      <div class="card" style="margin-top: 1rem;">
-        <h3 class="card-title">Key parameters</h3>
-        <div class="form-grid">
-          <div>
-            <label>Clamp force (kN)</label>
-            <div class="field-with-code">
-              <input type="text" name="clamp_force_kN" value="<%= settings.clamp_force_kN ?? '' %>">
-              <input class="machine-code-input" type="text" readonly placeholder="Save to generate" value="<%= tokenFor('clamp_force_kN') %>">
-            </div>
-          </div>
-          <div>
-            <label>Clamp force (t)</label>
-            <div class="field-with-code">
-              <input type="text" name="clamp_force_t" value="<%= settings.clamp_force_t ?? '' %>">
-              <input class="machine-code-input" type="text" readonly placeholder="Save to generate" value="<%= tokenFor('clamp_force_t') %>">
-            </div>
-          </div>
-          <div>
-            <label>Intensification ratio</label>
-            <div class="field-with-code">
-              <input type="text" name="intensification_ratio" value="<%= settings.intensification_ratio ?? '' %>">
-              <input class="machine-code-input" type="text" readonly placeholder="Save to generate" value="<%= tokenFor('intensification_ratio') %>">
-            </div>
-          </div>
-          <div>
-            <label>Injection pressure (bar)</label>
-            <div class="field-with-code">
-              <input type="text" name="injection_pressure_bar" value="<%= settings.injection_pressure_bar ?? '' %>">
-              <input class="machine-code-input" type="text" readonly placeholder="Save to generate" value="<%= tokenFor('injection_pressure_bar') %>">
-            </div>
-          </div>
-          <div>
-            <label>Screw diameter (mm)</label>
-            <div class="field-with-code">
-              <input type="text" name="screw_diameter_mm" value="<%= settings.screw_diameter_mm ?? '' %>">
-              <input class="machine-code-input" type="text" readonly placeholder="Save to generate" value="<%= tokenFor('screw_diameter_mm') %>">
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card" style="margin-top: 1rem;">
-        <h3 class="card-title">Additional specs</h3>
-        <div class="form-grid">
-          <div>
-            <label>Tie bar distance (mm)</label>
-            <div class="field-with-code">
-              <input type="text" name="tie_bar_distance_mm" value="<%= settings.tie_bar_distance_mm ?? '' %>">
-              <input class="machine-code-input" type="text" readonly placeholder="Save to generate" value="<%= tokenFor('tie_bar_distance_mm') %>">
-            </div>
-          </div>
-          <div>
-            <label>Platen size (mm)</label>
-            <div class="field-with-code">
-              <input type="text" name="platen_size_mm" value="<%= settings.platen_size_mm ?? '' %>">
-              <input class="machine-code-input" type="text" readonly placeholder="Save to generate" value="<%= tokenFor('platen_size_mm') %>">
-            </div>
-          </div>
-          <div>
-            <label>Opening stroke (mm)</label>
-            <div class="field-with-code">
-              <input type="text" name="opening_stroke_mm" value="<%= settings.opening_stroke_mm ?? '' %>">
-              <input class="machine-code-input" type="text" readonly placeholder="Save to generate" value="<%= tokenFor('opening_stroke_mm') %>">
-            </div>
-          </div>
-          <div>
-            <label>Min mold height (mm)</label>
-            <div class="field-with-code">
-              <input type="text" name="min_mold_height_mm" value="<%= settings.min_mold_height_mm ?? '' %>">
-              <input class="machine-code-input" type="text" readonly placeholder="Save to generate" value="<%= tokenFor('min_mold_height_mm') %>">
-            </div>
-          </div>
-          <div>
-            <label>Max mold height (mm)</label>
-            <div class="field-with-code">
-              <input type="text" name="max_mold_height_mm" value="<%= settings.max_mold_height_mm ?? '' %>">
-              <input class="machine-code-input" type="text" readonly placeholder="Save to generate" value="<%= tokenFor('max_mold_height_mm') %>">
-            </div>
-          </div>
-          <div>
-            <label>Injection volume (cm3)</label>
-            <div class="field-with-code">
-              <input type="text" name="injection_volume_cm3" value="<%= settings.injection_volume_cm3 ?? '' %>">
-              <input class="machine-code-input" type="text" readonly placeholder="Save to generate" value="<%= tokenFor('injection_volume_cm3') %>">
-            </div>
-          </div>
-          <div>
-            <label>Injection weight (g)</label>
-            <div class="field-with-code">
-              <input type="text" name="injection_weight_g" value="<%= settings.injection_weight_g ?? '' %>">
-              <input class="machine-code-input" type="text" readonly placeholder="Save to generate" value="<%= tokenFor('injection_weight_g') %>">
-            </div>
-          </div>
-          <div>
-            <label>Screw speed (rpm)</label>
-            <div class="field-with-code">
-              <input type="text" name="screw_speed_rpm" value="<%= settings.screw_speed_rpm ?? '' %>">
-              <input class="machine-code-input" type="text" readonly placeholder="Save to generate" value="<%= tokenFor('screw_speed_rpm') %>">
-            </div>
-          </div>
-          <div>
-            <label>Plasticizing rate (g/s)</label>
-            <div class="field-with-code">
-              <input type="text" name="plasticizing_rate_g_s" value="<%= settings.plasticizing_rate_g_s ?? '' %>">
-              <input class="machine-code-input" type="text" readonly placeholder="Save to generate" value="<%= tokenFor('plasticizing_rate_g_s') %>">
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card" style="margin-top: 1rem;">
-        <h3 class="card-title">Notes / Scheme</h3>
-        <textarea name="notes" rows="6"><%= machine?.notes ?? '' %></textarea>
-      </div>
-
-      <div class="card" style="margin-top: 1rem;">
-        <div class="card-header">
-          <h3 class="card-title">Custom fields</h3>
-          <button class="pure-button pure-button-secondary" type="button" id="addMachineCustomField">Add field</button>
-        </div>
-        <div
-          id="machineCustomFields"
-          class="setup-fields"
-          data-show-machine-code="1"
-          data-machine-id="<%= machine?.id ?? '' %>"
-        ></div>
-        <input type="hidden" id="machineCustomFieldsJson" name="custom_fields_json" value="">
-      </div>
-
-      <button class="pure-button pure-button-primary" type="submit"><%= machine ? 'Save' : 'Create' %></button>
-    </form>
-  </div>
-</div>
-<%- include('partials/foot') %>
-
+<%- include('partials/head', { title: `Polymer Processing Planner | ${machine ? 'Edit machine' : 'Add machine'}`, uiKit: true }) %>
+<% const machineParamMap = machineParamByCode || {}; const tokenFor = (code) => { const param = machineParamMap[code]; return machine?.id && param?.id ? `%${machine.id}:${param.id}%` : ''; }; const keyFields = [['clamp_force_kN','Clamp force (kN)'],['clamp_force_t','Clamp force (t)'],['intensification_ratio','Intensification ratio'],['injection_pressure_bar','Injection pressure (bar)'],['screw_diameter_mm','Screw diameter (mm)']]; const specFields = [['tie_bar_distance_mm','Tie bar distance (mm)'],['platen_size_mm','Platen size (mm)'],['opening_stroke_mm','Opening stroke (mm)'],['min_mold_height_mm','Min mold height (mm)'],['max_mold_height_mm','Max mold height (mm)'],['injection_volume_cm3','Injection volume (cm3)'],['injection_weight_g','Injection weight (g)'],['screw_speed_rpm','Screw speed (rpm)'],['plasticizing_rate_g_s','Plasticizing rate (g/s)']]; %>
+<div class="min-h-screen w-full bg-gray-50 font-sans text-gray-900 antialiased"><div class="flex min-h-screen w-full flex-col bg-gray-50 lg:flex-row"><%- include('partials/admin_sidebar') %><main class="min-w-0 flex-1"><header class="border-b border-gray-200 bg-white"><div class="flex items-center gap-4 px-4 py-4 sm:px-6 lg:px-8"><a class="inline-flex size-9 items-center justify-center rounded-lg text-gray-500 no-underline hover:bg-gray-100" href="/machines" aria-label="Back to equipment"><span class="material-symbols-rounded" aria-hidden="true">arrow_back</span></a><div><p class="text-sm font-medium text-blue-700">Equipment</p><h1 class="mt-0.5 text-2xl font-semibold tracking-tight text-gray-900"><%= machine ? 'Edit machine' : 'Add machine' %></h1></div></div></header><form class="space-y-6 px-4 py-6 sm:px-6 lg:px-8" action="<%= machine ? `/machines/${machine.id}` : '/machines' %>" method="post"><section class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm"><h2 class="text-lg font-semibold text-gray-900">Identity</h2><div class="mt-5 grid gap-5 md:grid-cols-2"><% [['name','Name',true],['image_url','Image URL',false],['vendor','Vendor',false],['model','Model',false]].forEach(([key,label,required]) => { %><div><label class="mb-2 block text-sm font-medium text-gray-900"><%= label %></label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="text" name="<%= key %>" <%= required ? 'required' : '' %> value="<%= machine?.[key] ?? '' %>"></div><% }); %></div></section>
+<% [['Key parameters', keyFields], ['Additional specifications', specFields]].forEach(([title, fields]) => { %><section class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm"><h2 class="text-lg font-semibold text-gray-900"><%= title %></h2><div class="mt-5 grid gap-5 md:grid-cols-2 xl:grid-cols-3"><% fields.forEach(([key,label]) => { %><div><label class="mb-2 block text-sm font-medium text-gray-900"><%= label %></label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="text" name="<%= key %>" value="<%= settings[key] ?? '' %>"><p class="mt-2 rounded bg-gray-100 px-2 py-1 font-mono text-xs text-gray-500"><%= tokenFor(key) || 'Save to generate token' %></p></div><% }); %></div></section><% }); %>
+<section class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm"><h2 class="text-lg font-semibold text-gray-900">Notes / scheme</h2><textarea class="mt-5 block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" name="notes" rows="6"><%= machine?.notes ?? '' %></textarea></section>
+<section class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm"><div class="flex items-center justify-between gap-4"><div><h2 class="text-lg font-semibold text-gray-900">Custom fields</h2><p class="mt-1 text-sm text-gray-500">Additional machine-specific values. Saving creates usable machine tokens.</p></div><button class="inline-flex items-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 hover:bg-gray-100" type="button" id="addMachineCustomField"><span class="material-symbols-rounded me-2 text-[18px]" aria-hidden="true">add</span>Add field</button></div><div class="mt-5 space-y-3" id="machineCustomFields" data-show-machine-code="1" data-machine-id="<%= machine?.id ?? '' %>"></div><input type="hidden" id="machineCustomFieldsJson" name="custom_fields_json" value=""></section><div class="flex justify-end gap-3"><a class="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-900 no-underline hover:bg-gray-100" href="/machines">Cancel</a><button class="rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300" type="submit"><%= machine ? 'Save machine' : 'Create machine' %></button></div></form></main></div></div>
+<%- include('partials/foot', { uiKit: true }) %>
 <script nonce="<%= cspNonce %>">
-  const listEl = document.getElementById('machineCustomFields');
-  const addBtn = document.getElementById('addMachineCustomField');
-  const hiddenInput = document.getElementById('machineCustomFieldsJson');
-  const initialFields = <%- jsonForScript(machineParams || []) %>;
-
-  const updateHidden = () => {
-    if (!hiddenInput || !listEl) return;
-    const rows = Array.from(listEl.querySelectorAll('[data-custom-field]'));
-    const data = rows.map((row) => ({
-      id: row.dataset.fieldId || '',
-      code: row.querySelector('[data-custom-code]')?.value || '',
-      label: row.querySelector('[data-custom-label]')?.value || '',
-      unit: row.querySelector('[data-custom-unit]')?.value || '',
-      value: row.querySelector('[data-custom-value]')?.value ?? ''
-    })).filter((item) => item.label);
-    hiddenInput.value = JSON.stringify(data);
-  };
-
-  const manager = window.IMPlanner?.createCustomFieldManager({
-    listEl,
-    onChange: updateHidden,
-    rowClass: 'setup-field-row'
-  });
-
-  if (manager) {
+  window.addEventListener('DOMContentLoaded', () => {
+    const listEl = document.getElementById('machineCustomFields');
+    const addBtn = document.getElementById('addMachineCustomField');
+    const hiddenInput = document.getElementById('machineCustomFieldsJson');
+    const initialFields = <%- jsonForScript(machineParams || []) %>;
+    const updateHidden = () => {
+      if (!hiddenInput || !listEl) return;
+      hiddenInput.value = JSON.stringify(Array.from(listEl.querySelectorAll('[data-custom-field]'))
+        .map((row) => ({
+          id: row.dataset.fieldId || '',
+          code: row.querySelector('[data-custom-code]')?.value || '',
+          label: row.querySelector('[data-custom-label]')?.value || '',
+          unit: row.querySelector('[data-custom-unit]')?.value || '',
+          value: row.querySelector('[data-custom-value]')?.value ?? ''
+        }))
+        .filter((item) => item.label));
+    };
+    const manager = window.IMPlanner?.createCustomFieldManager({
+      listEl,
+      onChange: updateHidden,
+      ui: 'flowbite',
+      rowClass: 'grid gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_minmax(12rem,0.8fr)_auto]'
+    });
+    if (!manager) return;
     initialFields.forEach((field) => manager.addRow(field));
     updateHidden();
-    addBtn?.addEventListener('click', () => {
-      manager.addRow({});
-      updateHidden();
-    });
-  }
+    addBtn?.addEventListener('click', () => manager.addRow({}));
+  });
 </script>

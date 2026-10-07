@@ -214,12 +214,13 @@ export function createMachinesRouter(db: Db) {
 
   router.get("/machines", (req, res) => {
     const machines = listMachinesForLibrary(db);
-    res.render("machine_library", { machines, canManageMachines: canManageMachines(req) });
+    res.render("machine_library", { machines, canManageMachines: canManageMachines(req), activeAdminPath: "/machines" });
   });
 
   router.get("/machines/new", (req, res) => {
     if (!canManageMachines(req)) return res.status(403).send("Forbidden");
     res.render("machine_edit", {
+      activeAdminPath: "/machines",
       machine: null,
       settings: {},
       machineParams: [],
@@ -260,6 +261,7 @@ export function createMachinesRouter(db: Db) {
         .map((param) => [String(param.code), param])
     );
     res.render("machine_edit", {
+      activeAdminPath: "/machines",
       machine,
       settings,
       machineParams,
