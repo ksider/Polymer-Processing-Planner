@@ -45,6 +45,7 @@ import {
 } from "../modules/llm/provider_profiles_repo.js";
 import { hasLlmSettingsEncryptionKey, LlmSettingsEncryptionError } from "../modules/llm/settings_crypto.js";
 import { listReportConfigsForAdmin } from "../repos/reports_repo.js";
+import { getSystemHealthOverview } from "../services/system_health_service.js";
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -107,6 +108,7 @@ export function createAdminRouter(db: Db) {
     const llmUsageTotals = getLlmUsageTotalsForAdmin(db, aiUsagePeriod.from);
     const llmUsageBreakdown = groupAiUsageByUser(getLlmUsageBreakdownForAdmin(db, aiUsagePeriod.from));
     const reports = listReportConfigsForAdmin(db);
+    const systemHealth = getSystemHealthOverview(db);
     const userAudit = listRecentAuditForUsers(db);
     const userActivity = new Map<number, typeof userAudit>();
     userAudit.forEach((event) => {
@@ -147,6 +149,7 @@ export function createAdminRouter(db: Db) {
       users,
       processes,
       reports,
+      systemHealth,
       userActivity,
       experiments,
       notice,

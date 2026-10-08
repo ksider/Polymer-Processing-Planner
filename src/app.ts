@@ -28,6 +28,7 @@ import { createReportRouter } from "./routes/report.js";
 import { createUsersRouter } from "./routes/users.js";
 import { createNotesRouter } from "./routes/notes.js";
 import { createCalendarRouter } from "./routes/calendar.js";
+import { createSystemHealthRouter } from "./routes/system_health.js";
 import { buildBreadcrumbs } from "./services/breadcrumbs.js";
 import { countUnreadMessageBoxes } from "./repos/messages_repo.js";
 import { getProcessById, getProcessRouteCode } from "./repos/processes_repo.js";
@@ -234,7 +235,7 @@ app.use(csrfTokenMiddleware);
 app.use(xssProtectionMiddleware);
 app.use((req, res, next) => {
   res.locals.currentUser = req.user ?? null;
-  res.locals.activeAdminPath = ["/machines", "/param-library", "/audit"].includes(req.path)
+  res.locals.activeAdminPath = ["/machines", "/param-library", "/audit", "/system-health"].includes(req.path)
     ? req.path
     : "";
   const wantsHtml = req.accepts(["html", "json"]) === "html";
@@ -264,6 +265,7 @@ app.use((req, res, next) => {
 
 app.use(ensureAuthenticated);
 app.use("/admin", ensureAdmin, createAdminRouter(db));
+app.use("/system-health", ensureAdmin, createSystemHealthRouter(db));
 app.use("/audit", createAuditRouter(db));
 app.use(createProfileRouter(db));
 app.use(createCalendarRouter(db));
