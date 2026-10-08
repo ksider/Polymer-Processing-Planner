@@ -13,7 +13,7 @@ import {
   setUserStatus,
   updateUser
 } from "../repos/users_repo.js";
-import { isEmailConfigured, sendPasswordSetupEmail, sendTestEmail } from "../services/email.js";
+import { isAuthSenderConfigured, isEmailConfigured, isPasswordSetupOriginConfigured, sendPasswordSetupEmail, sendTestEmail } from "../services/email.js";
 import {
   EMAIL_PURPOSES,
   createEmailSenderProfile,
@@ -161,6 +161,8 @@ export function createAdminRouter(db: Db) {
       emailProviderProfiles,
       emailSenderProfiles,
       emailSettingsEncryptionReady: hasAppSettingsEncryptionKey(),
+      emailPasswordOriginReady: isPasswordSetupOriginConfigured(),
+      emailAuthSenderReady: isAuthSenderConfigured(db),
       emailPasswordLinksReady: isEmailConfigured(db),
       llmProviderProfiles,
       llmSettingsEncryptionReady: hasLlmSettingsEncryptionKey(),

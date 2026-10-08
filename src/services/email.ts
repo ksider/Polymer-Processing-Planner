@@ -32,6 +32,14 @@ export function isEmailConfigured(db: Db, purpose: EmailPurpose = "auth"): boole
   return purpose !== "auth" || Boolean(setupUrl("/auth/set-password/check"));
 }
 
+export function isPasswordSetupOriginConfigured(): boolean {
+  return Boolean(setupUrl("/auth/set-password/check"));
+}
+
+export function isAuthSenderConfigured(db: Db): boolean {
+  return Boolean(getDefaultSenderForDelivery(db, "auth"));
+}
+
 export async function sendWithResend(sender: EmailSenderForDelivery, input: { to: string; subject: string; text: string; html?: string }): Promise<boolean> {
   let apiKey: string;
   try {
