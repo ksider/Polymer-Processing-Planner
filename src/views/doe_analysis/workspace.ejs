@@ -1,5 +1,5 @@
-<%- include('../partials/head', { title: `DOE Analysis V2 | ${doe.name}` }) %>
-<%- include('../partials/nav') %>
+<%- include('../partials/head', { title: `DOE Analysis V2 | ${doe.name}`, uiKit: true }) %>
+<%- include('../partials/experiment_workspace_nav') %>
 <%
   const displayCell = (value) => {
     if (value === null || typeof value === 'undefined') return '—';
@@ -16,9 +16,12 @@
   const tagResponses = responses.filter((column) => column.dataType === 'tags');
   const graphNumbers = dataset.columns.filter((column) => column.active && column.dataType === 'number' && (column.role === 'factor' || column.role === 'response'));
   const graphGroups = dataset.columns.filter((column) => column.active && (column.dataType === 'category' || column.dataType === 'text'));
+  const inputTableClass = 'min-w-full border-separate border-spacing-y-2 text-left text-sm text-body [&_thead_th]:whitespace-nowrap [&_thead_th]:px-3 [&_thead_th]:py-2 [&_thead_th]:text-xs [&_thead_th]:font-medium [&_thead_th]:uppercase [&_thead_th]:text-body [&_tbody_td]:border-y [&_tbody_td]:border-default-medium [&_tbody_td]:bg-neutral-primary [&_tbody_td]:px-3 [&_tbody_td]:py-2 [&_tbody_td:first-child]:rounded-s-base [&_tbody_td:first-child]:border-s [&_tbody_td:last-child]:rounded-e-base [&_tbody_td:last-child]:border-e';
 %>
 
-<main class="container doe-analysis-page" data-analysis-workspace
+<div class="flex min-h-[calc(100vh-4rem)] w-full overflow-x-clip bg-gray-50">
+  <%- include('../partials/experiment_workspace_sidebar', { workspace }) %>
+  <main class="min-w-0 flex-1"><div class="doe-analysis-page w-full max-w-none px-3 py-3 sm:px-4 lg:px-5" data-analysis-workspace
   data-engine-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/engine"
   data-calculate-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/calculate"
   data-multi-optimize-url="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2/multi-optimize"
@@ -36,22 +39,23 @@
   data-llm-can-request="<%= canRequestAiInterpretation ? '1' : '0' %>"
   data-pending-job-id="<%= pendingCalculationJob?.id || '' %>"
   data-analysis-state="<%= selectedAnalysis?.state || 'draft' %>">
-  <header class="card doe-analysis-header">
-    <a class="back-link" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>?tab=design" aria-label="Back to DOE design">
+  <header class="doe-analysis-header mb-4 rounded-xl border border-default-medium bg-neutral-primary px-4 py-3 shadow-xs">
+    <a class="inline-flex size-9 items-center justify-center rounded-base text-body no-underline hover:bg-neutral-secondary hover:text-heading" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>?tab=design" aria-label="Back to DOE design">
       <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
     </a>
     <div class="doe-analysis-heading">
       <div class="doe-analysis-title-row">
-        <h1 class="card-title"><%- formatInline(doe.name) %> · Analysis V2</h1>
-        <span class="badge"><%= selectedAnalysis ? selectedAnalysis.state : 'Preview' %></span>
+        <h1 class="text-base font-semibold tracking-tight text-heading"><%- formatInline(doe.name) %> · Analysis V2</h1>
+        <span class="inline-flex rounded-full bg-neutral-secondary px-2 py-0.5 text-xs font-medium text-heading"><%= selectedAnalysis ? selectedAnalysis.state : 'Preview' %></span>
       </div>
       <p class="small-note"><%- formatInline(experiment.name) %> · <%= doe.designType %> · dataset <code><%= dataset.datasetRevision.slice(0, 12) %></code></p>
     </div>
     <div class="doe-analysis-header-tools">
       <div class="doe-analysis-switcher">
-        <label>
+        <label class="relative block">
+          <span class="pointer-events-none absolute inset-y-0 start-0 z-10 flex items-center ps-3 text-body"><span class="material-symbols-rounded text-[18px]" aria-hidden="true">analytics</span></span>
           <span class="visually-hidden">Analysis</span>
-          <select data-analysis-nav-select aria-label="Choose analysis">
+          <select class="block w-full rounded-base border border-default-medium bg-neutral-secondary-medium py-2 pe-8 ps-9 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" data-ui-control-exempt data-analysis-nav-select aria-label="Choose analysis">
             <option value="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2" <%= selectedAnalysis ? '' : 'selected' %>>Unsaved analysis · Draft</option>
             <% analyses.filter((analysis) => !analysis.archivedAt).forEach((analysis) => { %>
               <option value="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2?analysis_id=<%= analysis.id %>" <%= selectedAnalysis?.id === analysis.id ? 'selected' : '' %>><%= analysis.name %> · <%= analysis.state %></option>
@@ -65,7 +69,7 @@
             <% } %>
           </select>
         </label>
-        <a class="icon-button" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2" title="New analysis" aria-label="New analysis">
+        <a class="inline-flex size-9 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body no-underline shadow-xs hover:bg-neutral-tertiary hover:text-heading" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/analysis-v2" title="New analysis" aria-label="New analysis">
           <span class="material-symbols-rounded" aria-hidden="true">add</span>
         </a>
       </div>
@@ -80,14 +84,14 @@
 
   <div class="doe-analysis-layout">
     <section class="doe-analysis-canvas">
-      <nav class="card doe-analysis-section-nav" aria-label="Analysis sections">
+      <nav class="doe-analysis-section-nav rounded-xl border border-default-medium bg-neutral-primary shadow-xs" aria-label="Analysis sections">
         <a href="#analysis-overview">Overview</a>
         <a href="#analysis-data">Data</a>
-        <a href="#analysis-custom-graph" data-reveal-custom-graph>Custom graph</a>
+        <a href="#analysis-custom-graph" data-reveal-custom-graph hidden>Custom graph</a>
         <a href="#analysis-results">Results</a>
       </nav>
 
-      <section class="card" id="analysis-overview">
+      <section class="rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs" id="analysis-overview">
         <div class="doe-analysis-section-heading">
           <div>
             <h2 class="card-title">Overview</h2>
@@ -145,7 +149,7 @@
         </div>
       </section>
 
-      <section class="card" id="analysis-custom-graph" data-custom-graph-card>
+      <section class="rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs" id="analysis-custom-graph" data-custom-graph-card hidden>
         <div class="doe-analysis-section-heading"><div><h2 class="card-title">Custom graph</h2><p class="small-note">Explore raw measurements or means with confidence intervals without changing the fitted DOE model.</p></div><button class="doe-analysis-link" type="button" data-toggle-custom-graph aria-expanded="false">Show graph</button></div>
         <div data-custom-graph-body hidden>
           <div class="doe-analysis-section-actions"><button class="doe-analysis-link" type="button" data-open-custom-graph>Configure graph</button></div>
@@ -154,7 +158,7 @@
         </div>
       </section>
 
-      <section class="card" id="analysis-data">
+      <section class="rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs" id="analysis-data">
         <div class="doe-analysis-section-heading">
           <h2 class="card-title"><button class="doe-analysis-heading-toggle" type="button" data-toggle-data-worksheet aria-expanded="false" aria-controls="analysis-data-body"><span>Data worksheet</span><span class="material-symbols-rounded" aria-hidden="true">expand_more</span></button></h2>
           <div class="doe-analysis-section-actions">
@@ -165,7 +169,7 @@
         <div id="analysis-data-body" data-data-worksheet-body hidden>
           <p class="small-note">One row per run. Raw values are shown; coded factor values remain available to the model.</p>
           <div class="doe-analysis-table-scroll" tabindex="0">
-          <table class="pure-table pure-table-bordered table-compact doe-analysis-data-table">
+          <table class="<%= inputTableClass %> doe-analysis-data-table">
             <thead>
               <tr>
                 <% dataset.columns.forEach((column) => { %>
@@ -190,7 +194,7 @@
         </div>
       </section>
 
-      <section class="card" id="analysis-results" data-results-panel>
+      <section class="rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs" id="analysis-results" data-results-panel>
         <div class="doe-analysis-section-heading">
           <div>
             <h2 class="card-title">Calculation result <button class="doe-analysis-link" type="button" data-open-multi-optimize hidden>Optimize multiple responses</button></h2>
@@ -306,7 +310,7 @@
               <p class="small-note" data-anova-note>Lack of fit compares model mismatch with repeat-to-repeat variation. A small p-value indicates that the selected model form may be inadequate. Pure error is variation between runs at identical factor settings.</p>
               <p class="small-note doe-analysis-significance-legend">p-value labels: green &lt; 0.05, dark green &lt; 0.01, muted ≥ 0.05. A significant lack-of-fit row is shown as a model concern.</p>
               <div class="doe-analysis-table-scroll">
-                <table class="pure-table pure-table-bordered table-compact">
+                <table class="<%= inputTableClass %>">
                   <thead><tr><th>Term</th><th>DF</th><th data-anova-sum-heading>SS</th><th>MS</th><th data-anova-stat-heading>F</th><th>p</th></tr></thead>
                   <tbody data-anova-body></tbody>
                 </table>
@@ -320,7 +324,7 @@
               <p class="small-note" data-coefficients-note>Estimate is the fitted contribution of a term while the other selected terms are held in the model. Standard uncertainty measures its precision; t and p test whether that contribution is distinguishable from zero. The sign indicates direction.</p>
               <p class="small-note doe-analysis-significance-legend">p-value labels use the same 0.05 and 0.01 thresholds as ANOVA.</p>
               <div class="doe-analysis-table-scroll">
-                <table class="pure-table pure-table-bordered table-compact">
+                <table class="<%= inputTableClass %>">
                   <thead><tr><th>Term</th><th>Estimate</th><th>Standard uncertainty</th><th data-coefficient-stat-heading>Signal / uncertainty (t)</th><th>p-value</th></tr></thead>
                   <tbody data-coefficients-body></tbody>
                 </table>
@@ -333,7 +337,7 @@
               <button class="icon-button tiny" type="button" data-copy-table="#analysis-diagnostics table" data-copy-icon title="Copy diagnostics table as TSV" aria-label="Copy diagnostics table as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button>
             </div>
             <div class="doe-analysis-table-scroll">
-              <table class="pure-table pure-table-bordered table-compact">
+              <table class="<%= inputTableClass %>">
                 <thead><tr><th>Run</th><th>Predicted response</th><th>Prediction error</th><th>Standardized error</th><th>Leverage</th><th>Cook's distance</th></tr></thead>
                 <tbody data-diagnostics-body></tbody>
               </table>
@@ -341,9 +345,9 @@
           </section>
         </div>
       </section>
-      <dialog class="modal-frame doe-analysis-dialog" data-multi-optimize-dialog>
+      <dialog class="m-auto w-[min(96vw,52rem)] rounded-xl border border-default-medium bg-neutral-primary p-0 text-heading shadow-2xl backdrop:bg-black/40" data-multi-optimize-dialog>
         <div class="modal-header"><h2>Optimize multiple responses</h2><button class="icon-button" type="button" data-close-multi-optimize aria-label="Close"><span class="material-symbols-rounded" aria-hidden="true">close</span></button></div>
-        <div class="modal-body"><p class="small-note">Only saved models using the same dataset snapshot, factor set, and block adjustment are available together.</p><form class="pure-form pure-form-stacked" data-multi-optimize-form>
+        <div class="modal-body"><p class="small-note">Only saved models using the same dataset snapshot, factor set, and block adjustment are available together.</p><form class="grid gap-4" data-multi-optimize-form>
           <div data-multi-optimize-goals></div>
           <button class="pure-button pure-button-primary" type="submit">Find compromise</button>
           <p class="small-note" data-multi-optimize-status></p>
@@ -362,7 +366,7 @@
             <button class="pure-button" type="button" data-close-ai-interpretation>Close</button>
           </div>
         </div>
-        <div class="modal-body pure-form pure-form-stacked">
+        <div class="modal-body grid gap-4">
           <p class="small-note" data-ai-interpretation-source></p>
           <% const aiExperimentDescription = typeof experiment.notes === 'string' ? experiment.notes.trim() : ''; %>
           <% const aiExperimentDescriptionPreview = aiExperimentDescription.length > 4_000 ? `${aiExperimentDescription.slice(0, 4_000)}\n\n[Description truncated by Planner.]` : aiExperimentDescription; %>
@@ -414,17 +418,17 @@
           </section>
         </div>
       </aside>
-      <dialog class="modal-frame doe-analysis-dialog" data-analysis-comparison-dialog>
-        <div class="modal-header"><h2>Compare saved models</h2><button class="icon-button" type="button" data-close-comparison aria-label="Close"><span class="material-symbols-rounded" aria-hidden="true">close</span></button></div>
-        <div class="modal-body"><p class="small-note">Compare the latest successful revision of each saved model; a dataset mismatch is shown explicitly.</p>
-        <div class="pure-form pure-form-stacked doe-analysis-comparison-controls"><label>First model <select data-comparison-left></select></label><label>Second model <select data-comparison-right></select></label></div>
+      <dialog class="m-auto w-[min(96vw,52rem)] rounded-xl border border-default-medium bg-neutral-primary p-0 text-heading shadow-2xl backdrop:bg-black/40" data-analysis-comparison-dialog>
+        <div class="flex items-center justify-between gap-4 border-b border-default px-5 py-4"><h2 class="text-base font-semibold text-heading">Compare saved models</h2><button class="inline-flex size-9 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading" type="button" data-close-comparison aria-label="Close"><span class="material-symbols-rounded" aria-hidden="true">close</span></button></div>
+        <div class="grid gap-4 p-5"><p class="text-sm text-body">Compare the latest successful revision of each saved model; a dataset mismatch is shown explicitly.</p>
+        <div class="grid gap-4 sm:grid-cols-2 doe-analysis-comparison-controls"><label>First model <select data-comparison-left></select></label><label>Second model <select data-comparison-right></select></label></div>
         <div data-comparison-result></div>
         </div>
       </dialog>
-      <dialog class="modal-frame doe-analysis-dialog" data-saved-views-dialog>
+      <dialog class="m-auto w-[min(96vw,52rem)] rounded-xl border border-default-medium bg-neutral-primary p-0 text-heading shadow-2xl backdrop:bg-black/40" data-saved-views-dialog>
         <div class="modal-header"><h2>Saved graphs</h2><button class="icon-button" type="button" data-close-saved-views aria-label="Close"><span class="material-symbols-rounded" aria-hidden="true">close</span></button></div>
         <div class="modal-body">
-          <form class="pure-form pure-form-stacked" data-save-view-form>
+          <form class="grid gap-4" data-save-view-form>
             <label for="savedViewName">Save current interaction, response-surface, or custom graph as</label>
             <div class="doe-analysis-view-save"><input id="savedViewName" name="name" maxlength="120" required placeholder="Graph name"><button class="pure-button pure-button-primary" type="submit">Save graph</button></div>
             <p class="small-note" data-save-view-status></p>
@@ -432,9 +436,9 @@
           <div data-saved-views-list></div>
         </div>
       </dialog>
-      <dialog class="modal-frame doe-analysis-dialog" data-custom-graph-dialog>
+      <dialog class="m-auto w-[min(96vw,52rem)] rounded-xl border border-default-medium bg-neutral-primary p-0 text-heading shadow-2xl backdrop:bg-black/40" data-custom-graph-dialog>
         <div class="modal-header"><h2>Configure custom graph</h2><button class="icon-button" type="button" data-close-custom-graph aria-label="Close"><span class="material-symbols-rounded" aria-hidden="true">close</span></button></div>
-        <form class="modal-body pure-form pure-form-stacked" data-custom-graph-form>
+        <form class="modal-body grid gap-4" data-custom-graph-form>
           <label>X axis<select name="xKey"><% graphNumbers.forEach((column) => { %><option value="<%= column.key %>"><%- formatInline(column.label) %><%= column.unit ? ` (${column.unit})` : '' %></option><% }); %></select></label>
           <label>Y axis<select name="yKey"><% graphNumbers.forEach((column) => { %><option value="<%= column.key %>" <%= column.role === 'response' ? 'selected' : '' %>><%- formatInline(column.label) %><%= column.unit ? ` (${column.unit})` : '' %></option><% }); %></select></label>
           <label>Group/color<select name="groupKey"><option value="">No grouping</option><% graphGroups.forEach((column) => { %><option value="<%= column.key %>"><%- formatInline(column.label) %></option><% }); %></select></label>
@@ -447,22 +451,22 @@
         </form>
       </dialog>
 
-      <dialog class="modal-frame doe-analysis-dialog" data-templates-dialog>
-        <div class="modal-header"><h2>Model templates</h2><button class="icon-button" type="button" data-close-templates aria-label="Close"><span class="material-symbols-rounded" aria-hidden="true">close</span></button></div>
-        <div class="modal-body">
-          <p class="small-note">Templates are shared by every DOE in this process type. When applied, field codes are matched to this DOE and validated before changing the form.</p>
+      <dialog class="m-auto w-[min(96vw,52rem)] rounded-xl border border-default-medium bg-neutral-primary p-0 text-heading shadow-2xl backdrop:bg-black/40" data-templates-dialog>
+        <div class="flex items-center justify-between gap-4 border-b border-default px-5 py-4"><h2 class="text-base font-semibold text-heading">Model templates</h2><button class="inline-flex size-9 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading" type="button" data-close-templates aria-label="Close"><span class="material-symbols-rounded" aria-hidden="true">close</span></button></div>
+        <div class="grid gap-4 p-5">
+          <p class="text-sm text-body">Templates are shared by every DOE in this process type. When applied, field codes are matched to this DOE and validated before changing the form.</p>
           <div class="doe-analysis-revisions" data-templates-list></div>
-          <form class="pure-form pure-form-stacked" data-save-template-form>
+          <form class="grid gap-4" data-save-template-form>
             <label for="analysisTemplateName">Save current model as a template</label>
             <input id="analysisTemplateName" name="name" maxlength="120" placeholder="For example: Defect probability — factorial">
-            <button class="pure-button pure-button-primary" type="submit">Save template</button>
+            <button class="inline-flex w-fit items-center justify-center rounded-base bg-brand px-3 py-2.5 text-sm font-medium text-white shadow-xs hover:bg-brand-strong focus:outline-none focus:ring-4 focus:ring-brand" type="submit">Save template</button>
           </form>
           <p class="small-note" data-template-status aria-live="polite"></p>
         </div>
       </dialog>
     </section>
 
-    <aside class="card doe-analysis-inspector">
+    <aside class="doe-analysis-inspector rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs">
       <div class="doe-analysis-panel-title">
         <h2>Model</h2>
         <span class="badge"><%= selectedAnalysis ? `#${selectedAnalysis.id}` : 'Basic' %></span>
@@ -473,7 +477,7 @@
       </div>
       <p class="small-note">Input factors define run settings. Measured response values are entered inside each run.</p>
       <% if (defaultSpecification) { %>
-        <form class="pure-form pure-form-stacked" data-analysis-form>
+        <form class="grid gap-4" data-analysis-form>
           <label for="analysisName">Analysis name</label>
           <input id="analysisName" name="analysisName" maxlength="120" value="<%= selectedAnalysis?.name || '' %>" placeholder="For example: Cycle time — quadratic model" <%= analysisArchived ? 'readonly' : '' %>>
 
@@ -580,7 +584,7 @@
               <span class="small-note" data-optimization-summary>No optimization configured</span>
             </div>
             <button class="pure-button button-small" type="button" data-open-optimization <%= analysisArchived ? 'disabled' : '' %>>Configure</button>
-            <dialog class="modal-frame doe-analysis-dialog" data-optimization-dialog>
+            <dialog class="m-auto w-[min(96vw,40rem)] rounded-xl border border-default-medium bg-neutral-primary p-0 text-heading shadow-2xl backdrop:bg-black/40" data-optimization-dialog>
               <div class="modal-header"><h2>Optimize this response</h2><button class="icon-button" type="button" data-close-optimization aria-label="Close"><span class="material-symbols-rounded" aria-hidden="true">close</span></button></div>
               <div class="modal-body">
                 <p class="small-note">Recommendations stay within the physical factor bounds below and are saved with the calculation revision.</p>
@@ -653,9 +657,9 @@
             </fieldset>
           <% } %>
 
-          <button class="pure-button pure-button-primary" type="submit" data-calculate-button disabled><%= selectedAnalysis ? 'Recalculate and save' : 'Calculate preview' %></button>
+          <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2.5 text-sm font-medium text-white shadow-xs hover:bg-brand-strong focus:outline-none focus:ring-4 focus:ring-brand disabled:cursor-not-allowed disabled:opacity-50" type="submit" data-calculate-button disabled><%= selectedAnalysis ? 'Recalculate and save' : 'Calculate preview' %></button>
           <% if (!selectedAnalysis) { %>
-            <button class="pure-button" type="button" data-save-analysis disabled>Save analysis</button>
+            <button class="inline-flex items-center justify-center rounded-base border border-default-medium bg-neutral-secondary px-3 py-2.5 text-sm font-medium text-heading shadow-xs hover:bg-neutral-tertiary disabled:cursor-not-allowed disabled:opacity-50" type="button" data-save-analysis disabled>Save analysis</button>
           <% } %>
           <% if (selectedAnalysis) { %>
             <div class="doe-analysis-analysis-actions" role="group" aria-label="Analysis actions">
@@ -735,7 +739,8 @@
       </button>
     </div>
   </div>
-</main>
+</div></main></div>
+<%- include('../partials/experiment_workspace_calendar', { workspace }) %>
 
 <script nonce="<%= cspNonce %>" id="analysis-initial-result" type="application/json"><%- jsonForScript(latestSuccessfulRevision?.result || null) %></script>
 <script nonce="<%= cspNonce %>" id="analysis-column-labels" type="application/json"><%- jsonForScript(Object.fromEntries(dataset.columns.map((column) => [column.key, column.label]))) %></script>
@@ -745,4 +750,4 @@
 <script nonce="<%= cspNonce %>" src="/vendor/echarts/dist/echarts.min.js" defer></script>
 <script nonce="<%= cspNonce %>" src="/vendor/echarts-gl/dist/echarts-gl.min.js?v=2.0.9" defer></script>
 <script nonce="<%= cspNonce %>" src="/doe_analysis_workspace.js?v=20261005-ai-interpretation7" defer></script>
-<%- include('../partials/foot') %>
+<%- include('../partials/foot', { uiKit: true }) %>

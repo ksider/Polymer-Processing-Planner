@@ -1,18 +1,16 @@
-/*
- * Tailwind + Flowbite entry point for progressively migrated EJS pages.
- *
- * This stylesheet is loaded only by pages that opt in via `uiKit: true`, so
- * Flowbite receives Tailwind's complete official base layer (Preflight) while
- * legacy Pure.css pages remain untouched.
- *
- * New screens use Flowbite's published component markup and Tailwind utility
- * classes directly; do not add app-specific visual component classes here.
- */
+/* Tailwind + Flowbite entry point for experimental workspaces. */
 @import "tailwindcss";
 @import "flowbite/src/themes/default";
+@import "../../node_modules/flowbite-datepicker/dist/css/datepicker.css";
 
 @plugin "flowbite/plugin";
 
 @source "../views";
 @source "../public";
 @source "../../node_modules/flowbite";
+@source "../../node_modules/flowbite-datepicker";
+
+/* Keep calendar popovers above the sticky workspace navigation (z-40). */
+.datepicker-dropdown {
+  z-index: 60;
+}

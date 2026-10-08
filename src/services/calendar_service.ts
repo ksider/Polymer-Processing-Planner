@@ -5,7 +5,7 @@ import { getTask, updateTask } from "../repos/tasks_repo.js";
 import { getRun, updateRunSchedule } from "../repos/runs_repo.js";
 import { getQualRun, updateQualRunDueAt } from "../repos/qual_repo.js";
 
-export type CalendarScope = "my" | "process";
+export type CalendarScope = "my" | "process" | "experiment";
 
 export type CalendarEvent = {
   id: string;
@@ -384,6 +384,37 @@ export function listProcessCalendarEvents(
       ${filterSql}
     `,
     [processId, ...visibleExperimentIds]
+  );
+  return [...taskEvents, ...runEvents, ...qualRunEvents];
+}
+
+export function listExperimentCalendarEvents(db: Db, experimentId: number): CalendarEvent[] {
+  const taskEvents = loadTaskEventsByWhere(
+    db,
+    `
+    WHERE e.archived_at IS NULL
+      AND t.due_at IS NOT NULL
+      AND e.id = ?
+    `,
+    [experimentId]
+  );
+  const runEvents = loadRunEventsByWhere(
+    db,
+    `
+    WHERE e.archived_at IS NULL
+      AND r.due_at IS NOT NULL
+      AND e.id = ?
+    `,
+    [experimentId]
+  );
+  const qualRunEvents = loadQualRunEventsByWhere(
+    db,
+    `
+    WHERE e.archived_at IS NULL
+      AND qr.due_at IS NOT NULL
+      AND e.id = ?
+    `,
+    [experimentId]
   );
   return [...taskEvents, ...runEvents, ...qualRunEvents];
 }

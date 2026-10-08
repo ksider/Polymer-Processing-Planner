@@ -12,6 +12,8 @@
         <img src="https://img.shields.io/badge/Express-4.x-111111?style=flat&logo=express&logoColor=white" alt="Express" />
         <img src="https://img.shields.io/badge/SQLite-better--sqlite3-0b5fa5?style=flat&logo=sqlite&logoColor=white" alt="SQLite" />
         <img src="https://img.shields.io/badge/EJS-3.x-8c4b32?style=flat&logo=ejs&logoColor=white" alt="EJS" />
+        <img src="https://img.shields.io/badge/Tailwind_CSS-4.x-06b6d4?style=flat&logo=tailwindcss&logoColor=white" alt="Tailwind CSS" />
+        <img src="https://img.shields.io/badge/Flowbite-UI_patterns-1c64f2?style=flat" alt="Flowbite UI patterns" />
         <img src="https://img.shields.io/badge/PureCSS-3.x-2f9c74?style=flat&logo=css3&logoColor=white" alt="PureCSS" />
         <img src="https://img.shields.io/badge/ECharts-5.x-c23531?style=flat" alt="ECharts" />
         <img src="https://img.shields.io/badge/jStat-1.x-6a5acd?style=flat" alt="jStat" />
@@ -80,6 +82,59 @@ openssl rand -base64 32
 
 Keep this encryption key permanently. Changing it makes provider keys already
 stored in SQLite unreadable until they are entered again.
+
+## Admin UI modernization
+
+The administrative interface is being migrated page by page to a stable,
+standardized UI foundation: **Tailwind CSS 4 + Flowbite patterns**. The
+application remains Express + TypeScript + EJS; React is not introduced for
+this migration. The new admin layer is opt-in, full-width, and isolated so
+legacy application pages can continue using their existing styles until they
+are migrated.
+
+The migration has introduced:
+
+- shared Flowbite/Tailwind layout primitives for the admin sidebar, header,
+  footer, forms, lists, tables, tabs, tooltips, dialogs and toast messages;
+- server-rendered active navigation for standalone admin pages and
+  no-reload switching for tabs inside `/admin`;
+- full-width Parameter Library and Equipment pages with migrated equipment
+  cards, custom fields, machine tokens and preserved filters;
+- user administration with role/status indicators, avatars, activity details,
+  access actions and direct chat links;
+- an AI Monitor grouped by user, with expandable per-model token and request
+  statistics, plus administrator-managed AI provider profiles;
+- Settings sections for security, processes, integrations and entity
+  controls;
+- a formatted Logs & Audit console with internal scrolling, searchable safe
+  fields and complete JSONL export;
+- a first System Health page for database, analytics, email configuration and
+  DOE background-job status.
+
+### Resend email delivery
+
+Email delivery is configured in **Admin → Settings** through Resend. The
+Resend API key is entered there and stored encrypted in SQLite. The only
+related environment secret is the master key:
+
+```sh
+APP_SETTINGS_ENCRYPTION_KEY="$(openssl rand -base64 32)"
+```
+
+Keep this value outside database backups and do not rotate it casually: stored
+Resend credentials cannot be decrypted after the master key changes. Sender
+profiles can be separated by purpose (`auth`, `notifications`, `reports`, and
+`system`), each with its own From address and optional Reply-To address. New
+user invitations and password resets use the default `auth` sender. A test
+message can be sent from each saved profile in Settings; System Health checks
+do not send email. When an invitation or reset is requested, the one-time link
+is both sent through Resend and displayed once to the administrator as a
+fallback. If delivery is not configured or fails, the same link remains
+available for secure manual transfer.
+
+The next planned admin slice is report-template governance with immutable
+template versions. Secure media uploads are tracked as a shared future
+capability, starting with equipment images.
 
 ### Docker deployment
 
@@ -171,13 +226,14 @@ Create a `.env` file based on `.env.example` and set:
 - `GOOGLE_CLIENT_SECRET`
 - `DB_PATH=/app/data/im_doe.sqlite` (production container)
 - `TRUST_PROXY=1` (one trusted local reverse proxy)
-- `APP_ORIGIN=https://planner.example.com` (only when SMTP email is enabled)
+- `APP_ORIGIN=https://planner.example.com` (required for password-setup email links)
+- `APP_SETTINGS_ENCRYPTION_KEY=<openssl rand -base64 32>` (required before saving a Resend API key in Admin → Settings)
 
 ## Authentication
 - The first admin account is created on startup using `ADMIN_EMAIL` + `ADMIN_TEMP_PASSWORD`.
 - `ADMIN_TEMP_PASSWORD` is used only for initial seeding. Changing it later does not update an existing admin password.
 - After first login with the temp password, the admin must set a new password.
-- New-user invitations and administrator password resets use a one-time, 30-minute password-setup link. With no SMTP configured, the administrator copies this link once and sends it via a secure channel.
+- New-user invitations and administrator password resets use a one-time, 30-minute password-setup link. Configure a default `auth` sender under Admin → Settings to deliver it through Resend; otherwise the administrator copies the link once and sends it through a secure channel.
 - Passwords are stored as bcrypt hashes (not in plain text).
 - Roles: `admin`, `manager`, `engineer`, `operator`, `viewer`.
 - Access:
@@ -418,6 +474,8 @@ Minitab or Origin.
 
 ### In progress
 
+- Continue the page-by-page admin UI migration and finish the remaining
+  standardized Flowbite/Tailwind states and accessibility checks.
 - Validate the R and AI provider paths with production-shaped DOE data.
 - Validate Gemini, Mistral, Ollama, and other OpenAI-compatible profiles through
   the same structured response contract.
@@ -477,6 +535,16 @@ Each experiment can have multiple reports. A report has its own editable name an
 4. DOCX export includes the configured report metadata, generated title information, document contents and signature information. Embedded PNG/JPEG/GIF/BMP images are supported.
 
 ## Recent Changes (for handoff)
+- Admin UI migration started on a reusable Tailwind CSS + Flowbite foundation;
+  the migrated admin pages use full-width layouts and keep the legacy
+  application UI isolated.
+- Admin Settings now supports encrypted Resend connections, multiple sender
+  profiles by purpose, optional Reply-To addresses and explicit test sends.
+- New-user invitations and administrator password resets use the configured
+  Resend `auth` sender when one is available, with a secure manual-link
+  fallback otherwise.
+- System Health and background-job overview added as a separate admin page;
+  health checks remain read-only and do not send email or retry jobs.
 - Internal messenger added and expanded:
   - direct/group chats
   - separate system notifications rail

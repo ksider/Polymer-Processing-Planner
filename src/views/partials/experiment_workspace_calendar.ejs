@@ -1,0 +1,56 @@
+<dialog class="m-auto w-[min(96vw,72rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" data-experiment-calendar-dialog aria-labelledby="experimentCalendarTitle">
+  <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4 sm:px-6"><div><p class="text-sm font-medium text-blue-700">Schedule</p><h2 class="mt-0.5 text-lg font-semibold tracking-tight" id="experimentCalendarTitle"><%= workspace.experiment.name %></h2></div><button class="inline-flex size-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900" type="button" data-close-experiment-calendar aria-label="Close calendar"><span class="material-symbols-rounded" aria-hidden="true">close</span></button></div>
+  <div class="p-4 sm:p-6"><div data-experiment-calendar-host class="min-h-96"></div><p class="mt-4 text-sm text-gray-500">Schedule includes tasks and scheduled run activity for this experiment. Runs remain outside the project tree.</p></div>
+</dialog>
+<script nonce="<%= cspNonce %>" src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script nonce="<%= cspNonce %>">
+  (() => {
+    const dialog = document.querySelector('[data-experiment-calendar-dialog]');
+    const host = document.querySelector('[data-experiment-calendar-host]');
+    let calendar = null;
+    const eventsUrl = '/calendar/events?scope=experiment&experiment_id=<%= workspace.experiment.id %>';
+
+    const setToolbarIcons = () => {
+      [
+        ['.fc-prev-button', 'Previous month', '<svg class="w-4 h-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 14 10"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5H1m0 0 4 4M1 5l4-4"/></svg>'],
+        ['.fc-next-button', 'Next month', '<svg class="w-4 h-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 14 10"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 5h12m0 0L9 1m4 4L9 9"/></svg>']
+      ].forEach(([selector, label, icon]) => {
+        const button = host?.querySelector(selector);
+        if (!button) return;
+        button.setAttribute('aria-label', label);
+        button.setAttribute('title', label);
+        button.innerHTML = icon;
+      });
+    };
+
+    const loadEvents = (_fetchInfo, successCallback, failureCallback) => {
+      fetch(eventsUrl, { headers: { Accept: 'application/json' } })
+        .then(async (response) => {
+          if (!response.ok) throw new Error(`Calendar request failed (${response.status})`);
+          const payload = await response.json();
+          const events = Array.isArray(payload) ? payload : payload?.events;
+          if (!Array.isArray(events)) throw new Error('Calendar response has an invalid event list');
+          successCallback(events);
+        })
+        .catch((error) => {
+          failureCallback(error);
+          window.IMPlanner?.notify?.({ type: 'error', title: 'Calendar unavailable', message: 'Events could not be loaded.' });
+        });
+    };
+
+    const open = () => {
+      if (!dialog || !host) return;
+      if (!window.FullCalendar) return window.IMPlanner?.notify?.({ type: 'error', title: 'Calendar unavailable', message: 'The calendar library could not be loaded.' });
+      if (!calendar) {
+        calendar = new window.FullCalendar.Calendar(host, { initialView: window.innerWidth < 640 ? 'listMonth' : 'dayGridMonth', height: 'auto', firstDay: 1, headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,listMonth' }, events: loadEvents, datesSet() { window.requestAnimationFrame(setToolbarIcons); }, eventClick(info) { info.jsEvent.preventDefault(); if (info.event.url) window.location.assign(info.event.url); } });
+        calendar.render();
+        setToolbarIcons();
+      } else calendar.refetchEvents();
+      dialog.showModal();
+      window.setTimeout(() => calendar?.updateSize(), 0);
+    };
+    document.querySelectorAll('[data-open-experiment-calendar]').forEach((button) => button.addEventListener('click', open));
+    dialog?.querySelector('[data-close-experiment-calendar]')?.addEventListener('click', () => dialog.close());
+    dialog?.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
+  })();
+</script>

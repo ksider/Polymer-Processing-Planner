@@ -1,14 +1,18 @@
-<%- include('partials/head', { title: 'Polymer Processing Planner | Qualification Step' }) %>
-<%- include('partials/nav') %>
-<div class="container">
-  <div class="card">
-    <div class="card-header card-header-main">
-      <a class="back-link" href="<%= `${experimentPath(experimentId)}#qualification` %>" aria-label="Back to experiment qualification">
+<%- include('partials/head', { title: 'Polymer Processing Planner | Qualification Step', uiKit: true }) %>
+<%- include('partials/experiment_workspace_nav') %>
+<% const inputTableClass = 'min-w-full border-separate border-spacing-y-2 text-left text-sm text-body [&_thead_th]:whitespace-nowrap [&_thead_th]:px-3 [&_thead_th]:py-2 [&_thead_th]:text-xs [&_thead_th]:font-medium [&_thead_th]:uppercase [&_thead_th]:text-body [&_tbody_td]:border-y [&_tbody_td]:border-default-medium [&_tbody_td]:bg-neutral-primary [&_tbody_td]:px-3 [&_tbody_td]:py-2 [&_tbody_td:first-child]:rounded-s-base [&_tbody_td:first-child]:border-s [&_tbody_td:last-child]:rounded-e-base [&_tbody_td:last-child]:border-e' %>
+<div class="flex min-h-[calc(100vh-4rem)] w-full overflow-x-clip bg-gray-50">
+  <%- include('partials/experiment_workspace_sidebar', { workspace }) %>
+  <main class="min-w-0 flex-1"><div class="w-full max-w-none px-4 py-5 sm:px-6 lg:px-8">
+    <div class="mb-4 flex items-center justify-between gap-3 lg:hidden"><button class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm" type="button" data-open-experiment-calendar><span class="material-symbols-rounded text-[19px]" aria-hidden="true">calendar_month</span>Calendar</button><a class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 no-underline shadow-sm" href="<%= `${experimentPath(experimentId)}#qualification` %>"><span class="material-symbols-rounded text-[19px]" aria-hidden="true">fact_check</span>Qualification</a></div>
+  <section class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div class="mb-5 flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 pb-4">
+      <a class="inline-flex size-9 items-center justify-center rounded-lg text-gray-500 no-underline hover:bg-gray-100 hover:text-gray-900" href="<%= `${experimentPath(experimentId)}#qualification` %>" aria-label="Back to experiment qualification">
         <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
       </a>
       <div>
-        <h1 class="card-title">Step <%= step.step_number %>: <%= stepDef?.name || 'Qualification Step' %></h1>
-        <p class="small-note">
+        <h1 class="text-lg font-semibold tracking-tight text-gray-900">Step <%= step.step_number %>: <%= stepDef?.name || 'Qualification Step' %></h1>
+        <p class="mt-1 text-sm text-gray-500">
           Responsible:
           <span id="qualStepResponsibleLabel">
             <% if (stepAssigneeId) { %>
@@ -19,59 +23,82 @@
           </span>
         </p>
       </div>
-      <div class="section-actions">
+      <div class="flex flex-wrap items-center gap-2">
         <% if (canAssignEntities) { %>
-          <button class="icon-button" type="button" id="openQualSettingsDialog" title="Qualification settings">
+          <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" id="openQualSettingsDialog" title="Qualification settings">
             <span class="material-symbols-rounded" aria-hidden="true">edit</span>
           </button>
         <% } %>
+        <% if (canBlockQualification) { %>
+          <% if (step.is_blocked === 1) { %>
+            <form action="/experiments/<%= experimentId %>/qualification/<%= step.step_number %>/block" method="post">
+              <input type="hidden" name="action" value="unblock">
+              <button class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50" type="submit">Unblock stage</button>
+            </form>
+          <% } else { %>
+            <details>
+              <summary class="inline-flex cursor-pointer list-none items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 [&::-webkit-details-marker]:hidden">Block stage</summary>
+              <form class="mt-3 grid gap-3" action="/experiments/<%= experimentId %>/qualification/<%= step.step_number %>/block" method="post">
+                <label class="grid gap-1 text-sm font-medium text-gray-700">Reason <input class="rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-600 focus:ring-blue-600" name="reason" type="text" maxlength="500" required></label>
+                <input type="hidden" name="action" value="block">
+                <button class="inline-flex w-fit items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300" type="submit">Confirm block</button>
+              </form>
+            </details>
+          <% } %>
+        <% } %>
       </div>
     </div>
-    <div class="run-controls">
-      <button class="pure-button pure-button-secondary" type="button" id="openQualFields">Manage fields</button>
-      <button class="pure-button pure-button-primary" type="button" id="addRunBtn">Add run</button>
+    <% if (step.is_blocked === 1) { %>
+      <p class="text-sm text-gray-500" role="status">
+        This stage is blocked<%= step.blocked_by_label ? ` by ${step.blocked_by_label}` : '' %><%= step.blocked_at ? ` on ${step.blocked_at}` : '' %>.
+        Reason: <strong><%= step.blocked_reason || '-' %></strong>
+      </p>
+    <% } %>
+    <div class="flex flex-wrap items-center gap-2">
+      <button class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" id="openQualFields" <%= step.is_blocked === 1 ? 'disabled' : '' %>>Manage fields</button>
+      <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50" type="button" id="addRunBtn" <%= step.is_blocked === 1 ? 'disabled' : '' %>>Add run</button>
     </div>
     <% if (summaryJson) { %>
       <pre class="qual-summary"><%= summaryJson %></pre>
     <% } %>
-  </div>
+  </section>
 
   <% let summaryData = null; %>
   <% if (summaryJson) { try { summaryData = JSON.parse(summaryJson); } catch { summaryData = null; } } %>
   <% const settings = stepSettings || {}; %>
   <% const fmt = (value, digits = 2) => (typeof value === 'number' && Number.isFinite(value) ? formatNumber(value, digits) : '-'); %>
   <% if (step.step_number === 1) { %>
-    <div class="card">
-      <div class="card-header">
-        <h2 class="card-title">Recommended Baseline from RTD Stability</h2>
+    <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
+        <h2 class="text-lg font-semibold tracking-tight text-gray-900">Recommended Baseline from RTD Stability</h2>
       </div>
-      <div class="setup-summary">
+      <div class="grid gap-4 sm:grid-cols-2">
         <div>
-          <div class="small-note">Recommended run</div>
-          <div class="setup-value" data-live-step1="recommended_run"><%= summaryData?.recommended_run || '-' %></div>
+          <div class="text-sm text-gray-500">Recommended run</div>
+          <div class="mt-1 text-sm text-gray-900" data-live-step1="recommended_run"><%= summaryData?.recommended_run || '-' %></div>
         </div>
         <div>
-          <div class="small-note">Screw RPM</div>
-          <div class="setup-value"><span data-live-step1="recommended_screw_rpm"><%= fmt(summaryData?.recommended_screw_rpm, 0) %></span> <span class="small-note">rpm</span></div>
+          <div class="text-sm text-gray-500">Screw RPM</div>
+          <div class="mt-1 text-sm text-gray-900"><span data-live-step1="recommended_screw_rpm"><%= fmt(summaryData?.recommended_screw_rpm, 0) %></span> <span class="text-sm text-gray-500">rpm</span></div>
         </div>
         <div>
-          <div class="small-note">MFR</div>
-          <div class="setup-value"><span data-live-step1="recommended_mfr_g_10min"><%= fmt(summaryData?.recommended_mfr_g_10min) %></span> <span class="small-note">g/10min</span></div>
+          <div class="text-sm text-gray-500">MFR</div>
+          <div class="mt-1 text-sm text-gray-900"><span data-live-step1="recommended_mfr_g_10min"><%= fmt(summaryData?.recommended_mfr_g_10min) %></span> <span class="text-sm text-gray-500">g/10min</span></div>
         </div>
         <div>
-          <div class="small-note">Head temp</div>
-          <div class="setup-value"><span data-live-step1="recommended_head_temp_c"><%= fmt(summaryData?.recommended_head_temp_c, 1) %></span> <span class="small-note">°C</span></div>
+          <div class="text-sm text-gray-500">Head temp</div>
+          <div class="mt-1 text-sm text-gray-900"><span data-live-step1="recommended_head_temp_c"><%= fmt(summaryData?.recommended_head_temp_c, 1) %></span> <span class="text-sm text-gray-500">°C</span></div>
         </div>
         <div>
-          <div class="small-note">Mid temp</div>
-          <div class="setup-value"><span data-live-step1="recommended_mid_temp_c"><%= fmt(summaryData?.recommended_mid_temp_c, 1) %></span> <span class="small-note">°C</span></div>
+          <div class="text-sm text-gray-500">Mid temp</div>
+          <div class="mt-1 text-sm text-gray-900"><span data-live-step1="recommended_mid_temp_c"><%= fmt(summaryData?.recommended_mid_temp_c, 1) %></span> <span class="text-sm text-gray-500">°C</span></div>
         </div>
         <div>
-          <div class="small-note">Min stabilization</div>
-          <div class="setup-value"><span data-live-step1="recommended_stabilization_time_min"><%= fmt(summaryData?.recommended_stabilization_time_min ?? summaryData?.stabilization_time_min, 1) %></span> <span class="small-note">min</span></div>
+          <div class="text-sm text-gray-500">Min stabilization</div>
+          <div class="mt-1 text-sm text-gray-900"><span data-live-step1="recommended_stabilization_time_min"><%= fmt(summaryData?.recommended_stabilization_time_min ?? summaryData?.stabilization_time_min, 1) %></span> <span class="text-sm text-gray-500">min</span></div>
         </div>
       </div>
-      <div class="small-note" style="margin-top: .75rem;">
+      <div class="text-sm text-gray-500" style="margin-top: .75rem;">
         Window estimate:
         screw <strong><span data-live-step1="window_screw_rpm_min"><%= fmt(summaryData?.window_screw_rpm_min, 0) %></span> - <span data-live-step1="window_screw_rpm_max"><%= fmt(summaryData?.window_screw_rpm_max, 0) %></span> rpm</strong>,
         head temp <strong><span data-live-step1="window_head_temp_c_min"><%= fmt(summaryData?.window_head_temp_c_min, 1) %></span> - <span data-live-step1="window_head_temp_c_max"><%= fmt(summaryData?.window_head_temp_c_max, 1) %></span> °C</strong>,
@@ -80,33 +107,33 @@
     </div>
   <% } %>
   <% if (step.step_number === 2) { %>
-    <div class="card">
-      <div class="card-header">
-        <h2 class="card-title">Recommended SME Window</h2>
+    <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
+        <h2 class="text-lg font-semibold tracking-tight text-gray-900">Recommended SME Window</h2>
       </div>
-      <div class="setup-summary">
+      <div class="grid gap-4 sm:grid-cols-2">
         <div>
-          <div class="small-note">Recommended run</div>
-          <div class="setup-value" data-live-step2="recommended_run"><%= summaryData?.recommended_run || '-' %></div>
+          <div class="text-sm text-gray-500">Recommended run</div>
+          <div class="mt-1 text-sm text-gray-900" data-live-step2="recommended_run"><%= summaryData?.recommended_run || '-' %></div>
         </div>
         <div>
-          <div class="small-note">Screw RPM</div>
-          <div class="setup-value"><span data-live-step2="recommended_screw_rpm"><%= fmt(summaryData?.recommended_screw_rpm, 0) %></span> <span class="small-note">rpm</span></div>
+          <div class="text-sm text-gray-500">Screw RPM</div>
+          <div class="mt-1 text-sm text-gray-900"><span data-live-step2="recommended_screw_rpm"><%= fmt(summaryData?.recommended_screw_rpm, 0) %></span> <span class="text-sm text-gray-500">rpm</span></div>
         </div>
         <div>
-          <div class="small-note">Throughput</div>
-          <div class="setup-value"><span data-live-step2="recommended_throughput_kg_h"><%= fmt(summaryData?.recommended_throughput_kg_h, 2) %></span> <span class="small-note">kg/h</span></div>
+          <div class="text-sm text-gray-500">Throughput</div>
+          <div class="mt-1 text-sm text-gray-900"><span data-live-step2="recommended_throughput_kg_h"><%= fmt(summaryData?.recommended_throughput_kg_h, 2) %></span> <span class="text-sm text-gray-500">kg/h</span></div>
         </div>
         <div>
-          <div class="small-note">SME</div>
-          <div class="setup-value"><span data-live-step2="recommended_sme_kj_kg"><%= fmt(summaryData?.recommended_sme_kj_kg, 2) %></span> <span class="small-note">kJ/kg</span></div>
+          <div class="text-sm text-gray-500">SME</div>
+          <div class="mt-1 text-sm text-gray-900"><span data-live-step2="recommended_sme_kj_kg"><%= fmt(summaryData?.recommended_sme_kj_kg, 2) %></span> <span class="text-sm text-gray-500">kJ/kg</span></div>
         </div>
         <div>
-          <div class="small-note">Melt temp</div>
-          <div class="setup-value"><span data-live-step2="recommended_melt_temp_c"><%= fmt(summaryData?.recommended_melt_temp_c, 1) %></span> <span class="small-note">°C</span></div>
+          <div class="text-sm text-gray-500">Melt temp</div>
+          <div class="mt-1 text-sm text-gray-900"><span data-live-step2="recommended_melt_temp_c"><%= fmt(summaryData?.recommended_melt_temp_c, 1) %></span> <span class="text-sm text-gray-500">°C</span></div>
         </div>
       </div>
-      <div class="small-note" style="margin-top: .75rem;">
+      <div class="text-sm text-gray-500" style="margin-top: .75rem;">
         Window estimate:
         SME <strong><span data-live-step2="window_sme_min_kj_kg"><%= fmt(summaryData?.window_sme_min_kj_kg, 2) %></span> - <span data-live-step2="window_sme_max_kj_kg"><%= fmt(summaryData?.window_sme_max_kj_kg, 2) %></span> kJ/kg</strong>,
         screw <strong><span data-live-step2="window_screw_rpm_min"><%= fmt(summaryData?.window_screw_rpm_min, 0) %></span> - <span data-live-step2="window_screw_rpm_max"><%= fmt(summaryData?.window_screw_rpm_max, 0) %></span> rpm</strong>,
@@ -115,17 +142,17 @@
     </div>
   <% } %>
   <% if (step.step_number === 3) { %>
-    <div class="card">
-      <div class="card-header">
-        <h2 class="card-title">Setup</h2>
-        <div class="setup-actions">
-          <button class="pure-button pure-button-secondary" type="button" id="openStep3Setup">Edit setup</button>
+    <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
+        <h2 class="text-lg font-semibold tracking-tight text-gray-900">Setup</h2>
+        <div class="flex flex-wrap items-center gap-2">
+          <button class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" id="openStep3Setup">Edit setup</button>
         </div>
       </div>
-      <div class="setup-summary">
+      <div class="grid gap-4 sm:grid-cols-2">
         <div>
-          <div class="small-note">Target screw RPM</div>
-          <div class="setup-value"><span data-live-step3="target_screw_rpm"><%= fmt(Number(settings.target_screw_rpm), 0) %></span> <span class="small-note">rpm</span></div>
+          <div class="text-sm text-gray-500">Target screw RPM</div>
+          <div class="mt-1 text-sm text-gray-900"><span data-live-step3="target_screw_rpm"><%= fmt(Number(settings.target_screw_rpm), 0) %></span> <span class="text-sm text-gray-500">rpm</span></div>
         </div>
       </div>
     </div>
@@ -134,22 +161,22 @@
   <%- include('partials/entity_notes', {
     experimentId: experimentId,
     entityType: 'qualification_step',
-    entityId: step.step_number,
+    entityId: step.id,
     title: `Step ${step.step_number} Notes`,
     canWrite: currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')
   }) %>
 
-  <div class="card">
-    <div class="card-header">
-      <h2 class="card-title">Runs</h2>
+  <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
+      <h2 class="text-lg font-semibold tracking-tight text-gray-900">Runs</h2>
     </div>
     <% const activeFields = fields.filter((field) => field.is_enabled === 1); %>
     <% const inputFields = activeFields.filter((field) => String(field.group_label || '').toLowerCase() === 'inputs'); %>
     <% const measurementFields = activeFields.filter((field) => String(field.group_label || '').toLowerCase() === 'measurements'); %>
     <% const summaryFields = activeFields.filter((field) => !['inputs', 'measurements'].includes(String(field.group_label || '').toLowerCase())); %>
     <% const orderedFields = [...inputFields, ...measurementFields, ...summaryFields]; %>
-    <div class="table-scroll">
-      <table class="pure-table table-compact" id="compoundingRunsTable">
+    <div class="overflow-x-auto rounded-lg border border-gray-200">
+      <table class="<%= inputTableClass %>" id="compoundingRunsTable">
         <thead>
           <tr>
             <th>Run</th>
@@ -157,7 +184,7 @@
             <% orderedFields.forEach((field) => { %>
               <th>
                 <%- formatInline(field.label) %>
-                <% if (field.unit) { %><span class="small-note"> <%= field.unit %></span><% } %>
+                <% if (field.unit) { %><span class="text-sm text-gray-500"> <%= field.unit %></span><% } %>
               </th>
             <% }); %>
             <th>Done</th>
@@ -173,12 +200,12 @@
             <% const values = runValueMap[String(run.id)] || {}; %>
             <tr data-run-row data-run-id="<%= run.id %>">
               <td><strong><%= run.run_code %></strong></td>
-              <td><input type="date" data-run-due value="<%= run.due_at || '' %>"></td>
+              <td><input type="date" data-ui-datepicker datepicker-autohide datepicker-format="yyyy-mm-dd" data-run-due value="<%= run.due_at || '' %>"></td>
               <% orderedFields.forEach((field) => { %>
                 <% const value = values[String(field.id)]; %>
                 <td>
                   <% if (field.is_derived) { %>
-                    <span class="small-note" data-derived-code="<%= field.code %>">
+                    <span class="text-sm text-gray-500" data-derived-code="<%= field.code %>">
                       <% if (field.field_type === 'number') { %>
                         <%= formatNumber(value?.value_real) %>
                       <% } else if (field.field_type === 'tag') { %>
@@ -203,7 +230,7 @@
               <td><input type="checkbox" data-flag="done" <%= run.done === 1 ? 'checked' : '' %>></td>
               <td><input type="checkbox" data-flag="exclude" <%= run.exclude_from_analysis === 1 ? 'checked' : '' %>></td>
               <td>
-                <button class="icon-button danger" type="button" data-run-delete title="Delete row">
+                <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-red-600 shadow-sm transition-colors hover:bg-red-50 hover:text-red-700" type="button" data-run-delete title="Delete row">
                   <span class="material-symbols-rounded" aria-hidden="true">delete</span>
                 </button>
               </td>
@@ -215,9 +242,9 @@
   </div>
 
   <% if (step.step_number === 1) { %>
-    <div class="card">
-      <div class="card-header">
-        <h2 class="card-title">MFR vs Screw RPM</h2>
+    <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
+        <h2 class="text-lg font-semibold tracking-tight text-gray-900">MFR vs Screw RPM</h2>
       </div>
       <div class="chart-card">
         <div id="compoundingStep1Chart" style="width: 100%; height: 320px;"></div>
@@ -225,46 +252,46 @@
     </div>
   <% } %>
   <% if (step.step_number === 2) { %>
-    <div class="card">
-      <div class="card-header">
-        <h2 class="card-title">SME vs Screw RPM (by Melt Temperature)</h2>
+    <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
+        <h2 class="text-lg font-semibold tracking-tight text-gray-900">SME vs Screw RPM (by Melt Temperature)</h2>
       </div>
       <div class="chart-card">
         <div id="compoundingStep2Chart" style="width: 100%; height: 340px;"></div>
       </div>
-      <p class="small-note" id="step2RecommendationReason" style="margin-top: .75rem;">
+      <p class="text-sm text-gray-500" id="step2RecommendationReason" style="margin-top: .75rem;">
         Recommendation reason will appear here after data entry.
       </p>
     </div>
   <% } %>
   <% if (step.step_number === 3) { %>
-    <div class="card">
-      <div class="card-header">
-        <h2 class="card-title">Recommendation (MFR Stability)</h2>
+    <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
+        <h2 class="text-lg font-semibold tracking-tight text-gray-900">Recommendation (MFR Stability)</h2>
       </div>
       <div class="recommendation-summary">
         <div class="recommendation-item">
-          <div class="small-note">Recommended run</div>
+          <div class="text-sm text-gray-500">Recommended run</div>
           <div class="recommendation-value" data-live-step3="recommended_run"><%= summaryData?.recommended_run || '-' %></div>
         </div>
         <div class="recommendation-item">
-          <div class="small-note">Recommended melt temp</div>
-          <div class="recommendation-value"><span data-live-step3="recommended_melt_temp_c"><%= fmt(summaryData?.recommended_melt_temp_c, 1) %></span> <span class="small-note">°C</span></div>
+          <div class="text-sm text-gray-500">Recommended melt temp</div>
+          <div class="recommendation-value"><span data-live-step3="recommended_melt_temp_c"><%= fmt(summaryData?.recommended_melt_temp_c, 1) %></span> <span class="text-sm text-gray-500">°C</span></div>
         </div>
         <div class="recommendation-item">
-          <div class="small-note">Recommended MFR</div>
-          <div class="recommendation-value"><span data-live-step3="recommended_mfr_g_10min"><%= fmt(summaryData?.recommended_mfr_g_10min, 2) %></span> <span class="small-note">g/10min</span></div>
+          <div class="text-sm text-gray-500">Recommended MFR</div>
+          <div class="recommendation-value"><span data-live-step3="recommended_mfr_g_10min"><%= fmt(summaryData?.recommended_mfr_g_10min, 2) %></span> <span class="text-sm text-gray-500">g/10min</span></div>
         </div>
         <div class="recommendation-item">
-          <div class="small-note">Melt temp window</div>
-          <div class="recommendation-value"><span data-live-step3="melt_temp_min_c"><%= fmt(summaryData?.melt_temp_min_c, 1) %></span> - <span data-live-step3="melt_temp_max_c"><%= fmt(summaryData?.melt_temp_max_c, 1) %></span> <span class="small-note">°C</span></div>
+          <div class="text-sm text-gray-500">Melt temp window</div>
+          <div class="recommendation-value"><span data-live-step3="melt_temp_min_c"><%= fmt(summaryData?.melt_temp_min_c, 1) %></span> - <span data-live-step3="melt_temp_max_c"><%= fmt(summaryData?.melt_temp_max_c, 1) %></span> <span class="text-sm text-gray-500">°C</span></div>
         </div>
         <div class="recommendation-item">
-          <div class="small-note">MFR median / limit</div>
-          <div class="recommendation-value"><span data-live-step3="mfr_median_g_10min"><%= fmt(summaryData?.mfr_median_g_10min, 2) %></span> <span class="small-note">g/10min</span> / <span data-live-step3="mfr_deviation_limit_pct"><%= fmt(summaryData?.mfr_deviation_limit_pct, 0) %></span><span class="small-note">%</span></div>
+          <div class="text-sm text-gray-500">MFR median / limit</div>
+          <div class="recommendation-value"><span data-live-step3="mfr_median_g_10min"><%= fmt(summaryData?.mfr_median_g_10min, 2) %></span> <span class="text-sm text-gray-500">g/10min</span> / <span data-live-step3="mfr_deviation_limit_pct"><%= fmt(summaryData?.mfr_deviation_limit_pct, 0) %></span><span class="text-sm text-gray-500">%</span></div>
         </div>
         <div class="recommendation-item">
-          <div class="small-note">Outliers (high/low)</div>
+          <div class="text-sm text-gray-500">Outliers (high/low)</div>
           <div class="recommendation-value"><span data-live-step3="mfr_rising_outlier_count"><%= fmt(summaryData?.mfr_rising_outlier_count, 0) %></span> / <span data-live-step3="mfr_falling_outlier_count"><%= fmt(summaryData?.mfr_falling_outlier_count, 0) %></span></div>
         </div>
       </div>
@@ -274,21 +301,22 @@
       <div class="chart-card" style="margin-top: .75rem;">
         <div id="compoundingStep3DeviationChart" style="width: 100%; height: 260px;"></div>
       </div>
-      <p class="small-note" id="step3RecommendationReason" style="margin-top: .75rem;">
+      <p class="text-sm text-gray-500" id="step3RecommendationReason" style="margin-top: .75rem;">
         <%= summaryData?.mfr_interpretation || 'MFR stability interpretation will appear after data entry.' %>
       </p>
     </div>
   <% } %>
-</div>
+</div></main></div>
+<%- include('partials/experiment_workspace_calendar', { workspace }) %>
 
 <% if (canAssignEntities) { %>
-  <dialog class="modal-frame" id="qualSettingsDialog">
-    <div class="modal-header">
+  <dialog class="m-auto w-[min(96vw,48rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="qualSettingsDialog">
+    <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
       <strong>Qualification settings</strong>
-      <button class="pure-button" type="button" data-close>Close</button>
+      <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Close</button>
     </div>
     <form class="pure-form" id="qualSettingsForm" action="/experiments/<%= experimentId %>/qualification/<%= step.step_number %>/assignee" method="post">
-      <div class="modal-body">
+      <div class="p-5">
         <label for="qualStepAssigneeInput">Responsible</label>
         <select id="qualStepAssigneeInput" name="assignee_user_id">
           <option value="">Unassigned</option>
@@ -299,41 +327,41 @@
           <% }); %>
         </select>
       </div>
-      <div class="modal-footer">
-        <span class="small-note" data-autosave-status></span>
-        <button class="pure-button" type="button" data-close>Cancel</button>
-        <button class="pure-button pure-button-primary" type="submit">Save</button>
+      <div class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 px-5 py-4">
+        <span class="text-sm text-gray-500" data-autosave-status></span>
+        <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Cancel</button>
+        <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50" type="submit">Save</button>
       </div>
     </form>
   </dialog>
 <% } %>
 
 <% if (step.step_number === 3) { %>
-  <dialog class="modal-frame" id="step3SetupDialog">
-    <div class="modal-header">
+  <dialog class="m-auto w-[min(96vw,48rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="step3SetupDialog">
+    <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
       <strong>Step 3 setup</strong>
-      <button class="pure-button" type="button" data-close>Close</button>
+      <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Close</button>
     </div>
     <form class="pure-form" id="step3SetupForm" action="/experiments/<%= experimentId %>/qualification/<%= step.step_number %>/settings" method="post">
-      <div class="modal-body">
+      <div class="p-5">
         <label for="targetScrewRpmInput">Target screw RPM</label>
         <input id="targetScrewRpmInput" name="target_screw_rpm" type="number" step="1" min="0" value="<%= settings.target_screw_rpm ?? '' %>" />
-        <p class="small-note">Used as fixed setup value for this step, not as a run column.</p>
+        <p class="text-sm text-gray-500">Used as fixed setup value for this step, not as a run column.</p>
       </div>
-      <div class="modal-footer">
-        <span class="small-note" data-autosave-status></span>
-        <button class="pure-button" type="button" data-close>Close</button>
+      <div class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 px-5 py-4">
+        <span class="text-sm text-gray-500" data-autosave-status></span>
+        <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Close</button>
       </div>
     </form>
   </dialog>
 <% } %>
 
-<dialog class="modal-frame" id="qualFieldDialog">
-  <div class="modal-header">
+<dialog class="m-auto w-[min(96vw,48rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="qualFieldDialog">
+  <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
     <strong>Qualification fields</strong>
-    <button class="pure-button" type="button" data-close>Close</button>
+    <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Close</button>
   </div>
-  <div class="modal-body">
+  <div class="p-5">
     <div class="field-toolbar">
       <label>
         Library
@@ -346,10 +374,10 @@
           <% }); %>
         </select>
       </label>
-      <button class="pure-button" type="button" id="qualImportField">Add from library</button>
-      <a class="pure-button pure-button-secondary" href="/param-library">Open library</a>
+      <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" id="qualImportField">Add from library</button>
+      <a class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" href="/param-library">Open library</a>
     </div>
-    <table class="pure-table table-compact qual-field-table">
+    <table class="<%= inputTableClass %> qual-field-table">
       <thead>
         <tr>
           <th>Code</th>
@@ -379,7 +407,7 @@
             <td><input type="checkbox" data-field-enabled <%= field.is_enabled === 1 ? 'checked' : '' %> <%= field.is_derived ? 'disabled' : '' %>></td>
             <td>
               <% if (!field.is_derived) { %>
-                <button class="icon-button danger" type="button" data-field-delete title="Delete field">
+                <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-red-600 shadow-sm transition-colors hover:bg-red-50 hover:text-red-700" type="button" data-field-delete title="Delete field">
                   <span class="material-symbols-rounded" aria-hidden="true">delete</span>
                 </button>
               <% } %>
@@ -389,10 +417,10 @@
       </tbody>
     </table>
 
-    <div class="card" style="margin-top: 1rem;">
-      <h3 class="card-title">Custom Field</h3>
+    <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm" style="margin-top: 1rem;">
+      <h3 class="text-lg font-semibold tracking-tight text-gray-900">Custom Field</h3>
       <form class="pure-form pure-form-stacked" id="qualCustomFieldForm">
-        <div class="field-grid">
+        <div class="grid gap-4 sm:grid-cols-2">
           <div>
             <label>Code</label>
             <input type="text" name="code" placeholder="custom_param" required>
@@ -415,7 +443,7 @@
             </select>
           </div>
         </div>
-        <button class="pure-button pure-button-primary" type="submit">Add Field</button>
+        <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50" type="submit">Add Field</button>
       </form>
     </div>
   </div>
@@ -1186,4 +1214,4 @@
   })();
 </script>
 
-<%- include('partials/foot') %>
+<%- include('partials/foot', { uiKit: true }) %>

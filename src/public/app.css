@@ -2967,14 +2967,9 @@ sub {
   overflow: visible;
 }
 
-.rheo-table input[type="number"] {
+body:not([data-ui-kit]) .rheo-table input[type="number"] {
   width: 100%;
   min-width: 90px;
-}
-
-.rheo-table td[data-derived] {
-  color: #3c3a35;
-  font-weight: 600;
 }
 
 .chart-card {
@@ -3561,8 +3556,8 @@ table.pure-table {
   border-radius: 999px;
 }
 
-.qual-field-table input,
-.qual-field-table select {
+body:not([data-ui-kit]) .qual-field-table input,
+body:not([data-ui-kit]) .qual-field-table select {
   width: 100%;
   padding: 0.35rem 0.45rem;
   border-radius: 8px;
@@ -3933,10 +3928,10 @@ table.pure-table {
   }
 }
 
-input[type="text"],
-input[type="number"],
-textarea,
-select {
+body:not([data-ui-kit]) input[type="text"],
+body:not([data-ui-kit]) input[type="number"],
+body:not([data-ui-kit]) textarea,
+body:not([data-ui-kit]) select {
   width: 100%;
   padding: 0.5rem 0.6rem;
   border-radius: 10px;
@@ -4877,6 +4872,9 @@ textarea {
 
 body.is-ai-split-mode { overflow: hidden; }
 body.is-ai-split-mode .site-footer { display: none; }
+body.is-ai-split-mode > header[aria-label="Experiment navigation"],
+body.is-ai-split-mode #experimentWorkspaceSidebar,
+body.is-ai-split-mode [data-experiment-sidebar-show] { display: none !important; }
 
 body.is-ai-split-mode .doe-analysis-page {
   height: 100vh;
@@ -5738,7 +5736,9 @@ tr[data-mode="list"] .settings-range {
   border-radius: 0;
   background: #fff;
   box-shadow: 0 18px 30px rgba(0, 0, 0, 0.16);
-  z-index: 24;
+  /* The journal is a full-screen workspace: it must sit above the sticky
+     experiment navigation (z-40), while regular dialogs retain their layer. */
+  z-index: 1100;
 }
 
 .notes-drawer.is-open {
@@ -5859,7 +5859,8 @@ tr[data-mode="list"] .settings-range {
   color: #20242b;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.16);
   transform: translate(-8px, -50%);
-  z-index: 70;
+  /* Appended directly to body, so keep it one level above its journal drawer. */
+  z-index: 1101;
   transition: opacity 100ms ease;
 }
 

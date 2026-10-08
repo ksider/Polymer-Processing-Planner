@@ -1,95 +1,75 @@
-<%- include('partials/head', { title: `Polymer Processing Planner | ${process.name}` }) %>
-<%- include('partials/nav') %>
-<div class="container">
-  <div class="card">
-    <div class="card-header card-header-main">
+<%- include('partials/head', { title: `Polymer Processing Planner | ${process.name}`, uiKit: true }) %>
+<%- include('partials/experiment_workspace_nav') %>
+<main class="min-h-[calc(100vh-4rem)] bg-gray-50"><div class="w-full max-w-none px-3 py-3 sm:px-4 lg:px-5">
+  <section class="mb-4 rounded-xl border border-default-medium bg-neutral-primary px-4 py-3 shadow-xs">
+    <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h1 class="card-title"><%- formatInline(process.name) %></h1>
-        <div class="small-note">Type: <%- formatInline(process.process_type_name || 'Process') %></div>
-        <div class="small-note">Route: /<%- formatInline(process.route_code || process.process_type_code || '') %></div>
-        <div class="small-note">Owner: <%- formatInline(ownerLabel || 'Unassigned') %></div>
+        <h1 class="text-base font-semibold tracking-tight text-heading"><%- formatInline(process.name) %></h1>
+        <div class="mt-0.5 text-xs text-body">Type: <%- formatInline(process.process_type_name || 'Process') %> · Owner: <%- formatInline(ownerLabel || 'Unassigned') %></div>
       </div>
-      <div class="section-actions">
+      <div class="flex items-center gap-2">
         <% if (canManage) { %>
-          <a class="pure-button pure-button-primary" href="/experiments/new?process_id=<%= process.id %>">Create Experiment</a>
+          <a class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2.5 text-sm font-medium text-white no-underline shadow-xs hover:bg-brand-strong focus:outline-none focus:ring-4 focus:ring-brand" href="/experiments/new?process_id=<%= process.id %>">Create experiment</a>
         <% } %>
       </div>
     </div>
-  </div>
+  </section>
 
-  <div class="card">
+  <div class="grid gap-4 xl:grid-cols-3">
+  <section class="order-2 rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs xl:order-none xl:col-start-3 xl:row-start-1">
     <details class="process-calendar-panel">
-      <summary class="card-title">Process Calendar</summary>
-      <div class="small-note">All dated tasks and runs in this process. Select entities with Shift/Cmd/Ctrl + click, then drag one selected event or use Move selected.</div>
-      <div class="calendar-tools">
-        <span id="calendarSelectionCount" class="small-note">Selected: 0</span>
-        <button class="pure-button" type="button" id="calendarClearSelection">Clear selection</button>
-        <input class="pure-input" type="date" id="calendarBatchDate">
-        <button class="pure-button pure-button-primary" type="button" id="calendarBatchMove">Move selected</button>
+      <summary class="cursor-pointer text-sm font-semibold text-heading">Process calendar</summary>
+      <div class="mt-3 text-sm text-body">All dated tasks and runs in this process. Select entities with Shift/Cmd/Ctrl + click, then drag one selected event or use Move selected.</div>
+      <div class="calendar-tools mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
+        <span id="calendarSelectionCount" class="shrink-0 text-sm text-body">Selected: 0</span>
+        <button class="inline-flex shrink-0 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-tertiary" type="button" id="calendarClearSelection">Clear selection</button>
+        <label class="sr-only" for="calendarBatchDate">Target date</label>
+        <input class="w-40 shrink-0 rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" type="date" data-ui-control-exempt data-ui-datepicker datepicker-autohide datepicker-format="yyyy-mm-dd" id="calendarBatchDate">
+        <button class="inline-flex shrink-0 items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong" type="button" id="calendarBatchMove">Move selected</button>
       </div>
       <div id="processCalendar" class="calendar-host" data-process-id="<%= process.id %>"></div>
     </details>
-  </div>
+  </section>
 
-  <dialog class="modal-frame" id="calendarEventDialog">
-    <div class="modal-header">
+  <dialog class="m-auto w-[min(96vw,34rem)] rounded-xl border border-default-medium bg-neutral-primary p-0 text-heading shadow-2xl backdrop:bg-black/40" id="calendarEventDialog">
+    <div class="flex items-center justify-between gap-4 border-b border-default px-5 py-4">
       <strong id="calendarEventTitle">Calendar event</strong>
-      <button class="icon-btn icon-only" type="button" data-close title="Close">
+      <button class="inline-flex size-9 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary" type="button" data-close title="Close">
         <span class="material-symbols-rounded">close</span>
       </button>
     </div>
-    <div class="modal-body">
+    <div class="grid gap-2 p-5 text-sm text-body">
       <div><strong>Type:</strong> <span id="calendarEventType">-</span></div>
       <div><strong>Status:</strong> <span id="calendarEventStatus">-</span></div>
       <div><strong>Due:</strong> <span id="calendarEventDue">-</span></div>
       <div><strong>Responsible:</strong> <span id="calendarEventOwner">-</span></div>
       <div><strong>Entity:</strong> <span id="calendarEventEntity">-</span></div>
       <div><strong>Process:</strong> <span id="calendarEventProcess">-</span></div>
-      <div class="section-actions" style="margin-top:0.75rem;">
-        <a class="pure-button pure-button-primary" id="calendarEventDetailLink" href="#">Open run/task</a>
-        <a class="pure-button" id="calendarEventEntityLink" href="#">Open entity</a>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <a class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white no-underline shadow-xs hover:bg-brand-strong" id="calendarEventDetailLink" href="#">Open run/task</a>
+        <a class="inline-flex items-center justify-center rounded-base border border-default-medium bg-neutral-secondary px-3 py-2 text-sm font-medium text-heading no-underline shadow-xs hover:bg-neutral-tertiary" id="calendarEventEntityLink" href="#">Open entity</a>
       </div>
     </div>
   </dialog>
 
-  <div class="card">
-    <h2 class="card-title">Experiments in this process</h2>
-    <table class="pure-table table-compact">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Name</th>
-          <th>Owner</th>
-          <th>Status</th>
-          <th>Created</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% if (!experiments || experiments.length === 0) { %>
-          <tr>
-            <td colspan="5">No experiments in this process yet.</td>
-          </tr>
-        <% } %>
+  <section class="order-1 rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs xl:order-none xl:col-span-2 xl:col-start-1 xl:row-start-1">
+    <h2 class="text-sm font-semibold text-heading">Experiments in this process</h2>
+    <% if (!experiments || experiments.length === 0) { %>
+      <p class="mt-3 text-sm text-body">No experiments in this process yet.</p>
+    <% } else { %>
+      <div class="mt-3 grid gap-3 sm:grid-cols-2">
         <% (experiments || []).forEach((exp) => { %>
-          <tr>
-            <td><%= exp.id %></td>
-            <td><a href="<%= experimentPath(exp) %>"><%- formatInline(exp.name) %></a></td>
-            <td>
-              <% if (exp.owner_user_id) { %>
-                <a href="/users/<%= exp.owner_user_id %>"><%= exp.owner_label %></a>
-              <% } else { %>
-                <%= exp.owner_label %>
-              <% } %>
-            </td>
-            <td><span class="status-pill status-<%= exp.status %>"><%= exp.statusLabel %></span></td>
-            <td><%= new Date(exp.created_at).toLocaleDateString() %></td>
-          </tr>
+          <a class="group rounded-base border border-default-medium bg-neutral-primary p-4 text-inherit no-underline shadow-xs transition-colors hover:bg-neutral-secondary focus:outline-none focus:ring-4 focus:ring-brand-soft" href="<%= experimentPath(exp) %>">
+            <div class="flex items-start justify-between gap-3"><div class="min-w-0"><h3 class="truncate text-sm font-semibold text-heading"><%- formatInline(exp.name) %></h3><p class="mt-1 text-xs text-body">#<%= exp.id %> · <%= new Date(exp.created_at).toLocaleDateString() %></p></div><span class="material-symbols-rounded shrink-0 text-body transition-transform group-hover:translate-x-0.5" aria-hidden="true">arrow_forward</span></div>
+            <div class="mt-4 flex flex-wrap items-center justify-between gap-2"><span class="text-xs text-body">Owner: <%= exp.owner_label %></span><span class="inline-flex rounded-full bg-neutral-secondary px-2 py-0.5 text-xs font-medium text-heading"><%= exp.statusLabel %></span></div>
+          </a>
         <% }); %>
-      </tbody>
-    </table>
-  </div>
+      </div>
+    <% } %>
+  </section>
 </div>
-<%- include('partials/foot') %>
+</div></main>
+<%- include('partials/foot', { uiKit: true }) %>
 <script nonce="<%= cspNonce %>" src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
 <script nonce="<%= cspNonce %>">
   (() => {
@@ -148,6 +128,18 @@
     let lassoStartX = 0;
     let lassoStartY = 0;
     let lassoBaseSelection = new Set();
+    const setToolbarIcons = () => {
+      [
+        ['.fc-prev-button', 'Previous month', '<svg class="w-4 h-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 14 10"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5H1m0 0 4 4M1 5l4-4"/></svg>'],
+        ['.fc-next-button', 'Next month', '<svg class="w-4 h-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 14 10"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 5h12m0 0L9 1m4 4L9 9"/></svg>']
+      ].forEach(([selector, label, icon]) => {
+        const button = host.querySelector(selector);
+        if (!button) return;
+        button.setAttribute('aria-label', label);
+        button.setAttribute('title', label);
+        button.innerHTML = icon;
+      });
+    };
     const toDateOnly = (date) => {
       if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
       const y = date.getFullYear();
@@ -317,6 +309,7 @@
         center: 'title',
         right: 'dayGridMonth,timeGridWeek,listWeek'
       },
+      datesSet: () => window.requestAnimationFrame(setToolbarIcons),
       editable: true,
       eventDurationEditable: false,
       eventsSet: () => {
@@ -467,5 +460,6 @@
 
     updateSelectionCount();
     calendar.render();
+    setToolbarIcons();
   })();
 </script>

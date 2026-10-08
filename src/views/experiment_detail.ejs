@@ -1,52 +1,55 @@
-<%- include('partials/head', { title: `Polymer Processing Planner | ${experiment.name}` }) %>
-<%- include('partials/nav') %>
-<div class="container">
-  <div class="card">
-    <div class="card-header card-header-main">
-      <a class="back-link" href="<%= processPath(experiment.process_id) %>" aria-label="Back to process">
+<%- include('partials/head', { title: `Polymer Processing Planner | ${experiment.name}`, uiKit: true }) %>
+<%- include('partials/experiment_workspace_nav') %>
+<% const statusTone = (value) => ({ done: 'bg-emerald-100 text-emerald-800', in_progress: 'bg-blue-100 text-blue-800', blocked: 'bg-red-100 text-red-800', not_started: 'bg-gray-100 text-gray-700' }[value] || 'bg-gray-100 text-gray-700'); %>
+<div class="flex min-h-[calc(100vh-4rem)] w-full overflow-x-clip bg-gray-50">
+  <%- include('partials/experiment_workspace_sidebar', { workspace }) %>
+  <main class="min-w-0 flex-1">
+    <div class="w-full max-w-none px-3 py-3 sm:px-4 lg:px-5">
+      <div class="mb-3 flex items-center justify-between gap-3 lg:hidden"><button class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm" type="button" data-open-experiment-calendar><span class="material-symbols-rounded text-[19px]" aria-hidden="true">calendar_month</span>Calendar</button><a class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 no-underline shadow-sm" href="<%= `${experimentPath(experiment)}#tasks` %>"><span class="material-symbols-rounded text-[19px]" aria-hidden="true">assignment</span>Tasks</a></div>
+  <section class="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm" id="experiment-overview">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <a class="inline-flex size-9 items-center justify-center rounded-lg text-gray-500 no-underline hover:bg-gray-100 hover:text-gray-900" href="<%= processPath(experiment.process_id) %>" aria-label="Back to process">
         <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
       </a>
-      <div>
-        <div class="title-row">
-          <h1 class="card-title"><%- formatInline(experiment.name) %></h1>
-        </div>
+      <div class="min-w-0 flex-1">
+        <h1 class="truncate text-base font-semibold tracking-tight text-gray-900"><%- formatInline(experiment.name) %></h1>
       </div>
-      <div class="section-actions">
+      <div class="flex flex-wrap items-center gap-2">
         <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
-          <button class="icon-button" type="button" id="openMachineEdit" title="Edit experiment">
+          <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" id="openMachineEdit" title="Edit experiment">
             <span class="material-symbols-rounded" aria-hidden="true">edit</span>
           </button>
         <% } %>
-        <span class="status-pill status-<%= status %>" id="experimentStatusPill" data-auto-status="<%= autoStatus %>" data-auto-label="<%= autoStatusLabel %>"><%= statusLabel %></span>
+        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium <%= statusTone(status) %>" id="experimentStatusPill" data-auto-status="<%= autoStatus %>" data-auto-label="<%= autoStatusLabel %>"><%= statusLabel %></span>
         <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager')) { %>
-          <label class="toggle" title="Mark done">
-            <input type="checkbox" id="experimentStatusToggle" <%= experiment.status_done_manual === 1 ? 'checked' : '' %>>
-            <span class="track"></span>
+          <label class="inline-flex cursor-pointer items-center" title="Mark done">
+            <input class="peer sr-only" type="checkbox" id="experimentStatusToggle" <%= experiment.status_done_manual === 1 ? 'checked' : '' %>>
+            <span class="relative h-6 w-11 rounded-full bg-gray-200 after:absolute after:start-[2px] after:top-[2px] after:size-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all peer-checked:bg-blue-700 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300"></span>
           </label>
         <% } %>
       </div>
     </div>
-  </div>
+  </section>
 
-  <div class="card">
-    <div class="card-header">
-      <h2 class="card-title">Experiment</h2>
+  <section class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm" id="experiment-setup">
+    <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
+      <h2 class="text-lg font-semibold tracking-tight text-gray-900">Experiment</h2>
     </div>
-    <div class="setup-summary setup-summary-two">
-      <div class="setup-col setup-col-desc">
-        <div class="small-note">Description</div>
-        <div class="setup-value"><%= experiment.notes ? formatInline(experiment.notes) : '-' %></div>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div class="rounded-lg border border-gray-200 bg-white p-4">
+        <div class="text-sm text-gray-500">Description</div>
+        <div class="mt-1 text-sm text-gray-900"><%= experiment.notes ? formatInline(experiment.notes) : '-' %></div>
       </div>
-      <div class="setup-col setup-stack">
-        <div class="setup-row">
-          <div class="small-note">Assigned machine</div>
-          <div class="setup-value">
+      <div class="grid gap-3">
+        <div class="rounded-lg border border-gray-200 bg-white p-4">
+          <div class="text-sm text-gray-500">Assigned machine</div>
+          <div class="mt-1 text-sm text-gray-900">
             <%= selectedMachine ? formatInline(selectedMachine.name) : 'No machine selected' %>
           </div>
         </div>
-        <div class="setup-row">
-          <div class="small-note">Recipe</div>
-          <div class="setup-value">
+        <div class="rounded-lg border border-gray-200 bg-white p-4">
+          <div class="text-sm text-gray-500">Recipe</div>
+          <div class="mt-1 text-sm text-gray-900">
             <% if (recipeNames && recipeNames.length) { %>
               <%= recipeNames.map((name) => formatInline(name)).join(', ') %>
             <% } else { %>
@@ -56,35 +59,38 @@
         </div>
       </div>
     </div>
-  </div>
+  </section>
 
-  <div class="card">
-    <div class="card-header">
-      <h2 class="card-title">Research Sections</h2>
+  <section class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm" id="qualification">
+    <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
+      <h2 class="text-lg font-semibold tracking-tight text-gray-900">Research Sections</h2>
     </div>
-    <div id="qualification" class="section-list">
-      <div class="section-row">
+    <div class="grid gap-3">
+      <div class="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4">
         <div>
           <strong>Qualification</strong>
-          <div class="small-note">
+          <div class="mt-1 text-sm text-gray-500">
             Qualification sequence for this process.
           </div>
         </div>
       </div>
-      <div class="qualification-compact-grid">
+      <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <% (qualificationCards || []).forEach((card) => { %>
-          <% const stepLocked = processTypeCode === 'compounding' && card.stepNumber >= 4; %>
-          <div class="qualification-compact-card <%= stepLocked ? 'is-locked' : '' %>">
-            <div class="qualification-compact-head">
-              <% if (stepLocked) { %>
-                <span class="section-title is-disabled">Step <%= card.stepNumber %></span>
-              <% } else { %>
-                <a class="section-title" href="/experiments/<%= experiment.id %>/qualification/<%= card.stepNumber %>">Step <%= card.stepNumber %></a>
-              <% } %>
-              <span class="status-pill status-<%= card.status %>"><%= card.statusLabel %></span>
+          <article class="rounded-lg border border-gray-200 bg-white p-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <a class="font-medium text-blue-700 no-underline hover:underline" href="/experiments/<%= experiment.id %>/qualification/<%= card.stepNumber %>">Step <%= card.stepNumber %></a>
+              <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium <%= statusTone(card.status) %>"><%= card.statusLabel %></span>
             </div>
-            <div class="qualification-compact-name"><%- formatInline(card.name) %></div>
-            <div class="small-note">
+            <div class="mt-2 text-sm font-medium text-gray-900"><%- formatInline(card.name) %></div>
+            <% if (card.status === 'blocked') { %>
+              <div class="mt-2 text-sm text-gray-500">
+                Blocked<%= card.blockedByLabel ? ` by ${card.blockedByLabel}` : '' %><%= card.blockedAt ? ` · ${card.blockedAt}` : '' %>
+              </div>
+              <div class="mt-3 grid gap-2 rounded-lg bg-gray-50 p-3">
+                <span class="text-sm text-gray-500"><%= card.blockedReason || 'No reason recorded.' %></span>
+              </div>
+            <% } %>
+            <div class="mt-2 text-sm text-gray-500">
               Responsible:
               <% const stepAssigneeId = card.stepId ? assignmentByStep.get(card.stepId) : null; %>
               <% if (stepAssigneeId) { %>
@@ -93,48 +99,43 @@
                 <span>-</span>
               <% } %>
             </div>
-            <div class="qualification-compact-summary">
+            <div class="mt-3 grid gap-2 rounded-lg bg-gray-50 p-3">
               <% if (card.summaryItems && card.summaryItems.length) { %>
                 <% card.summaryItems.forEach((item) => { %>
-                  <div class="qualification-compact-item">
-                    <span class="small-note"><%= item.label %></span>
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="text-sm text-gray-500"><%= item.label %></span>
                     <strong><%= item.value %></strong>
                   </div>
                 <% }); %>
               <% } else { %>
-                <span class="small-note">No summary yet.</span>
+                <span class="text-sm text-gray-500">No summary yet.</span>
               <% } %>
             </div>
-            <% if (stepLocked) { %>
-              <div class="card-lock-overlay" aria-hidden="true">
-                <span>Temporarily disabled</span>
-              </div>
-            <% } %>
-          </div>
+          </article>
         <% }); %>
       </div>
     </div>
-  </div>
+  </section>
 
-  <div class="card">
-    <div class="card-header">
-      <h2 class="card-title">Detailed Optimization</h2>
+  <section class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm" id="detailed-optimization">
+    <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
+      <h2 class="text-lg font-semibold tracking-tight text-gray-900">Detailed Optimization</h2>
       <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
-        <button class="icon-button" type="button" id="openDoeCreate" title="Add DOE">
+        <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" id="openDoeCreate" title="Add DOE">
           <span class="material-symbols-rounded" aria-hidden="true">add</span>
         </button>
       <% } %>
     </div>
-    <div class="section-list">
+    <div class="grid gap-3">
       <% if (!doeStudies || doeStudies.length === 0) { %>
-        <div class="small-note">No detailed optimization studies yet. Create one.</div>
+        <div class="text-sm text-gray-500">No detailed optimization studies yet. Create one.</div>
       <% } else { %>
         <% doeStudies.forEach((doe) => { %>
-          <div class="section-row">
-            <div class="section-main">
-              <a class="section-title" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>?tab=design"><strong data-doe-name-label data-doe-id="<%= doe.id %>"><%- formatInline(doe.name) %></strong></a>
-              <div class="small-note">Type: <%= doe.design_type %> · Seed: <%= doe.seed %></div>
-              <div class="small-note">
+          <div class="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4">
+            <div>
+              <a class="font-medium text-blue-700 no-underline hover:underline" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>?tab=design"><strong data-doe-name-label data-doe-id="<%= doe.id %>"><%- formatInline(doe.name) %></strong></a>
+              <div class="mt-1 text-sm text-gray-500">Type: <%= doe.design_type %> · Seed: <%= doe.seed %></div>
+              <div class="mt-1 text-sm text-gray-500">
                 Responsible:
                 <% const doeAssigneeId = assignmentByDoe.get(doe.id); %>
                 <span data-doe-responsible-label data-doe-id="<%= doe.id %>">
@@ -146,12 +147,12 @@
                 </span>
               </div>
             </div>
-          <div class="section-actions">
-            <a class="pure-button pure-button-secondary" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>?tab=analysis">Analysis</a>
-            <a class="pure-button" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>?tab=runs">Runs</a>
+          <div class="flex flex-wrap items-center gap-2">
+            <a class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 no-underline shadow-sm transition-colors hover:bg-gray-50" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>?tab=analysis">Analysis</a>
+            <a class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 no-underline shadow-sm transition-colors hover:bg-gray-50" href="/experiments/<%= experiment.id %>/doe/<%= doe.id %>?tab=runs">Runs</a>
             <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
               <button
-                class="icon-button"
+                class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900"
                 type="button"
                 title="DOE settings"
                 data-doe-edit
@@ -161,13 +162,13 @@
               >
                 <span class="material-symbols-rounded" aria-hidden="true">edit</span>
               </button>
-              <form class="pure-form icon-action" action="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/clone" method="post">
-                <button class="icon-button" type="submit" title="Clone detailed optimization">
+              <form action="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/clone" method="post">
+                <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="submit" title="Clone detailed optimization">
                   <span class="material-symbols-rounded" aria-hidden="true">content_copy</span>
                 </button>
               </form>
-              <form class="pure-form icon-action" action="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/delete" method="post" data-confirm="Delete this detailed optimization study?">
-                <button class="icon-button danger" type="submit" title="Delete detailed optimization">
+              <form action="/experiments/<%= experiment.id %>/doe/<%= doe.id %>/delete" method="post" data-confirm="Delete this detailed optimization study?">
+                <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-red-600 shadow-sm transition-colors hover:bg-red-50 hover:text-red-700" type="submit" title="Delete detailed optimization">
                   <span class="material-symbols-rounded" aria-hidden="true">delete</span>
                 </button>
               </form>
@@ -177,37 +178,37 @@
         <% }); %>
       <% } %>
     </div>
-  </div>
+  </section>
 
-  <div class="card">
-    <div class="card-header">
-      <h2 class="card-title">Reports</h2>
+  <section class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm" id="reports">
+    <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
+      <h2 class="text-lg font-semibold tracking-tight text-gray-900">Reports</h2>
       <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
-        <button class="icon-button" type="button" id="openReportDialog" title="Generate report">
+        <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" id="openReportDialog" title="Generate report">
           <span class="material-symbols-rounded" aria-hidden="true">add</span>
         </button>
       <% } %>
     </div>
-    <p class="small-note">Open the report setup first, then continue to the text editor.</p>
-    <div class="section-list">
+    <p class="mb-4 text-sm text-gray-500">Open the report setup first, then continue to the text editor.</p>
+    <div class="grid gap-3">
       <% if (!reports || reports.length === 0) { %>
-        <div class="small-note">No reports yet. Create one.</div>
+        <div class="text-sm text-gray-500">No reports yet. Create one.</div>
       <% } else { %>
         <% reports.forEach((report) => { 
         %>
-          <div class="section-row">
+          <div class="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4">
             <div>
-              <a class="section-title" href="/reports/<%= report.id %>"><strong><%- formatInline(report.name) %></strong></a>
-              <div class="small-note">Created: <%= new Date(report.created_at).toLocaleString() %></div>
+              <a class="font-medium text-blue-700 no-underline hover:underline" href="/reports/<%= report.id %>"><strong><%- formatInline(report.name) %></strong></a>
+              <div class="mt-1 text-sm text-gray-500">Created: <%= new Date(report.created_at).toLocaleString() %></div>
             </div>
-            <div class="section-actions">
-              <a class="pure-button pure-button-secondary" href="/reports/<%= report.id %>">Open report setup</a>
+            <div class="flex flex-wrap items-center gap-2">
+              <a class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 no-underline shadow-sm transition-colors hover:bg-gray-50" href="/reports/<%= report.id %>">Open report setup</a>
               <% if (report.signed_at) { %>
-                <span class="status-pill status-done">Signed</span>
+                <span class="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">Signed</span>
               <% } %>
               <% if (!report.signed_at && currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
                 <button
-                  class="icon-button"
+                  class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900"
                   type="button"
                   title="Edit report"
                   data-report-edit
@@ -217,9 +218,9 @@
                 >
                   <span class="material-symbols-rounded" aria-hidden="true">edit</span>
                 </button>
-                <form class="pure-form icon-action" action="/reports/<%= report.id %>/delete" method="post" data-confirm="Delete this report?">
+                <form action="/reports/<%= report.id %>/delete" method="post" data-confirm="Delete this report?">
                   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                  <button class="icon-button danger" type="submit" title="Delete report">
+                  <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-red-600 shadow-sm transition-colors hover:bg-red-50 hover:text-red-700" type="submit" title="Delete report">
                     <span class="material-symbols-rounded" aria-hidden="true">delete</span>
                   </button>
                 </form>
@@ -229,38 +230,42 @@
         <% }); %>
       <% } %>
     </div>
-  </div>
+  </section>
 
-  <div class="card">
-    <div class="card-header">
-      <h2 class="card-title">Tasks</h2>
+  <section class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm" id="tasks">
+    <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
+      <h2 class="text-lg font-semibold tracking-tight text-gray-900">Tasks</h2>
       <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
-        <button class="icon-button" type="button" id="openTaskCreate" title="New task">
+        <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" id="openTaskCreate" title="New task">
           <span class="material-symbols-rounded" aria-hidden="true">add</span>
         </button>
       <% } %>
     </div>
-    <div class="kanban-board" data-experiment-id="<%= experiment.id %>">
-      <div class="kanban-column" data-status="init">
-        <div class="kanban-title">Init</div>
-        <div class="kanban-list" data-list></div>
+    <div class="grid gap-3 xl:grid-cols-4" data-experiment-id="<%= experiment.id %>" data-kanban-board>
+      <div class="min-w-0 rounded-lg border border-gray-200 bg-[#f4f2ef] p-3" data-status="init" data-kanban-column>
+        <div class="mb-3 text-sm font-semibold text-gray-700">Init</div>
+        <div class="grid gap-2" data-list></div>
       </div>
-      <div class="kanban-column" data-status="in_progress">
-        <div class="kanban-title">In progress</div>
-        <div class="kanban-list" data-list></div>
+      <div class="min-w-0 rounded-lg border border-[#f0d2a7] bg-[#fff3e2] p-3" data-status="in_progress" data-kanban-column>
+        <div class="mb-3 text-sm font-semibold text-amber-900">In progress</div>
+        <div class="grid gap-2" data-list></div>
       </div>
-      <div class="kanban-column" data-status="done">
-        <div class="kanban-title">Done</div>
-        <div class="kanban-list" data-list></div>
+      <div class="min-w-0 rounded-lg border border-[#cbe4d6] bg-[#eaf6ef] p-3" data-status="done" data-kanban-column>
+        <div class="mb-3 text-sm font-semibold text-emerald-900">Done</div>
+        <div class="grid gap-2" data-list></div>
       </div>
-      <div class="kanban-column" data-status="failed">
-        <div class="kanban-title">Failed</div>
-        <div class="kanban-list" data-list></div>
+      <div class="min-w-0 rounded-lg border border-[#f5c9c4] bg-[#fdecea] p-3" data-status="failed" data-kanban-column>
+        <div class="mb-3 text-sm font-semibold text-red-900">Failed</div>
+        <div class="grid gap-2" data-list></div>
       </div>
     </div>
-  </div>
+  </section>
 
+    </div>
+  </main>
 </div>
+
+<%- include('partials/experiment_workspace_calendar', { workspace }) %>
 
 <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
   <a
@@ -289,14 +294,14 @@
         <span class="track"></span>
         <span>Only current context</span>
       </label>
-      <span class="small-note">Context: Experiment #<%= experiment.id %></span>
+      <span class="text-sm text-gray-500">Context: Experiment #<%= experiment.id %></span>
       <input class="notes-search" type="date" id="notesDateInput" title="Filter by date">
       <input class="notes-search" type="search" id="notesSearchInput" placeholder="Search notes">
-      <div class="section-actions">
-        <a class="icon-button" href="/experiments/<%= experiment.id %>/journal" title="Open journal">
+      <div class="flex flex-wrap items-center gap-2">
+        <a class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" href="/experiments/<%= experiment.id %>/journal" title="Open journal">
           <span class="material-symbols-rounded" aria-hidden="true">menu_book</span>
         </a>
-        <button class="icon-button" type="button" id="notesDrawerClose" title="Hide notes">
+        <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" id="notesDrawerClose" title="Hide notes">
           <span class="material-symbols-rounded" aria-hidden="true">expand_more</span>
         </button>
       </div>
@@ -400,8 +405,8 @@
           </div>
           <div id="notesInput" class="journal-editor" tabindex="0" data-placeholder="Write note for current experiment context..."></div>
           <div class="notes-compose-footer">
-            <span class="small-note">Ctrl/Cmd+Enter: append today · Ctrl/Cmd+Shift+Enter: new note</span>
-            <button class="pure-button pure-button-primary" type="button" id="notesSendBtn">Add note</button>
+            <span class="text-sm text-gray-500">Ctrl/Cmd+Enter: append today · Ctrl/Cmd+Shift+Enter: new note</span>
+            <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50" type="button" id="notesSendBtn">Add note</button>
           </div>
         </div>
       </section>
@@ -416,54 +421,57 @@
   </aside>
 <% } %>
 
-<dialog class="modal-frame" id="reportDialog">
-  <div class="modal-header">
+<dialog class="m-auto w-[min(96vw,48rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="reportDialog">
+  <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
     <strong>Create report</strong>
-    <button class="pure-button" type="button" data-close>Close</button>
+    <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Close</button>
   </div>
-  <div class="modal-body">
-    <form class="pure-form form-grid" id="reportForm">
+  <div class="p-5">
+    <form class="grid gap-4 sm:grid-cols-2" id="reportForm">
       <div>
-        <label for="reportName">Report name</label>
-        <input id="reportName" name="name" type="text" placeholder="Report 1">
+        <label class="mb-1.5 block text-sm font-medium text-gray-700" for="reportName">Report name</label>
+        <input class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="reportName" name="name" type="text" placeholder="Report 1">
       </div>
       <div>
-        <label for="reportExecutors">Executors</label>
-        <input id="reportExecutors" name="executors" type="text" placeholder="e.g. Ivan Petrov, Anna Lee" data-default-executors="<%= ownerName || '' %>">
+        <label class="mb-1.5 block text-sm font-medium text-gray-700" for="reportExecutors">Executors</label>
+        <div class="flex rounded-base shadow-xs">
+          <span class="inline-flex items-center px-3 text-sm text-body bg-neutral-tertiary border border-default-medium border-e-0 rounded-s-base"><svg class="w-4 h-4 text-body" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0 0a8.949 8.949 0 0 0 4.951-1.488A3.987 3.987 0 0 0 13 16h-2a3.987 3.987 0 0 0-3.951 3.512A8.948 8.948 0 0 0 12 21Zm3-11a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg></span>
+          <input class="block w-full rounded-none rounded-e-base border border-default-medium bg-neutral-secondary-medium px-3 py-2.5 text-sm text-heading placeholder:text-body focus:border-brand focus:ring-brand" id="reportExecutors" name="executors" type="text" placeholder="e.g. Ivan Petrov, Anna Lee" data-default-executors="<%= ownerName || '' %>" data-ui-control-exempt>
+        </div>
       </div>
-      <div>
-        <label for="reportTypeCreate">Type and template</label>
-        <select id="reportTypeCreate" name="report_type">
+      <div class="sm:col-span-2">
+        <label class="mb-1.5 block text-sm font-medium text-gray-700" for="reportTypeCreate">Type and template</label>
+        <select class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="reportTypeCreate" name="report_type">
           <option value="COMBINED">Combined — standard template</option>
           <option value="QUALIFICATION">Qualification — standard template</option>
           <option value="DOE">DOE — standard template</option>
         </select>
       </div>
-      <p class="small-note report-create-note">
+      <p class="sm:col-span-2 text-sm text-gray-500">
         The report starts with a document outline. After creation, review its setup and then select research data in the text editor.
       </p>
     </form>
   </div>
-  <div class="modal-footer">
-    <button class="pure-button pure-button-primary" type="button" id="generateReportBtn">Create report</button>
+  <div class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 px-5 py-4">
+    <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50" type="button" id="generateReportBtn">Create report</button>
   </div>
 </dialog>
 
-<dialog class="modal-frame" id="machineEditDialog">
-  <div class="modal-header">
+<dialog class="m-auto w-[min(96vw,48rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="machineEditDialog">
+  <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
     <strong>Edit experiment</strong>
-    <button class="pure-button" type="button" data-close>Close</button>
+    <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Close</button>
   </div>
-  <form class="pure-form" action="/experiments/<%= experiment.id %>/update" method="post">
-    <div class="modal-body">
-      <div class="field-grid">
+  <form action="/experiments/<%= experiment.id %>/update" method="post">
+    <div class="p-5">
+      <div class="grid gap-4 sm:grid-cols-2">
         <div>
-          <label>Experiment name</label>
-          <input type="text" name="name" value="<%= experiment.name %>">
+          <label class="mb-1.5 block text-sm font-medium text-gray-700">Experiment name</label>
+          <input class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="text" name="name" value="<%= experiment.name %>">
         </div>
         <div>
-          <label>Assigned machine</label>
-          <select name="machine_id">
+          <label class="mb-1.5 block text-sm font-medium text-gray-700">Assigned machine</label>
+          <select class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" name="machine_id">
             <option value="">No machine</option>
             <% (machines || []).forEach((machine) => { %>
               <option value="<%= machine.id %>" <%= experiment.machine_id === machine.id ? 'selected' : '' %>>
@@ -472,49 +480,52 @@
             <% }); %>
           </select>
         </div>
-        <div class="field-span">
-          <label>Description</label>
-          <textarea name="notes" rows="4" placeholder="Optional description"><%- formatInline(experiment.notes || '') %></textarea>
+        <div class="sm:col-span-2">
+          <label class="mb-1.5 block text-sm font-medium text-gray-700">Description</label>
+          <textarea class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" name="notes" rows="4" placeholder="Optional description"><%- formatInline(experiment.notes || '') %></textarea>
         </div>
         <% if (canManageOwner) { %>
-          <div class="field-span">
-            <label>Owner (admin/manager only)</label>
-            <select name="owner_user_id" id="ownerSelect">
-              <option value="">No owner</option>
-              <% (users || []).forEach((user) => { %>
-                <option value="<%= user.id %>" <%= experiment.owner_user_id === user.id ? 'selected' : '' %>>
-                  <%- formatInline(user.name ? user.name : user.email) %> (<%= user.role ?? 'no-role' %>)
-                </option>
-              <% }); %>
-            </select>
-            <div class="small-note" id="ownerSaveStatus">Changes apply immediately.</div>
+          <div class="sm:col-span-2">
+            <label class="mb-1.5 block text-sm font-medium text-gray-700">Owner (admin/manager only)</label>
+            <div class="flex rounded-base shadow-xs">
+              <span class="inline-flex items-center px-3 text-sm text-body bg-neutral-tertiary border border-default-medium border-e-0 rounded-s-base"><svg class="w-4 h-4 text-body" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0 0a8.949 8.949 0 0 0 4.951-1.488A3.987 3.987 0 0 0 13 16h-2a3.987 3.987 0 0 0-3.951 3.512A8.948 8.948 0 0 0 12 21Zm3-11a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg></span>
+              <select class="block w-full rounded-none rounded-e-base border border-default-medium bg-neutral-secondary-medium px-3 py-2.5 text-sm text-heading focus:border-brand focus:ring-brand" name="owner_user_id" id="ownerSelect" data-ui-control-exempt>
+                <option value="">No owner</option>
+                <% (users || []).forEach((user) => { %>
+                  <option value="<%= user.id %>" <%= experiment.owner_user_id === user.id ? 'selected' : '' %>>
+                    <%- formatInline(user.name ? user.name : user.email) %> (<%= user.role ?? 'no-role' %>)
+                  </option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="text-sm text-gray-500" id="ownerSaveStatus">Changes apply immediately.</div>
           </div>
         <% } %>
       </div>
     </div>
-    <div class="modal-footer">
-      <span class="small-note" data-autosave-status></span>
-      <button class="pure-button" type="button" data-close>Cancel</button>
-      <button class="pure-button pure-button-primary" type="submit">Save</button>
+    <div class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 px-5 py-4">
+      <span class="text-sm text-gray-500" data-autosave-status></span>
+      <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Cancel</button>
+      <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50" type="submit">Save</button>
     </div>
   </form>
 </dialog>
 
-<dialog class="modal-frame" id="doeCreateDialog">
-  <div class="modal-header">
+<dialog class="m-auto w-[min(96vw,48rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="doeCreateDialog">
+  <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
     <strong>New Detailed Optimization Study</strong>
-    <button class="pure-button" type="button" data-close>Close</button>
+    <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Close</button>
   </div>
-  <form class="pure-form" action="/experiments/<%= experiment.id %>/doe" method="post">
-    <div class="modal-body">
-      <div class="field-grid">
+  <form action="/experiments/<%= experiment.id %>/doe" method="post">
+    <div class="p-5">
+      <div class="grid gap-4 sm:grid-cols-2">
         <div>
-          <label>Name</label>
-          <input name="name" placeholder="Optimization 1">
+          <label class="mb-1.5 block text-sm font-medium text-gray-700">Name</label>
+          <input class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" name="name" placeholder="Optimization 1">
         </div>
         <div>
-          <label>Design Type</label>
-          <select name="design_type">
+          <label class="mb-1.5 block text-sm font-medium text-gray-700">Design Type</label>
+          <select class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" name="design_type">
             <option value="BBD">BBD (Box-Behnken)</option>
             <option value="FFA">FFA (Full Factorial)</option>
             <option value="SCREEN">SCREEN (Sampled Factorial)</option>
@@ -522,121 +533,131 @@
           </select>
         </div>
         <div>
-          <label>Seed</label>
-          <input type="number" name="seed" value="42">
+          <label class="mb-1.5 block text-sm font-medium text-gray-700">Seed</label>
+          <input class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="number" name="seed" value="42">
         </div>
         <div>
-          <label>Center Points (BBD)</label>
-          <input type="number" name="center_points" value="3">
+          <label class="mb-1.5 block text-sm font-medium text-gray-700">Center Points (BBD)</label>
+          <input class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="number" name="center_points" value="3">
         </div>
         <div>
-          <label>Max Runs</label>
-          <input type="number" name="max_runs" value="200">
+          <label class="mb-1.5 block text-sm font-medium text-gray-700">Max Runs</label>
+          <input class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="number" name="max_runs" value="200">
         </div>
         <div>
-          <label>Replicates</label>
-          <input type="number" name="replicate_count" value="1">
+          <label class="mb-1.5 block text-sm font-medium text-gray-700">Replicates</label>
+          <input class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="number" name="replicate_count" value="1">
         </div>
         <div>
-          <label>Recipe Block</label>
-          <label class="pure-checkbox">
-            <input type="checkbox" name="recipe_as_block" value="1"> Use recipe as block
+          <span class="mb-1.5 block text-sm font-medium text-gray-700">Recipe Block</span>
+          <label class="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+            <input class="size-4 rounded border-gray-300 bg-gray-100 text-blue-600 focus:ring-2 focus:ring-blue-500" type="checkbox" name="recipe_as_block" value="1"> Use recipe as block
           </label>
         </div>
       </div>
     </div>
-    <div class="modal-footer">
-      <button class="pure-button" type="button" data-close>Cancel</button>
-      <button class="pure-button pure-button-primary" type="submit">Create Study</button>
+    <div class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 px-5 py-4">
+      <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Cancel</button>
+      <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50" type="submit">Create Study</button>
     </div>
   </form>
 </dialog>
 
-<dialog class="modal-frame" id="taskCreateDialog">
-  <div class="modal-header">
+<dialog class="m-auto w-[min(96vw,48rem)] overflow-visible rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="taskCreateDialog">
+  <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
     <strong>New Task</strong>
-    <button class="pure-button" type="button" data-close>Close</button>
+    <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Close</button>
   </div>
-  <form class="pure-form" id="taskCreateForm">
-    <div class="modal-body">
-      <div class="field-grid">
+  <form id="taskCreateForm">
+    <div class="p-5">
+      <div class="grid gap-4 sm:grid-cols-2">
         <div>
-          <label for="taskTitleInput">Title</label>
-          <input id="taskTitleInput" name="title" type="text" required>
+          <label class="mb-1.5 block text-sm font-medium text-gray-700" for="taskTitleInput">Title</label>
+          <input class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-600 focus:ring-blue-600" id="taskTitleInput" name="title" type="text" required>
         </div>
         <div>
-          <label for="taskDueInput">Due date</label>
-          <input id="taskDueInput" name="due_at" type="date">
+          <label class="mb-1.5 block text-sm font-medium text-gray-700" for="taskDueInput">Due date</label>
+          <div class="relative">
+            <div class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3">
+              <svg class="w-4 h-4 text-body" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 10h16m-8-3V4M7 7V4m10 3V4M5 20h14a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1Zm3-7h.01v.01H8V13Zm4 0h.01v.01H12V13Zm4 0h.01v.01H16V13Zm-8 4h.01v.01H8V17Zm4 0h.01v.01H12V17Zm4 0h.01v.01H16V17Z"/></svg>
+            </div>
+            <input class="block w-full ps-9 pe-3 py-2.5 bg-neutral-secondary-medium border border-default-medium text-heading text-sm rounded-base focus:ring-brand focus:border-brand shadow-xs placeholder:text-body" id="taskDueInput" name="due_at" type="text" placeholder="Select date" autocomplete="off" datepicker-autohide datepicker-format="yyyy-mm-dd" data-ui-datepicker data-ui-control-exempt>
+          </div>
         </div>
-        <div class="field-span">
-          <label for="taskDescInput">Description</label>
-          <textarea id="taskDescInput" name="description" rows="3"></textarea>
+        <div class="sm:col-span-2">
+          <label class="mb-1.5 block text-sm font-medium text-gray-700" for="taskDescInput">Description</label>
+          <textarea class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-600 focus:ring-blue-600" id="taskDescInput" name="description" rows="3"></textarea>
         </div>
         <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
-          <div class="field-span">
-            <label for="taskOwnerSelect">Owner</label>
-            <select id="taskOwnerSelect" name="owner_user_id">
-              <option value="">No owner</option>
-              <% (users || []).forEach((user) => { %>
-                <option value="<%= user.id %>" <%= experiment.owner_user_id === user.id ? 'selected' : '' %>>
-                  <%- formatInline(user.name ? user.name : user.email) %>
-                </option>
-              <% }); %>
-            </select>
+          <div class="sm:col-span-2">
+            <label class="mb-1.5 block text-sm font-medium text-gray-700" for="taskOwnerSelect">Owner</label>
+            <div class="flex rounded-base shadow-xs">
+              <span class="inline-flex items-center px-3 text-sm text-body bg-neutral-tertiary border border-default-medium border-e-0 rounded-s-base"><svg class="w-4 h-4 text-body" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0 0a8.949 8.949 0 0 0 4.951-1.488A3.987 3.987 0 0 0 13 16h-2a3.987 3.987 0 0 0-3.951 3.512A8.948 8.948 0 0 0 12 21Zm3-11a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg></span>
+              <select class="block w-full rounded-none rounded-e-base border border-default-medium bg-neutral-secondary-medium px-3 py-2.5 text-sm text-heading focus:border-brand focus:ring-brand" id="taskOwnerSelect" name="owner_user_id" data-ui-control-exempt>
+                <option value="">No owner</option>
+                <% (users || []).forEach((user) => { %>
+                  <option value="<%= user.id %>" <%= experiment.owner_user_id === user.id ? 'selected' : '' %>>
+                    <%- formatInline(user.name ? user.name : user.email) %>
+                  </option>
+                <% }); %>
+              </select>
+            </div>
           </div>
         <% } else { %>
           <input type="hidden" name="owner_user_id" value="<%= experiment.owner_user_id ?? '' %>">
         <% } %>
       </div>
-      <button class="link-muted collapsible-toggle" type="button" id="toggleTaskCreateEntities">
-        Add entities
-      </button>
-      <div class="collapsible is-open" id="taskCreateEntitiesPanel">
-        <div class="task-entity-picker">
-          <div class="task-entity-card">
-            <div class="task-entity-title">Qualification (<%= (qualificationCards || []).length %> steps)</div>
-            <div class="small-note">Select steps to include in task.</div>
-            <div class="task-entity-steps">
+      <div class="mt-5 border-t border-gray-100 pt-4" id="taskCreateEntitiesPanel">
+        <div class="mb-2 flex items-center gap-2 text-sm font-medium text-gray-900"><span class="material-symbols-rounded text-[19px] text-gray-500" aria-hidden="true">account_tree</span>Included entities</div>
+        <div class="grid gap-2 sm:grid-cols-2">
+          <section class="rounded-lg border border-gray-200 bg-white p-3">
+            <div class="flex items-center justify-between gap-2">
+              <h3 class="text-sm font-medium text-gray-900">Qualification</h3>
+              <span class="inline-flex rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700"><%= (qualificationCards || []).length %></span>
+            </div>
+            <div class="mt-2 grid gap-1">
               <% if (!qualificationCards || qualificationCards.length === 0) { %>
-                <div class="small-note">No qualification steps configured.</div>
+                <div class="text-sm text-gray-500">No qualification steps configured.</div>
               <% } else { %>
                 <% qualificationCards.forEach((card, idx) => { %>
-                  <label class="pure-checkbox">
-                    <input type="checkbox" name="qual_steps" value="<%= card.stepNumber %>" <%= idx === 0 ? 'checked' : '' %>>
-                    Step <%= card.stepNumber %>
+                  <label class="flex cursor-pointer items-start gap-2 rounded-md px-1 py-1 text-sm text-gray-700 hover:bg-gray-50">
+                    <input class="mt-0.5 size-4 rounded border-gray-300 text-blue-700 focus:ring-blue-600" type="checkbox" name="qual_steps" value="<%= card.stepId %>" <%= idx === 0 ? 'checked' : '' %>>
+                    <span class="min-w-0"><span class="font-medium text-gray-900">Step <%= card.stepNumber %></span><span class="text-gray-500"> · </span><%- formatInline(card.name) %></span>
                   </label>
                 <% }); %>
               <% } %>
             </div>
-          </div>
-          <div class="task-entity-card">
-            <div class="task-entity-title">DOE studies</div>
-            <div class="small-note">Select DOE studies to include.</div>
-            <div class="task-entity-steps">
+          </section>
+          <section class="rounded-lg border border-gray-200 bg-white p-3">
+            <div class="flex items-center justify-between gap-2">
+              <h3 class="text-sm font-medium text-gray-900">DOE studies</h3>
+              <span class="inline-flex rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700"><%= (doeStudies || []).length %></span>
+            </div>
+            <div class="mt-2 grid gap-1">
               <% if (!doeStudies || doeStudies.length === 0) { %>
-                <div class="small-note">No DOE studies yet.</div>
+                <div class="text-sm text-gray-500">No DOE studies yet.</div>
               <% } else { %>
                 <% doeStudies.forEach((study) => { %>
-                  <label class="pure-checkbox">
-                    <input type="checkbox" name="doe_ids" value="<%= study.id %>">
-                    <%- formatInline(study.name) %>
+                  <label class="flex cursor-pointer items-start gap-2 rounded-md px-1 py-1 text-sm text-gray-700 hover:bg-gray-50">
+                    <input class="mt-0.5 size-4 rounded border-gray-300 text-blue-700 focus:ring-blue-600" type="checkbox" name="doe_ids" value="<%= study.id %>">
+                    <span class="min-w-0 truncate"><%- formatInline(study.name) %></span>
                   </label>
                 <% }); %>
               <% } %>
             </div>
-          </div>
+          </section>
         </div>
       </div>
     </div>
-    <div class="modal-footer">
-      <button class="pure-button" type="button" data-close>Cancel</button>
-      <button class="pure-button pure-button-primary" type="submit">Create</button>
+    <div class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 px-5 py-4">
+      <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Cancel</button>
+      <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50" type="submit">Create</button>
     </div>
   </form>
 </dialog>
 
-<dialog class="modal-frame" id="taskDetailDialog">
-  <div class="modal-header">
+<dialog class="m-auto w-[min(96vw,48rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="taskDetailDialog">
+  <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
     <strong id="taskTitle">Task</strong>
     <div class="modal-actions">
       <% if (canDeleteTasks) { %>
@@ -654,16 +675,16 @@
       </button>
     </div>
   </div>
-  <div class="modal-body">
-    <p id="taskDescription" class="small-note"></p>
+  <div class="p-5">
+    <p id="taskDescription" class="text-sm text-gray-500"></p>
     <div class="task-meta">
       <div><strong>Owner:</strong> <span id="taskOwner">-</span></div>
       <div class="task-due">
         <strong>Due:</strong>
         <span class="task-due-icon material-symbols-rounded" aria-hidden="true">calendar_today</span>
         <div class="calendar-menu" id="calendarMenu">
-          <a class="pure-button" id="calendarIcsLink" href="#" download>Download .ics</a>
-          <a class="pure-button" id="calendarGoogleLink" href="#" target="_blank" rel="noopener">Google Calendar</a>
+          <a class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" id="calendarIcsLink" href="#" download>Download .ics</a>
+          <a class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" id="calendarGoogleLink" href="#" target="_blank" rel="noopener">Google Calendar</a>
         </div>
         <span id="taskDue">-</span>
       </div>
@@ -671,125 +692,140 @@
       <div><strong>Suggested:</strong> <span id="taskSuggested">-</span></div>
     </div>
     <div class="calendar-actions"></div>
-    <h3 class="card-title" style="margin-top: 1rem;">Entities</h3>
+    <h3 class="text-lg font-semibold tracking-tight text-gray-900" style="margin-top: 1rem;">Entities</h3>
     <div id="taskEntities"></div>
   </div>
 </dialog>
 
 <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
-  <dialog class="modal-frame" id="taskEditDialog">
-    <div class="modal-header">
+  <dialog class="m-auto w-[min(96vw,48rem)] overflow-visible rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="taskEditDialog">
+    <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
       <strong>Edit Task</strong>
-      <button class="pure-button" type="button" data-close>Close</button>
+      <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Close</button>
     </div>
-    <div class="modal-body">
-      <form class="pure-form form-grid" id="taskEditForm">
+    <div class="p-5">
+      <form class="grid gap-4 sm:grid-cols-2" id="taskEditForm">
         <div>
-          <label for="taskEditTitle">Title</label>
-          <input id="taskEditTitle" name="title" type="text" required>
+          <label class="mb-1.5 block text-sm font-medium text-gray-700" for="taskEditTitle">Title</label>
+          <input class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-600 focus:ring-blue-600" id="taskEditTitle" name="title" type="text" required>
         </div>
         <div>
-          <label for="taskEditDue">Due date</label>
-          <input id="taskEditDue" name="due_at" type="date">
+          <label class="mb-1.5 block text-sm font-medium text-gray-700" for="taskEditDue">Due date</label>
+          <div class="relative">
+            <div class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3">
+              <svg class="w-4 h-4 text-body" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 10h16m-8-3V4M7 7V4m10 3V4M5 20h14a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1Zm3-7h.01v.01H8V13Zm4 0h.01v.01H12V13Zm4 0h.01v.01H16V13Zm-8 4h.01v.01H8V17Zm4 0h.01v.01H12V17Zm4 0h.01v.01H16V17Z"/></svg>
+            </div>
+            <input class="block w-full ps-9 pe-3 py-2.5 bg-neutral-secondary-medium border border-default-medium text-heading text-sm rounded-base focus:ring-brand focus:border-brand shadow-xs placeholder:text-body" id="taskEditDue" name="due_at" type="text" placeholder="Select date" autocomplete="off" datepicker-autohide datepicker-format="yyyy-mm-dd" data-ui-datepicker data-ui-control-exempt>
+          </div>
         </div>
-        <div class="field-span">
-          <label for="taskEditDesc">Description</label>
-          <textarea id="taskEditDesc" name="description" rows="3"></textarea>
+        <div class="sm:col-span-2">
+          <label class="mb-1.5 block text-sm font-medium text-gray-700" for="taskEditDesc">Description</label>
+          <textarea class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-600 focus:ring-blue-600" id="taskEditDesc" name="description" rows="3"></textarea>
         </div>
       </form>
-      <div class="task-entity-form">
-        <button class="link-muted collapsible-toggle" type="button" id="toggleTaskEditEntities">
-          Attach entities
-        </button>
-        <div class="collapsible" id="taskEditEntitiesPanel">
-          <form class="pure-form" id="taskEditEntityForm">
-            <div class="task-entity-picker">
-              <div class="task-entity-card">
-                <div class="task-entity-title">Qualification (<%= (qualificationCards || []).length %> steps)</div>
-                <div class="small-note">Pick steps to add.</div>
-                <div class="task-entity-steps">
+      <div class="mt-5 border-t border-gray-100 pt-4" id="taskEditEntitiesPanel">
+        <form id="taskEditEntityForm">
+          <div class="mb-2 flex items-center gap-2 text-sm font-medium text-gray-900"><span class="material-symbols-rounded text-[19px] text-gray-500" aria-hidden="true">account_tree</span>Attach entities</div>
+          <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            <section class="rounded-lg border border-gray-200 bg-white p-3">
+              <div class="flex items-center justify-between gap-2">
+                <h3 class="text-sm font-medium text-gray-900">Qualification</h3>
+                <span class="inline-flex rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700"><%= (qualificationCards || []).length %></span>
+              </div>
+              <div class="mt-2 grid gap-1">
                   <% if (!qualificationCards || qualificationCards.length === 0) { %>
-                    <div class="small-note">No qualification steps configured.</div>
+                    <div class="text-sm text-gray-500">No qualification steps configured.</div>
                   <% } else { %>
                     <% qualificationCards.forEach((card) => { %>
-                      <label class="pure-checkbox">
-                        <input type="checkbox" name="qual_steps_edit" value="<%= card.stepNumber %>"> Step <%= card.stepNumber %>
+                      <label class="flex cursor-pointer items-start gap-2 rounded-md px-1 py-1 text-sm text-gray-700 hover:bg-gray-50">
+                        <input class="mt-0.5 size-4 rounded border-gray-300 text-blue-700 focus:ring-blue-600" type="checkbox" name="qual_steps_edit" value="<%= card.stepId %>">
+                        <span class="min-w-0"><span class="font-medium text-gray-900">Step <%= card.stepNumber %></span><span class="text-gray-500"> · </span><%- formatInline(card.name) %></span>
                       </label>
                     <% }); %>
                   <% } %>
-                </div>
               </div>
-              <div class="task-entity-card">
-                <div class="task-entity-title">DOE studies</div>
-                <div class="small-note">Pick DOE studies to attach.</div>
-                <div class="task-entity-steps">
+            </section>
+            <section class="rounded-lg border border-gray-200 bg-white p-3">
+              <div class="flex items-center justify-between gap-2">
+                <h3 class="text-sm font-medium text-gray-900">DOE studies</h3>
+                <span class="inline-flex rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700"><%= (doeStudies || []).length %></span>
+              </div>
+              <div class="mt-2 grid gap-1">
                   <% if (!doeStudies || doeStudies.length === 0) { %>
-                    <div class="small-note">No DOE studies yet.</div>
+                    <div class="text-sm text-gray-500">No DOE studies yet.</div>
                   <% } else { %>
                     <% doeStudies.forEach((study) => { %>
-                      <label class="pure-checkbox">
-                        <input type="checkbox" name="doe_ids_edit" value="<%= study.id %>">
-                        <%- formatInline(study.name) %>
+                      <label class="flex cursor-pointer items-start gap-2 rounded-md px-1 py-1 text-sm text-gray-700 hover:bg-gray-50">
+                        <input class="mt-0.5 size-4 rounded border-gray-300 text-blue-700 focus:ring-blue-600" type="checkbox" name="doe_ids_edit" value="<%= study.id %>">
+                        <span class="min-w-0 truncate"><%- formatInline(study.name) %></span>
                       </label>
                     <% }); %>
                   <% } %>
-                </div>
               </div>
-              <div class="task-entity-card">
-                <div class="task-entity-title">Reports</div>
-                <div class="small-note">Attach reports (signature required).</div>
-                <div class="task-entity-steps">
+            </section>
+            <section class="rounded-lg border border-gray-200 bg-white p-3">
+              <div class="flex items-center justify-between gap-2">
+                <h3 class="text-sm font-medium text-gray-900">Reports</h3>
+                <span class="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700"><%= (reports || []).length %></span>
+              </div>
+              <div class="mt-2 grid gap-1">
                   <% if (!reports || reports.length === 0) { %>
-                    <div class="small-note">No reports yet.</div>
+                    <div class="text-sm text-gray-500">No reports yet.</div>
                   <% } else { %>
                     <% reports.forEach((report) => { %>
-                      <label class="pure-checkbox">
-                        <input type="checkbox" name="report_ids_edit" value="<%= report.id %>">
-                        <%- formatInline(report.name) %>
+                      <label class="flex cursor-pointer items-start gap-2 rounded-md px-1 py-1 text-sm text-gray-700 hover:bg-gray-50">
+                        <input class="mt-0.5 size-4 rounded border-gray-300 text-blue-700 focus:ring-blue-600" type="checkbox" name="report_ids_edit" value="<%= report.id %>">
+                        <span class="min-w-0 truncate"><%- formatInline(report.name) %></span>
                       </label>
                     <% }); %>
                   <% } %>
-                </div>
               </div>
-            </div>
-            <button class="pure-button pure-button-primary attach-entities-btn" type="submit">Attach selected</button>
-          </form>
-        </div>
+            </section>
+          </div>
+          <div class="mt-3 flex justify-end"><button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300" type="submit">Attach selected</button></div>
+        </form>
       </div>
-      <h3 class="card-title" style="margin-top: 1rem;">Entities</h3>
+      <h3 class="text-lg font-semibold tracking-tight text-gray-900" style="margin-top: 1rem;">Entities</h3>
       <div id="taskEditEntities"></div>
     </div>
-    <div class="modal-footer">
-      <button class="pure-button" type="button" data-close>Cancel</button>
-      <button class="pure-button pure-button-primary" type="button" id="taskEditSave">Save changes</button>
+    <div class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 px-5 py-4">
+      <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Cancel</button>
+      <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50" type="button" id="taskEditSave">Save changes</button>
     </div>
   </dialog>
 <% } %>
 
-<dialog class="modal-frame" id="doeEditDialog">
-  <div class="modal-header">
+<dialog class="m-auto w-[min(96vw,48rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="doeEditDialog">
+  <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
     <strong>DOE settings</strong>
-    <button class="pure-button" type="button" data-close>Close</button>
+    <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Close</button>
   </div>
-  <form class="pure-form" id="doeEditForm" method="post">
-    <div class="modal-body">
-      <label for="doeEditName">DOE name</label>
-      <input id="doeEditName" name="name" type="text" required>
+  <form id="doeEditForm" method="post">
+    <div class="grid gap-4 p-5">
+      <div>
+        <label class="mb-1.5 block text-sm font-medium text-gray-700" for="doeEditName">DOE name</label>
+        <input class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="doeEditName" name="name" type="text" required>
+      </div>
       <% if (canAssignEntities) { %>
-        <label for="doeEditAssignee">Responsible</label>
-        <select id="doeEditAssignee" name="assignee_user_id">
-          <option value="">Unassigned</option>
-          <% assignableUsers.forEach((user) => { %>
-            <option value="<%= user.id %>">
-              <%= user.name || user.email %> (<%= user.role || 'user' %>)
-            </option>
-          <% }); %>
-        </select>
+        <div>
+          <label class="mb-1.5 block text-sm font-medium text-gray-700" for="doeEditAssignee">Responsible</label>
+          <div class="flex rounded-base shadow-xs">
+            <span class="inline-flex items-center px-3 text-sm text-body bg-neutral-tertiary border border-default-medium border-e-0 rounded-s-base"><svg class="w-4 h-4 text-body" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0 0a8.949 8.949 0 0 0 4.951-1.488A3.987 3.987 0 0 0 13 16h-2a3.987 3.987 0 0 0-3.951 3.512A8.948 8.948 0 0 0 12 21Zm3-11a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg></span>
+            <select class="block w-full rounded-none rounded-e-base border border-default-medium bg-neutral-secondary-medium px-3 py-2.5 text-sm text-heading focus:border-brand focus:ring-brand" id="doeEditAssignee" name="assignee_user_id" data-ui-control-exempt>
+              <option value="">Unassigned</option>
+              <% assignableUsers.forEach((user) => { %>
+                <option value="<%= user.id %>">
+                  <%= user.name || user.email %> (<%= user.role || 'user' %>)
+                </option>
+              <% }); %>
+            </select>
+          </div>
+        </div>
       <% } %>
     </div>
-    <div class="modal-footer">
-      <button class="pure-button" type="button" data-close>Cancel</button>
-      <button class="pure-button pure-button-primary" type="submit">Save</button>
+    <div class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 px-5 py-4">
+      <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Cancel</button>
+      <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50" type="submit">Save</button>
     </div>
   </form>
 </dialog>
@@ -937,21 +973,21 @@
 
   const statusToggle = document.getElementById('experimentStatusToggle');
   const statusPill = document.getElementById('experimentStatusPill');
+  const statusToneClasses = ['bg-emerald-100', 'text-emerald-800', 'bg-blue-100', 'text-blue-800', 'bg-red-100', 'text-red-800', 'bg-gray-100', 'text-gray-700'];
+  const setStatusPill = (value, label) => {
+    if (!statusPill) return;
+    const tone = value === 'done' ? ['bg-emerald-100', 'text-emerald-800']
+      : value === 'in_progress' ? ['bg-blue-100', 'text-blue-800']
+      : value === 'blocked' ? ['bg-red-100', 'text-red-800']
+      : ['bg-gray-100', 'text-gray-700'];
+    statusPill.classList.remove(...statusToneClasses);
+    statusPill.classList.add(...tone);
+    statusPill.textContent = label;
+  };
   statusToggle?.addEventListener('change', async () => {
     const done = statusToggle.checked ? '1' : '0';
-    if (statusPill) {
-      if (statusToggle.checked) {
-        statusPill.classList.remove('status-in_progress', 'status-not_started');
-        statusPill.classList.add('status-done');
-        statusPill.textContent = 'Done';
-      } else {
-        const autoStatus = statusPill.dataset.autoStatus || 'not_started';
-        const autoLabel = statusPill.dataset.autoLabel || 'Not started';
-        statusPill.classList.remove('status-done', 'status-in_progress', 'status-not_started');
-        statusPill.classList.add(`status-${autoStatus}`);
-        statusPill.textContent = autoLabel;
-      }
-    }
+    if (statusToggle.checked) setStatusPill('done', 'Done');
+    else setStatusPill(statusPill?.dataset.autoStatus || 'not_started', statusPill?.dataset.autoLabel || 'Not started');
     try {
       const payload = new URLSearchParams();
       payload.set('done', done);
@@ -963,24 +999,13 @@
       if (!resp.ok) throw new Error('Request failed');
     } catch {
       statusToggle.checked = !statusToggle.checked;
-      if (statusPill) {
-        if (statusToggle.checked) {
-          statusPill.classList.remove('status-in_progress', 'status-not_started');
-          statusPill.classList.add('status-done');
-          statusPill.textContent = 'Done';
-        } else {
-          const autoStatus = statusPill.dataset.autoStatus || 'not_started';
-          const autoLabel = statusPill.dataset.autoLabel || 'Not started';
-          statusPill.classList.remove('status-done', 'status-in_progress', 'status-not_started');
-          statusPill.classList.add(`status-${autoStatus}`);
-          statusPill.textContent = autoLabel;
-        }
-      }
+      if (statusToggle.checked) setStatusPill('done', 'Done');
+      else setStatusPill(statusPill?.dataset.autoStatus || 'not_started', statusPill?.dataset.autoLabel || 'Not started');
     }
   });
 
   // Tasks kanban (read-only).
-  const board = document.querySelector('.kanban-board');
+  const board = document.querySelector('[data-kanban-board]');
   const taskTitle = document.getElementById('taskTitle');
   const taskDescription = document.getElementById('taskDescription');
   const taskOwner = document.getElementById('taskOwner');
@@ -999,10 +1024,6 @@
   const calendarMenu = document.getElementById('calendarMenu');
   const calendarIcsLink = document.getElementById('calendarIcsLink');
   const calendarGoogleLink = document.getElementById('calendarGoogleLink');
-  const toggleTaskEditEntities = document.getElementById('toggleTaskEditEntities');
-  const taskEditEntitiesPanel = document.getElementById('taskEditEntitiesPanel');
-  const toggleTaskCreateEntities = document.getElementById('toggleTaskCreateEntities');
-  const taskCreateEntitiesPanel = document.getElementById('taskCreateEntitiesPanel');
   let currentTaskId = null;
   const notesDrawer = document.getElementById('notesDrawer');
   const notesDrawerToggle = document.getElementById('notesDrawerToggle');
@@ -1474,7 +1495,7 @@
       <header class="journal-item-head">
         <a class="journal-item-title-link" href="${notesEscapeHtml(note.entity_href || '/experiments/<%= experiment.id %>')}">${notesEscapeHtml(note.display_title || note.title || '')}</a>
         <div class="journal-item-head-actions">
-          <span class="small-note">${notesEscapeHtml(note.timestamp || '')}</span>
+          <span class="text-sm text-gray-500">${notesEscapeHtml(note.timestamp || '')}</span>
           ${note.can_edit ? '<button class="icon-button tiny" type="button" data-note-edit title="Edit note"><span class="material-symbols-rounded" aria-hidden="true">edit</span></button>' : ''}
           ${note.can_delete ? '<button class="icon-button danger tiny" type="button" data-note-delete title="Delete note"><span class="material-symbols-rounded" aria-hidden="true">delete</span></button>' : ''}
         </div>
@@ -1697,7 +1718,7 @@
     if (!resp.ok) return;
     card.remove();
     if (!notesFeed.querySelector('.journal-item')) {
-      notesFeed.innerHTML = '<div class="small-note">No notes yet.</div>';
+      notesFeed.innerHTML = '<div class="text-sm text-gray-500">No notes yet.</div>';
     }
     rebuildNotesRail();
   });
@@ -1814,24 +1835,24 @@
       if (!list) return;
       const card = document.createElement('button');
       card.type = 'button';
-      card.className = 'kanban-card';
+      card.className = 'rounded-lg border border-gray-200 bg-white p-3 text-left shadow-sm transition hover:border-blue-300 hover:bg-blue-50';
       card.draggable = true;
       card.dataset.taskId = String(task.id);
       const owner = task.owner_name || task.owner_email || '-';
       const due = task.due_at ? new Date(task.due_at).toLocaleDateString() : '-';
       const percent = Math.round((task.progress?.percent || 0) * 100);
       card.innerHTML = `
-        <div class="kanban-card-title">${task.title}</div>
-        <div class="kanban-card-meta">${owner}</div>
-        <div class="kanban-card-meta">Due: ${due}</div>
-        <div class="kanban-card-progress">${percent}%</div>
+        <div class="text-sm font-medium text-gray-900">${task.title}</div>
+        <div class="mt-2 text-xs text-gray-500">${owner}</div>
+        <div class="mt-1 text-xs text-gray-500">Due: ${due}</div>
+        <div class="mt-2 text-xs font-medium text-blue-700">${percent}%</div>
       `;
       card.addEventListener('dragstart', (event) => {
         event.dataTransfer?.setData('text/plain', String(task.id));
-        card.classList.add('is-dragging');
+        card.classList.add('opacity-50');
       });
       card.addEventListener('dragend', () => {
-        card.classList.remove('is-dragging');
+        card.classList.remove('opacity-50');
       });
       card.addEventListener('click', () => openTask(task.id));
       list.appendChild(card);
@@ -1857,16 +1878,19 @@
     taskEntities.innerHTML = '';
     (data.entities || []).forEach((entity) => {
       const row = document.createElement('div');
-      row.className = 'task-entity-row';
+      row.className = 'mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm';
       const signed = entity.signature_at ? 'signed' : (entity.signature_required ? 'required' : 'no');
+      const entityType = entity.entity_type === 'qualification_step' ? 'Qualification' : (entity.entity_type === 'doe' ? 'DOE' : 'Report');
+      const entityTone = entity.entity_type === 'qualification_step' ? 'bg-blue-50 text-blue-700' : (entity.entity_type === 'doe' ? 'bg-violet-50 text-violet-700' : 'bg-emerald-50 text-emerald-700');
       row.innerHTML = `
-        <div>
-          <strong>${entity.display_label || `#${entity.entity_id}`}</strong>
-          <span class="entity-type">${entity.entity_type}</span>
+        <div class="min-w-0">
+          <div class="truncate font-medium text-gray-900">${entity.display_label || `#${entity.entity_id}`}</div>
+          <div class="mt-1 flex flex-wrap items-center gap-1.5">
+            <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${entityTone}">${entityType}</span>
+            <span class="text-xs text-gray-500">${entity.status} · weight ${entity.weight}</span>
+          </div>
         </div>
-        <div>weight: ${entity.weight}</div>
-        <div>status: ${entity.status}</div>
-        <div>signature: ${signed}</div>
+        <span class="text-xs text-gray-500">Signature: ${signed}</span>
       `;
       taskEntities.appendChild(row);
     });
@@ -1883,6 +1907,7 @@
     } else {
       taskEditDue.value = '';
     }
+    taskEditDue.datepicker?.update();
     const attached = new Set(
       (data.entities || []).map((entity) => `${entity.entity_type}:${entity.entity_id}`)
     );
@@ -1893,24 +1918,27 @@
       taskEditEntities.innerHTML = '';
       (data.entities || []).forEach((entity) => {
         const row = document.createElement('div');
-        row.className = 'task-entity-row';
+        row.className = 'mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm';
         const signed = entity.signature_at ? 'signed' : (entity.signature_required ? 'required' : 'no');
+        const entityType = entity.entity_type === 'qualification_step' ? 'Qualification' : (entity.entity_type === 'doe' ? 'DOE' : 'Report');
+        const entityTone = entity.entity_type === 'qualification_step' ? 'bg-blue-50 text-blue-700' : (entity.entity_type === 'doe' ? 'bg-violet-50 text-violet-700' : 'bg-emerald-50 text-emerald-700');
         const signButton = canSignReports && entity.entity_type === 'report' && entity.signature_required && !entity.signature_at
-          ? `<button class="pure-button pure-button-secondary" type="button" data-entity-sign="${entity.id}">Sign report</button>`
+          ? `<button class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-entity-sign="${entity.id}">Sign report</button>`
           : '';
         row.innerHTML = `
-          <div>
-            <strong>${entity.display_label || `#${entity.entity_id}`}</strong>
-            <span class="entity-type">${entity.entity_type}</span>
+          <div class="min-w-0">
+            <div class="truncate font-medium text-gray-900">${entity.display_label || `#${entity.entity_id}`}</div>
+            <div class="mt-1 flex flex-wrap items-center gap-1.5">
+              <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${entityTone}">${entityType}</span>
+              <span class="text-xs text-gray-500">${entity.status} · signature: ${signed}</span>
+            </div>
           </div>
-          <div>
-            <label>weight</label>
-            <input type="number" min="0" step="1" value="${entity.weight}" data-entity-weight="${entity.id}">
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-gray-500" for="entity-weight-${entity.id}">Weight</label>
+            <input class="w-16 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-blue-600 focus:ring-blue-600" id="entity-weight-${entity.id}" type="number" min="0" step="1" value="${entity.weight}" data-entity-weight="${entity.id}">
           </div>
-          <div>status: ${entity.status}</div>
-          <div>signature: ${signed}</div>
           ${signButton}
-          <button class="pure-button pure-button-secondary" type="button" data-entity-delete="${entity.id}">Remove</button>
+          <button class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-entity-delete="${entity.id}">Remove</button>
         `;
         taskEditEntities.appendChild(row);
       });
@@ -2026,14 +2054,6 @@
     }
   });
 
-  toggleTaskEditEntities?.addEventListener('click', () => {
-    taskEditEntitiesPanel?.classList.toggle('is-open');
-  });
-
-  toggleTaskCreateEntities?.addEventListener('click', () => {
-    taskCreateEntitiesPanel?.classList.toggle('is-open');
-  });
-
   taskDetailDialog?.addEventListener('close', () => {
     calendarMenu?.classList.remove('is-open');
   });
@@ -2047,21 +2067,18 @@
     currentTaskId = null;
     loadTasks();
   });
-  taskEditDialog?.addEventListener('close', () => {
-    taskEditEntitiesPanel?.classList.remove('is-open');
-  });
 
-  board?.querySelectorAll('.kanban-column').forEach((column) => {
+  board?.querySelectorAll('[data-kanban-column]').forEach((column) => {
     column.addEventListener('dragover', (event) => {
       event.preventDefault();
-      column.classList.add('is-drop-target');
+      column.classList.add('ring-2', 'ring-blue-500');
     });
     column.addEventListener('dragleave', () => {
-      column.classList.remove('is-drop-target');
+      column.classList.remove('ring-2', 'ring-blue-500');
     });
     column.addEventListener('drop', async (event) => {
       event.preventDefault();
-      column.classList.remove('is-drop-target');
+      column.classList.remove('ring-2', 'ring-blue-500');
       const taskId = event.dataTransfer?.getData('text/plain');
       const status = column.dataset.status;
       if (!taskId || !status) return;
@@ -2121,11 +2138,11 @@
       }
     }
     taskCreateForm.reset();
-    taskCreateEntitiesPanel?.classList.remove('is-open');
+    document.getElementById('taskDueInput')?.datepicker?.setDate({ clear: true });
     taskCreateDialog?.close();
     loadTasks();
   });
 
   loadTasks();
 </script>
-<%- include('partials/foot') %>
+<%- include('partials/foot', { uiKit: true }) %>

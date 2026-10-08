@@ -330,9 +330,19 @@ function getStepDefinitionsForProcessType(processTypeCode: string): StepDefiniti
   return injectionStepDefinitions;
 }
 
+function getCatalogueStageCode(processTypeCode: string, stepNumber: number) {
+  const normalizedProcess = processTypeCode.replace(/[^a-z0-9_-]+/g, "") || "injection";
+  return `${normalizedProcess}.qualification.${String(stepNumber).padStart(3, "0")}`;
+}
+
 export function getQualificationStepsForExperiment(db: Db, experimentId: number) {
   const processTypeCode = getProcessTypeCodeForExperiment(db, experimentId);
-  return getStepDefinitionsForProcessType(processTypeCode).map(({ step_number, name }) => ({ step_number, name }));
+  return getStepDefinitionsForProcessType(processTypeCode).map(({ step_number, name }) => ({
+    step_number,
+    name,
+    stage_code: getCatalogueStageCode(processTypeCode, step_number),
+    display_order: step_number
+  }));
 }
 
 export function getStepDefinitionForExperiment(db: Db, experimentId: number, stepNumber: number) {
@@ -347,7 +357,16 @@ export function getQualificationStepName(db: Db, experimentId: number, stepNumbe
 export function ensureQualificationDefaults(db: Db, experimentId: number) {
   const processTypeCode = getProcessTypeCodeForExperiment(db, experimentId);
   const stepDefinitions = getStepDefinitionsForProcessType(processTypeCode);
-  ensureQualSteps(db, experimentId);
+  ensureQualSteps(
+    db,
+    experimentId,
+    stepDefinitions.map((step) => ({
+      step_number: step.step_number,
+      stage_code: getCatalogueStageCode(processTypeCode, step.step_number),
+      display_order: step.step_number,
+      title: step.name
+    }))
+  );
   const steps = listQualSteps(db, experimentId);
   for (const step of steps) {
     const def = stepDefinitions.find((d) => d.step_number === step.step_number);

@@ -4,7 +4,23 @@ export type QualStep = {
   id: number;
   experiment_id: number;
   step_number: number;
-  status: "DRAFT" | "RUNNING" | "DONE";
+  stage_code: string;
+  display_order: number;
+  title: string;
+  status: "DRAFT" | "RUNNING" | "DONE" | "BLOCKED";
+  is_blocked: number;
+  blocked_reason: string | null;
+  blocked_by_user_id: number | null;
+  blocked_by_label: string | null;
+  blocked_at: string | null;
+  status_before_block: "DRAFT" | "RUNNING" | "DONE" | null;
+};
+
+export type QualStageSeed = {
+  step_number: number;
+  stage_code: string;
+  display_order: number;
+  title: string;
 };
 
 export type QualRun = {
@@ -42,23 +58,58 @@ export type QualRunValue = {
   value_tags_json: string | null;
 };
 
-export function ensureQualSteps(db: Db, experimentId: number) {
+const qualStepSelect = `
+  SELECT qs.id, qs.experiment_id, qs.step_number, qs.stage_code,
+         qs.display_order, qs.title, qs.status, qs.is_blocked,
+         qs.blocked_reason, qs.blocked_by_user_id, qs.blocked_at,
+         qs.status_before_block,
+         COALESCE(NULLIF(u.name, ''), u.email) AS blocked_by_label
+  FROM qual_steps qs
+  LEFT JOIN users u ON u.id = qs.blocked_by_user_id
+`;
+
+export function ensureQualSteps(db: Db, experimentId: number, seeds: readonly QualStageSeed[]) {
   const existing = db
-    .prepare("SELECT step_number FROM qual_steps WHERE experiment_id = ?")
-    .all(experimentId) as Array<{ step_number: number }>;
-  const existingSet = new Set(existing.map((row) => row.step_number));
+    .prepare("SELECT id, step_number FROM qual_steps WHERE experiment_id = ?")
+    .all(experimentId) as Array<{ id: number; step_number: number }>;
+  const existingByNumber = new Map(existing.map((row) => [row.step_number, row]));
   const insert = db.prepare(
-    "INSERT INTO qual_steps (experiment_id, step_number, status) VALUES (?, ?, 'DRAFT')"
+    `INSERT INTO qual_steps
+     (experiment_id, step_number, stage_code, display_order, title, status)
+     VALUES (?, ?, ?, ?, ?, 'DRAFT')`
   );
-  for (let step = 1; step <= 6; step += 1) {
-    if (!existingSet.has(step)) insert.run(experimentId, step);
+  const update = db.prepare(
+    "UPDATE qual_steps SET stage_code = ?, display_order = ?, title = ? WHERE id = ?"
+  );
+  const seenNumbers = new Set<number>();
+  const seenCodes = new Set<string>();
+  for (const seed of seeds) {
+    if (!Number.isInteger(seed.step_number) || seed.step_number <= 0) {
+      throw new Error("Qualification stage number must be a positive integer");
+    }
+    if (!seed.stage_code.trim() || !seed.title.trim()) {
+      throw new Error("Qualification stage code and title are required");
+    }
+    if (seenNumbers.has(seed.step_number) || seenCodes.has(seed.stage_code)) {
+      throw new Error("Qualification stage catalogue contains duplicate identifiers");
+    }
+    seenNumbers.add(seed.step_number);
+    seenCodes.add(seed.stage_code);
+    const current = existingByNumber.get(seed.step_number);
+    if (current) {
+      update.run(seed.stage_code, seed.display_order, seed.title, current.id);
+    } else {
+      insert.run(experimentId, seed.step_number, seed.stage_code, seed.display_order, seed.title);
+    }
   }
 }
 
 export function listQualSteps(db: Db, experimentId: number): QualStep[] {
   return db
     .prepare(
-      "SELECT id, experiment_id, step_number, status FROM qual_steps WHERE experiment_id = ? ORDER BY step_number"
+      `${qualStepSelect}
+       WHERE qs.experiment_id = ?
+       ORDER BY qs.display_order, qs.id`
     )
     .all(experimentId) as QualStep[];
 }
@@ -66,7 +117,8 @@ export function listQualSteps(db: Db, experimentId: number): QualStep[] {
 export function getQualStep(db: Db, experimentId: number, stepNumber: number): QualStep | null {
   const row = db
     .prepare(
-      "SELECT id, experiment_id, step_number, status FROM qual_steps WHERE experiment_id = ? AND step_number = ?"
+      `${qualStepSelect}
+       WHERE qs.experiment_id = ? AND qs.step_number = ?`
     )
     .get(experimentId, stepNumber) as QualStep | undefined;
   return row ?? null;
@@ -75,14 +127,50 @@ export function getQualStep(db: Db, experimentId: number, stepNumber: number): Q
 export function getQualStepById(db: Db, stepId: number): QualStep | null {
   const row = db
     .prepare(
-      "SELECT id, experiment_id, step_number, status FROM qual_steps WHERE id = ?"
+      `${qualStepSelect}
+       WHERE qs.id = ?`
     )
     .get(stepId) as QualStep | undefined;
   return row ?? null;
 }
 
 export function updateQualStepStatus(db: Db, stepId: number, status: QualStep["status"]) {
+  if (status === "BLOCKED") {
+    throw new Error("Use setQualStepBlocked to block a qualification stage");
+  }
   db.prepare("UPDATE qual_steps SET status = ? WHERE id = ?").run(status, stepId);
+}
+
+export function setQualStepBlocked(
+  db: Db,
+  stepId: number,
+  input: { blocked: boolean; reason?: string | null; actorUserId: number | null }
+) {
+  if (input.blocked) {
+    const reason = String(input.reason ?? "").trim();
+    if (!reason) throw new Error("A block reason is required");
+    db.prepare(
+      `UPDATE qual_steps
+       SET status_before_block = CASE WHEN status = 'BLOCKED' THEN status_before_block ELSE status END,
+           status = 'BLOCKED',
+           is_blocked = 1,
+           blocked_reason = ?,
+           blocked_by_user_id = ?,
+           blocked_at = datetime('now')
+       WHERE id = ?`
+    ).run(reason, input.actorUserId, stepId);
+    return;
+  }
+  db.prepare(
+    `UPDATE qual_steps
+     SET status = COALESCE(status_before_block, 'DRAFT'),
+         is_blocked = 0,
+         blocked_reason = NULL,
+         blocked_by_user_id = NULL,
+         blocked_at = NULL,
+         status_before_block = NULL
+     WHERE id = ?`
+  ).run(stepId);
 }
 
 export function listQualRuns(db: Db, stepId: number): QualRun[] {
@@ -116,7 +204,7 @@ export function createQualRuns(db: Db, experimentId: number, stepId: number, cou
   );
   for (let i = 1; i <= count; i += 1) {
     const order = current.max_order + i;
-    const runCode = `Q${stepNumber}-R${String(order).padStart(3, "0")}`;
+    const runCode = `E${experimentId}-Q${stepNumber}-R${String(order).padStart(3, "0")}`;
     insert.run(experimentId, stepId, order, runCode);
   }
 }

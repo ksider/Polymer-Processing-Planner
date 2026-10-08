@@ -60,6 +60,35 @@ function initDb(db: Db) {
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_by INTEGER
     );
+    CREATE TABLE IF NOT EXISTS email_provider_profiles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      provider_kind TEXT NOT NULL DEFAULT 'resend',
+      api_key_ciphertext TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      updated_by INTEGER,
+      FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE TABLE IF NOT EXISTS email_sender_profiles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      provider_profile_id INTEGER NOT NULL,
+      purpose TEXT NOT NULL,
+      name TEXT NOT NULL,
+      from_name TEXT,
+      from_email TEXT NOT NULL,
+      reply_to TEXT,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      is_default INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      updated_by INTEGER,
+      FOREIGN KEY (provider_profile_id) REFERENCES email_provider_profiles(id) ON DELETE CASCADE,
+      FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_email_sender_profiles_purpose
+      ON email_sender_profiles(purpose, enabled, is_default);
     CREATE TABLE IF NOT EXISTS sessions (
       sid TEXT PRIMARY KEY,
       user_id INTEGER,
@@ -690,7 +719,15 @@ function initDb(db: Db) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       experiment_id INTEGER NOT NULL,
       step_number INTEGER NOT NULL,
+      stage_code TEXT,
+      display_order INTEGER,
+      title TEXT,
       status TEXT NOT NULL DEFAULT 'DRAFT',
+      is_blocked INTEGER NOT NULL DEFAULT 0,
+      blocked_reason TEXT,
+      blocked_by_user_id INTEGER,
+      blocked_at TEXT,
+      status_before_block TEXT,
       UNIQUE(experiment_id, step_number),
       FOREIGN KEY (experiment_id) REFERENCES experiments(id) ON DELETE CASCADE
     );
@@ -1459,6 +1496,51 @@ function initDb(db: Db) {
     db.exec("ALTER TABLE qual_runs ADD COLUMN due_at TEXT");
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_qual_runs_due_at ON qual_runs(due_at)");
+  if (!hasColumn(db, "qual_steps", "stage_code")) {
+    db.exec("ALTER TABLE qual_steps ADD COLUMN stage_code TEXT");
+  }
+  if (!hasColumn(db, "qual_steps", "display_order")) {
+    db.exec("ALTER TABLE qual_steps ADD COLUMN display_order INTEGER");
+  }
+  if (!hasColumn(db, "qual_steps", "title")) {
+    db.exec("ALTER TABLE qual_steps ADD COLUMN title TEXT");
+  }
+  if (!hasColumn(db, "qual_steps", "is_blocked")) {
+    db.exec("ALTER TABLE qual_steps ADD COLUMN is_blocked INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!hasColumn(db, "qual_steps", "blocked_reason")) {
+    db.exec("ALTER TABLE qual_steps ADD COLUMN blocked_reason TEXT");
+  }
+  if (!hasColumn(db, "qual_steps", "blocked_by_user_id")) {
+    db.exec("ALTER TABLE qual_steps ADD COLUMN blocked_by_user_id INTEGER");
+  }
+  if (!hasColumn(db, "qual_steps", "blocked_at")) {
+    db.exec("ALTER TABLE qual_steps ADD COLUMN blocked_at TEXT");
+  }
+  if (!hasColumn(db, "qual_steps", "status_before_block")) {
+    db.exec("ALTER TABLE qual_steps ADD COLUMN status_before_block TEXT");
+  }
+  db.exec(`
+    UPDATE qual_steps
+    SET stage_code = COALESCE(NULLIF(stage_code, ''), 'legacy.step.' || printf('%03d', step_number)),
+        display_order = COALESCE(display_order, step_number),
+        title = COALESCE(title, 'Step ' || step_number)
+    WHERE stage_code IS NULL OR stage_code = '' OR display_order IS NULL OR title IS NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_qual_steps_experiment_stage_code
+      ON qual_steps(experiment_id, stage_code);
+    CREATE INDEX IF NOT EXISTS idx_qual_steps_experiment_display_order
+      ON qual_steps(experiment_id, display_order, id);
+  `);
+  // Legacy qualification run labels were unique only inside one step.  IDs and
+  // relationships remain unchanged; update generated labels to make them
+  // unambiguous wherever they appear across the application.
+  db.exec(`
+    UPDATE qual_runs
+    SET run_code = 'E' || experiment_id || '-Q' ||
+      COALESCE((SELECT step_number FROM qual_steps WHERE qual_steps.id = qual_runs.step_id), step_id) ||
+      '-R' || printf('%03d', run_order)
+    WHERE run_code GLOB 'Q[0-9]*-R[0-9]*';
+  `);
   db.exec(`
     UPDATE runs
     SET owner_user_id = (

@@ -2,19 +2,11 @@ import type { TaskEntityRow, TaskStatus } from "../repos/tasks_repo.js";
 
 const SIGNATURE_WEIGHT_MULTIPLIER = 2;
 
-// Default weights for qualification steps (can be overridden in the editor).
-const QUAL_STEP_WEIGHTS: Record<number, number> = {
-  1: 3,
-  2: 1,
-  3: 1,
-  4: 3,
-  5: 2,
-  6: 2
-};
-
-export function getDefaultEntityWeight(entityType: string, entityId: number): number {
+// Qualification stage effort is declared by the code-owned catalogue later.
+// Never infer it from a visible stage number: stage row ids are not ordinals.
+export function getDefaultEntityWeight(entityType: string, _entityId: number): number {
   if (entityType === "qualification_step") {
-    return QUAL_STEP_WEIGHTS[entityId] ?? 1;
+    return 1;
   }
   if (entityType === "doe") {
     return 4;
@@ -54,31 +46,14 @@ export function suggestTaskStatus(progress: ProgressSummary): TaskStatus {
   return "init";
 }
 
-// Apply domain rules for Qualification/DOE tasks.
-// - Qualification steps 2/3 are optional; missing them can be covered by report signature.
-// - DOE tasks require report + signature to be considered done, even if runs are complete.
+// Apply domain rules for Qualification/DOE tasks. Stage dependencies belong to
+// the qualification catalogue; task closure must not reinterpret a stage row id
+// as a globally meaningful step number.
 export function canCloseTask(entities: TaskEntityRow[]): boolean {
   const hasReport = entities.some((e) => e.entity_type === "report");
   const reportSigned = entities.some(
     (e) => e.entity_type === "report" && e.signature_required && e.signature_at
   );
-
-  const hasQualificationSteps = entities.some((e) => e.entity_type === "qualification_step");
-  if (hasQualificationSteps) {
-    const step2 = entities.find(
-      (e) => e.entity_type === "qualification_step" && e.entity_id === 2
-    );
-    const step3 = entities.find(
-      (e) => e.entity_type === "qualification_step" && e.entity_id === 3
-    );
-    const step2Done = step2 ? step2.status === "done" : false;
-    const step3Done = step3 ? step3.status === "done" : false;
-
-    // If optional steps are missing, a signed report can close the task.
-    if ((!step2Done || !step3Done) && !(hasReport && reportSigned)) {
-      return false;
-    }
-  }
 
   const hasDoe = entities.some((e) => e.entity_type === "doe");
   if (hasDoe) {

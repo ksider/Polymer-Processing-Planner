@@ -23,7 +23,7 @@ import {
 import { computeTaskProgress, suggestTaskStatusWithRules, getDefaultEntityWeight } from "../services/tasks_service.js";
 import { listTasksForUser } from "../repos/tasks_read_repo.js";
 import { findUserById } from "../repos/users_repo.js";
-import { getQualStepById, listQualSummarySteps } from "../repos/qual_repo.js";
+import { getQualStep, getQualStepById, listQualSummarySteps } from "../repos/qual_repo.js";
 import { getQualificationStepName } from "../services/qualification_service.js";
 import { getExperiment } from "../repos/experiments_repo.js";
 import { getDoeStudy } from "../repos/doe_repo.js";
@@ -32,6 +32,14 @@ import { isProcessOwner } from "../repos/processes_repo.js";
 
 export function createTasksRouter(db: Db) {
   const router = express.Router();
+
+  // Old task records stored a visible stage number. New records store the
+  // qualification row id. Resolve both during the additive migration period.
+  const resolveQualificationStage = (experimentId: number, entityId: number) => {
+    const byId = getQualStepById(db, entityId);
+    if (byId?.experiment_id === experimentId) return byId;
+    return getQualStep(db, experimentId, entityId);
+  };
 
   const ensureTaskAccess = (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const taskId = Number(req.params.id);
@@ -85,7 +93,8 @@ export function createTasksRouter(db: Db) {
       const entities = listTaskEntities(db, task.id);
       const hydrated: TaskEntityRow[] = entities.map((entity) => {
         if (entity.entity_type === "qualification_step") {
-          if (summarySteps.has(entity.entity_id)) {
+          const stage = resolveQualificationStage(experimentId, entity.entity_id);
+          if (stage && summarySteps.has(stage.step_number)) {
             return { ...entity, status: "done" as const };
           }
         }
@@ -116,7 +125,8 @@ export function createTasksRouter(db: Db) {
     const summarySteps = new Set(listQualSummarySteps(db, task.experiment_id));
     const hydrated: TaskEntityRow[] = entities.map((entity) => {
       if (entity.entity_type === "qualification_step") {
-        if (summarySteps.has(entity.entity_id)) {
+        const stage = resolveQualificationStage(task.experiment_id, entity.entity_id);
+        if (stage && summarySteps.has(stage.step_number)) {
           return { ...entity, status: "done" as const };
         }
       }
@@ -419,8 +429,11 @@ function toTaskStatus(raw: unknown): TaskStatus | null {
 
 function getEntityLabel(db: Db, experimentId: number, type: string, id: number): string {
   if (type === "qualification_step") {
-    const name = getQualificationStepName(db, experimentId, id);
-    return `Step ${id}: ${name}`;
+    const byId = getQualStepById(db, id);
+    const stage = byId?.experiment_id === experimentId ? byId : getQualStep(db, experimentId, id);
+    const stepNumber = stage?.step_number ?? id;
+    const name = getQualificationStepName(db, experimentId, stepNumber);
+    return `Step ${stepNumber}: ${name}`;
   }
   if (type === "doe") {
     const doe = getDoeStudy(db, id);

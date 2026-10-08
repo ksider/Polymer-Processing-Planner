@@ -6,6 +6,7 @@ import { getDoeStudy } from "../repos/doe_repo.js";
 import { getReportConfig } from "../repos/reports_repo.js";
 import { getRun } from "../repos/runs_repo.js";
 import { getTask } from "../repos/tasks_repo.js";
+import { getQualStep, getQualStepById } from "../repos/qual_repo.js";
 import {
   appendToNote,
   createNote,
@@ -57,14 +58,24 @@ function toEntityId(raw: unknown, fallback: number): number {
   return parsed;
 }
 
+function resolveQualificationStage(db: Db, experimentId: number, entityId: number) {
+  const byId = getQualStepById(db, entityId);
+  if (byId?.experiment_id === experimentId) return byId;
+  return getQualStep(db, experimentId, entityId);
+}
+
 function entityHref(
   note: { entity_type: NoteEntityType | null; entity_id: number | null },
-  experimentId: number
+  experimentId: number,
+  db: Db
 ): string {
   const entityType = note.entity_type || "experiment";
   const entityId = Number(note.entity_id || experimentId);
   if (entityType === "experiment") return `/experiments/${experimentId}`;
-  if (entityType === "qualification_step") return `/experiments/${experimentId}/qualification/${entityId}`;
+  if (entityType === "qualification_step") {
+    const stage = resolveQualificationStage(db, experimentId, entityId);
+    return `/experiments/${experimentId}/qualification/${stage?.step_number ?? entityId}`;
+  }
   if (entityType === "doe") return `/experiments/${experimentId}/doe/${entityId}`;
   if (entityType === "run") return `/experiments/${experimentId}/runs/${entityId}`;
   if (entityType === "report") return `/reports/${entityId}`;
@@ -101,7 +112,7 @@ function toResponseNote(
       },
       experimentId
     ),
-    entity_href: entityHref(note, experimentId),
+    entity_href: entityHref(note, experimentId, db),
     can_edit: canEdit,
     can_delete: role === "admin" || role === "manager"
   };
@@ -109,7 +120,10 @@ function toResponseNote(
 
 function entityLabel(db: Db, note: { entity_type: NoteEntityType; entity_id: number }, experimentId: number): string {
   if (note.entity_type === "experiment") return `Experiment #${experimentId}`;
-  if (note.entity_type === "qualification_step") return `Qualification Step ${note.entity_id}`;
+  if (note.entity_type === "qualification_step") {
+    const stage = resolveQualificationStage(db, experimentId, note.entity_id);
+    return `Qualification Step ${stage?.step_number ?? note.entity_id}`;
+  }
   if (note.entity_type === "doe") {
     const doe = getDoeStudy(db, note.entity_id);
     return doe?.name?.trim() || `DOE #${note.entity_id}`;

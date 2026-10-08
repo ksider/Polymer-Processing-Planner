@@ -3,6 +3,7 @@ import type { Db } from "../../db.js";
 import { ensureExperimentAccess } from "../../middleware/experiment_access.js";
 import { createRateLimiter } from "../../middleware/rate_limit.js";
 import { getExperiment } from "../../repos/experiments_repo.js";
+import { buildExperimentWorkspace } from "../../services/experiment_workspace_service.js";
 import { getProcessById } from "../../repos/processes_repo.js";
 import { insertRuns, listRuns } from "../../repos/runs_repo.js";
 import {
@@ -96,6 +97,8 @@ export function createDoeAnalysisRouter(
         const experiment = getExperiment(db, experimentId);
         const dataset = buildDoeAnalysisDataset(db, experimentId, doeId);
         if (!experiment) return res.status(404).send("Experiment not found");
+        const workspace = buildExperimentWorkspace(db, experiment.id);
+        if (!workspace) return res.status(404).send("Experiment not found");
         const responses = dataset.columns.filter(
           (column) => column.role === "response" && column.active && (column.dataType === "number" || column.dataType === "boolean" || column.dataType === "tags")
         );
@@ -171,7 +174,8 @@ export function createDoeAnalysisRouter(
           savedAiInterpretations,
           aiProviderProfiles,
           llmAssistantEnabled: isDoeAnalysisLlmEnabled(),
-          canRequestAiInterpretation: canEditAnalysis(req.user)
+          canRequestAiInterpretation: canEditAnalysis(req.user),
+          workspace
         });
       } catch (error) {
         if (error instanceof DoeAnalysisDatasetNotFoundError) {

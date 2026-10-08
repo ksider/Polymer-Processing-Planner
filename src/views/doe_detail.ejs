@@ -1,34 +1,39 @@
-<%- include('partials/head', { title: `Polymer Processing Planner | ${experiment.name}` }) %>
-<%- include('partials/nav') %>
-<div class="container">
-  <div class="card">
-    <div class="card-header card-header-main">
-      <a class="back-link" href="<%= experimentPath(experiment) %>" aria-label="Back to experiment">
+<%- include('partials/head', { title: `Polymer Processing Planner | ${experiment.name}`, uiKit: true }) %>
+<%- include('partials/experiment_workspace_nav') %>
+<% const inputTableClass = 'min-w-full border-separate border-spacing-y-2 text-left text-sm text-body [&_thead_th]:whitespace-nowrap [&_thead_th]:px-3 [&_thead_th]:py-2 [&_thead_th]:text-xs [&_thead_th]:font-medium [&_thead_th]:uppercase [&_thead_th]:text-body [&_tbody_td]:border-y [&_tbody_td]:border-default-medium [&_tbody_td]:bg-neutral-primary [&_tbody_td]:px-3 [&_tbody_td]:py-2 [&_tbody_td:first-child]:rounded-s-base [&_tbody_td:first-child]:border-s [&_tbody_td:last-child]:rounded-e-base [&_tbody_td:last-child]:border-e' %>
+<% const factorTableClass = 'min-w-full border-collapse text-left text-sm text-body [&_thead_th]:whitespace-nowrap [&_thead_th]:border-b [&_thead_th]:border-default-strong [&_thead_th]:bg-neutral-secondary [&_thead_th]:px-3 [&_thead_th]:py-2 [&_thead_th]:text-xs [&_thead_th]:font-medium [&_thead_th]:uppercase [&_thead_th]:text-heading [&_tbody_td]:border-b [&_tbody_td]:border-default-medium [&_tbody_td]:bg-neutral-primary [&_tbody_td]:px-3 [&_tbody_td]:py-2 [&_tbody_tr:hover_td]:bg-neutral-secondary' %>
+<div class="flex min-h-[calc(100vh-4rem)] w-full overflow-x-clip bg-gray-50">
+  <%- include('partials/experiment_workspace_sidebar', { workspace }) %>
+  <main class="min-w-0 flex-1"><div class="w-full max-w-none px-3 py-3 sm:px-4 lg:px-5">
+    <div class="mb-3 flex items-center justify-between gap-3 lg:hidden"><button class="inline-flex items-center gap-2 rounded-base border border-default-medium bg-neutral-secondary px-3 py-2 text-sm font-medium text-heading shadow-xs" type="button" data-open-experiment-calendar><span class="material-symbols-rounded text-[19px]" aria-hidden="true">calendar_month</span>Calendar</button><a class="inline-flex items-center gap-2 rounded-base border border-default-medium bg-neutral-secondary px-3 py-2 text-sm font-medium text-heading no-underline shadow-xs" href="<%= experimentPath(experiment) %>"><span class="material-symbols-rounded text-[19px]" aria-hidden="true">science</span>Experiment</a></div>
+  <section class="mb-4 rounded-xl border border-default-medium bg-neutral-primary px-4 py-3 shadow-xs">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <a class="inline-flex size-9 items-center justify-center rounded-base text-body no-underline hover:bg-neutral-secondary hover:text-heading" href="<%= experimentPath(experiment) %>" aria-label="Back to experiment">
         <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
       </a>
-      <div>
-        <h1 class="card-title" id="doeTitle"><%- formatInline(doe.name) %></h1>
-        <p class="small-note">
+      <div class="min-w-0 flex-1">
+        <h1 class="truncate text-base font-semibold tracking-tight text-heading" id="doeTitle"><%- formatInline(doe.name) %></h1>
+        <p class="mt-0.5 text-xs text-body">
           <strong><%- formatInline(experiment.name) %></strong> · <%= doe.design_type %> · Seed <%= doe.seed %>
         </p>
       </div>
       <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
-        <div class="section-actions">
-          <button class="icon-button" type="button" id="openDoeNameDialog" title="DOE settings">
+        <div class="flex flex-wrap items-center gap-2">
+          <button class="inline-flex size-9 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="openDoeNameDialog" title="DOE settings">
             <span class="material-symbols-rounded" aria-hidden="true">edit</span>
           </button>
         </div>
       <% } %>
     </div>
-    <div class="tabs">
-      <a class="<%= tab === 'design' ? 'active' : '' %>" href="/experiments/<%= experiment.id %>/doe/<%= doeId %>?tab=design">Design</a>
-      <a class="<%= tab === 'runs' ? 'active' : '' %>" href="/experiments/<%= experiment.id %>/doe/<%= doeId %>?tab=runs">Runs</a>
-      <a class="<%= tab === 'analysis' ? 'active' : '' %>" href="/experiments/<%= experiment.id %>/doe/<%= doeId %>?tab=analysis">Analysis</a>
+    <div class="mt-3 flex flex-wrap gap-1 border-t border-default pt-2">
+      <a class="rounded-base px-3 py-2 text-sm font-medium no-underline <%= tab === 'design' ? 'bg-brand-soft text-brand-strong' : 'text-body hover:bg-neutral-secondary hover:text-heading' %>" href="/experiments/<%= experiment.id %>/doe/<%= doeId %>?tab=design">Design</a>
+      <a class="rounded-base px-3 py-2 text-sm font-medium no-underline <%= tab === 'runs' ? 'bg-brand-soft text-brand-strong' : 'text-body hover:bg-neutral-secondary hover:text-heading' %>" href="/experiments/<%= experiment.id %>/doe/<%= doeId %>?tab=runs">Runs</a>
+      <a class="rounded-base px-3 py-2 text-sm font-medium no-underline <%= tab === 'analysis' ? 'bg-brand-soft text-brand-strong' : 'text-body hover:bg-neutral-secondary hover:text-heading' %>" href="/experiments/<%= experiment.id %>/doe/<%= doeId %>?tab=analysis">Analysis</a>
       <% if (analysisV2Enabled) { %>
-        <a href="/experiments/<%= experiment.id %>/doe/<%= doeId %>/analysis-v2">Analysis V2</a>
+        <a class="rounded-base px-3 py-2 text-sm font-medium text-body no-underline hover:bg-neutral-secondary hover:text-heading" href="/experiments/<%= experiment.id %>/doe/<%= doeId %>/analysis-v2">Analysis V2</a>
       <% } %>
     </div>
-  </div>
+  </section>
 
   <%- include('partials/entity_notes', {
     experimentId: experiment.id,
@@ -39,15 +44,15 @@
   }) %>
 
   <% if (tab === 'design') { %>
-    <div class="card">
-      <h2 class="card-title">Factor Setup</h2>
-      <p class="small-note">Manage all parameters and custom fields from the popup.</p>
+    <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <h2 class="text-lg font-semibold tracking-tight text-gray-900">Factor Setup</h2>
+      <p class="text-sm text-gray-500">Manage all parameters and custom fields from the popup.</p>
       <% if (errorMessage) { %>
-        <p class="small-note"><strong><%= errorMessage %></strong></p>
+        <p class="text-sm text-gray-500"><strong><%= errorMessage %></strong></p>
       <% } %>
       <% const configMap = new Map(); configs.forEach(c => configMap.set(c.param_def_id, c)); %>
       <% const activeParams = inputParams.filter((param) => (configMap.get(param.id)?.active ?? 0) === 1); %>
-      <table class="pure-table table-compact" style="margin-top: 0.75rem;">
+      <div class="mt-3 overflow-x-auto"><table class="<%= inputTableClass %>">
         <thead>
           <tr>
             <th>Parameter</th>
@@ -60,41 +65,42 @@
             <tr><td colspan="3">No active factors selected.</td></tr>
           <% } %>
           <% activeParams.forEach((param) => { const config = configMap.get(param.id); const groupKey = (param.group_label || 'General').toLowerCase().replace(/[^a-z0-9]+/g, '-'); const valuesText = config?.mode === 'RANGE' ? `${formatNumber(config?.range_min_real)} .. ${formatNumber(config?.range_max_real)}` : config?.mode === 'LIST' ? (config?.list_json ? JSON.parse(config.list_json).map((val) => formatNumber(val)).join(', ') : '-') : formatNumber(config?.fixed_value_real); %>
-            <tr class="row-active group-row group-<%= groupKey %>" data-group-key="<%= groupKey %>">
+            <tr data-group-key="<%= groupKey %>">
               <td>
+                <span class="mr-2 inline-block size-2 rounded-full" data-group-marker="<%= groupKey %>" aria-hidden="true"></span>
                 <%- formatInline(param.label) %>
                 <% if (param.unit) { %>
-                  <span class="small-note">(<%- formatInline(param.unit) %>)</span>
+                  <span class="text-sm text-gray-500">(<%- formatInline(param.unit) %>)</span>
                 <% } %>
               </td>
-              <td><span class="badge"><%= config?.mode || 'FIXED' %></span></td>
+              <td><span class="inline-flex rounded-full bg-neutral-secondary px-2 py-0.5 text-xs font-medium text-heading"><%= config?.mode || 'FIXED' %></span></td>
               <td><%= valuesText %></td>
             </tr>
           <% }); %>
         </tbody>
-      </table>
-      <div style="margin-top: 1rem;">
-        <button class="pure-button pure-button-secondary" type="button" id="openFactorDialog">Edit All Parameters</button>
+      </table></div>
+      <div class="mt-4">
+        <button class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" id="openFactorDialog">Edit All Parameters</button>
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-header">
+    <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
         <div>
-          <h2 class="card-title">Measured Responses</h2>
-          <p class="small-note">Define what will be measured before running the experiment. Responses can also be added later without regenerating existing runs.</p>
+          <h2 class="text-lg font-semibold tracking-tight text-gray-900">Measured Responses</h2>
+          <p class="text-sm text-gray-500">Define what will be measured before running the experiment. Responses can also be added later without regenerating existing runs.</p>
         </div>
-        <button class="pure-button pure-button-secondary" type="button" data-open-measured-fields>Configure measured responses</button>
+        <button class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-open-measured-fields>Configure measured responses</button>
       </div>
       <% if (activeAnalysisFields.length === 0) { %>
-        <p class="small-note"><strong>No measured responses selected.</strong> Add at least one numeric response for model analysis.</p>
+        <p class="text-sm text-gray-500"><strong>No measured responses selected.</strong> Add at least one numeric response for model analysis.</p>
       <% } else { %>
-        <div class="field-grid" style="margin-top: 0.75rem;">
+        <div class="mt-3 grid gap-3 sm:grid-cols-2">
           <% activeAnalysisFields.forEach((field) => { %>
-            <div class="field-chip">
-              <div class="field-content">
-                <div class="field-title"><%- formatInline(field.label) %></div>
-                <div class="field-meta"><%= field.field_type %><% if (field.unit) { %> · <%- formatInline(field.unit) %><% } %></div>
+            <div class="rounded-base border border-default-medium bg-neutral-primary p-3 shadow-xs">
+              <div>
+                <div class="text-sm font-medium text-heading"><%- formatInline(field.label) %></div>
+                <div class="mt-0.5 text-xs text-body"><%= field.field_type %><% if (field.unit) { %> · <%- formatInline(field.unit) %><% } %></div>
               </div>
             </div>
           <% }); %>
@@ -102,57 +108,59 @@
       <% } %>
     </div>
 
-    <div class="card">
-      <h2 class="card-title">Generate Runs</h2>
-      <p class="small-note">Generation will replace existing runs for this experiment.</p>
-      <p class="small-note" data-run-preview>
+    <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <h2 class="text-lg font-semibold tracking-tight text-gray-900">Generate Runs</h2>
+      <p class="text-sm text-gray-500">Generation will replace existing runs for this experiment.</p>
+      <p class="text-sm text-gray-500" data-run-preview>
         Preview: <strong data-run-total><%= runPreview.totalRuns %></strong> runs
         = base <span data-run-base><%= runPreview.baseRuns %></span>
         × recipes <span data-run-recipes><%= runPreview.recipeMultiplier %></span>
         × replicates <span data-run-replicates><%= runPreview.replicateMultiplier %></span>
       </p>
-      <p class="small-note" data-run-formula><%= runPreview.formula %></p>
-      <p class="small-note" data-run-warning style="<%= runPreview.warning ? '' : 'display:none;' %>">
+      <p class="text-sm text-gray-500" data-run-formula><%= runPreview.formula %></p>
+      <p class="text-sm text-gray-500" data-run-warning style="<%= runPreview.warning ? '' : 'display:none;' %>">
         <strong><%= runPreview.warning %></strong>
       </p>
-      <form class="pure-form" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/generate" method="post">
-        <button class="pure-button pure-button-primary" type="submit">Generate Runlist</button>
+      <form action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/generate" method="post">
+        <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50" type="submit">Generate Runlist</button>
       </form>
     </div>
 
-    <dialog id="factorDialog" class="modal-frame">
-      <div class="modal-header">
+    <dialog id="factorDialog" class="m-auto w-[min(96vw,48rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40">
+      <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
         <strong>All Parameters</strong>
-        <button class="pure-button" type="button" data-close>Close</button>
+        <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Close</button>
       </div>
-      <div class="modal-body">
+      <div class="p-5">
         <% if (errorMessage) { %>
-          <p class="small-note"><strong><%= errorMessage %></strong></p>
+          <p class="text-sm text-gray-500"><strong><%= errorMessage %></strong></p>
         <% } %>
         <% const groupSet = new Set(); inputParams.forEach((param) => groupSet.add(param.group_label || 'General')); const groupList = Array.from(groupSet); %>
-        <div class="group-filter" data-group-filter>
-          <button type="button" class="group-chip active" data-group-filter="all">All</button>
+        <div class="flex flex-wrap gap-2" data-group-filter>
+          <button type="button" class="rounded-full border border-brand bg-brand px-3 py-1.5 text-sm font-medium text-white shadow-xs focus:outline-none focus:ring-4 focus:ring-brand-soft" data-group-filter-button="all">All</button>
+          <button type="button" class="rounded-full border border-default-medium bg-neutral-primary px-3 py-1.5 text-sm font-medium text-heading shadow-xs hover:bg-neutral-secondary focus:outline-none focus:ring-4 focus:ring-brand-soft" data-group-filter-button="selected">Selected</button>
           <% groupList.forEach((group) => { const groupKey = group.toLowerCase().replace(/[^a-z0-9]+/g, '-'); %>
             <button
               type="button"
-              class="group-chip"
-              data-group-filter="<%= groupKey %>"
+              class="rounded-full border border-default-medium bg-neutral-primary px-3 py-1.5 text-sm font-medium text-heading shadow-xs hover:bg-neutral-secondary focus:outline-none focus:ring-4 focus:ring-brand-soft"
+              data-group-filter-button="<%= groupKey %>"
               data-group-label="<%= group %>"
             >
+              <span class="size-2 rounded-full bg-current/70" data-group-marker="<%= groupKey %>" aria-hidden="true"></span>
               <%- formatInline(group) %>
             </button>
           <% }); %>
         </div>
-        <form class="pure-form" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/configs" method="post" id="factorForm">
-          <div class="small-note" style="margin-bottom: 0.5rem;">
+        <form class="grid gap-4" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/configs" method="post" id="factorForm">
+          <div class="text-sm text-body">
             Do not randomize (optional): pick one factor to keep grouped in run order.
           </div>
-          <table class="pure-table table-compact">
+          <div class="overflow-x-auto rounded-base border border-default-medium"><table class="<%= factorTableClass %>">
             <thead>
               <tr>
                 <th>On</th>
                 <th>
-                  <label class="toggle">
+                  <label class="inline-flex items-center gap-2 text-sm text-body">
                     <input
                       type="radio"
                       name="non_randomized_param_id"
@@ -160,8 +168,7 @@
                       id="nonRandomizeNone"
                       <%= !nonRandomizedParamId ? 'checked' : '' %>
                     >
-                    <span class="track"></span>
-                    <span class="toggle-label">None</span>
+                    <span>None</span>
                   </label>
                 </th>
                 <th>Parameter</th>
@@ -179,16 +186,14 @@
                   data-param-group="<%= param.group_label || 'General' %>"
                   data-param-unit="<%= param.unit || '' %>"
                   data-group-key="<%= groupKey %>"
-                  class="<%= config?.active ? 'row-active' : '' %> group-row group-<%= groupKey %>"
                 >
                   <td>
-                    <label class="toggle">
+                    <label class="inline-flex items-center">
                       <input type="checkbox" name="param_<%= param.id %>_active" data-active-toggle <%= config?.active ? 'checked' : '' %>>
-                      <span class="track"></span>
                     </label>
                   </td>
                   <td>
-                    <label class="toggle">
+                    <label class="inline-flex items-center">
                       <input
                         type="radio"
                         name="non_randomized_param_id"
@@ -197,16 +202,16 @@
                         <%= nonRandomizedParamId === param.id ? 'checked' : '' %>
                         <%= config?.active ? '' : 'disabled' %>
                       >
-                      <span class="track"></span>
                     </label>
                   </td>
                   <td>
+                    <span class="mr-2 inline-block size-2 rounded-full" data-group-marker="<%= groupKey %>" aria-hidden="true"></span>
                     <%- formatInline(param.label) %>
                     <% if (param.unit) { %>
-                      <span class="small-note">(<%- formatInline(param.unit) %>)</span>
+                      <span class="text-sm text-gray-500">(<%- formatInline(param.unit) %>)</span>
                     <% } %>
                   </td>
-                  <td class="mode-cell mode-<%= (config?.mode || 'FIXED').toLowerCase() %>">
+                  <td>
                     <select name="param_<%= param.id %>_mode" data-mode-select>
                       <option value="FIXED" <%= config?.mode === 'FIXED' ? 'selected' : '' %>>FIXED</option>
                       <option value="RANGE" <%= config?.mode === 'RANGE' ? 'selected' : '' %>>RANGE</option>
@@ -214,8 +219,8 @@
                     </select>
                   </td>
                   <td>
-                    <div class="factor-settings">
-                      <div class="settings-range">
+                    <div class="grid gap-2">
+                      <div class="grid grid-cols-[1fr_1fr_auto] gap-2" data-settings-range>
                         <input type="number" step="any" name="param_<%= param.id %>_min" data-range value="<%= config?.range_min_real ?? '' %>">
                         <input type="number" step="any" name="param_<%= param.id %>_max" data-range value="<%= config?.range_max_real ?? '' %>">
                         <% if (doe.design_type !== 'BBD') { %>
@@ -225,7 +230,7 @@
                           </select>
                         <% } %>
                       </div>
-                      <div class="settings-values">
+                      <div data-settings-values>
                         <input type="text" name="param_<%= param.id %>_values" data-values value="<%= valueText %>">
                       </div>
                     </div>
@@ -233,15 +238,15 @@
                 </tr>
               <% }); %>
             </tbody>
-          </table>
-          <div style="margin-top: 1rem;">
-            <button class="pure-button pure-button-primary" type="submit">Save Factors</button>
+          </table></div>
+          <div>
+            <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50" type="submit">Save Factors</button>
           </div>
         </form>
 
-        <div class="card" style="margin-top: 1rem;">
-          <h2 class="card-title">Custom Fields</h2>
-          <form class="pure-form pure-form-stacked" id="doeCustomFieldForm" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/params" method="post">
+        <div class="rounded-base border border-default-medium bg-neutral-primary p-4 shadow-xs">
+          <h2 class="text-lg font-semibold tracking-tight text-gray-900">Custom Fields</h2>
+          <form class="grid gap-4" id="doeCustomFieldForm" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/params" method="post">
             <div class="field-toolbar">
               <label>
                 Library
@@ -263,10 +268,10 @@
                   <% }); %>
                 </select>
               </label>
-              <button class="pure-button" type="button" id="doeLibraryFill">Use selected</button>
-              <a class="pure-button pure-button-secondary" href="/param-library">Open library</a>
+              <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" id="doeLibraryFill">Use selected</button>
+              <a class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" href="/param-library">Open library</a>
             </div>
-            <div class="grid-two">
+            <div class="grid gap-4 sm:grid-cols-2">
               <div>
                 <label>Code</label>
                 <input type="text" name="code" placeholder="custom_param" required>
@@ -303,14 +308,14 @@
                 <input type="text" name="allowed_values" placeholder="good, ok, fail">
               </div>
             </div>
-            <button class="pure-button pure-button-secondary" type="submit">Add Field</button>
+            <button class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="submit">Add Field</button>
           </form>
         </div>
 
         
       </div>
-      <div class="modal-footer">
-        <button class="pure-button" type="button" data-close>Close</button>
+      <div class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 px-5 py-4">
+        <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Close</button>
       </div>
     </dialog>
 
@@ -359,7 +364,8 @@
         const rangeInputs = row.querySelectorAll('[data-range]');
         const valuesInput = row.querySelector('[data-values]');
         const levelsSelect = row.querySelector('[data-levels]');
-        const modeCell = row.querySelector('.mode-cell');
+        const rangeSettings = row.querySelector('[data-settings-range]');
+        const valuesSettings = row.querySelector('[data-settings-values]');
         const nonRandomize = row.querySelector('[data-nonrandomize]');
         const activeToggle = row.querySelector('[data-active-toggle]');
         if (!modeSelect) return;
@@ -367,10 +373,9 @@
         rangeInputs.forEach((input) => { input.disabled = mode !== 'RANGE'; });
         if (valuesInput) valuesInput.disabled = mode === 'RANGE';
         if (levelsSelect) levelsSelect.disabled = mode !== 'RANGE';
-        if (modeCell) {
-          modeCell.classList.remove('mode-fixed', 'mode-range', 'mode-list');
-          modeCell.classList.add(`mode-${mode.toLowerCase()}`);
-        }
+        if (rangeSettings) rangeSettings.hidden = mode !== 'RANGE';
+        if (valuesSettings) valuesSettings.hidden = mode === 'RANGE';
+        if (valuesInput) valuesInput.placeholder = mode === 'LIST' ? 'Comma-separated values' : 'Fixed value';
         row.dataset.mode = mode.toLowerCase();
         if (nonRandomize && activeToggle) {
           nonRandomize.disabled = !activeToggle.checked;
@@ -390,7 +395,6 @@
         const activeToggle = row.querySelector('[data-active-toggle]');
         if (activeToggle) {
           activeToggle.addEventListener('change', () => {
-            row.classList.toggle('row-active', activeToggle.checked);
             updateRow(row);
           });
         }
@@ -496,14 +500,22 @@
           const groupKey = /^[a-z0-9_-]+$/i.test(row.dataset.groupKey || '') ? row.dataset.groupKey : 'general';
 
           const tr = document.createElement('tr');
-          tr.className = `row-active group-row group-${groupKey}`;
+          tr.className = '';
           tr.dataset.groupKey = groupKey;
           tr.innerHTML = `
             <td>${escapeHtml(label)}</td>
-            <td><span class="badge">${escapeHtml(mode)}</span></td>
+            <td><span class="inline-flex rounded-full bg-neutral-secondary px-2 py-0.5 text-xs font-medium text-heading">${escapeHtml(mode)}</span></td>
             <td>${escapeHtml(valuesText)}${unit ? ` ${escapeHtml(unit)}` : ''}</td>
           `;
           tbody.appendChild(tr);
+        });
+        applyGroupMarkers(tbody);
+      }
+
+      const factorGroupColors = new Map(<%- jsonForScript(Array.from(new Set(inputParams.map((param) => (param.group_label || 'General').toLowerCase().replace(/[^a-z0-9]+/g, '-')))).map((key, index) => [key, `hsl(${[210, 160, 28, 280, 340, 190, 80, 15][index % 8]} 62% 42%)`])) %>);
+      function applyGroupMarkers(root = document) {
+        root.querySelectorAll('[data-group-marker]').forEach((marker) => {
+          marker.style.backgroundColor = factorGroupColors.get(marker.dataset.groupMarker) || 'hsl(210 62% 42%)';
         });
       }
 
@@ -622,58 +634,54 @@
       });
       updateFactorSummary();
       updateRunPreview();
-
-      function applyGroupColors() {
-        const chips = Array.from(document.querySelectorAll('.group-chip')).filter((chip) => {
-          return chip.dataset.groupFilter && chip.dataset.groupFilter !== 'all';
-        });
-        const palette = [18, 42, 90, 140, 200, 250, 300, 330];
-        chips.forEach((chip, idx) => {
-          const hue = palette[idx % palette.length];
-          const color = `hsl(${hue} 60% 40%)`;
-          const bg = `hsla(${hue} 60% 92% / 0.6)`;
-          chip.style.setProperty('--chip-color', color);
-          chip.style.setProperty('--chip-bg', bg);
-          const key = chip.dataset.groupFilter;
-          document.querySelectorAll(`[data-group-key="${key}"]`).forEach((row) => {
-            row.style.setProperty('--group-color', color);
-            row.style.setProperty('--group-bg', bg);
-          });
-        });
-      }
+      applyGroupMarkers();
 
       function wireGroupFilter() {
         const container = document.querySelector('[data-group-filter]');
         if (!container) return;
-        container.addEventListener('click', (event) => {
-          const target = event.target.closest('.group-chip');
-          if (!target) return;
-          const key = target.dataset.groupFilter || 'all';
-          container.querySelectorAll('.group-chip').forEach((chip) => {
-            chip.classList.toggle('active', chip === target);
-          });
+        const applyFilter = (key) => {
           document.querySelectorAll('[data-param-row]').forEach((row) => {
+            const isSelected = Boolean(row.querySelector('[data-active-toggle]')?.checked);
             const rowKey = row.dataset.groupKey;
-            row.style.display = key === 'all' || rowKey === key ? '' : 'none';
+            row.style.display = key === 'all' || (key === 'selected' ? isSelected : rowKey === key) ? '' : 'none';
           });
+        };
+        container.addEventListener('click', (event) => {
+          const target = event.target.closest('[data-group-filter-button]');
+          if (!target) return;
+          const key = target.dataset.groupFilterButton || 'all';
+          container.querySelectorAll('[data-group-filter-button]').forEach((chip) => {
+            const isActive = chip === target;
+            chip.classList.toggle('border-brand', isActive);
+            chip.classList.toggle('bg-brand', isActive);
+            chip.classList.toggle('text-white', isActive);
+            chip.classList.toggle('border-default-medium', !isActive);
+            chip.classList.toggle('bg-neutral-primary', !isActive);
+            chip.classList.toggle('text-heading', !isActive);
+            chip.classList.toggle('hover:bg-neutral-secondary', !isActive);
+          });
+          container.dataset.activeFilter = key;
+          applyFilter(key);
+        });
+        document.querySelectorAll('[data-active-toggle]').forEach((toggle) => {
+          toggle.addEventListener('change', () => applyFilter(container.dataset.activeFilter || 'all'));
         });
       }
 
-      applyGroupColors();
       wireGroupFilter();
     </script>
   <% } %>
 
   <% if (tab === 'runs') { %>
-    <div class="card">
-      <h2 class="card-title">Runs</h2>
-      <div class="run-controls">
-        <a class="pure-button pure-button-secondary" href="/experiments/<%= experiment.id %>/doe/<%= doeId %>/export/runs">Export Runs CSV</a>
-        <a class="pure-button" href="/experiments/<%= experiment.id %>/doe/<%= doeId %>/export/wide">Export Wide CSV</a>
+    <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <h2 class="text-lg font-semibold tracking-tight text-gray-900">Runs</h2>
+      <div class="flex flex-wrap items-center gap-2">
+        <a class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" href="/experiments/<%= experiment.id %>/doe/<%= doeId %>/export/runs">Export Runs CSV</a>
+        <a class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" href="/experiments/<%= experiment.id %>/doe/<%= doeId %>/export/wide">Export Wide CSV</a>
       </div>
       <% const recipeMap = new Map(); recipes.forEach(r => recipeMap.set(r.id, r.name)); %>
       <% const activeMap = new Map(); activeInputParams.forEach(p => activeMap.set(p.id, p)); %>
-      <table class="pure-table table-compact" style="margin-top: 1rem;">
+      <div class="mt-4 overflow-x-auto"><table class="<%= inputTableClass %>">
         <thead>
           <tr>
             <th>Run</th>
@@ -682,7 +690,7 @@
             <th>Done</th>
             <th>Exclude</th>
             <% activeInputParams.forEach((param) => { %>
-              <th><%- formatInline(param.label) %> <span class="small-note"><%- formatInline(param.unit || '') %></span></th>
+              <th><%- formatInline(param.label) %> <span class="text-sm text-gray-500"><%- formatInline(param.unit || '') %></span></th>
             <% }); %>
           </tr>
         </thead>
@@ -691,11 +699,11 @@
             <tr><td colspan="<%= 5 + activeInputParams.length %>">No runs yet. Generate a runlist.</td></tr>
           <% } %>
           <% runRows.forEach((run) => { %>
-            <tr class="<%= run.done ? 'run-done' : '' %> <%= run.exclude_from_analysis ? 'run-excluded' : '' %>">
-              <td><a href="/experiments/<%= experiment.id %>/runs/<%= run.id %>"><%= run.run_code %></a></td>
+            <tr>
+              <td><a class="inline-flex items-center gap-1.5 font-medium text-brand no-underline hover:underline" href="/experiments/<%= experiment.id %>/runs/<%= run.id %>"><%= run.run_code %><span class="material-symbols-rounded text-[16px]" aria-hidden="true">open_in_new</span><span class="sr-only">Open run</span></a></td>
               <td><%- run.recipe_id ? formatInline(recipeMap.get(run.recipe_id)) : '-' %></td>
               <td>
-                <input type="date" data-run-due data-run-id="<%= run.id %>" value="<%= run.due_at || '' %>">
+                <input type="date" data-ui-datepicker datepicker-autohide datepicker-format="yyyy-mm-dd" data-run-due data-run-id="<%= run.id %>" value="<%= run.due_at || '' %>">
               </td>
               <td><%= run.done ? 'Yes' : 'No' %></td>
               <td><%= run.exclude_from_analysis ? 'Yes' : 'No' %></td>
@@ -705,7 +713,7 @@
             </tr>
           <% }); %>
         </tbody>
-      </table>
+      </table></div>
     </div>
     <script nonce="<%= cspNonce %>">
       (() => {
@@ -731,15 +739,15 @@
   <% } %>
 
   <% if (tab === 'analysis') { %>
-    <div class="card">
-      <div class="card-header">
-        <h2 class="card-title">Analysis Controls</h2>
+    <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
+        <h2 class="text-lg font-semibold tracking-tight text-gray-900">Analysis Controls</h2>
       </div>
-      <p class="small-note">Measured responses are configured in the Design tab and entered inside each run.</p>
-      <p class="small-note" id="noActiveNumericOutputs" <%= outputNumericParams.length === 0 ? '' : 'style="display:none;"' %>><strong>No active numeric responses.</strong> Configure measured responses in Design to run analysis.</p>
-      <form class="pure-form pure-form-stacked" method="get" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>">
+      <p class="text-sm text-gray-500">Measured responses are configured in the Design tab and entered inside each run.</p>
+      <p class="text-sm text-gray-500" id="noActiveNumericOutputs" <%= outputNumericParams.length === 0 ? '' : 'style="display:none;"' %>><strong>No active numeric responses.</strong> Configure measured responses in Design to run analysis.</p>
+      <form class="grid gap-4" method="get" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>">
         <input type="hidden" name="tab" value="analysis">
-        <div class="grid-two">
+        <div class="grid gap-4 sm:grid-cols-2">
           <div>
             <label>Output</label>
             <select name="output_param" id="outputParamSelect">
@@ -774,7 +782,7 @@
                 <% }); %>
               </select>
             <% } else { %>
-              <div class="small-note">No linked recipes.</div>
+              <div class="text-sm text-gray-500">No linked recipes.</div>
             <% } %>
           </div>
           <div>
@@ -812,20 +820,20 @@
             </select>
           </div>
         </div>
-        <button class="pure-button pure-button-primary" type="submit">Update Analysis</button>
+        <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50" type="submit">Update Analysis</button>
       </form>
     </div>
 
-    <div class="grid-two chart-grid">
-      <div class="card chart-card" id="lineChart"></div>
-      <div class="card chart-card" id="heatmapChart"></div>
-      <div class="card chart-card" id="scatterChart"></div>
-      <div class="card chart-card" id="scatter3d"></div>
+    <div class="grid gap-4 lg:grid-cols-2 chart-grid">
+      <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm chart-card" id="lineChart"></div>
+      <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm chart-card" id="heatmapChart"></div>
+      <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm chart-card" id="scatterChart"></div>
+      <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm chart-card" id="scatter3d"></div>
     </div>
 
-    <div class="card">
-      <h2 class="card-title">Decision Notes</h2>
-      <p class="small-note">
+    <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <h2 class="text-lg font-semibold tracking-tight text-gray-900">Decision Notes</h2>
+      <p class="text-sm text-gray-500">
         Trends are descriptive. Low replicate counts and missing data reduce confidence.
       </p>
       <div>
@@ -847,7 +855,7 @@
           <strong>Boolean rate:</strong> <%= (analysis.boolPenaltyRate * 100).toFixed(1) %>%
         </div>
       <% } %>
-      <table class="pure-table table-compact" style="margin-top: 1rem;">
+      <div class="mt-4 overflow-x-auto"><table class="<%= inputTableClass %>">
         <thead>
           <tr>
             <th>Factor Level</th>
@@ -869,7 +877,7 @@
             </tr>
           <% }); %>
         </tbody>
-      </table>
+      </table></div>
     </div>
 
     <script nonce="<%= cspNonce %>" src="/vendor/echarts/dist/echarts.min.js"></script>
@@ -1099,25 +1107,26 @@
       });
     </script>
   <% } %>
-</div>
+</div></main></div>
+<%- include('partials/experiment_workspace_calendar', { workspace }) %>
 
-<dialog id="measuredFieldsDialog" class="modal-frame">
-  <div class="modal-header">
+<dialog id="measuredFieldsDialog" class="m-auto w-[min(96vw,48rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40">
+  <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
     <strong>Measured Responses</strong>
-    <button class="pure-button" type="button" data-close>Close</button>
+    <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Close</button>
   </div>
-  <div class="modal-body">
-    <div class="card">
-      <h2 class="card-title">Standard fields</h2>
-      <p class="small-note">Select responses before measurements begin. You may add more later; deactivating a response keeps all stored values.</p>
+  <div class="p-5">
+    <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <h2 class="text-lg font-semibold tracking-tight text-gray-900">Standard fields</h2>
+      <p class="text-sm text-gray-500">Select responses before measurements begin. You may add more later; deactivating a response keeps all stored values.</p>
       <form method="POST" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/analysis-fields/standard" data-autosave="standard">
-        <div class="field-grid">
+        <div class="grid gap-4 sm:grid-cols-2">
           <% standardAnalysisFields.forEach((field) => { %>
-            <label class="field-chip" data-standard-chip data-group-label="<%= field.group_label || 'Custom' %>">
+            <label class="flex cursor-pointer items-start gap-3 rounded-base border border-default-medium bg-neutral-primary p-3 shadow-xs transition-colors hover:bg-neutral-secondary" data-standard-chip data-group-label="<%= field.group_label || 'Custom' %>">
               <input type="checkbox" name="standard_codes" value="<%= field.code %>" <%= field.is_active ? 'checked' : '' %>>
-              <div class="field-content">
-                <div class="field-title"><%- formatInline(field.label) %></div>
-                <div class="field-meta">
+              <div>
+                <div class="text-sm font-medium text-heading"><%- formatInline(field.label) %></div>
+                <div class="mt-0.5 text-xs text-body">
                   <%= field.field_type %>
                   <% if (field.unit) { %> · <%- formatInline(field.unit) %><% } %>
                   <% if (field.group_label) { %> · <%- formatInline(field.group_label) %><% } %>
@@ -1126,21 +1135,21 @@
             </label>
           <% }); %>
         </div>
-        <div style="margin-top: 1rem;">
-          <button class="pure-button pure-button-primary" type="submit">Save standard fields</button>
-          <span class="small-note" data-autosave-status></span>
+        <div class="mt-4">
+          <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50" type="submit">Save standard fields</button>
+          <span class="text-sm text-gray-500" data-autosave-status></span>
         </div>
       </form>
     </div>
 
-    <div class="card" style="margin-top: 1rem;">
-      <h2 class="card-title">Custom fields</h2>
+    <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <h2 class="text-lg font-semibold tracking-tight text-gray-900">Custom fields</h2>
       <% if (customAnalysisFields.length === 0) { %>
-        <p class="small-note" id="customFieldsEmpty">No custom fields yet.</p>
+        <p class="text-sm text-gray-500" id="customFieldsEmpty">No custom fields yet.</p>
       <% } %>
       <form method="POST" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/analysis-fields/custom" data-autosave="custom" id="customFieldsForm">
-        <div class="table-wrap">
-          <table class="pure-table table-compact field-table">
+        <div class="overflow-x-auto">
+          <table class="<%= inputTableClass %>">
             <thead>
               <tr>
                 <th>Active</th>
@@ -1159,7 +1168,7 @@
                       <input type="checkbox" name="custom[<%= field.id %>][is_active]" value="1" <%= field.is_active ? 'checked' : '' %> data-custom-active data-field-id="<%= field.id %>">
                     </td>
                   <td><input name="custom[<%= field.id %>][label]" value="<%= field.label %>"></td>
-                  <td><span class="badge"><%= field.field_type %></span></td>
+                  <td><span class="inline-flex rounded-full bg-neutral-secondary px-2 py-0.5 text-xs font-medium text-heading"><%= field.field_type %></span></td>
                   <td><input name="custom[<%= field.id %>][unit]" value="<%= field.unit || '' %>"></td>
                   <td><input name="custom[<%= field.id %>][group_label]" value="<%= field.group_label || '' %>"></td>
                   <td>
@@ -1170,17 +1179,17 @@
             </tbody>
           </table>
         </div>
-        <div style="margin-top: 1rem;">
-          <button class="pure-button pure-button-primary" type="submit">Save custom fields</button>
-          <span class="small-note" data-autosave-status></span>
+        <div class="mt-4">
+          <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50" type="submit">Save custom fields</button>
+          <span class="text-sm text-gray-500" data-autosave-status></span>
         </div>
       </form>
     </div>
 
-    <div class="card" style="margin-top: 1rem;">
-      <h2 class="card-title">Add new field</h2>
+    <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <h2 class="text-lg font-semibold tracking-tight text-gray-900">Add new field</h2>
       <form method="POST" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/analysis-fields/new" id="analysisFieldCreateForm">
-        <div class="grid-two">
+        <div class="grid gap-4 sm:grid-cols-2">
           <div>
             <label>Label</label>
             <input name="label" required>
@@ -1211,14 +1220,14 @@
             <input name="allowed_values" placeholder="short_shot, flash">
           </div>
         </div>
-        <div style="margin-top: 1rem;">
-          <button class="pure-button pure-button-primary" type="submit">Add field</button>
+        <div class="mt-4">
+          <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50" type="submit">Add field</button>
         </div>
       </form>
     </div>
   </div>
-  <div class="modal-footer">
-    <button class="pure-button" type="button" data-close>Close</button>
+  <div class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 px-5 py-4">
+    <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Close</button>
   </div>
 </dialog>
 
@@ -1443,7 +1452,7 @@
           <input type="checkbox" name="custom[${fieldId}][is_active]" value="1" ${field.is_active ? 'checked' : ''} data-custom-active data-field-id="${fieldId}">
         </td>
         <td><input name="custom[${fieldId}][label]" value="${escapeHtml(field.label || '')}"></td>
-        <td><span class="badge">${fieldType}</span></td>
+        <td><span class="inline-flex rounded-full bg-neutral-secondary px-2 py-0.5 text-xs font-medium text-heading">${fieldType}</span></td>
         <td><input name="custom[${fieldId}][unit]" value="${escapeHtml(field.unit || '')}"></td>
         <td><input name="custom[${fieldId}][group_label]" value="${escapeHtml(field.group_label || '')}"></td>
         <td>
@@ -1487,23 +1496,11 @@
     const updateChip = (chip) => {
       const input = chip.querySelector('input[type="checkbox"]');
       if (!input) return;
-      chip.classList.toggle('is-active', input.checked);
+      chip.classList.toggle('border-brand', input.checked);
+      chip.classList.toggle('bg-brand-soft', input.checked);
     };
-    const palette = [18, 42, 90, 140, 200, 250, 300, 330];
-    const groupColors = new Map();
     measuredDialog.querySelectorAll('[data-standard-chip]').forEach((chip) => {
       updateChip(chip);
-      const label = chip.dataset.groupLabel || 'Custom';
-      if (!groupColors.has(label)) {
-        const hue = palette[groupColors.size % palette.length];
-        groupColors.set(label, {
-          accent: `hsl(${hue} 60% 42%)`,
-          bg: `hsla(${hue} 60% 92% / 0.9)`
-        });
-      }
-      const colors = groupColors.get(label);
-      chip.style.setProperty('--group-accent', colors.accent);
-      chip.style.setProperty('--group-bg', colors.bg);
     });
     measuredDialog.addEventListener('change', (event) => {
       const checkbox = event.target;
@@ -1530,15 +1527,15 @@
     });
   }
 </script>
-<%- include('partials/foot') %>
+<%- include('partials/foot', { uiKit: true }) %>
 
-<dialog class="modal-frame" id="doeNameDialog">
-  <div class="modal-header">
+<dialog class="m-auto w-[min(96vw,48rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="doeNameDialog">
+  <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
     <strong>DOE settings</strong>
-    <button class="pure-button" type="button" data-close>Close</button>
+    <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Close</button>
   </div>
-  <form class="pure-form" id="doeSettingsForm" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/name" method="post">
-    <div class="modal-body">
+  <form class="grid gap-4" id="doeSettingsForm" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/name" method="post">
+    <div class="p-5">
       <label for="doeNameInput">DOE name</label>
       <input id="doeNameInput" name="name" type="text" value="<%= doe.name %>" required>
       <% if (canAssignEntities) { %>
@@ -1553,10 +1550,10 @@
         </select>
       <% } %>
     </div>
-    <div class="modal-footer">
-      <span class="small-note" data-autosave-status></span>
-      <button class="pure-button" type="button" data-close>Cancel</button>
-      <button class="pure-button pure-button-primary" type="submit">Save</button>
+    <div class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 px-5 py-4">
+      <span class="text-sm text-gray-500" data-autosave-status></span>
+      <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Cancel</button>
+      <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50" type="submit">Save</button>
     </div>
   </form>
 </dialog>

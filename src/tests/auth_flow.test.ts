@@ -20,12 +20,7 @@ before(() => {
   process.env.NODE_ENV = "test";
   process.env.ADMIN_EMAIL = "admin@example.com";
   process.env.ADMIN_TEMP_PASSWORD = "TempPass123!";
-  // Exercise the secure manual-link fallback instead of reaching an SMTP server.
-  process.env.SMTP_HOST = "";
-  process.env.SMTP_PORT = "";
-  process.env.SMTP_USER = "";
-  process.env.SMTP_PASS = "";
-  process.env.SMTP_FROM = "";
+  // Exercise the secure manual-link fallback instead of reaching an email provider.
 });
 
 after(() => {
@@ -102,6 +97,7 @@ test("temp password flow and owner access", async () => {
     .expect(200);
   assert.equal(invitation.body.ok, true);
   assert.match(invitation.body.setupPath, /^\/auth\/set-password\/[A-Za-z0-9_-]{40,}$/);
+  assert.equal(invitation.body.emailSent, false);
   assert.equal("tempPassword" in invitation.body, false);
 
   const setupPath = String(invitation.body.setupPath);
@@ -137,6 +133,7 @@ test("temp password flow and owner access", async () => {
     .send({ _csrf: resetCsrf })
     .expect(200);
   assert.match(reset.body.setupPath, /^\/auth\/set-password\/[A-Za-z0-9_-]{40,}$/);
+  assert.equal(reset.body.emailSent, false);
   await invitedAgent.get("/").expect(302).expect("Location", "/auth/login");
 
   const userId = createUser(db, {

@@ -13,7 +13,18 @@ import {
   setUserStatus,
   updateUser
 } from "../repos/users_repo.js";
-import { isEmailConfigured, sendPasswordSetupEmail } from "../services/email.js";
+import { isEmailConfigured, sendPasswordSetupEmail, sendTestEmail } from "../services/email.js";
+import {
+  EMAIL_PURPOSES,
+  createEmailSenderProfile,
+  createResendProviderProfile,
+  deleteEmailProviderProfile,
+  deleteEmailSenderProfile,
+  listEmailProviderProfiles,
+  listEmailSenderProfiles,
+  type EmailPurpose
+} from "../repos/email_profiles_repo.js";
+import { AppSettingsEncryptionError, encryptAppSetting, hasAppSettingsEncryptionKey } from "../services/settings_crypto.js";
 import {
   listExperimentsForAdmin,
   updateExperimentOwner,
@@ -49,6 +60,10 @@ import { getSystemHealthOverview } from "../services/system_health_service.js";
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+function isSafeEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) && value.length <= 320;
 }
 
 function wantsJson(req: express.Request) {
@@ -109,6 +124,8 @@ export function createAdminRouter(db: Db) {
     const llmUsageBreakdown = groupAiUsageByUser(getLlmUsageBreakdownForAdmin(db, aiUsagePeriod.from));
     const reports = listReportConfigsForAdmin(db);
     const systemHealth = getSystemHealthOverview(db);
+    const emailProviderProfiles = listEmailProviderProfiles(db);
+    const emailSenderProfiles = listEmailSenderProfiles(db);
     const userAudit = listRecentAuditForUsers(db);
     const userActivity = new Map<number, typeof userAudit>();
     userAudit.forEach((event) => {
@@ -141,6 +158,10 @@ export function createAdminRouter(db: Db) {
     res.render("admin", {
       title: "Admin",
       settings,
+      emailProviderProfiles,
+      emailSenderProfiles,
+      emailSettingsEncryptionReady: hasAppSettingsEncryptionKey(),
+      emailPasswordLinksReady: isEmailConfigured(db),
       llmProviderProfiles,
       llmSettingsEncryptionReady: hasLlmSettingsEncryptionKey(),
       llmUsageTotals,
@@ -240,6 +261,62 @@ export function createAdminRouter(db: Db) {
     return res.redirect("/admin?notice=HTTPS setting updated");
   });
 
+  router.post("/email-providers", ADMIN_ACTION_LIMITER, (req, res) => {
+    const name = String(req.body?.name ?? "").trim();
+    const apiKey = String(req.body?.api_key ?? "").trim();
+    if (!name || name.length > 120) return sendAdminInputError(req, res, "Connection name must contain 1 to 120 characters");
+    if (!apiKey) return sendAdminInputError(req, res, "Resend API key is required");
+    if (!hasAppSettingsEncryptionKey()) return sendAdminInputError(req, res, "Set APP_SETTINGS_ENCRYPTION_KEY before saving a Resend API key");
+    try {
+      const id = createResendProviderProfile(db, { name, apiKeyCiphertext: encryptAppSetting(apiKey), actorUserId: req.user?.id ?? null });
+      insertAudit(db, { actorUserId: req.user?.id ?? null, action: "admin.email_provider.create", targetUserId: null, detailsJson: JSON.stringify({ provider_id: id, name, provider_kind: "resend", has_api_key: true }) });
+      return sendAdminSuccess(req, res, "Resend connection saved");
+    } catch (error) {
+      return sendAdminInputError(req, res, error instanceof AppSettingsEncryptionError ? error.message : "Resend connection could not be saved");
+    }
+  });
+
+  router.post("/email-providers/:id/delete", ADMIN_ACTION_LIMITER, (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return sendAdminInputError(req, res, "Invalid email connection");
+    deleteEmailProviderProfile(db, id);
+    insertAudit(db, { actorUserId: req.user?.id ?? null, action: "admin.email_provider.delete", targetUserId: null, detailsJson: JSON.stringify({ provider_id: id }) });
+    return sendAdminSuccess(req, res, "Resend connection deleted");
+  });
+
+  router.post("/email-senders", ADMIN_ACTION_LIMITER, (req, res) => {
+    const providerProfileId = Number(req.body?.provider_profile_id);
+    const purpose = String(req.body?.purpose ?? "").trim() as EmailPurpose;
+    const name = String(req.body?.name ?? "").trim();
+    const fromName = String(req.body?.from_name ?? "").trim();
+    const fromEmail = normalizeEmail(String(req.body?.from_email ?? ""));
+    const replyTo = normalizeEmail(String(req.body?.reply_to ?? ""));
+    if (!Number.isFinite(providerProfileId)) return sendAdminInputError(req, res, "Choose a Resend connection");
+    if (!listEmailProviderProfiles(db).some((profile) => profile.id === providerProfileId)) return sendAdminInputError(req, res, "Resend connection not found", 404);
+    if (!EMAIL_PURPOSES.includes(purpose)) return sendAdminInputError(req, res, "Choose a valid sender purpose");
+    if (!name || name.length > 120 || !isSafeEmail(fromEmail) || (replyTo && !isSafeEmail(replyTo))) return sendAdminInputError(req, res, "Enter a sender name, a valid From address, and an optional valid Reply-To address");
+    const id = createEmailSenderProfile(db, { provider_profile_id: providerProfileId, purpose, name, from_name: fromName || null, from_email: fromEmail, reply_to: replyTo || null, makeDefault: Boolean(req.body?.is_default), actorUserId: req.user?.id ?? null });
+    insertAudit(db, { actorUserId: req.user?.id ?? null, action: "admin.email_sender.create", targetUserId: null, detailsJson: JSON.stringify({ sender_id: id, provider_profile_id: providerProfileId, purpose, name, from_email: fromEmail, reply_to: replyTo || null }) });
+    return sendAdminSuccess(req, res, "Sender profile saved");
+  });
+
+  router.post("/email-senders/:id/delete", ADMIN_ACTION_LIMITER, (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return sendAdminInputError(req, res, "Invalid sender profile");
+    deleteEmailSenderProfile(db, id);
+    insertAudit(db, { actorUserId: req.user?.id ?? null, action: "admin.email_sender.delete", targetUserId: null, detailsJson: JSON.stringify({ sender_id: id }) });
+    return sendAdminSuccess(req, res, "Sender profile deleted");
+  });
+
+  router.post("/email-senders/:id/test", ADMIN_ACTION_LIMITER, async (req, res) => {
+    const id = Number(req.params.id);
+    const recipient = normalizeEmail(String(req.body?.recipient ?? req.user?.email ?? ""));
+    if (!Number.isFinite(id) || !isSafeEmail(recipient)) return sendAdminInputError(req, res, "Enter a valid test recipient");
+    const delivered = await sendTestEmail(db, id, recipient);
+    insertAudit(db, { actorUserId: req.user?.id ?? null, action: "admin.email_sender.test", targetUserId: null, detailsJson: JSON.stringify({ sender_id: id, recipient, delivered }) });
+    return delivered ? sendAdminSuccess(req, res, "Test email accepted by Resend") : sendAdminInputError(req, res, "Test email could not be sent");
+  });
+
   router.post("/ai-providers", ADMIN_ACTION_LIMITER, (req, res) => {
     const parsed = parseLlmProviderProfileInput(req.body, false);
     if ("error" in parsed) return sendAdminInputError(req, res, parsed.error);
@@ -320,7 +397,8 @@ export function createAdminRouter(db: Db) {
       });
       const setup = createPasswordSetupToken(db, userId);
       const setupPath = `/auth/set-password/${encodeURIComponent(setup.token)}`;
-      const emailed = isEmailConfigured() && await sendPasswordSetupEmail(email, setupPath);
+      const emailConfigured = isEmailConfigured(db);
+      const emailed = emailConfigured && await sendPasswordSetupEmail(db, email, setupPath);
       insertAudit(db, {
         actorUserId: req.user?.id ?? null,
         action: "admin.user.create",
@@ -328,10 +406,12 @@ export function createAdminRouter(db: Db) {
         detailsJson: JSON.stringify({ email, name, role, status })
       });
       const notice = emailed
-        ? "User created; a password setup link was emailed."
-        : "User created; copy the one-time password setup link.";
+        ? "User created; the password setup link was emailed and is also shown to you."
+        : emailConfigured
+          ? "User created; Resend did not accept the password setup email, so copy the one-time link."
+          : "User created; configure APP_ORIGIN and a default auth sender before relying on email, then copy the one-time link.";
       if (wantsJson(req)) {
-        return res.json({ ok: true, message: notice, setupPath: emailed ? null : setupPath, expiresAt: setup.expiresAt });
+        return res.json({ ok: true, message: notice, setupPath, emailSent: emailed, emailConfigured, expiresAt: setup.expiresAt });
       }
       return res.redirect(`/admin?notice=${encodeURIComponent(notice)}`);
     } catch {
@@ -554,7 +634,8 @@ export function createAdminRouter(db: Db) {
     }
     const setup = createPasswordSetupToken(db, id, true);
     const setupPath = `/auth/set-password/${encodeURIComponent(setup.token)}`;
-    const emailed = isEmailConfigured() && await sendPasswordSetupEmail(user.email, setupPath);
+    const emailConfigured = isEmailConfigured(db);
+    const emailed = emailConfigured && await sendPasswordSetupEmail(db, user.email, setupPath);
 
     insertAudit(db, {
       actorUserId: req.user?.id ?? null,
@@ -564,9 +645,11 @@ export function createAdminRouter(db: Db) {
     });
 
     const message = emailed
-      ? "Password reset link emailed; existing sessions were revoked."
-      : "Password reset link created; existing sessions were revoked.";
-    if (wantsJson(req)) return res.json({ ok: true, message, setupPath: emailed ? null : setupPath, expiresAt: setup.expiresAt });
+      ? "Password reset link emailed and shown to you; existing sessions were revoked."
+      : emailConfigured
+        ? "Resend did not accept the password reset email; the link is shown to you. Existing sessions were revoked."
+        : "Password reset email was not attempted: configure APP_ORIGIN and a default auth sender. The link is shown to you; existing sessions were revoked.";
+    if (wantsJson(req)) return res.json({ ok: true, message, setupPath, emailSent: emailed, emailConfigured, expiresAt: setup.expiresAt });
     return res.redirect(`/admin?notice=${encodeURIComponent(message)}`);
   });
 

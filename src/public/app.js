@@ -241,6 +241,26 @@
     const panelEl = container.querySelector("[data-tag-panel]");
     const filterInput = container.querySelector("[data-tag-filter]");
     if (!selectedEl || !panelEl) return;
+    const usesUiKit = document.body.hasAttribute("data-ui-kit");
+
+    const appendChevron = () => {
+      if (!usesUiKit) return;
+      const chevron = document.createElement("span");
+      chevron.className = "material-symbols-rounded ms-auto shrink-0 text-body";
+      chevron.setAttribute("aria-hidden", "true");
+      chevron.textContent = "expand_more";
+      selectedEl.appendChild(chevron);
+    };
+
+    const applyUiKitClasses = () => {
+      if (!usesUiKit) return;
+      container.classList.add("inline-block", "min-w-40", "max-w-64", "align-top");
+      selectedEl.classList.add("flex", "min-h-10", "w-full", "items-center", "gap-1.5", "rounded-base", "border", "border-default-medium", "bg-neutral-secondary-medium", "px-3", "py-2", "text-left", "text-sm", "text-heading", "shadow-xs", "focus:border-brand", "focus:ring-2", "focus:ring-brand");
+      panelEl.classList.add("w-64", "rounded-base", "border", "border-default-medium", "bg-neutral-primary", "p-2", "shadow-lg");
+      filterInput?.classList.add("mb-2", "block", "w-full", "rounded-base", "border", "border-default-medium", "bg-neutral-secondary-medium", "px-3", "py-2", "text-sm", "text-heading", "placeholder:text-body", "focus:border-brand", "focus:ring-brand");
+      panelEl.querySelectorAll("[data-tag-option]").forEach((option) => option.classList.add("flex", "cursor-pointer", "items-center", "gap-2", "rounded-base", "px-2", "py-2", "text-sm", "text-heading", "hover:bg-neutral-secondary"));
+      panelEl.querySelectorAll("[data-tag-option] .tag-chip").forEach((chip) => chip.classList.add("rounded-none", "bg-transparent", "p-0", "text-sm", "text-heading"));
+    };
 
     const getInputRoot = () =>
       panelEl.parentElement === document.body ? panelEl : container;
@@ -254,17 +274,21 @@
       selectedEl.innerHTML = "";
       if (selectedTags.length === 0) {
         const placeholder = document.createElement("span");
-        placeholder.className = "tag-placeholder";
+        placeholder.className = usesUiKit ? "min-w-0 flex-1 truncate text-body" : "tag-placeholder";
         placeholder.textContent = "Select...";
         selectedEl.appendChild(placeholder);
+        appendChevron();
         return;
       }
       selectedTags.forEach((tag) => {
         const chip = document.createElement("span");
-        chip.className = "tag-chip";
+        chip.className = usesUiKit
+          ? "inline-flex max-w-full min-w-0 items-center truncate rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-fg-brand"
+          : "tag-chip";
         chip.textContent = tag;
         selectedEl.appendChild(chip);
       });
+      appendChevron();
     };
 
     const applyFilter = () => {
@@ -282,6 +306,19 @@
         container.id = `tag-select-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       }
     };
+
+    applyUiKitClasses();
+    ensureContainerId();
+    if (usesUiKit) {
+      selectedEl.setAttribute("role", "button");
+      selectedEl.tabIndex = 0;
+      selectedEl.setAttribute("aria-haspopup", "listbox");
+      selectedEl.setAttribute("aria-expanded", "false");
+      panelEl.id = panelEl.id || `${container.id}-menu`;
+      selectedEl.setAttribute("aria-controls", panelEl.id);
+      panelEl.setAttribute("role", "listbox");
+      panelEl.setAttribute("aria-multiselectable", "true");
+    }
 
     const positionPanel = () => {
       const rect = selectedEl.getBoundingClientRect();
@@ -319,6 +356,7 @@
 
     const closeSelect = () => {
       container.classList.remove("is-open");
+      selectedEl.setAttribute("aria-expanded", "false");
       if (repositionHandler) {
         window.removeEventListener("scroll", repositionHandler, true);
         window.removeEventListener("resize", repositionHandler);
@@ -349,6 +387,7 @@
       });
       if (!container.classList.contains("is-open")) {
         container.classList.add("is-open");
+        selectedEl.setAttribute("aria-expanded", "true");
         attachPanelToBody();
         panelEl.style.display = "block";
         repositionHandler = () => {
@@ -364,6 +403,12 @@
       } else {
         closeSelect();
       }
+    });
+
+    selectedEl.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      selectedEl.click();
     });
 
     panelEl.addEventListener("click", (event) => {
@@ -751,20 +796,20 @@
         row.className = rowClass;
         row.innerHTML = `
           <div>
-            <label class="mb-2 block text-xs font-medium text-gray-700">Label</label>
-            <input class="block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="text" data-custom-label value="${escapeHtml(normalizeText(data.label))}" placeholder="Label">
+            <label class="mb-2.5 block text-xs font-medium text-heading">Label</label>
+            <input class="block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2.5 text-sm text-heading shadow-xs placeholder:text-body focus:border-brand focus:ring-brand" type="text" data-custom-label value="${escapeHtml(normalizeText(data.label))}" placeholder="Label">
           </div>
           <div>
-            <label class="mb-2 block text-xs font-medium text-gray-700">Unit</label>
-            <input class="block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="text" data-custom-unit value="${escapeHtml(normalizeText(data.unit))}" placeholder="Unit">
+            <label class="mb-2.5 block text-xs font-medium text-heading">Unit</label>
+            <input class="block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2.5 text-sm text-heading shadow-xs placeholder:text-body focus:border-brand focus:ring-brand" type="text" data-custom-unit value="${escapeHtml(normalizeText(data.unit))}" placeholder="Unit">
           </div>
           <div class="md:col-span-2 xl:col-span-1">
-            <label class="mb-2 block text-xs font-medium text-gray-700">Value</label>
-            <input class="block w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="text" data-custom-value data-template-input value="${escapeHtml(normalizeText(data.value))}" placeholder="Value">
-            <div class="mt-2 hidden rounded-lg border px-3 py-2 text-xs" data-template-preview data-template-preview-ui="flowbite"></div>
+            <label class="mb-2.5 block text-xs font-medium text-heading">Value</label>
+            <input class="block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2.5 text-sm text-heading shadow-xs placeholder:text-body focus:border-brand focus:ring-brand" type="text" data-custom-value data-template-input value="${escapeHtml(normalizeText(data.value))}" placeholder="Value">
+            <div class="mt-2 hidden rounded-base border border-default-medium bg-neutral-secondary px-3 py-2 text-xs text-body" data-template-preview data-template-preview-ui="flowbite"></div>
           </div>
-          ${showMachineCode ? `<div><label class="mb-2 block text-xs font-medium text-gray-700">Token</label><input class="block w-full rounded-lg border border-gray-200 bg-gray-100 p-2.5 font-mono text-xs text-gray-600" type="text" value="${codeToken}" readonly title="Token"></div>` : ""}
-          <div class="flex items-end"><button class="inline-flex size-10 items-center justify-center rounded-lg text-red-600 hover:bg-red-50 focus:outline-none focus:ring-4 focus:ring-red-100" type="button" data-remove-field aria-label="Remove field" title="Remove field"><span class="material-symbols-rounded" aria-hidden="true">delete</span></button></div>
+          ${showMachineCode ? `<div><label class="mb-2.5 block text-xs font-medium text-heading">Token</label><input class="block w-full rounded-base border border-default-medium bg-neutral-secondary px-3 py-2.5 font-mono text-xs text-body shadow-xs" type="text" value="${codeToken}" readonly title="Token"></div>` : ""}
+          <div class="flex items-end"><button class="inline-flex size-10 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-danger shadow-xs hover:bg-danger-soft focus:outline-none focus:ring-4 focus:ring-danger-soft" type="button" data-remove-field aria-label="Remove field" title="Remove field"><span class="material-symbols-rounded" aria-hidden="true">delete</span></button></div>
           <input type="hidden" data-custom-code value="${escapeHtml(normalizeText(data.code))}">
         `;
         return row;

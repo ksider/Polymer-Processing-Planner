@@ -82,9 +82,9 @@ export function assignEntityResponsibility(
   const entityLabel = getEntityLabel(db, data.experimentId, data.entityType, data.entityId);
   const entityPath = getEntityPath(db, data.experimentId, data.entityType, data.entityId);
   const taskTitle = data.taskTitle?.trim() || `Assigned: ${entityLabel}`;
-  const stepNumberForTask =
-    data.entityType === "qualification_step" ? getQualStepById(db, data.entityId)?.step_number : null;
-  const taskEntityId = data.entityType === "qualification_step" ? (stepNumberForTask ?? data.entityId) : data.entityId;
+  // task_entities keeps the actual qualification stage id. The visible ordinal
+  // is not a stable identity once a catalogue can grow beyond six stages.
+  const taskEntityId = data.entityId;
   const existingLink = getAssignmentTaskByAssignmentId(db, assignmentId);
 
   if (data.assigneeUserId) {

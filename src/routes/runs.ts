@@ -10,6 +10,7 @@ import {
   listAnalysisRunValuesByRunId,
   upsertAnalysisRunValue
 } from "../repos/analysis_repo.js";
+import { buildExperimentWorkspace } from "../services/experiment_workspace_service.js";
 
 export function createRunsRouter(db: Db) {
   const router = express.Router();
@@ -91,6 +92,8 @@ export function createRunsRouter(db: Db) {
 
     const experiment = getExperiment(db, run.experiment_id);
     if (!experiment) return res.status(404).send("Experiment not found");
+    const workspace = buildExperimentWorkspace(db, experiment.id);
+    if (!workspace) return res.status(404).send("Experiment not found");
 
     const params = listParamDefinitions(db, run.experiment_id);
     const inputParams = listParamDefinitionsByKind(db, run.experiment_id, "INPUT");
@@ -143,7 +146,8 @@ export function createRunsRouter(db: Db) {
       components,
       experimentId,
       prevId,
-      nextId
+      nextId,
+      workspace
     });
   });
 

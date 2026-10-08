@@ -22,7 +22,8 @@ import {
   insertQualField,
   updateQualField,
   updateQualRunFlags,
-  updateQualRunDueAt
+  updateQualRunDueAt,
+  setQualStepBlocked
 } from "../repos/qual_repo.js";
 import { getExperiment } from "../repos/experiments_repo.js";
 import { getProcessById } from "../repos/processes_repo.js";
@@ -39,9 +40,17 @@ import { canAccessExperiment, ensureExperimentAccess } from "../middleware/exper
 import { listUsers, findUserById } from "../repos/users_repo.js";
 import { getEntityAssignment } from "../repos/entity_assignments_repo.js";
 import { canAssignEntityResponsibility } from "../services/entity_assignment_service.js";
+import { insertAudit } from "../repos/audit_repo.js";
+import { buildExperimentWorkspace } from "../services/experiment_workspace_service.js";
 
 function hasRole(req: express.Request, roles: string[]) {
   return roles.includes(req.user?.role ?? "");
+}
+
+function rejectBlockedStep(res: express.Response, step: { is_blocked: number; status: string }) {
+  if (step.is_blocked !== 1 && step.status !== "BLOCKED") return false;
+  res.status(423).json({ error: "Qualification step is blocked by an administrator" });
+  return true;
 }
 
 export function createQualificationRouter(db: Db) {
@@ -63,6 +72,18 @@ export function createQualificationRouter(db: Db) {
 
   router.use("/experiments/:id", ensureExperimentAccess(db));
 
+  // A stage may still be opened to inspect its evidence while blocked, but no
+  // write endpoint under it may alter runs, fields, settings, or summaries.
+  router.use("/experiments/:id/qualification/:step", (req, res, next) => {
+    if (req.method === "GET" || req.path === "/block") return next();
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    const step = getQualStep(db, experimentId, stepNumber);
+    if (!step) return res.status(404).json({ error: "Step not found" });
+    if (rejectBlockedStep(res, step)) return;
+    return next();
+  });
+
   router.get("/experiments/:id/qualification", (req, res) => {
     const experimentId = Number(req.params.id);
     return res.redirect(`/experiments/${experimentId}#qualification`);
@@ -78,16 +99,14 @@ export function createQualificationRouter(db: Db) {
       const process = getProcessById(db, experiment.process_id);
       return String(process?.process_type_code || "injection").toLowerCase();
     })();
-    const isLimitedProcess = processTypeCode === "compounding";
-    if (isLimitedProcess && stepNumber >= 4) {
-      return res.redirect(`/experiments/${experimentId}#qualification`);
-    }
     ensureQualificationDefaults(db, experimentId);
+    const workspace = buildExperimentWorkspace(db, experimentId);
+    if (!workspace) return res.status(404).send("Experiment not found");
     const step = getQualStep(db, experimentId, stepNumber);
     if (!step) return res.status(404).send("Step not found");
     const fields = listQualFields(db, step.id);
     let runs = listQualRuns(db, step.id);
-    if ((stepNumber === 2 || stepNumber === 3) && runs.length === 0) {
+    if (step.is_blocked !== 1 && (stepNumber === 2 || stepNumber === 3) && runs.length === 0) {
       createQualRuns(db, experimentId, step.id, 1);
       runs = listQualRuns(db, step.id);
     }
@@ -122,11 +141,17 @@ export function createQualificationRouter(db: Db) {
     const stepAssignee = stepAssigneeId ? findUserById(db, stepAssigneeId) : null;
     const stepAssigneeLabel = stepAssignee?.name?.trim() || stepAssignee?.email?.trim() || null;
     // Keep summary synchronized with current run values and formulas on page open.
-    recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
+    // A blocked stage is deliberately read-only, including automatic writes.
+    if (step.is_blocked !== 1) {
+      recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
+    }
     const summaryRow = listQualSummaries(db, experimentId).find(
       (row) => row.step_number === stepNumber
     );
-    if (processTypeCode === "compounding" || processTypeCode === "coating") {
+    // The original IM panels are retained for their six established studies.
+    // Every other catalogue stage uses the shared table/detail shell, so a new
+    // code-owned stage never needs a new micro-application or a six-step fork.
+    if (processTypeCode === "compounding" || processTypeCode === "coating" || stepNumber > 6) {
       return res.render("qualification_step_compounding", {
         experimentId,
         step,
@@ -140,7 +165,9 @@ export function createQualificationRouter(db: Db) {
         canAssignEntities,
         assignableUsers,
         stepAssigneeId,
-        stepAssigneeLabel
+        stepAssigneeLabel,
+        canBlockQualification: req.user?.role === "admin",
+        workspace
       });
     }
 
@@ -263,8 +290,48 @@ export function createQualificationRouter(db: Db) {
       canAssignEntities,
       assignableUsers,
       stepAssigneeId,
-      stepAssigneeLabel
+      stepAssigneeLabel,
+      canBlockQualification: req.user?.role === "admin",
+      workspace
     });
+  });
+
+  router.post("/experiments/:id/qualification/:step/block", (req, res) => {
+    if (req.user?.role !== "admin") return res.status(403).send("Forbidden");
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    const step = getQualStep(db, experimentId, stepNumber);
+    if (!step) return res.status(404).send("Step not found");
+    const action = String(req.body?.action ?? "block").trim().toLowerCase();
+    if (action !== "block" && action !== "unblock") {
+      return res.status(400).send("Invalid block action");
+    }
+    try {
+      setQualStepBlocked(db, step.id, {
+        blocked: action === "block",
+        reason: req.body?.reason,
+        actorUserId: req.user?.id ?? null
+      });
+    } catch (error) {
+      return res.status(400).send(error instanceof Error ? error.message : "Unable to update step block");
+    }
+    insertAudit(db, {
+      actorUserId: req.user?.id ?? null,
+      action: action === "block" ? "qualification.step.blocked" : "qualification.step.unblocked",
+      targetUserId: null,
+      detailsJson: JSON.stringify({
+        experiment_id: experimentId,
+        qualification_step_id: step.id,
+        stage_code: step.stage_code,
+        step_number: step.step_number,
+        reason: action === "block" ? String(req.body?.reason ?? "").trim() : null
+      })
+    });
+    const ajax = req.get("X-Requested-With");
+    if (ajax === "XMLHttpRequest" || ajax === "fetch") {
+      return res.json({ ok: true, blocked: action === "block" });
+    }
+    return res.redirect(`/experiments/${experimentId}/qualification/${stepNumber}`);
   });
 
   router.get("/qual-runs/:id", ensureQualRunAccess, (req, res) => {
@@ -294,6 +361,7 @@ export function createQualificationRouter(db: Db) {
     if (!run) return res.status(404).json({ error: "Run not found" });
     const step = getQualStepById(db, run.step_id);
     if (!step) return res.status(404).json({ error: "Step not found" });
+    if (rejectBlockedStep(res, step)) return;
     const field = listQualFields(db, run.step_id).find((f) => f.id === Number(field_id));
     if (!field) return res.status(404).json({ error: "Field not found" });
     if (field.is_derived) return res.status(400).json({ error: "Derived field" });
@@ -313,6 +381,7 @@ export function createQualificationRouter(db: Db) {
     if (!run) return res.status(404).json({ error: "Run not found" });
     const step = getQualStepById(db, run.step_id);
     if (!step) return res.status(404).json({ error: "Step not found" });
+    if (rejectBlockedStep(res, step)) return;
     const done = Number(req.body.done ? 1 : 0);
     const exclude = Number(req.body.exclude ? 1 : 0);
     const dueAtRaw = String(req.body?.due_at ?? "").trim();
@@ -330,6 +399,9 @@ export function createQualificationRouter(db: Db) {
     const runId = Number(req.params.id);
     const run = getQualRun(db, runId);
     if (!run) return res.status(404).json({ error: "Run not found" });
+    const step = getQualStepById(db, run.step_id);
+    if (!step) return res.status(404).json({ error: "Step not found" });
+    if (rejectBlockedStep(res, step)) return;
     const dueAtRaw = String(req.body?.due_at ?? "").trim();
     const dueAt = /^\d{4}-\d{2}-\d{2}$/.test(dueAtRaw) ? dueAtRaw : null;
     updateQualRunDueAt(db, runId, dueAt);

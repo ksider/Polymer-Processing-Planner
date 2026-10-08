@@ -1,0 +1,35 @@
+<aside class="w-72 shrink-0 self-stretch border-r border-gray-200 bg-white" id="experimentWorkspaceSidebar" data-experiment-sidebar aria-label="Experiment tree">
+  <div class="sticky top-16 flex h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] flex-col">
+    <div class="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-3">
+      <span class="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Project tree</span>
+      <div class="flex items-center gap-1">
+        <button class="inline-flex size-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900" type="button" data-open-experiment-calendar title="Open calendar" aria-label="Open calendar"><span class="material-symbols-rounded text-[18px]" aria-hidden="true">calendar_month</span></button>
+        <button class="inline-flex size-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900" type="button" data-experiment-sidebar-hide aria-controls="experimentWorkspaceSidebar" aria-expanded="true" title="Hide project tree" aria-label="Hide project tree"><span class="material-symbols-rounded text-[18px]" aria-hidden="true">left_panel_close</span></button>
+      </div>
+    </div>
+    <div class="min-h-0 flex-1 overflow-x-clip overflow-y-auto p-3">
+      <%- include('experiment_workspace_tree', { workspace }) %>
+    </div>
+  </div>
+</aside>
+<button class="sticky top-20 hidden size-9 shrink-0 self-start items-center justify-center rounded-r-lg border border-l-0 border-gray-200 bg-white text-gray-500 shadow-sm hover:bg-gray-100 hover:text-gray-900" type="button" data-experiment-sidebar-show aria-controls="experimentWorkspaceSidebar" aria-expanded="false" title="Show project tree" aria-label="Show project tree"><span class="material-symbols-rounded text-[19px]" aria-hidden="true">left_panel_open</span></button>
+<script nonce="<%= cspNonce %>">
+  (() => {
+    const sidebar = document.querySelector('[data-experiment-sidebar]');
+    const hide = document.querySelector('[data-experiment-sidebar-hide]');
+    const show = document.querySelector('[data-experiment-sidebar-show]');
+    if (!sidebar || !hide || !show) return;
+    const key = 'im-planner:experiment-sidebar-collapsed';
+    const setCollapsed = (collapsed) => {
+      sidebar.classList.toggle('hidden', collapsed);
+      show.classList.toggle('hidden', !collapsed);
+      show.classList.toggle('inline-flex', collapsed);
+      hide.setAttribute('aria-expanded', String(!collapsed));
+      show.setAttribute('aria-expanded', String(collapsed));
+      try { window.localStorage.setItem(key, String(collapsed)); } catch (_) { /* storage can be unavailable */ }
+    };
+    try { setCollapsed(window.localStorage.getItem(key) === 'true'); } catch (_) { setCollapsed(false); }
+    hide.addEventListener('click', () => setCollapsed(true));
+    show.addEventListener('click', () => setCollapsed(false));
+  })();
+</script>

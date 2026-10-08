@@ -109,7 +109,7 @@ export function getSystemHealthOverview(db: Db): SystemHealthOverview {
   return {
     database: { status: databaseStatus },
     analytics: { status: "unknown", mode: analyticsMode() },
-    smtp: { configured: isEmailConfigured() },
+    smtp: { configured: isEmailConfigured(db) },
     aiSettings: { configured: hasLlmSettingsEncryptionKey() },
     ...background
   };

@@ -89,6 +89,7 @@ import {
   assignEntityResponsibility,
   canAssignEntityResponsibility
 } from "../services/entity_assignment_service.js";
+import { buildExperimentWorkspace } from "../services/experiment_workspace_service.js";
 
 // Local helper for role checks in this router.
 function hasRole(req: express.Request, roles: string[]) {
@@ -226,13 +227,18 @@ export function createExperimentsRouter(db: Db) {
       const canonicalPath = canonicalExperimentPath(experimentId, experiment.process_id);
       if (canonicalPath !== req.path) return res.redirect(canonicalPath);
     }
+    // Catalogue synchronization is additive: a future code-owned stage appears
+    // for existing experiments without a six-step schema ceiling.
+    ensureQualificationDefaults(db, experimentId);
     const qualSummaries = listQualSummaries(db, experimentId);
     const qualSteps = listQualSteps(db, experimentId);
-    const stepStatusByNumber = new Map(qualSteps.map((step) => [step.step_number, step.status]));
-    const stepIdByNumber = new Map(qualSteps.map((step) => [step.step_number, step.id]));
     const summaryByStep = new Map(qualSummaries.map((summary) => [summary.step_number, summary.summary_json]));
-    const qualificationCards = getQualificationStepsForExperiment(db, experimentId).map((stepDef) => {
-      const stepNumber = stepDef.step_number;
+    const definitionByNumber = new Map(
+      getQualificationStepsForExperiment(db, experimentId).map((stepDef) => [stepDef.step_number, stepDef])
+    );
+    const qualificationCards = qualSteps.map((step) => {
+      const stepNumber = step.step_number;
+      const stepDef = definitionByNumber.get(stepNumber);
       const summaryJson = summaryByStep.get(stepNumber) || null;
       let summaryData: Record<string, unknown> | null = null;
       if (summaryJson) {
@@ -242,15 +248,23 @@ export function createExperimentsRouter(db: Db) {
           summaryData = null;
         }
       }
-      const rawStatus = stepStatusByNumber.get(stepNumber) || "DRAFT";
+      const rawStatus = step.status || "DRAFT";
       const status =
-        summaryJson || rawStatus === "DONE"
+        step.is_blocked === 1 || rawStatus === "BLOCKED"
+          ? "blocked"
+          : summaryJson || rawStatus === "DONE"
           ? "done"
           : rawStatus === "RUNNING"
             ? "in_progress"
             : "not_started";
       const statusLabel =
-        status === "done" ? "Done" : status === "in_progress" ? "In progress" : "Not started";
+        status === "blocked"
+          ? "Blocked"
+          : status === "done"
+            ? "Done"
+            : status === "in_progress"
+              ? "In progress"
+              : "Not started";
       const summaryItems: Array<{ label: string; value: string }> = [];
       if (summaryData) {
         if (stepNumber === 4) {
@@ -277,11 +291,15 @@ export function createExperimentsRouter(db: Db) {
         }
       }
       return {
-        stepId: stepIdByNumber.get(stepNumber) ?? null,
+        stepId: step.id,
         stepNumber,
-        name: stepDef.name,
+        stageCode: step.stage_code,
+        name: stepDef?.name || step.title || `Step ${stepNumber}`,
         status,
         statusLabel,
+        blockedReason: step.blocked_reason,
+        blockedByLabel: step.blocked_by_label,
+        blockedAt: step.blocked_at,
         summaryItems
       };
     });
@@ -297,7 +315,11 @@ export function createExperimentsRouter(db: Db) {
     const recipeIds = getExperimentRecipes(db, experimentId);
     const recipeNameById = new Map(listRecipes(db).map((recipe) => [recipe.id, recipe.name]));
     const recipeNames = recipeIds.map((id) => recipeNameById.get(id)).filter(Boolean);
+    const recipeLinks = recipeIds
+      .map((id) => ({ id, name: recipeNameById.get(id) }))
+      .filter((recipe): recipe is { id: number; name: string } => Boolean(recipe.name));
     const reports = listReportConfigs(db, experimentId);
+    const workspace = buildExperimentWorkspace(db, experimentId);
     const entityAssignments = listEntityAssignmentsByExperiment(db, experimentId);
     const assignmentByStep = new Map<number, number | null>();
     const assignmentByDoe = new Map<number, number | null>();
@@ -310,6 +332,7 @@ export function createExperimentsRouter(db: Db) {
     });
     // Owner selection is visible only to admin/manager.
     const canManageOwner = req.user?.role === "admin" || req.user?.role === "manager";
+    const canBlockQualification = req.user?.role === "admin";
     const canAssignEntities = canAssignEntityResponsibility(req.user, experiment);
     const canDeleteTasks =
       req.user?.role === "admin" ||
@@ -336,16 +359,19 @@ export function createExperimentsRouter(db: Db) {
       machines,
       selectedMachine,
       recipeNames,
+      recipeLinks,
       reports,
       users,
       assignableUsers,
       userLabelById,
       canManageOwner,
+      canBlockQualification,
       canAssignEntities,
       canDeleteTasks,
       assignmentByStep,
       assignmentByDoe,
-      ownerName
+      ownerName,
+      workspace
     });
   });
 
@@ -663,6 +689,8 @@ export function createExperimentsRouter(db: Db) {
     const doe = getDoeStudy(db, doeId);
     if (!doe || doe.experiment_id !== experimentId) return res.status(404).send("DOE not found");
     const errorMessage = req.query.error ? String(req.query.error) : null;
+    const workspace = buildExperimentWorkspace(db, experimentId);
+    if (!workspace) return res.status(404).send("Experiment not found");
 
     const recipes = listRecipes(db);
     const linkedRecipes = getExperimentRecipes(db, experimentId);
@@ -876,7 +904,8 @@ export function createExperimentsRouter(db: Db) {
       canAssignEntities,
       assignableUsers,
       doeAssigneeId,
-      manageMeasuredFields: req.query.manage_fields === "1"
+      manageMeasuredFields: req.query.manage_fields === "1",
+      workspace
     });
   });
 

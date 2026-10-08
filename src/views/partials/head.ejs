@@ -95,7 +95,9 @@
   <script nonce="<%= cspNonce %>" src="/app.js" defer></script>
   <% if (typeof uiKit !== "undefined" && uiKit) { %>
     <script nonce="<%= cspNonce %>" src="/vendor/flowbite/dist/flowbite.min.js" defer></script>
+    <script nonce="<%= cspNonce %>" src="/ui_datepickers.js" defer></script>
+    <script nonce="<%= cspNonce %>" src="/ui_form_controls.js" defer></script>
   <% } %>
   <meta name="csrf-token" content="<%= csrfToken || '' %>">
 </head>
-<body>
+<body<% if (typeof uiKit !== "undefined" && uiKit) { %> data-ui-kit<% } %>>

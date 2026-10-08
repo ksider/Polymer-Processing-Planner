@@ -1,0 +1,45 @@
+<header class="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur" aria-label="Experiment navigation">
+  <div class="flex min-h-16 w-full items-center gap-3 px-4 sm:px-6 lg:px-8">
+    <a class="flex shrink-0 items-center gap-2 text-sm font-semibold text-gray-900 no-underline" href="/" aria-label="Open Planner">
+      <span class="flex size-9 items-center justify-center rounded-lg bg-blue-700 text-white shadow-sm"><span class="material-symbols-rounded" aria-hidden="true">science</span></span>
+      <span class="hidden xl:inline">Planner</span>
+    </a>
+    <div class="min-w-0 flex-1">
+      <% if (breadcrumbs && breadcrumbs.length > 0) { %>
+        <nav class="flex min-w-0 items-center gap-1 overflow-hidden text-sm" aria-label="Breadcrumb">
+          <% breadcrumbs.forEach((crumb, index) => { %>
+            <% if (index > 0) { %><span class="shrink-0 text-gray-300" aria-hidden="true">/</span><% } %>
+            <% if (index < breadcrumbs.length - 1 && crumb.href) { %>
+              <a class="truncate text-gray-500 no-underline hover:text-blue-700" href="<%= crumb.href %>"><%= crumb.label %></a>
+            <% } else { %>
+              <span class="truncate font-medium text-gray-900" aria-current="page"><%= crumb.label %></span>
+            <% } %>
+          <% }); %>
+        </nav>
+      <% } %>
+    </div>
+    <nav class="hidden items-center gap-1 lg:flex" aria-label="Planner sections">
+      <a class="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 no-underline hover:bg-gray-100 hover:text-gray-900" href="/">Processes</a>
+      <a class="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 no-underline hover:bg-gray-100 hover:text-gray-900" href="/my-experiments">Experiments</a>
+      <a class="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 no-underline hover:bg-gray-100 hover:text-gray-900" href="/recipes">Recipes</a>
+    </nav>
+    <% if (currentUser) { %>
+      <div class="flex shrink-0 items-center gap-1 sm:gap-2">
+        <a class="relative inline-flex size-10 items-center justify-center rounded-lg text-gray-500 no-underline hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-4 focus:ring-gray-100" href="/messages" title="Notifications" data-messages-popover-toggle aria-haspopup="dialog" aria-expanded="false">
+          <span class="material-symbols-rounded" aria-hidden="true">notifications</span>
+          <% if (unreadNotifications && unreadNotifications > 0) { %><span class="absolute right-0 top-0 inline-flex min-w-4 -translate-y-0.5 translate-x-0.5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold leading-4 text-white" data-messages-unread-badge><%= unreadNotifications > 99 ? '99+' : unreadNotifications %></span><% } %>
+        </a>
+        <div class="messages-popover" data-messages-popover hidden>
+          <div class="messages-popover-head"><strong>Unread messages</strong><button class="pure-button button-sm" type="button" data-messages-read-all>Mark all read</button></div>
+          <div class="messages-popover-body" data-messages-popover-body><div class="small-note">Loading...</div></div>
+          <div class="messages-popover-foot"><a class="pure-button pure-button-primary" href="/messages">Open messages</a></div>
+        </div>
+        <a class="inline-flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-700 no-underline hover:bg-gray-100" href="/me" aria-label="Open my profile">
+          <img class="size-7 rounded-full object-cover" src="<%= avatarUrl(currentUser.id) %>" alt="">
+          <span class="max-w-40 truncate"><%= currentUser.name || currentUser.email %></span>
+        </a>
+        <form method="post" action="/auth/logout" class="hidden sm:block"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="inline-flex size-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900" type="submit" aria-label="Log out"><span class="material-symbols-rounded" aria-hidden="true">logout</span></button></form>
+      </div>
+    <% } %>
+  </div>
+</header>

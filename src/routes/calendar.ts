@@ -1,9 +1,11 @@
 import express from "express";
 import type { Db } from "../db.js";
 import { getProcessById } from "../repos/processes_repo.js";
-import { listExperimentsByProcessForUserWithMeta } from "../repos/experiments_repo.js";
+import { canAccessExperiment } from "../middleware/experiment_access.js";
+import { getExperiment, listExperimentsByProcessForUserWithMeta } from "../repos/experiments_repo.js";
 import {
   decodeCalendarEventToken,
+  listExperimentCalendarEvents,
   listMyCalendarEvents,
   listProcessCalendarEvents,
   moveCalendarEventDate
@@ -74,6 +76,18 @@ export function createCalendarRouter(db: Db) {
     if (!req.user?.id) return res.status(401).json({ error: "Unauthorized" });
 
     const scope = String(req.query.scope || "my").toLowerCase();
+    if (scope === "experiment") {
+      const experimentId = Number(req.query.experiment_id || 0);
+      if (!Number.isFinite(experimentId) || experimentId <= 0) {
+        return res.status(400).json({ error: "Invalid experiment_id" });
+      }
+      const experiment = getExperiment(db, experimentId);
+      if (!experiment) return res.status(404).json({ error: "Experiment not found" });
+      if (!canAccessExperiment(db, req.user, experimentId, experiment)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      return res.json({ events: listExperimentCalendarEvents(db, experimentId) });
+    }
     if (scope === "process") {
       const processId = Number(req.query.process_id || 0);
       if (!Number.isFinite(processId) || processId <= 0) {
