@@ -25,18 +25,27 @@ export function createUsersRouter(db: Db) {
     if (!Number.isFinite(userId)) return res.status(404).send("Not found");
 
     const currentUser = req.user as { id?: number; role?: string } | undefined;
-    const isSelf = currentUser?.id === userId;
-    const canView = isSelf || currentUser?.role === "admin" || currentUser?.role === "manager";
-    if (!canView) return res.status(403).send("Forbidden");
-
     const user = findUserById(db, userId);
     if (!user) return res.status(404).send("User not found");
+    if (currentUser?.id === userId) return res.redirect("/me");
 
-    const experiments = listExperimentsForOwnerWithMeta(db, userId, false);
+    // The profile card is a directory record, not another person's private
+    // workspace. Active colleagues can identify and contact one another;
+    // inactive accounts remain visible only to directory moderators.
+    const canModerateDirectory = currentUser?.role === "admin" || currentUser?.role === "manager";
+    if (user.status !== "ACTIVE" && !canModerateDirectory) return res.status(404).send("User not found");
+
+    // Ownership by itself is not an experiment visibility grant. Retain the
+    // supporting list only for directory moderators until experiment ACLs
+    // expose an explicit shareable scope.
+    const canViewExperiments = Boolean(canModerateDirectory);
+    const experiments = canViewExperiments ? listExperimentsForOwnerWithMeta(db, userId, false) : [];
     res.render("user_profile", {
+      title: `${user.name || user.email} · Profile`,
+      uiKit: true,
       user,
       experiments: enrich(experiments),
-      isSelf
+      canViewExperiments
     });
   });
 

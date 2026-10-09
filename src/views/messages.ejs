@@ -1,9 +1,10 @@
-<%- include('partials/head', { title: title || 'Messages' }) %>
-<%- include('partials/nav') %>
-<div class="container messages-page-container">
-  <div class="card messages-workspace">
-    <div class="messages-layout">
-      <aside class="messages-sidebar">
+<%- include('partials/head', { title: title || 'Messages', uiKit: true }) %>
+<%- include('partials/experiment_workspace_nav') %>
+<main class="min-h-[calc(100vh-4rem)] bg-gray-50 p-2 sm:p-3">
+  <div class="messages-page-container mx-auto h-[calc(100dvh-5rem)] max-w-[1800px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm sm:h-[calc(100dvh-5.5rem)]">
+    <div class="messages-workspace h-full overflow-hidden">
+    <div class="messages-layout grid h-full min-h-0 grid-cols-1 lg:grid-cols-[18rem_minmax(26rem,1fr)_17rem]">
+      <aside class="messages-sidebar flex min-h-0 flex-col border-b border-gray-200 bg-white p-3 lg:border-b-0 lg:border-r">
         <div class="messages-sidebar-head">
           <div class="messages-sidebar-head-top">
             <h1 class="card-title">Messages</h1>
@@ -19,14 +20,14 @@
             <% } %>
           </div>
           <div class="messages-view-tabs">
-            <a class="pure-button <%= view === 'chat' ? 'pure-button-primary' : '' %>" href="/messages?view=chat">Chats</a>
-            <a class="pure-button <%= view === 'deleted' ? 'pure-button-primary' : '' %>" href="/messages?view=deleted">Deleted</a>
+            <a class="messages-view-tab <%= view === 'chat' ? 'is-active' : '' %>" href="/messages?view=chat" <%= view === 'chat' ? 'aria-current="page"' : '' %>>Chats</a>
+            <a class="messages-view-tab <%= view === 'deleted' ? 'is-active' : '' %>" href="/messages?view=deleted" <%= view === 'deleted' ? 'aria-current="page"' : '' %>>Deleted</a>
           </div>
         </div>
 
         <div class="messages-sidebar-body">
         <% if (view === 'chat') { %>
-          <form class="pure-form messages-chat-filter-form" action="/messages" method="get" data-auto-submit-search>
+          <form class="messages-chat-filter-form" action="/messages" method="get" data-auto-submit-search>
             <input type="hidden" name="view" value="chat">
             <% if (activeRoom?.id) { %>
               <input type="hidden" name="room_id" value="<%= activeRoom.id %>">
@@ -85,7 +86,7 @@
                     </div>
                   </a>
                   <% if (room.room_type === 'group') { %>
-                    <form class="pure-form messages-room-delete-form" action="/messages/rooms/<%= room.room_id %>/delete" method="post">
+                    <form class="messages-room-delete-form" action="/messages/rooms/<%= room.room_id %>/delete" method="post">
                       <button class="icon-btn icon-only danger" type="submit" title="Delete group chat" onclick="return confirm('Delete this group chat for all participants?');">
                         <span class="material-symbols-rounded">delete</span>
                       </button>
@@ -127,8 +128,8 @@
                   <strong><%- formatInline(item.subject) %></strong>
                   <div class="small-note"><%- formatInline(item.body || '-') %></div>
                   <div class="messages-row-actions">
-                    <form class="pure-form" action="/messages/<%= item.id %>/restore" method="post">
-                      <button class="pure-button button-sm" type="submit">Restore</button>
+                    <form action="/messages/<%= item.id %>/restore" method="post">
+                      <button class="inline-flex h-8 items-center rounded-md border border-gray-300 bg-white px-2.5 text-xs font-semibold text-gray-700 shadow-xs transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-3 focus:ring-blue-100" type="submit">Restore</button>
                     </form>
                   </div>
                 </div>
@@ -139,7 +140,7 @@
         </div>
       </aside>
 
-      <section class="messages-thread">
+      <section class="messages-thread flex min-h-0 min-w-0 flex-col bg-gray-50">
         <% if (view === 'deleted') { %>
           <div class="messages-empty-thread">
             <strong>Deleted messages</strong>
@@ -164,7 +165,7 @@
               </div>
             </div>
             <div class="messages-thread-head-actions">
-              <form class="pure-form messages-thread-search-form" action="/messages" method="get" data-auto-submit-search>
+              <form class="messages-thread-search-form" action="/messages" method="get" data-auto-submit-search>
                 <input type="hidden" name="view" value="chat">
                 <input type="hidden" name="room_id" value="<%= activeRoom.id %>">
                 <% if (chatQuery) { %>
@@ -188,7 +189,7 @@
                   <span class="material-symbols-rounded">tune</span>
                 </button>
               <% } %>
-              <form class="pure-form" action="/messages/rooms/<%= activeRoom.id %>/read" method="post">
+              <form action="/messages/rooms/<%= activeRoom.id %>/read" method="post">
                 <button
                   class="icon-btn icon-only messages-mark-read-btn <%= activeUnreadCount > 0 ? 'is-active' : 'is-idle' %>"
                   type="submit"
@@ -202,29 +203,29 @@
           </div>
 
           <% if (activeRoomType === 'group') { %>
-            <dialog class="modal-frame" id="roomSettingsDialog">
-              <div class="modal-header">
-                <strong>Chat settings</strong>
-                <div class="messages-room-settings-head-actions">
+            <dialog class="modal-frame m-auto w-[min(96vw,38rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="roomSettingsDialog">
+              <div class="modal-header flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
+                <div><p class="text-sm font-medium text-blue-700">Group chat</p><strong class="mt-0.5 block text-lg">Chat settings</strong></div>
+                <div class="messages-room-settings-head-actions flex items-center gap-2">
                   <% if (canManageMembers) { %>
-                    <button class="icon-btn" type="button" data-add-member-open>
+                    <button class="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-800" type="button" data-add-member-open>
                       <span class="material-symbols-rounded">group_add</span>
                       <span>Add participant</span>
                     </button>
                   <% } %>
-                  <button class="icon-btn icon-only" type="button" data-room-settings-close title="Close">
+                  <button class="inline-flex size-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900" type="button" data-room-settings-close title="Close">
                     <span class="material-symbols-rounded">close</span>
                   </button>
                 </div>
               </div>
-              <div class="modal-body">
-                <div class="messages-list-title">Participants</div>
-                <div class="messages-add-member-list">
+              <div class="modal-body p-5">
+                <div class="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Participants</div>
+                <div class="messages-add-member-list grid gap-2">
                   <% (roomMembers || []).forEach((member) => { %>
-                    <div class="messages-add-member-row is-static">
+                    <div class="messages-add-member-row is-static grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 shadow-xs">
                       <div>
-                        <strong><%- formatInline(member.name || member.email || `User #${member.user_id}`) %></strong>
-                        <div class="small-note">
+                        <strong class="text-sm text-gray-900"><%- formatInline(member.name || member.email || `User #${member.user_id}`) %></strong>
+                        <div class="mt-1 text-xs text-gray-500">
                           <%- formatInline(member.email || '-') %>
                           <% if (member.member_role === 'owner') { %>
                             · OWNER
@@ -232,46 +233,46 @@
                         </div>
                       </div>
                       <% if (canManageMembers && Number(member.user_id) !== Number(currentUser?.id)) { %>
-                        <form class="pure-form" action="/messages/rooms/<%= activeRoom.id %>/members/<%= member.user_id %>/remove" method="post">
-                          <button class="pure-button button-sm danger" type="submit">Remove</button>
+                        <form action="/messages/rooms/<%= activeRoom.id %>/members/<%= member.user_id %>/remove" method="post">
+                          <button class="inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50" type="submit">Remove</button>
                         </form>
                       <% } %>
                     </div>
                   <% }) %>
                 </div>
                 <% if (!canManageMembers) { %>
-                  <div class="small-note messages-room-settings-note">
+                  <div class="messages-room-settings-note mt-4 rounded-lg bg-gray-50 p-3 text-sm text-gray-500">
                     Only chat owners, managers, or admins can add or remove participants.
                   </div>
                 <% } %>
               </div>
             </dialog>
             <% if (canManageMembers) { %>
-              <dialog class="modal-frame" id="addMemberDialog">
-                <div class="modal-header">
-                  <strong>Add Participant</strong>
-                  <button class="icon-btn icon-only" type="button" data-add-member-close title="Close">
+              <dialog class="modal-frame m-auto w-[min(96vw,34rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="addMemberDialog">
+                <div class="modal-header flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
+                  <div><p class="text-sm font-medium text-blue-700">Group chat</p><strong class="mt-0.5 block text-lg">Add participant</strong></div>
+                  <button class="inline-flex size-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900" type="button" data-add-member-close title="Close">
                     <span class="material-symbols-rounded">close</span>
                   </button>
                 </div>
-                <div class="modal-body">
-                  <div class="messages-add-member-list">
+                <div class="modal-body p-5">
+                  <div class="messages-add-member-list grid gap-2">
                     <% let hasCandidates = false; %>
                     <% (subordinateUsers || []).forEach((user) => { %>
                       <% const alreadyIn = (roomMembers || []).some((member) => Number(member.user_id) === Number(user.id)); %>
                       <% if (!alreadyIn) { hasCandidates = true; %>
-                        <form class="pure-form messages-add-member-row" action="/messages/rooms/<%= activeRoom.id %>/members/add" method="post">
+                        <form class="messages-add-member-row flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-3 shadow-xs" action="/messages/rooms/<%= activeRoom.id %>/members/add" method="post">
                           <input type="hidden" name="user_id" value="<%= user.id %>">
                           <div>
-                            <strong><%- formatInline(user.name || user.email) %></strong>
-                            <div class="small-note"><%- formatInline(user.email) %> · <%- formatInline(user.role || 'user') %></div>
+                            <strong class="text-sm text-gray-900"><%- formatInline(user.name || user.email) %></strong>
+                            <div class="mt-1 text-xs text-gray-500"><%- formatInline(user.email) %> · <%- formatInline(user.role || 'user') %></div>
                           </div>
-                          <button class="pure-button button-sm" type="submit">Add</button>
+                          <button class="inline-flex shrink-0 items-center justify-center rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-800" type="submit">Add</button>
                         </form>
                       <% } %>
                     <% }) %>
                     <% if (!hasCandidates) { %>
-                      <div class="small-note">No eligible users to add.</div>
+                      <div class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-3 text-sm text-gray-500">No eligible users to add.</div>
                     <% } %>
                   </div>
                 </div>
@@ -322,7 +323,7 @@
                 <div class="messages-bubble-cluster">
                   <div class="messages-bubble">
                     <div class="messages-bubble-tools">
-                      <form class="pure-form messages-bubble-tool" action="/messages/rooms/<%= activeRoom.id %>/pins/<%= msg.message_id %>/toggle" method="post">
+                      <form class="messages-bubble-tool" action="/messages/rooms/<%= activeRoom.id %>/pins/<%= msg.message_id %>/toggle" method="post">
                         <button class="icon-btn icon-only" type="submit" title="<%= msg.is_pinned ? 'Unpin message' : 'Pin message' %>">
                           <span class="material-symbols-rounded"><%= msg.is_pinned ? 'keep_off' : 'keep' %></span>
                         </button>
@@ -334,7 +335,7 @@
                         <a class="icon-btn icon-only messages-bubble-tool" href="/messages?view=chat&room_id=<%= activeRoom.id %>&edit_message_id=<%= msg.message_id %>#composer" title="Edit message">
                           <span class="material-symbols-rounded">edit</span>
                         </a>
-                        <form class="pure-form messages-bubble-tool" action="/messages/<%= msg.id %>/delete" method="post">
+                        <form class="messages-bubble-tool" action="/messages/<%= msg.id %>/delete" method="post">
                           <input type="hidden" name="room_id" value="<%= activeRoom.id %>">
                           <input type="hidden" name="message_id" value="<%= msg.message_id %>">
                           <button class="icon-btn icon-only" type="submit" title="Delete message">
@@ -418,7 +419,7 @@
                       <% if (reactionsList.length > 0) { %>
                         <div class="messages-reaction-summary" title="<%= reactionSummaryTitle %>">
                           <% reactionsList.forEach((reaction) => { %>
-                            <form class="pure-form messages-reaction-summary-item" action="/messages/rooms/<%= activeRoom.id %>/messages/<%= msg.message_id %>/reactions/toggle" method="post">
+                            <form class="messages-reaction-summary-item" action="/messages/rooms/<%= activeRoom.id %>/messages/<%= msg.message_id %>/reactions/toggle" method="post">
                               <input type="hidden" name="reaction" value="<%= reaction.reaction %>">
                               <button
                                 class="messages-reaction-summary-pill <%= reaction.reacted_by_current_user ? 'is-active' : '' %>"
@@ -439,7 +440,7 @@
                       <% } %>
                       <% (reactionOptions || []).forEach((reaction, reactionIndex) => { %>
                         <% const isActiveReaction = reactionsList.some((item) => item.reaction === reaction.code && item.reacted_by_current_user); %>
-                        <form class="pure-form messages-reaction-orbit-item orbit-pos-<%= reactionIndex + 1 %>" action="/messages/rooms/<%= activeRoom.id %>/messages/<%= msg.message_id %>/reactions/toggle" method="post">
+                        <form class="messages-reaction-orbit-item orbit-pos-<%= reactionIndex + 1 %>" action="/messages/rooms/<%= activeRoom.id %>/messages/<%= msg.message_id %>/reactions/toggle" method="post">
                           <input type="hidden" name="reaction" value="<%= reaction.code %>">
                           <button class="messages-reaction-option <%= isActiveReaction ? 'is-active' : '' %>" type="submit" title="<%= reaction.label %>"><%= reaction.emoji %></button>
                         </form>
@@ -454,9 +455,9 @@
           <% if (activeRoomType !== 'system') { %>
             <div class="messages-thread-compose" id="composer">
               <% if (sendError) { %>
-                <div class="auth-error"><%= sendError %></div>
+                <div class="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert"><%= sendError %></div>
               <% } %>
-              <form class="pure-form pure-form-stacked" action="/messages/rooms/<%= activeRoom.id %>/send" method="post">
+              <form class="grid gap-3" action="/messages/rooms/<%= activeRoom.id %>/send" method="post">
                 <input id="threadReplyToMessageId" type="hidden" name="reply_to_message_id" value="<%= editTarget?.reply_to_message_id || draft?.reply_to_message_id || '' %>">
                 <input id="threadEditMessageId" type="hidden" name="edit_message_id" value="<%= editTarget?.message_id || '' %>">
                 <input id="threadAttachmentEntityType" type="hidden" name="attachment_entity_type" value="">
@@ -468,7 +469,7 @@
                     <strong id="threadReplyStateTitle"><%= editTarget ? 'Editing message' : 'Replying to message' %></strong>
                     <span id="threadReplyStateBody"><%- formatInline(composeReplyMessage?.subject || composeReplyMessage?.body || editTarget?.subject || '') %></span>
                   </div>
-                  <button class="icon-btn icon-only" type="button" id="clearComposeState" title="Clear state">
+                  <button class="inline-flex size-8 items-center justify-center rounded-lg text-gray-500 hover:bg-white hover:text-gray-900" type="button" id="clearComposeState" title="Clear state">
                     <span class="material-symbols-rounded">close</span>
                   </button>
                 </div>
@@ -477,28 +478,28 @@
                     <strong id="threadAttachmentTitle">Attached entity</strong>
                     <span id="threadAttachmentSubtitle"></span>
                   </div>
-                  <button class="icon-btn icon-only" type="button" id="clearAttachmentState" title="Remove attachment">
+                  <button class="inline-flex size-8 items-center justify-center rounded-lg text-gray-500 hover:bg-white hover:text-gray-900" type="button" id="clearAttachmentState" title="Remove attachment">
                     <span class="material-symbols-rounded">close</span>
                   </button>
                 </div>
-                <fieldset class="pure-group">
+                <div class="overflow-hidden rounded-lg border border-gray-300 bg-white shadow-xs focus-within:border-blue-600 focus-within:ring-3 focus-within:ring-blue-100">
                   <% if (activeRoomType !== 'group') { %>
-                    <input id="threadSubject" name="subject" type="text" required placeholder="Subject" value="<%= editTarget?.subject || draft?.subject || '' %>">
+                    <input class="block w-full border-0 border-b border-gray-200 bg-transparent px-3 py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-400" id="threadSubject" name="subject" type="text" required placeholder="Subject" value="<%= editTarget?.subject || draft?.subject || '' %>">
                   <% } else { %>
                     <input id="threadSubject" name="subject" type="hidden" value="">
                   <% } %>
-                  <textarea id="threadBody" name="body" rows="3" placeholder="Message"><%= editTarget?.body || draft?.body || '' %></textarea>
-                </fieldset>
-                <div class="messages-compose-actions">
-                  <div class="messages-compose-entity-picker">
-                    <button class="icon-btn" type="button" id="openEntityAttach" title="Attach entity">
+                  <textarea class="block min-h-28 w-full resize-y border-0 bg-transparent px-3 py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-400" id="threadBody" name="body" rows="3" placeholder="Message"><%= editTarget?.body || draft?.body || '' %></textarea>
+                </div>
+                <div class="messages-compose-actions flex items-center justify-between gap-3">
+                  <div class="messages-compose-entity-picker flex items-center">
+                    <button class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50" type="button" id="openEntityAttach" title="Attach entity">
                       <span class="material-symbols-rounded">attach_file</span>
                       <span>Attach</span>
                     </button>
                   </div>
-                  <div class="messages-compose-submit">
-                    <button class="pure-button pure-button-primary" type="submit">Send</button>
-                    <span class="small-note">Ctrl+Enter</span>
+                  <div class="messages-compose-submit inline-flex items-center gap-2">
+                    <button class="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-800" type="submit"><span class="material-symbols-rounded text-[18px]" aria-hidden="true">send</span>Send</button>
+                    <span class="text-xs text-gray-500">Ctrl+Enter</span>
                   </div>
                 </div>
               </form>
@@ -508,14 +509,14 @@
       </section>
 
       <% if (view === 'chat') { %>
-        <aside class="messages-rail">
+        <aside class="messages-rail flex min-h-0 flex-col border-t border-gray-200 bg-white lg:border-l lg:border-t-0">
           <div class="messages-rail-head">
             <div>
               <h2 class="messages-rail-title">Notifications</h2>
               <div class="small-note">Technical events from your work</div>
             </div>
             <% if (systemRoom) { %>
-              <a class="pure-button button-sm" href="/messages?view=chat&room_id=<%= systemRoom.room_id %>">Open</a>
+              <a class="inline-flex h-8 items-center rounded-md border border-gray-300 bg-white px-2.5 text-xs font-semibold text-gray-700 shadow-xs transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-3 focus:ring-blue-100" href="/messages?view=chat&room_id=<%= systemRoom.room_id %>">Open</a>
             <% } %>
           </div>
           <div class="messages-rail-body">
@@ -543,60 +544,48 @@
               </a>
             <% }) %>
           </div>
-          <div class="messages-rail-foot">
-            <div class="messages-rail-links">
-              <% if (currentUser && (currentUser.role === "admin" || currentUser.role === "manager" || currentUser.role === "engineer")) { %>
-                <a href="/param-library">Parameters</a>
-              <% } %>
-              <% if (currentUser && currentUser.role === "admin") { %>
-                <a href="/admin">Admin</a>
-              <% } %>
-            </div>
-            <div class="messages-rail-links">
-              <a href="https://nikolaysemenov.ru" target="_blank" rel="noopener">nikolaysemenov.ru</a>
-              <a href="https://www.linkedin.com/in/nikolay-semenov/" target="_blank" rel="noopener">LinkedIn</a>
-            </div>
-          </div>
         </aside>
       <% } %>
     </div>
+    </div>
   </div>
-</div>
+</main>
 
-<dialog class="modal-frame" id="groupChatDialog">
-  <div class="modal-header">
-    <strong>New Group Chat</strong>
-    <button class="icon-btn icon-only" type="button" data-group-chat-close title="Close">
+<dialog class="modal-frame m-auto w-[min(96vw,36rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="groupChatDialog">
+  <div class="modal-header flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
+    <div><p class="text-sm font-medium text-blue-700">Messenger</p><strong class="mt-0.5 block text-lg">New group chat</strong></div>
+    <button class="inline-flex size-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900" type="button" data-group-chat-close title="Close">
       <span class="material-symbols-rounded">close</span>
     </button>
   </div>
-  <div class="modal-body">
-    <form class="pure-form pure-form-stacked" action="/messages/rooms/create-group" method="post" data-group-create-form>
-      <label for="groupTitle">Group title</label>
-      <input id="groupTitle" name="title" type="text" placeholder="Team chat">
-      <label for="groupRecipientsInput">Participants</label>
+  <div class="modal-body p-5">
+    <form class="grid gap-4" action="/messages/rooms/create-group" method="post" data-group-create-form>
+      <label class="grid gap-1.5 text-sm font-medium text-gray-700" for="groupTitle">Group title
+        <input class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-xs focus:border-blue-600 focus:ring-blue-600" id="groupTitle" name="title" type="text" placeholder="Team chat">
+      </label>
+      <label class="grid gap-1.5 text-sm font-medium text-gray-700" for="groupRecipientsInput">Participants</label>
       <div class="messages-input-anchor">
-        <input id="groupRecipientsInput" type="search" placeholder="Type name or email..." autocomplete="off" data-group-recipient-input>
+        <input class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-xs focus:border-blue-600 focus:ring-blue-600" id="groupRecipientsInput" type="search" placeholder="Type name or email..." autocomplete="off" data-group-recipient-input>
         <div class="messages-user-suggest" data-group-recipient-suggest hidden></div>
       </div>
       <div class="messages-recipient-chips" data-group-recipient-chips></div>
       <div data-group-recipient-hidden></div>
-      <button class="pure-button pure-button-primary" type="submit">Create group</button>
+      <button class="inline-flex w-fit items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-800" type="submit"><span class="material-symbols-rounded text-[18px]" aria-hidden="true">group_add</span>Create group</button>
     </form>
   </div>
 </dialog>
 
-<dialog class="modal-frame" id="directChatDialog">
-  <div class="modal-header">
-    <strong>Open Direct Chat</strong>
-    <button class="icon-btn icon-only" type="button" data-direct-chat-close title="Close">
+<dialog class="modal-frame m-auto w-[min(96vw,32rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="directChatDialog">
+  <div class="modal-header flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
+    <div><p class="text-sm font-medium text-blue-700">Messenger</p><strong class="mt-0.5 block text-lg">New direct chat</strong></div>
+    <button class="inline-flex size-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900" type="button" data-direct-chat-close title="Close">
       <span class="material-symbols-rounded">close</span>
     </button>
   </div>
-  <div class="modal-body">
+  <div class="modal-body p-5">
     <div class="messages-compose-search">
       <input
-        class="messages-text-input"
+        class="messages-text-input w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-xs focus:border-blue-600 focus:ring-blue-600"
         id="openDirectInput"
         type="search"
         placeholder="Type name or email..."
@@ -608,17 +597,17 @@
   </div>
 </dialog>
 
-<dialog class="modal-frame" id="entityAttachDialog">
-  <div class="modal-header">
-    <strong>Attach Entity</strong>
-    <button class="icon-btn icon-only" type="button" data-entity-attach-close title="Close">
+<dialog class="modal-frame m-auto w-[min(96vw,52rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="entityAttachDialog">
+  <div class="modal-header flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
+    <div><p class="text-sm font-medium text-blue-700">Message context</p><strong class="mt-0.5 block text-lg">Attach entity</strong></div>
+    <button class="inline-flex size-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900" type="button" data-entity-attach-close title="Close">
       <span class="material-symbols-rounded">close</span>
     </button>
   </div>
-  <div class="modal-body">
+  <div class="modal-body p-5">
     <div class="messages-entity-browser-head">
-      <input class="messages-text-input" id="entityAttachInput" type="search" placeholder="Filter entities..." autocomplete="off">
-      <div class="small-note">Choose an entity and add it to the message.</div>
+      <input class="messages-text-input w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-xs focus:border-blue-600 focus:ring-blue-600" id="entityAttachInput" type="search" placeholder="Filter entities..." autocomplete="off">
+      <div class="text-sm text-gray-500">Choose an entity and add it to the message.</div>
     </div>
     <div class="messages-entity-browser" id="entityAttachBrowser">
       <% if (!attachEntityTree || attachEntityTree.length === 0) { %>
@@ -1210,4 +1199,4 @@
 
   })();
 </script>
-<%- include('partials/foot', { hideSiteFooter: true }) %>
+<%- include('partials/foot', { hideSiteFooter: true, uiKit: true }) %>

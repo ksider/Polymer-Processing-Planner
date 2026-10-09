@@ -2143,6 +2143,11 @@
     loadTasks();
   });
 
-  loadTasks();
+  const requestedTaskId = Number(new URLSearchParams(window.location.search).get('task_id'));
+  loadTasks().then(() => {
+    if (!Number.isFinite(requestedTaskId) || requestedTaskId <= 0) return;
+    document.getElementById('tasks')?.scrollIntoView({ block: 'start' });
+    openTask(requestedTaskId);
+  });
 </script>
 <%- include('partials/foot', { uiKit: true }) %>

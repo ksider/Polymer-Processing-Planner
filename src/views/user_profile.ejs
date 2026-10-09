@@ -1,43 +1,51 @@
-<%- include('partials/head', { title: 'Polymer Processing Planner | User' }) %>
-<%- include('partials/nav') %>
-<div class="container">
-  <div class="card">
-    <h1 class="card-title"><%= user.name || user.email %></h1>
-    <p class="small-note">
-      <%= user.email %> · <%= user.role || 'user' %> · <%= user.status %>
-      <% if (isSelf) { %>
-        · <a href="/profile">Edit profile</a>
-      <% } %>
-    </p>
-  </div>
+<%- include('partials/head', { title: title || 'Profile', uiKit: true }) %>
+<%- include('partials/experiment_workspace_nav') %>
+<main class="min-h-[calc(100vh-4rem)] bg-gray-50"><div class="w-full max-w-none space-y-4 px-3 py-3 sm:px-4 lg:px-5">
+  <section class="flex flex-wrap items-center gap-4 rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs" aria-labelledby="personProfileName">
+    <img class="size-20 shrink-0 rounded-full border border-default-medium bg-neutral-secondary object-cover" src="<%= avatarUrl(user.id) %>" alt="<%= user.name || user.email %> avatar">
+    <div class="min-w-0 flex-1">
+      <p class="text-xs font-medium text-brand">Team profile</p>
+      <h1 class="mt-0.5 truncate text-xl font-semibold tracking-tight text-heading" id="personProfileName"><%= user.name || user.email %></h1>
+      <p class="mt-1 text-sm text-body"><%= user.role || 'user' %> · <%= user.email %></p>
+      <span class="mt-3 inline-flex rounded-full px-2.5 py-1 text-xs font-medium <%= user.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800' %>"><%= user.status === 'ACTIVE' ? 'Active' : user.status %></span>
+    </div>
+    <% if (user.status === 'ACTIVE') { %>
+      <a class="inline-flex items-center justify-center gap-2 rounded-base bg-brand px-3 py-2.5 text-sm font-medium text-white no-underline shadow-xs hover:bg-brand-strong" href="/messages?view=chat&user_id=<%= user.id %>">
+        <span class="material-symbols-rounded" aria-hidden="true">chat</span>
+        Write a message
+      </a>
+    <% } %>
+  </section>
 
-  <div class="card">
-    <h2 class="card-title">Experiments</h2>
-    <table class="pure-table table-compact">
+  <% if (canViewExperiments) { %>
+  <section class="rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 class="text-sm font-semibold text-heading">Owned experiments</h2>
+        <p class="mt-1 text-sm text-body">Visible because you have directory moderation access.</p>
+      </div>
+    </div>
+    <div class="mt-4 overflow-x-auto"><table class="min-w-full border-separate border-spacing-y-2 text-left text-sm text-body [&_thead_th]:whitespace-nowrap [&_thead_th]:px-3 [&_thead_th]:py-2 [&_thead_th]:text-xs [&_thead_th]:font-medium [&_thead_th]:uppercase [&_tbody_td]:border-y [&_tbody_td]:border-default-medium [&_tbody_td]:bg-neutral-primary [&_tbody_td]:px-3 [&_tbody_td]:py-2 [&_tbody_td:first-child]:rounded-s-base [&_tbody_td:first-child]:border-s [&_tbody_td:last-child]:rounded-e-base [&_tbody_td:last-child]:border-e">
       <thead>
-        <tr>
-          <th>ID</th>
-          <th>Name</th>
-          <th>Status</th>
-          <th>Created</th>
-        </tr>
+        <tr><th>ID</th><th>Name</th><th>Status</th><th>Created</th></tr>
       </thead>
       <tbody>
         <% if (experiments.length === 0) { %>
-          <tr>
-            <td colspan="4">No experiments assigned.</td>
-          </tr>
+          <tr><td colspan="4">No owned experiments.</td></tr>
         <% } %>
         <% experiments.forEach((exp) => { %>
           <tr>
             <td><%= exp.id %></td>
-            <td><a href="<%= experimentPath(exp) %>"><%- formatInline(exp.name) %></a></td>
-            <td><span class="status-pill status-<%= exp.status %>"><%= exp.statusLabel %></span></td>
+            <td><a class="font-medium text-brand no-underline hover:underline" href="<%= experimentPath(exp) %>"><%- formatInline(exp.name) %></a></td>
+            <td><span class="inline-flex rounded-full bg-neutral-secondary px-2 py-0.5 text-xs font-medium text-heading"><%= exp.statusLabel %></span></td>
             <td><%= new Date(exp.created_at).toLocaleDateString() %></td>
           </tr>
         <% }); %>
       </tbody>
-    </table>
-  </div>
-</div>
-<%- include('partials/foot') %>
+    </table></div>
+  </section>
+  <% } else { %>
+    <p class="text-sm text-body">Private work, activity and account settings are visible only to the profile owner.</p>
+  <% } %>
+</div></main>
+<%- include('partials/foot', { uiKit: true }) %>

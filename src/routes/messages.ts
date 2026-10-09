@@ -219,6 +219,7 @@ export function createMessagesRouter(db: Db) {
 
     return res.render("messages", {
       title: "Messages",
+      uiKit: true,
       view,
       rooms: filteredChatRooms,
       systemRoom,

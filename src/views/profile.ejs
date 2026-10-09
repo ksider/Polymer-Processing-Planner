@@ -1,107 +1,54 @@
-<%- include('partials/head', { title: title }) %>
-<%- include('partials/nav') %>
-<div class="container">
-  <div class="card profile-hero">
-    <div class="profile-hero-row">
-      <div class="profile-hero-main">
-        <img class="profile-avatar" src="<%= avatarUrl(currentUser?.id) %>" alt="<%= currentUser?.name || currentUser?.email || 'User' %> avatar">
+<%- include('partials/head', { title: title, uiKit: true }) %>
+<%- include('partials/experiment_workspace_nav') %>
+<main class="min-h-[calc(100vh-4rem)] bg-gray-50"><div class="w-full max-w-none space-y-4 px-3 py-3 sm:px-4 lg:px-5">
+  <section class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs">
+      <div class="flex min-w-0 items-center gap-3">
+        <img class="size-16 shrink-0 rounded-full border border-default-medium bg-neutral-secondary object-cover" data-profile-hero-avatar src="<%= avatarUrl(currentUser?.id) %>" alt="<%= currentUser?.name || currentUser?.email || 'User' %> avatar">
         <div>
-        <h1 class="card-title profile-name" id="profileName">
+        <p class="text-xs font-medium text-brand">Personal workspace</p>
+        <h1 class="mt-0.5 text-xl font-semibold tracking-tight text-heading" id="profileName">
           <%= currentUser?.name || currentUser?.email || 'Profile' %>
         </h1>
-        <div class="small-note profile-meta" id="profileMeta">
+        <div class="mt-1 text-sm text-body" id="profileMeta">
           <%= (currentUser?.role || 'user') %> · <%= currentUser?.email || '-' %>
         </div>
         </div>
       </div>
-      <button class="icon-btn icon-only" type="button" id="openProfileDialog" title="Edit profile">
+      <button class="inline-flex size-10 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary" type="button" id="openProfileDialog" title="Edit profile">
         <span class="material-symbols-rounded">edit</span>
       </button>
-    </div>
-  </div>
-
-  <section class="card profile-ai-usage" aria-labelledby="aiUsageTitle">
-    <div class="profile-ai-usage-head">
-      <div>
-        <h2 class="card-title" id="aiUsageTitle">My AI usage</h2>
-        <p class="small-note">Tokens used by your Planner AI requests. Counts come from the provider when available, otherwise from a local estimate.</p>
-      </div>
-      <span class="material-symbols-rounded profile-ai-usage-icon" aria-hidden="true">auto_awesome</span>
-    </div>
-    <nav class="profile-ai-usage-periods" aria-label="AI usage period">
-      <% [['7d', '7 days'], ['30d', '30 days'], ['90d', '90 days'], ['all', 'All time']].forEach(([key, label]) => { %>
-        <a class="<%= aiUsagePeriod?.key === key ? 'is-active' : '' %>" href="/me?ai_usage_period=<%= key %>#aiUsageTitle" <%= aiUsagePeriod?.key === key ? 'aria-current="page"' : '' %>><%= label %></a>
-      <% }) %>
-    </nav>
-    <p class="small-note profile-ai-usage-period-label"><%= aiUsagePeriod?.label || 'All time' %></p>
-    <div class="profile-ai-usage-metrics" aria-label="AI token totals">
-      <div><span class="small-note">Input</span><strong><%= Number(llmUsageTotals?.inputTokens || 0).toLocaleString() %></strong></div>
-      <div><span class="small-note">Output</span><strong><%= Number(llmUsageTotals?.outputTokens || 0).toLocaleString() %></strong></div>
-      <div><span class="small-note">Total</span><strong><%= Number(llmUsageTotals?.totalTokens || 0).toLocaleString() %></strong></div>
-      <div><span class="small-note">Requests</span><strong><%= Number(llmUsageTotals?.requestCount || 0).toLocaleString() %></strong></div>
-    </div>
-    <% if (llmUsageBreakdown && llmUsageBreakdown.length) { %>
-      <div class="table-scroll profile-ai-usage-table">
-        <table class="pure-table table-compact">
-          <thead>
-            <tr>
-              <th>Provider</th>
-              <th>Model</th>
-              <th>Input</th>
-              <th>Output</th>
-              <th>Total</th>
-              <th>Requests</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% llmUsageBreakdown.forEach((item) => { %>
-              <tr>
-                <td><%= item.providerName %></td>
-                <td><code><%= item.model %></code></td>
-                <td><%= Number(item.inputTokens).toLocaleString() %></td>
-                <td><%= Number(item.outputTokens).toLocaleString() %></td>
-                <td><strong><%= Number(item.totalTokens).toLocaleString() %></strong></td>
-                <td><%= item.requestCount %><% if (item.failedRequestCount) { %><small class="small-note"> · <%= item.failedRequestCount %> failed</small><% } %></td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
-      </div>
-    <% } else { %>
-      <p class="small-note profile-ai-usage-empty">No AI requests have been made from this account yet.</p>
-    <% } %>
   </section>
 
-  <dialog class="modal-frame" id="profileDialog">
-    <div class="modal-header">
+  <dialog class="m-auto w-[min(96vw,58rem)] rounded-xl border border-default-medium bg-neutral-primary p-0 text-heading shadow-2xl backdrop:bg-black/40" id="profileDialog">
+    <div class="flex items-center justify-between gap-4 border-b border-default px-5 py-4">
       <strong>Profile settings</strong>
-      <button class="icon-btn icon-only" type="button" data-close title="Close">
+      <button class="inline-flex size-9 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary" type="button" data-close title="Close">
         <span class="material-symbols-rounded">close</span>
       </button>
     </div>
-    <div class="modal-body">
+    <div class="grid gap-5 p-5">
       <% if (error) { %>
-        <div class="auth-error"><%= error %></div>
+        <div class="rounded-base border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert"><%= error %></div>
       <% } %>
       <% if (notice) { %>
-        <div class="auth-error"><%= notice %></div>
+        <div class="rounded-base border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800" role="status"><%= notice %></div>
       <% } %>
-      <form class="pure-form pure-form-stacked" action="/me/name" method="post">
+      <form class="grid gap-2" action="/me/name" method="post">
         <%- include('partials/csrf_token') %>
         <label for="name">Name</label>
-        <input id="name" name="name" type="text" value="<%= currentUser?.name ?? '' %>" placeholder="Your name">
-        <button class="pure-button pure-button-primary" type="submit">Update name</button>
+        <input class="w-full rounded-base border border-default-medium bg-neutral-primary px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" id="name" name="name" type="text" value="<%= currentUser?.name ?? '' %>" placeholder="Your name">
+        <button class="inline-flex w-fit items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong" type="submit">Update name</button>
       </form>
-      <section class="profile-settings-block">
-        <div class="profile-settings-block-head">
+      <section class="rounded-xl border border-default-medium bg-neutral-secondary p-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
           <strong>Avatar Generator</strong>
-          <span class="small-note">Changes apply automatically.</span>
+          <span class="text-sm text-body">Changes apply automatically.</span>
         </div>
-        <form class="pure-form pure-form-stacked profile-avatar-config" action="/me/avatar-style" method="post" data-avatar-style-form>
+        <form class="mt-4 grid gap-4" action="/me/avatar-style" method="post" data-avatar-style-form>
           <%- include('partials/csrf_token') %>
-          <div class="profile-avatar-config-top">
-            <img class="profile-avatar profile-avatar-lg" id="profileAvatarPreview" src="<%= avatarUrl(currentUser?.id) %>" alt="Avatar preview">
-            <div class="small-note" id="profileAvatarStatus">Changes apply automatically.</div>
+          <div class="flex items-center gap-3">
+            <img class="size-24 rounded-full border border-default-medium bg-neutral-primary object-cover" id="profileAvatarPreview" src="<%= avatarUrl(currentUser?.id) %>" alt="Avatar preview">
+            <div class="text-sm text-body" id="profileAvatarStatus">Changes apply automatically.</div>
           </div>
           <input type="hidden" name="palette" value="<%= currentAvatarStyle?.palette || 'amber' %>">
           <input type="hidden" name="presentation" value="<%= currentAvatarStyle?.presentation || 'neutral' %>">
@@ -112,13 +59,13 @@
           <input type="hidden" name="eyes" value="<%= currentAvatarStyle?.eyes || 'calm' %>">
           <input type="hidden" name="mouth" value="<%= currentAvatarStyle?.mouth || 'default' %>">
 
-          <div class="profile-avatar-config-grid">
-            <section class="profile-avatar-section">
-              <div class="messages-list-title">Presentation</div>
-              <div class="profile-avatar-chip-row" data-avatar-group="presentation">
+          <div class="grid gap-3 md:grid-cols-2">
+            <section class="rounded-base border border-default-medium bg-neutral-primary p-3">
+              <div class="text-sm font-medium text-heading">Presentation</div>
+              <div class="mt-2 flex flex-wrap gap-2" data-avatar-group="presentation">
                 <% (avatarStyleOptions?.presentation || []).forEach((item) => { %>
                   <button
-                    class="profile-avatar-chip <%= currentAvatarStyle?.presentation === item ? 'is-active' : '' %>"
+                    class="profile-avatar-chip inline-flex items-center gap-1 rounded-base border border-default-medium bg-neutral-secondary px-2.5 py-1.5 text-xs font-medium text-heading hover:bg-neutral-tertiary <%= currentAvatarStyle?.presentation === item ? 'is-active' : '' %>"
                     type="button"
                     data-avatar-option
                     data-field="presentation"
@@ -132,12 +79,12 @@
               </div>
             </section>
 
-            <section class="profile-avatar-section">
-              <div class="messages-list-title">Skin Tone</div>
-              <div class="profile-avatar-chip-row" data-avatar-group="skin_tone">
+            <section class="rounded-base border border-default-medium bg-neutral-primary p-3">
+              <div class="text-sm font-medium text-heading">Skin Tone</div>
+              <div class="mt-2 flex flex-wrap gap-2" data-avatar-group="skin_tone">
                 <% (avatarStyleOptions?.skinTone || []).forEach((item) => { %>
                   <button
-                    class="profile-avatar-chip <%= currentAvatarStyle?.skinTone === item ? 'is-active' : '' %>"
+                    class="profile-avatar-chip inline-flex items-center gap-1 rounded-base border border-default-medium bg-neutral-secondary px-2.5 py-1.5 text-xs font-medium text-heading hover:bg-neutral-tertiary <%= currentAvatarStyle?.skinTone === item ? 'is-active' : '' %>"
                     type="button"
                     data-avatar-option
                     data-field="skin_tone"
@@ -151,12 +98,12 @@
               </div>
             </section>
 
-            <section class="profile-avatar-section">
-              <div class="messages-list-title">Palette</div>
-              <div class="profile-avatar-chip-row" data-avatar-group="palette">
+            <section class="rounded-base border border-default-medium bg-neutral-primary p-3">
+              <div class="text-sm font-medium text-heading">Palette</div>
+              <div class="mt-2 flex flex-wrap gap-2" data-avatar-group="palette">
                 <% (avatarStyleOptions?.palette || []).forEach((item) => { %>
                   <button
-                    class="profile-avatar-chip <%= currentAvatarStyle?.palette === item ? 'is-active' : '' %>"
+                    class="profile-avatar-chip inline-flex items-center gap-1 rounded-base border border-default-medium bg-neutral-secondary px-2.5 py-1.5 text-xs font-medium text-heading hover:bg-neutral-tertiary <%= currentAvatarStyle?.palette === item ? 'is-active' : '' %>"
                     type="button"
                     data-avatar-option
                     data-field="palette"
@@ -170,12 +117,12 @@
               </div>
             </section>
 
-            <section class="profile-avatar-section">
-              <div class="messages-list-title">Hair</div>
-              <div class="profile-avatar-chip-row" data-avatar-group="hair">
+            <section class="rounded-base border border-default-medium bg-neutral-primary p-3">
+              <div class="text-sm font-medium text-heading">Hair</div>
+              <div class="mt-2 flex flex-wrap gap-2" data-avatar-group="hair">
                 <% (avatarStyleOptions?.hair || []).forEach((item) => { %>
                   <button
-                    class="profile-avatar-chip <%= currentAvatarStyle?.hair === item ? 'is-active' : '' %>"
+                    class="profile-avatar-chip inline-flex items-center gap-1 rounded-base border border-default-medium bg-neutral-secondary px-2.5 py-1.5 text-xs font-medium text-heading hover:bg-neutral-tertiary <%= currentAvatarStyle?.hair === item ? 'is-active' : '' %>"
                     type="button"
                     data-avatar-option
                     data-field="hair"
@@ -189,12 +136,12 @@
               </div>
             </section>
 
-            <section class="profile-avatar-section">
-              <div class="messages-list-title">Accessory</div>
-              <div class="profile-avatar-chip-row" data-avatar-group="accessory">
+            <section class="rounded-base border border-default-medium bg-neutral-primary p-3">
+              <div class="text-sm font-medium text-heading">Accessory</div>
+              <div class="mt-2 flex flex-wrap gap-2" data-avatar-group="accessory">
                 <% (avatarStyleOptions?.accessory || []).forEach((item) => { %>
                   <button
-                    class="profile-avatar-chip <%= currentAvatarStyle?.accessory === item ? 'is-active' : '' %>"
+                    class="profile-avatar-chip inline-flex items-center gap-1 rounded-base border border-default-medium bg-neutral-secondary px-2.5 py-1.5 text-xs font-medium text-heading hover:bg-neutral-tertiary <%= currentAvatarStyle?.accessory === item ? 'is-active' : '' %>"
                     type="button"
                     data-avatar-option
                     data-field="accessory"
@@ -208,12 +155,12 @@
               </div>
             </section>
 
-            <section class="profile-avatar-section">
-              <div class="messages-list-title">Facial Hair</div>
-              <div class="profile-avatar-chip-row" data-avatar-group="facial_hair">
+            <section class="rounded-base border border-default-medium bg-neutral-primary p-3">
+              <div class="text-sm font-medium text-heading">Facial Hair</div>
+              <div class="mt-2 flex flex-wrap gap-2" data-avatar-group="facial_hair">
                 <% (avatarStyleOptions?.facialHair || []).forEach((item) => { %>
                   <button
-                    class="profile-avatar-chip <%= currentAvatarStyle?.facialHair === item ? 'is-active' : '' %>"
+                    class="profile-avatar-chip inline-flex items-center gap-1 rounded-base border border-default-medium bg-neutral-secondary px-2.5 py-1.5 text-xs font-medium text-heading hover:bg-neutral-tertiary <%= currentAvatarStyle?.facialHair === item ? 'is-active' : '' %>"
                     type="button"
                     data-avatar-option
                     data-field="facial_hair"
@@ -227,12 +174,12 @@
               </div>
             </section>
 
-            <section class="profile-avatar-section">
-              <div class="messages-list-title">Eyes</div>
-              <div class="profile-avatar-chip-row" data-avatar-group="eyes">
+            <section class="rounded-base border border-default-medium bg-neutral-primary p-3">
+              <div class="text-sm font-medium text-heading">Eyes</div>
+              <div class="mt-2 flex flex-wrap gap-2" data-avatar-group="eyes">
                 <% (avatarStyleOptions?.eyes || []).forEach((item) => { %>
                   <button
-                    class="profile-avatar-chip <%= currentAvatarStyle?.eyes === item ? 'is-active' : '' %>"
+                    class="profile-avatar-chip inline-flex items-center gap-1 rounded-base border border-default-medium bg-neutral-secondary px-2.5 py-1.5 text-xs font-medium text-heading hover:bg-neutral-tertiary <%= currentAvatarStyle?.eyes === item ? 'is-active' : '' %>"
                     type="button"
                     data-avatar-option
                     data-field="eyes"
@@ -246,12 +193,12 @@
               </div>
             </section>
 
-            <section class="profile-avatar-section">
-              <div class="messages-list-title">Mouth</div>
-              <div class="profile-avatar-chip-row" data-avatar-group="mouth">
+            <section class="rounded-base border border-default-medium bg-neutral-primary p-3">
+              <div class="text-sm font-medium text-heading">Mouth</div>
+              <div class="mt-2 flex flex-wrap gap-2" data-avatar-group="mouth">
                 <% (avatarStyleOptions?.mouth || []).forEach((item) => { %>
                   <button
-                    class="profile-avatar-chip <%= currentAvatarStyle?.mouth === item ? 'is-active' : '' %>"
+                    class="profile-avatar-chip inline-flex items-center gap-1 rounded-base border border-default-medium bg-neutral-secondary px-2.5 py-1.5 text-xs font-medium text-heading hover:bg-neutral-tertiary <%= currentAvatarStyle?.mouth === item ? 'is-active' : '' %>"
                     type="button"
                     data-avatar-option
                     data-field="mouth"
@@ -267,193 +214,184 @@
           </div>
         </form>
       </section>
-      <form class="pure-form pure-form-stacked" action="/me/password" method="post" style="margin-top: 1rem;">
+      <form class="grid gap-2 border-t border-default pt-5" action="/me/password" method="post">
         <%- include('partials/csrf_token') %>
         <label for="current_password">Current password</label>
-        <input id="current_password" name="current_password" type="password" autocomplete="current-password" required>
+        <input class="w-full rounded-base border border-default-medium bg-neutral-primary px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" id="current_password" name="current_password" type="password" autocomplete="current-password" required>
         <label for="new_password">New password</label>
-        <input id="new_password" name="new_password" type="password" autocomplete="new-password" required>
+        <input class="w-full rounded-base border border-default-medium bg-neutral-primary px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" id="new_password" name="new_password" type="password" autocomplete="new-password" required>
         <label for="confirm_password">Confirm password</label>
-        <input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" required>
-        <button class="pure-button pure-button-primary" type="submit">Update password</button>
+        <input class="w-full rounded-base border border-default-medium bg-neutral-primary px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" required>
+        <button class="inline-flex w-fit items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong" type="submit">Update password</button>
       </form>
     </div>
   </dialog>
 
-  <div class="card">
-    <h2 class="card-title">My Calendar</h2>
-    <div class="small-note">Tasks and runs assigned to you. Select entities with Shift/Cmd/Ctrl + click, then drag one selected event or use Move selected.</div>
-    <div class="calendar-tools">
-      <span id="calendarSelectionCount" class="small-note">Selected: 0</span>
-      <button class="pure-button" type="button" id="calendarClearSelection">Clear selection</button>
-      <input class="pure-input" type="date" id="calendarBatchDate">
-      <button class="pure-button pure-button-primary" type="button" id="calendarBatchMove">Move selected</button>
-    </div>
-    <div id="myCalendar" class="calendar-host"></div>
-  </div>
+  <section class="grid gap-4 xl:grid-cols-3" aria-label="My work">
+    <section class="rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs xl:col-span-2" aria-labelledby="myTasksTitle">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 class="text-sm font-semibold text-heading" id="myTasksTitle">My Tasks</h2>
+          <p class="mt-1 text-sm text-body">Your current work and completion progress.</p>
+        </div>
+        <button class="inline-flex items-center justify-center gap-2 rounded-base border border-default-medium bg-neutral-secondary px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-tertiary" type="button" id="openProfileCalendar">
+          <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
+          Calendar
+        </button>
+      </div>
+      <div class="mt-4 grid gap-3">
+        <% if (!tasks || tasks.length === 0) { %>
+          <p class="rounded-base border border-dashed border-default-medium bg-neutral-secondary px-3 py-4 text-sm text-body">No tasks assigned.</p>
+        <% } %>
+        <% tasks.forEach((task) => { %>
+          <% const taskStatusTone = task.status === 'done' ? 'border-s-emerald-500 bg-emerald-50/60' : (task.status === 'in_progress' ? 'border-s-amber-500 bg-amber-50/70' : (task.status === 'failed' ? 'border-s-red-500 bg-red-50/70' : 'border-s-slate-400 bg-slate-50')); %>
+          <% const taskStatusBadge = task.status === 'done' ? 'bg-emerald-100 text-emerald-800' : (task.status === 'in_progress' ? 'bg-amber-100 text-amber-800' : (task.status === 'failed' ? 'bg-red-100 text-red-800' : 'bg-slate-200 text-slate-700')); %>
+          <% const taskStatusLabel = task.status === 'in_progress' ? 'In progress' : (task.status === 'init' ? 'New' : task.status); %>
+          <% const dueDate = task.due_at ? new Date(task.due_at) : null; %>
+          <% const dueTime = dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate.getTime() : null; %>
+          <% const isOverdue = dueTime !== null && task.status !== 'done' && dueTime < Date.now() - 86400000; %>
+          <% const isUrgent = dueTime !== null && task.status !== 'done' && !isOverdue && dueTime < Date.now() + 2 * 86400000; %>
+          <% const dueTone = isOverdue ? 'bg-red-100 text-red-800' : (isUrgent ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'); %>
+          <% const taskPath = `${experimentPath({ id: task.experiment_id, process_route_code: task.process_route_code, process_type_code: task.process_type_code })}?task_id=${task.task_id}#tasks`; %>
+          <a class="group grid gap-3 rounded-base border border-default-medium border-s-4 <%= taskStatusTone %> p-3 text-inherit no-underline shadow-xs transition hover:-translate-y-0.5 hover:shadow-sm sm:grid-cols-[minmax(0,1fr)_auto]" href="<%= taskPath %>" aria-label="Open task <%= task.title %>">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <strong class="truncate text-sm text-heading group-hover:text-brand"><%- formatInline(task.title) %></strong>
+                <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium <%= taskStatusBadge %>"><%= taskStatusLabel %></span>
+              </div>
+              <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-body">
+                <span class="inline-flex items-center gap-1"><span class="material-symbols-rounded text-[16px] text-violet-600" aria-hidden="true">account_tree</span><%= task.process_name || 'Process not set' %></span>
+                <span class="inline-flex items-center gap-1"><span class="material-symbols-rounded text-[16px] text-blue-600" aria-hidden="true">science</span><%- formatInline(task.experiment_name) %></span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 sm:flex-col sm:items-end">
+              <% if (dueDate) { %><span class="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium <%= dueTone %>"><span class="material-symbols-rounded text-[15px]" aria-hidden="true">event</span><%= isOverdue ? 'Overdue · ' : (isUrgent ? 'Due soon · ' : '') %><%= dueDate.toLocaleDateString() %></span><% } else { %><span class="inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">No deadline</span><% } %>
+              <span class="text-xs font-medium text-brand"><%= typeof task.progress_percent === 'number' ? `${task.progress_percent}% complete` : 'Open task' %> <span aria-hidden="true">→</span></span>
+            </div>
+            <span class="h-1 overflow-hidden rounded-full bg-white/80 sm:col-span-2"><span class="block h-full rounded-full <%= task.status === 'done' ? 'bg-emerald-500' : (task.status === 'failed' ? 'bg-red-500' : 'bg-brand') %>" style="width: <%= Math.max(0, Math.min(100, Number(task.progress_percent || 0))) %>%"></span></span>
+          </a>
+        <% }); %>
+      </div>
+    </section>
 
-  <dialog class="modal-frame" id="calendarEventDialog">
-    <div class="modal-header">
+    <aside class="flex min-h-[18rem] flex-col rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs" aria-labelledby="profileNotificationsTitle">
+      <div class="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <h2 class="text-sm font-semibold text-heading" id="profileNotificationsTitle">Notifications</h2>
+          <p class="mt-1 text-sm text-body">The same operational messages as in Messenger.</p>
+        </div>
+        <a class="inline-flex size-9 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary" href="/messages" title="Open Messenger"><span class="material-symbols-rounded">open_in_new</span></a>
+      </div>
+      <div class="flex min-h-0 flex-1 flex-col gap-2 overflow-auto">
+        <% if (!notifications || notifications.length === 0) { %>
+          <p class="text-sm text-body">No technical notifications yet.</p>
+        <% } %>
+        <% notifications.forEach((note) => { %>
+          <% const noteTone = note.kind === 'assignment' ? 'border-s-violet-500 bg-violet-50/60' : (note.kind === 'task' ? 'border-s-amber-500 bg-amber-50/70' : 'border-s-blue-500 bg-blue-50/60'); %>
+          <% const noteIcon = note.kind === 'assignment' ? 'person_add' : (note.kind === 'task' ? 'assignment' : 'info'); %>
+          <% const noteIconTone = note.kind === 'assignment' ? 'bg-violet-100 text-violet-700' : (note.kind === 'task' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'); %>
+          <a class="rounded-base border border-default-medium border-s-4 <%= noteTone %> p-3 text-inherit no-underline shadow-xs transition hover:-translate-y-0.5 hover:shadow-sm" href="/messages/<%= note.id %>/open">
+            <div class="flex items-start gap-2 text-sm">
+              <span class="inline-flex size-7 shrink-0 items-center justify-center rounded-full <%= noteIconTone %>"><span class="material-symbols-rounded text-[16px]" aria-hidden="true"><%= noteIcon %></span></span>
+              <strong class="min-w-0 flex-1"><%- formatInline(note.subject || 'Notification') %></strong>
+              <% if (note.status === 'unread') { %><span class="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand">new</span><% } %>
+            </div>
+            <% if (note.body) { %><div class="mt-2 text-sm text-body"><%- formatInline(note.body) %></div><% } %>
+            <div class="mt-2 text-xs text-body"><%= new Date(note.message_created_at || note.created_at).toLocaleString() %></div>
+          </a>
+        <% }); %>
+      </div>
+    </aside>
+  </section>
+
+  <dialog class="m-auto w-[min(96vw,72rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="profileCalendarDialog">
+    <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4 sm:px-6">
+      <div><p class="text-sm font-medium text-blue-700">Schedule</p><h2 class="mt-0.5 text-lg font-semibold tracking-tight" id="profileCalendarTitle">My calendar</h2><p class="mt-1 text-sm text-gray-500">Tasks and runs assigned to you.</p></div>
+      <button class="inline-flex size-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900" type="button" data-profile-calendar-close aria-label="Close calendar" title="Close calendar"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
+    </div>
+    <div class="p-4 sm:p-6">
+      <div class="mb-4 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1 calendar-tools">
+        <span id="calendarSelectionCount" class="shrink-0 rounded-full bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700">Selected: 0</span>
+        <button class="inline-flex shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50" type="button" id="calendarClearSelection">Clear</button>
+        <input class="w-40 shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-600 focus:ring-blue-600" type="date" id="calendarBatchDate">
+        <button class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-800" type="button" id="calendarBatchMove"><span class="material-symbols-rounded text-[18px]" aria-hidden="true">drive_file_move</span>Move selected</button>
+      </div>
+      <div class="profile-calendar rounded-xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4"><div id="myCalendar" class="calendar-host min-h-96"></div></div>
+      <div class="mt-4 flex flex-wrap gap-3 text-xs text-gray-500"><span class="inline-flex items-center gap-1.5"><i class="size-2 rounded-full bg-blue-500"></i>Task</span><span class="inline-flex items-center gap-1.5"><i class="size-2 rounded-full bg-violet-500"></i>Run</span><span class="inline-flex items-center gap-1.5"><i class="size-2 rounded-full bg-amber-500"></i>Selection</span></div>
+    </div>
+  </dialog>
+
+  <dialog class="m-auto w-[min(96vw,34rem)] rounded-xl border border-default-medium bg-neutral-primary p-0 text-heading shadow-2xl backdrop:bg-black/40" id="calendarEventDialog">
+    <div class="flex items-center justify-between gap-4 border-b border-default px-5 py-4">
       <strong id="calendarEventTitle">Calendar event</strong>
-      <button class="icon-btn icon-only" type="button" data-close title="Close">
+      <button class="inline-flex size-9 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary" type="button" data-close title="Close">
         <span class="material-symbols-rounded">close</span>
       </button>
     </div>
-    <div class="modal-body">
+    <div class="grid gap-2 p-5 text-sm text-body">
       <div><strong>Type:</strong> <span id="calendarEventType">-</span></div>
       <div><strong>Status:</strong> <span id="calendarEventStatus">-</span></div>
       <div><strong>Due:</strong> <span id="calendarEventDue">-</span></div>
       <div><strong>Responsible:</strong> <span id="calendarEventOwner">-</span></div>
       <div><strong>Entity:</strong> <span id="calendarEventEntity">-</span></div>
       <div><strong>Process:</strong> <span id="calendarEventProcess">-</span></div>
-      <div class="section-actions" style="margin-top:0.75rem;">
-        <a class="pure-button pure-button-primary" id="calendarEventDetailLink" href="#">Open run/task</a>
-        <a class="pure-button" id="calendarEventEntityLink" href="#">Open entity</a>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <a class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white no-underline shadow-xs hover:bg-brand-strong" id="calendarEventDetailLink" href="#">Open run/task</a>
+        <a class="inline-flex items-center justify-center rounded-base border border-default-medium bg-neutral-secondary px-3 py-2 text-sm font-medium text-heading no-underline shadow-xs hover:bg-neutral-tertiary" id="calendarEventEntityLink" href="#">Open entity</a>
       </div>
     </div>
   </dialog>
 
-  <div class="card">
-    <h2 class="card-title">My Tasks</h2>
-    <table class="pure-table table-compact">
-      <thead>
-        <tr>
-          <th>Task</th>
-          <th>Experiment</th>
-          <th>Status</th>
-          <th>Due</th>
-          <th>%</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% if (!tasks || tasks.length === 0) { %>
-          <tr>
-            <td colspan="5">No tasks assigned.</td>
-          </tr>
-        <% } %>
-        <% tasks.forEach((task) => { %>
-          <tr>
-            <td><%= task.title %></td>
-            <td><a href="/experiments/<%= task.experiment_id %>"><%- formatInline(task.experiment_name) %></a></td>
-            <td><%= task.status %></td>
-            <td><%= task.due_at ? new Date(task.due_at).toLocaleDateString() : '-' %></td>
-            <td><%= typeof task.progress_percent === 'number' ? `${task.progress_percent}%` : '-' %></td>
-          </tr>
-        <% }); %>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="card">
-    <h2 class="card-title">Assigned Entities</h2>
-    <table class="pure-table table-compact">
-      <thead>
-        <tr>
-          <th>Entity</th>
-          <th>Experiment</th>
-          <th>Assigned at</th>
-          <th>Assigned by</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% if (!assignedEntities || assignedEntities.length === 0) { %>
-          <tr>
-            <td colspan="4">No entity assignments.</td>
-          </tr>
-        <% } %>
+  <section class="grid gap-4 lg:grid-cols-2" aria-label="Quick access">
+    <section class="rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs">
+      <h2 class="text-sm font-semibold text-heading">Assigned Entities</h2>
+      <div class="mt-3 grid gap-3">
+        <% if (!assignedEntities || assignedEntities.length === 0) { %><p class="text-sm text-body">No entity assignments.</p><% } %>
         <% assignedEntities.forEach((item) => { %>
-          <tr>
-            <td><a href="<%= item.entityPath %>"><%- formatInline(item.entityTitle) %></a></td>
-            <td><a href="/experiments/<%= item.experiment_id %>"><%- formatInline(item.experiment_name) %></a></td>
-            <td><%= new Date(item.updated_at || item.assigned_at).toLocaleString() %></td>
-            <td><%- formatInline(item.assigned_by_name || item.assigned_by_email || '-') %></td>
-          </tr>
+          <% const entityTone = item.entity_type === 'qualification_step' ? 'border-s-blue-600 bg-blue-50/60' : (item.entity_type === 'report' ? 'border-s-violet-600 bg-violet-50/60' : 'border-s-amber-600 bg-amber-50/60'); %>
+          <% const entityLabelTone = item.entity_type === 'qualification_step' ? 'text-blue-700' : (item.entity_type === 'report' ? 'text-violet-700' : 'text-amber-700'); %>
+          <a class="grid gap-1 rounded-base border border-default-medium border-s-4 <%= entityTone %> p-3 text-inherit no-underline shadow-xs hover:bg-neutral-secondary" href="<%= item.entityPath %>">
+            <span class="text-xs font-semibold uppercase tracking-wide <%= entityLabelTone %>"><%= item.entity_type === 'qualification_step' ? 'Qualification' : (item.entity_type === 'report' ? 'Report' : 'DOE') %></span>
+            <strong><%- formatInline(item.entityTitle) %></strong>
+            <span class="text-xs text-body"><%- formatInline(item.experiment_name) %></span>
+          </a>
         <% }); %>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="card" id="notifications">
-    <div class="card-header">
-      <h2 class="card-title">Notifications</h2>
-      <form class="pure-form" action="/me/notifications/read-all" method="post">
-        <button class="pure-button" type="submit">Mark all as read</button>
-      </form>
-    </div>
-    <table class="pure-table table-compact">
-      <thead>
-        <tr>
-          <th>Status</th>
-          <th>Message</th>
-          <th>Time</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        <% if (!notifications || notifications.length === 0) { %>
-          <tr>
-            <td colspan="4">No notifications.</td>
-          </tr>
-        <% } %>
-        <% notifications.forEach((note) => { %>
-          <tr>
-            <td><span class="status-pill status-<%= note.status === 'unread' ? 'in_progress' : 'done' %>"><%= note.status %></span></td>
-            <td>
-              <strong><%- formatInline(note.title) %></strong>
-              <% if (note.body) { %>
-                <div class="small-note"><%- formatInline(note.body) %></div>
-              <% } %>
-              <% if (note.path) { %>
-                <div><a href="<%= note.path %>">Open</a></div>
-              <% } %>
-            </td>
-            <td><%= new Date(note.created_at).toLocaleString() %></td>
-            <td>
-              <% if (note.status === 'unread') { %>
-                <form class="pure-form" action="/me/notifications/<%= note.id %>/read" method="post">
-                  <button class="pure-button pure-button-secondary" type="submit">Mark read</button>
-                </form>
-              <% } %>
-            </td>
-          </tr>
-        <% }); %>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="card">
-    <h2 class="card-title">My Experiments</h2>
-    <table class="pure-table table-compact">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Name</th>
-          <th>Status</th>
-          <th>Created</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% if (experiments.length === 0) { %>
-          <tr>
-            <td colspan="4">No experiments assigned.</td>
-          </tr>
-        <% } %>
+      </div>
+    </section>
+    <section class="rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs">
+      <h2 class="text-sm font-semibold text-heading">My Experiments</h2>
+      <div class="mt-3 grid gap-3">
+        <% if (!experiments || experiments.length === 0) { %><p class="text-sm text-body">No experiments assigned.</p><% } %>
         <% experiments.forEach((exp) => { %>
-          <tr>
-            <td><%= exp.id %></td>
-            <td><a href="<%= experimentPath(exp) %>"><%- formatInline(exp.name) %></a></td>
-            <td><span class="status-pill status-<%= exp.status %>"><%= exp.statusLabel %></span></td>
-            <td><%= new Date(exp.created_at).toLocaleDateString() %></td>
-          </tr>
+          <% const processTone = exp.process_type_code === 'extrusion' ? 'bg-emerald-100 text-emerald-800' : (exp.process_type_code === 'injection' ? 'bg-blue-100 text-blue-800' : 'bg-violet-100 text-violet-800'); %>
+          <% const experimentStatusTone = exp.status === 'done' ? 'bg-emerald-100 text-emerald-800' : (exp.status === 'in_progress' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'); %>
+          <a class="group grid gap-2 rounded-base border border-default-medium border-s-4 border-s-violet-500 bg-neutral-primary p-3 text-inherit no-underline shadow-xs transition hover:-translate-y-0.5 hover:shadow-sm" href="<%= experimentPath(exp) %>">
+            <div class="flex flex-wrap items-center justify-between gap-2"><span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium <%= processTone %>"><span class="material-symbols-rounded text-[15px]" aria-hidden="true">account_tree</span><%= exp.process_name || 'Process not set' %></span><span class="text-xs text-body">#<%= exp.id %></span></div>
+            <strong class="group-hover:text-brand"><%- formatInline(exp.name) %></strong>
+            <div class="flex flex-wrap items-center justify-between gap-2"><span class="text-xs text-body"><%= new Date(exp.created_at).toLocaleDateString() %></span><span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium <%= experimentStatusTone %>"><%= exp.statusLabel %></span></div>
+          </a>
         <% }); %>
-      </tbody>
-    </table>
-  </div>
-</div>
-<%- include('partials/foot') %>
+      </div>
+    </section>
+  </section>
+
+  <section class="rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs" aria-labelledby="aiUsageTitle">
+    <div class="flex flex-wrap items-start justify-between gap-3"><div><h2 class="text-sm font-semibold text-heading" id="aiUsageTitle">My AI usage</h2><p class="mt-1 text-sm text-body">Tokens used by your Planner AI requests.</p></div><span class="material-symbols-rounded text-brand" aria-hidden="true">auto_awesome</span></div>
+    <nav class="mt-4 flex flex-wrap gap-2" data-ai-usage-periods aria-label="AI usage period"><% [['7d', '7 days'], ['30d', '30 days'], ['90d', '90 days'], ['all', 'All time']].forEach(([key, label]) => { %><a class="rounded-full border px-3 py-1.5 text-xs font-medium no-underline <%= aiUsagePeriod?.key === key ? 'border-brand bg-brand text-white' : 'border-default-medium bg-neutral-secondary text-heading hover:bg-neutral-tertiary' %>" href="/me?ai_usage_period=<%= key %>#aiUsageTitle" <%= aiUsagePeriod?.key === key ? 'aria-current="page"' : '' %>><%= label %></a><% }) %></nav>
+    <p class="mt-3 text-xs text-body"><%= aiUsagePeriod?.label || 'All time' %></p>
+    <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="AI token totals"><div class="rounded-base border border-default-medium bg-neutral-secondary p-3"><span class="text-xs text-body">Input</span><strong class="mt-1 block text-lg text-heading"><%= Number(llmUsageTotals?.inputTokens || 0).toLocaleString() %></strong></div><div class="rounded-base border border-default-medium bg-neutral-secondary p-3"><span class="text-xs text-body">Output</span><strong class="mt-1 block text-lg text-heading"><%= Number(llmUsageTotals?.outputTokens || 0).toLocaleString() %></strong></div><div class="rounded-base border border-default-medium bg-neutral-secondary p-3"><span class="text-xs text-body">Total</span><strong class="mt-1 block text-lg text-heading"><%= Number(llmUsageTotals?.totalTokens || 0).toLocaleString() %></strong></div><div class="rounded-base border border-default-medium bg-neutral-secondary p-3"><span class="text-xs text-body">Requests</span><strong class="mt-1 block text-lg text-heading"><%= Number(llmUsageTotals?.requestCount || 0).toLocaleString() %></strong></div></div>
+    <% if (llmUsageBreakdown && llmUsageBreakdown.length) { %><div class="mt-4 overflow-x-auto"><table class="min-w-full text-left text-sm text-body"><thead class="border-b border-default text-xs uppercase"><tr><th class="px-3 py-2">Provider</th><th class="px-3 py-2">Model</th><th class="px-3 py-2">Input</th><th class="px-3 py-2">Output</th><th class="px-3 py-2">Total</th><th class="px-3 py-2">Requests</th></tr></thead><tbody class="divide-y divide-default"><% llmUsageBreakdown.forEach((item) => { %><tr><td class="px-3 py-2"><%= item.providerName %></td><td class="px-3 py-2"><code><%= item.model %></code></td><td class="px-3 py-2"><%= Number(item.inputTokens).toLocaleString() %></td><td class="px-3 py-2"><%= Number(item.outputTokens).toLocaleString() %></td><td class="px-3 py-2 font-medium text-heading"><%= Number(item.totalTokens).toLocaleString() %></td><td class="px-3 py-2"><%= item.requestCount %><% if (item.failedRequestCount) { %><small> · <%= item.failedRequestCount %> failed</small><% } %></td></tr><% }) %></tbody></table></div><% } else { %><p class="mt-4 text-sm text-body">No AI requests have been made from this account yet.</p><% } %>
+  </section>
+</div></main>
+<%- include('partials/foot', { uiKit: true }) %>
 <script nonce="<%= cspNonce %>" src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
 <script nonce="<%= cspNonce %>">
+  let profileCalendar = null;
   const renderUserCalendar = () => {
+    if (profileCalendar) {
+      profileCalendar.updateSize();
+      return profileCalendar;
+    }
     const host = document.getElementById('myCalendar');
     if (!host || !window.FullCalendar) return;
     host.addEventListener('selectstart', (event) => {
@@ -648,6 +586,19 @@
       window.addEventListener('pointerup', onUp);
     };
 
+    const decorateCalendarToolbar = () => {
+      [
+        ['.fc-prev-button', 'Previous month', '<svg class="size-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 14 10"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5H1m0 0 4 4M1 5l4-4"/></svg>'],
+        ['.fc-next-button', 'Next month', '<svg class="size-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 14 10"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 5h12m0 0L9 1m4 4L9 9"/></svg>']
+      ].forEach(([selector, label, icon]) => {
+        const button = host.querySelector(selector);
+        if (!button) return;
+        button.setAttribute('aria-label', label);
+        button.setAttribute('title', label);
+        button.innerHTML = icon;
+      });
+    };
+
     const calendar = new window.FullCalendar.Calendar(host, {
       initialView: 'dayGridMonth',
       height: 'auto',
@@ -659,11 +610,14 @@
       },
       editable: true,
       eventDurationEditable: false,
+      datesSet: () => window.requestAnimationFrame(decorateCalendarToolbar),
       eventsSet: () => {
         refreshSelectionUi(calendar);
       },
       eventDidMount: (arg) => {
         const eventId = String(arg.event.id);
+        const eventKind = String(arg.event.extendedProps?.kind || '').replace(/[^a-z0-9_-]/gi, '');
+        if (eventKind) arg.el.classList.add(`profile-calendar-event-${eventKind}`);
         const list = eventElementMap.get(eventId) || [];
         list.push(arg.el);
         eventElementMap.set(eventId, list);
@@ -803,6 +757,9 @@
 
     updateSelectionCount();
     calendar.render();
+    decorateCalendarToolbar();
+    profileCalendar = calendar;
+    return calendar;
   };
 
   const profileDialog = document.getElementById('profileDialog');
@@ -873,7 +830,7 @@
         const nextUrl = String(data.avatar_url || buildAvatarUrl(true));
         if (avatarPreview instanceof HTMLImageElement) avatarPreview.src = nextUrl;
         if (navAvatar instanceof HTMLImageElement) navAvatar.src = nextUrl;
-        const heroAvatar = document.querySelector('.profile-hero .profile-avatar');
+        const heroAvatar = document.querySelector('[data-profile-hero-avatar]');
         if (heroAvatar instanceof HTMLImageElement) heroAvatar.src = nextUrl;
         avatarStatus.textContent = 'Saved';
         window.setTimeout(() => {
@@ -909,5 +866,14 @@
     profileDialog?.showModal();
   }
 
-  renderUserCalendar();
+  const profileCalendarDialog = document.getElementById('profileCalendarDialog');
+  const openProfileCalendar = document.getElementById('openProfileCalendar');
+  openProfileCalendar?.addEventListener('click', () => {
+    if (typeof profileCalendarDialog?.showModal !== 'function') return;
+    profileCalendarDialog.showModal();
+    window.requestAnimationFrame(() => renderUserCalendar()?.updateSize());
+  });
+  profileCalendarDialog?.querySelectorAll('[data-profile-calendar-close]').forEach((button) => {
+    button.addEventListener('click', () => profileCalendarDialog.close());
+  });
 </script>

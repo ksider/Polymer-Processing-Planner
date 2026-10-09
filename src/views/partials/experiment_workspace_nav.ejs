@@ -30,9 +30,9 @@
           <% if (unreadNotifications && unreadNotifications > 0) { %><span class="absolute right-0 top-0 inline-flex min-w-4 -translate-y-0.5 translate-x-0.5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold leading-4 text-white" data-messages-unread-badge><%= unreadNotifications > 99 ? '99+' : unreadNotifications %></span><% } %>
         </a>
         <div class="messages-popover" data-messages-popover hidden>
-          <div class="messages-popover-head"><strong>Unread messages</strong><button class="pure-button button-sm" type="button" data-messages-read-all>Mark all read</button></div>
+          <div class="messages-popover-head"><strong>Unread messages</strong><button class="inline-flex h-8 items-center rounded-md border border-gray-300 bg-white px-2.5 text-xs font-semibold text-gray-700 shadow-xs transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-3 focus:ring-blue-100" type="button" data-messages-read-all>Mark all read</button></div>
           <div class="messages-popover-body" data-messages-popover-body><div class="small-note">Loading...</div></div>
-          <div class="messages-popover-foot"><a class="pure-button pure-button-primary" href="/messages">Open messages</a></div>
+          <div class="messages-popover-foot"><a class="inline-flex h-8 items-center rounded-md bg-blue-700 px-2.5 text-xs font-semibold text-white no-underline shadow-xs transition hover:bg-blue-800 focus:outline-none focus:ring-3 focus:ring-blue-100" href="/messages">Open messages</a></div>
         </div>
         <a class="inline-flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-700 no-underline hover:bg-gray-100" href="/me" aria-label="Open my profile">
           <img class="size-7 rounded-full object-cover" src="<%= avatarUrl(currentUser.id) %>" alt="">

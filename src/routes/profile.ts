@@ -16,9 +16,9 @@ import { listTaskEntities, type TaskEntityRow } from "../repos/tasks_repo.js";
 import { computeTaskProgress } from "../services/tasks_service.js";
 import { listQualSummarySteps } from "../repos/qual_repo.js";
 import { listAssignedEntitiesForUser } from "../repos/entity_assignments_repo.js";
+import { listByFolder } from "../services/messages_service.js";
 import {
   countUnreadNotifications,
-  listNotificationsByUser,
   listUnreadNotificationsByUser,
   markAllNotificationsRead,
   markNotificationRead
@@ -66,7 +66,9 @@ export function createProfileRouter(db: Db) {
       return { ...exp, status, statusLabel };
     });
 
-  const enrichNotification = <T extends { payload_json: string | null }>(notice: T) => {
+  // Retained only for the backward-compatible legacy JSON endpoint. New UI
+  // surfaces operational notifications from the Messenger mailbox instead.
+  const enrichLegacyNotification = <T extends { payload_json: string | null }>(notice: T) => {
     let path = null as string | null;
     if (notice.payload_json) {
       try {
@@ -117,7 +119,9 @@ export function createProfileRouter(db: Db) {
             : `/experiments/${item.experiment_id}/doe/${item.entity_id}?tab=design`;
       return { ...item, entityTitle, entityPath };
     });
-    const notifications = listNotificationsByUser(db, userId, 30).map(enrichNotification);
+    const notifications = listByFolder(db, userId, "inbox", 100)
+      .filter((item) => ["system", "assignment", "task"].includes(item.kind))
+      .slice(0, 12);
     return {
       experiments: enrich(experiments),
       tasks: tasksWithProgress,
@@ -193,12 +197,20 @@ export function createProfileRouter(db: Db) {
     const data = buildProfilePayload(req.user.id, aiUsagePeriodFromQuery(req.query.ai_usage_period));
     res.render("profile", {
       title: "Profile",
+      uiKit: true,
       ...data,
       currentAvatarStyle: getAvatarStyle(avatarUserFromRequest(req.user)),
       avatarStyleOptions: AVATAR_STYLE_OPTIONS,
       error: null,
       notice: null
     });
+  });
+
+  // Keep old bookmarks from opening a separate, legacy notifications screen.
+  // Operational notifications live in the Messenger inbox and its right rail.
+  router.get("/me/notifications", (req, res) => {
+    if (!req.user?.id) return res.redirect("/auth/login");
+    return res.redirect("/messages");
   });
 
   router.post("/me/name", (req, res) => {
@@ -257,6 +269,7 @@ export function createProfileRouter(db: Db) {
       const data = buildProfilePayload(req.user.id);
       return res.render("profile", {
         title: "Profile",
+        uiKit: true,
         ...data,
         currentAvatarStyle: getAvatarStyle(avatarUserFromRequest(req.user)),
         avatarStyleOptions: AVATAR_STYLE_OPTIONS,
@@ -268,6 +281,7 @@ export function createProfileRouter(db: Db) {
       const data = buildProfilePayload(req.user.id);
       return res.render("profile", {
         title: "Profile",
+        uiKit: true,
         ...data,
         currentAvatarStyle: getAvatarStyle(avatarUserFromRequest(req.user)),
         avatarStyleOptions: AVATAR_STYLE_OPTIONS,
@@ -281,6 +295,7 @@ export function createProfileRouter(db: Db) {
     const data = buildProfilePayload(req.user.id);
     return res.render("profile", {
       title: "Profile",
+      uiKit: true,
       ...data,
       currentAvatarStyle: getAvatarStyle(avatarUserFromRequest(req.user)),
       avatarStyleOptions: AVATAR_STYLE_OPTIONS,
@@ -304,7 +319,7 @@ export function createProfileRouter(db: Db) {
     const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(50, limit)) : 12;
     return res.json({
       unread_count: countUnreadNotifications(db, req.user.id),
-      items: listUnreadNotificationsByUser(db, req.user.id, safeLimit).map(enrichNotification)
+      items: listUnreadNotificationsByUser(db, req.user.id, safeLimit).map(enrichLegacyNotification)
     });
   });
 

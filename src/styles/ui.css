@@ -14,3 +14,526 @@
 .datepicker-dropdown {
   z-index: 60;
 }
+
+/* FullCalendar creates its own DOM, so its workspace skin lives alongside the
+   Tailwind entry point rather than in the legacy stylesheet. */
+body[data-ui-kit] .profile-calendar .fc {
+  --fc-border-color: #e5e7eb;
+  --fc-page-bg-color: #ffffff;
+  --fc-neutral-bg-color: #f9fafb;
+  --fc-today-bg-color: #eff6ff;
+  --fc-list-event-hover-bg-color: #f8fafc;
+  color: #374151;
+  font-size: 0.875rem;
+}
+
+body[data-ui-kit] #profileCalendarDialog .calendar-tools {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap !important;
+  overflow-x: auto;
+}
+
+body[data-ui-kit] #profileCalendarDialog .calendar-tools input[type="date"] {
+  flex: 0 0 10rem;
+  max-width: 10rem;
+  width: 10rem;
+}
+
+body[data-ui-kit] [data-ai-usage-periods] a[aria-current="page"],
+body[data-ui-kit] [data-ai-usage-periods] a[aria-current="page"]:hover,
+body[data-ui-kit] [data-ai-usage-periods] a[aria-current="page"]:visited {
+  background-color: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #ffffff !important;
+}
+
+/* Messenger: Flowbite/Tailwind chat workspace, while the established message
+   selectors remain as stable JavaScript contracts. */
+body[data-ui-kit] .messages-workspace {
+  background: #ffffff;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body[data-ui-kit] .messages-sidebar,
+body[data-ui-kit] .messages-thread,
+body[data-ui-kit] .messages-rail {
+  background: #ffffff;
+}
+
+body[data-ui-kit] .messages-sidebar-head {
+  border-bottom: 1px solid #e5e7eb;
+  margin: 0 -0.75rem 0.75rem;
+  padding: 0 0.75rem 0.75rem;
+}
+
+body[data-ui-kit] .messages-sidebar-head-top .card-title {
+  color: #111827;
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+body[data-ui-kit] .messages-view-tabs {
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+body[data-ui-kit] .messages-view-tab {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  box-shadow: none;
+  color: #6b7280;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: -1px;
+  padding: 0.5rem 0.125rem;
+}
+
+body[data-ui-kit] .messages-view-tab.is-active {
+  background: transparent;
+  border-bottom-color: #2563eb;
+  color: #1d4ed8;
+}
+
+body[data-ui-kit] .messages-text-input,
+body[data-ui-kit] .messages-thread-search-input {
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+
+body[data-ui-kit] .messages-workspace .icon-btn {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+  color: #4b5563;
+  display: inline-flex;
+  justify-content: center;
+}
+
+body[data-ui-kit] .messages-workspace .icon-btn:hover,
+body[data-ui-kit] .messages-workspace .icon-btn.is-active {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+body[data-ui-kit] .messages-workspace .icon-btn.danger:hover {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
+}
+
+body[data-ui-kit] .messages-text-input:focus,
+body[data-ui-kit] .messages-thread-search-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.14);
+}
+
+body[data-ui-kit] .messages-list-title,
+body[data-ui-kit] .messages-list-divider {
+  color: #6b7280;
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+}
+
+body[data-ui-kit] .messages-conversation-item,
+body[data-ui-kit] .messages-user-item {
+  border: 1px solid transparent;
+  border-radius: 0.625rem;
+  padding: 0.625rem;
+}
+
+body[data-ui-kit] .messages-conversation-item:hover,
+body[data-ui-kit] .messages-user-item:hover {
+  background: #f9fafb;
+}
+
+body[data-ui-kit] .messages-conversation-item.is-active {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  box-shadow: none;
+}
+
+body[data-ui-kit] .messages-conversation-item.is-active::before {
+  background: #2563eb;
+  border-radius: 9999px;
+  bottom: 0.625rem;
+  top: 0.625rem;
+}
+
+body[data-ui-kit] .messages-conversation-avatar.room-type-group {
+  background: #7c3aed;
+  box-shadow: none;
+}
+
+body[data-ui-kit] .messages-conversation-avatar.room-type-system {
+  background: #2563eb;
+  box-shadow: none;
+}
+
+body[data-ui-kit] .messages-room-type {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  color: #4b5563;
+}
+
+body[data-ui-kit] .messages-unread-pill {
+  background: #dc2626;
+}
+
+body[data-ui-kit] .messages-mention-pill {
+  background: #2563eb;
+}
+
+body[data-ui-kit] .messages-thread-head {
+  background: #ffffff;
+  border-bottom-color: #e5e7eb;
+  padding: 0.75rem 1rem;
+}
+
+body[data-ui-kit] .messages-thread-title-row strong {
+  color: #111827;
+  font-size: 1rem;
+}
+
+body[data-ui-kit] .messages-filter-icons .icon-btn.icon-only,
+body[data-ui-kit] .messages-mark-read-btn.icon-btn.icon-only {
+  height: 2rem;
+  padding: 0;
+  width: 2rem;
+}
+
+body[data-ui-kit] .messages-thread-kind {
+  background: #f3f4f6;
+  border-radius: 9999px;
+  color: #4b5563;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+}
+
+body[data-ui-kit] .messages-thread-body {
+  background: #f9fafb;
+  gap: 0.875rem;
+  padding: 1rem;
+}
+
+body[data-ui-kit] .messages-bubble {
+  background: #ffffff;
+  border-color: #e5e7eb;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+  color: #1f2937;
+}
+
+body[data-ui-kit] .messages-bubble-row.is-outgoing .messages-bubble {
+  background: #dbeafe;
+  border-color: #bfdbfe;
+}
+
+body[data-ui-kit] .messages-bubble-body {
+  color: #374151;
+}
+
+body[data-ui-kit] .messages-reply-preview {
+  background: #f3f4f6;
+  border-left-color: #60a5fa;
+  color: #4b5563;
+}
+
+body[data-ui-kit] .messages-attachment-card {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+body[data-ui-kit] .messages-bubble-row.is-selected .messages-bubble,
+body[data-ui-kit] .messages-bubble-row:target .messages-bubble {
+  box-shadow: 0 0 0 2px #60a5fa, 0 4px 14px rgb(37 99 235 / 0.12);
+}
+
+body[data-ui-kit] .messages-pinned-strip {
+  background: #fffbeb;
+  border-bottom-color: #fde68a;
+}
+
+body[data-ui-kit] .messages-pinned-item {
+  background: #ffffff;
+  border-color: #fde68a;
+}
+
+body[data-ui-kit] .messages-thread-compose {
+  background: #ffffff;
+  border-top-color: #e5e7eb;
+  padding: 0.75rem 1rem;
+}
+
+body[data-ui-kit] .messages-compose-state {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+body[data-ui-kit] .messages-compose-attachment {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+body[data-ui-kit] .messages-rail-head,
+body[data-ui-kit] .messages-rail-foot {
+  background: #ffffff;
+  border-color: #e5e7eb;
+}
+
+body[data-ui-kit] .messages-notice-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid #60a5fa;
+  border-radius: 0.5rem;
+}
+
+body[data-ui-kit] .messages-notice-item.is-unread {
+  background: #eff6ff;
+  box-shadow: none;
+}
+
+body[data-ui-kit] .messages-user-suggest,
+body[data-ui-kit] .messages-entity-tree,
+body[data-ui-kit] .messages-entity-tree-row,
+body[data-ui-kit] .messages-add-member-row {
+  background: #ffffff;
+  border-color: #d1d5db;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+}
+
+body[data-ui-kit] dialog.modal-frame {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+  color: #111827;
+  max-width: min(96vw, 48rem);
+  padding: 0;
+}
+
+body[data-ui-kit] dialog.modal-frame::backdrop {
+  background: rgb(17 24 39 / 0.45);
+}
+
+body[data-ui-kit] dialog.modal-frame .modal-header {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 1rem 1.25rem;
+}
+
+body[data-ui-kit] dialog.modal-frame .modal-body {
+  padding: 1.25rem;
+}
+
+body[data-ui-kit] dialog.modal-frame .messages-user-suggest {
+  border-color: #d1d5db;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  padding: 0.25rem;
+}
+
+body[data-ui-kit] dialog.modal-frame .messages-user-suggest-item {
+  border-radius: 0.375rem;
+  color: #111827;
+  padding: 0.625rem;
+}
+
+body[data-ui-kit] dialog.modal-frame .messages-user-suggest-item:hover {
+  background: #eff6ff;
+}
+
+body[data-ui-kit] dialog.modal-frame .messages-recipient-chip {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1e40af;
+  padding: 0.25rem 0.5rem;
+}
+
+body[data-ui-kit] dialog.modal-frame .messages-recipient-chip-remove {
+  color: #2563eb;
+}
+
+body[data-ui-kit] dialog.modal-frame .messages-entity-browser {
+  max-height: min(58vh, 34rem);
+}
+
+body[data-ui-kit] dialog.modal-frame .messages-entity-tree-summary {
+  background: #f8fafc;
+  padding: 0.75rem;
+}
+
+body[data-ui-kit] dialog.modal-frame .messages-entity-tree-title > .material-symbols-rounded {
+  color: #2563eb;
+}
+
+body[data-ui-kit] dialog.modal-frame .messages-entity-tree-children {
+  background: #ffffff;
+  padding: 0.75rem 0.75rem 0.75rem 1.75rem;
+}
+
+body[data-ui-kit] dialog.modal-frame .messages-entity-tree-row {
+  box-shadow: none;
+  padding: 0.625rem;
+}
+
+body[data-ui-kit] dialog.modal-frame .messages-entity-tree-row .material-symbols-rounded {
+  color: #7c3aed;
+}
+
+@media (min-width: 1024px) {
+  body[data-ui-kit] .messages-layout {
+    grid-template-columns: 18rem minmax(26rem, 1fr) 17rem;
+  }
+}
+
+@media (max-width: 1023px) {
+  body[data-ui-kit] .messages-page-container {
+    height: auto;
+    min-height: calc(100dvh - 5rem);
+  }
+
+  body[data-ui-kit] .messages-sidebar {
+    max-height: 25rem;
+  }
+
+  body[data-ui-kit] .messages-thread {
+    min-height: 42rem;
+  }
+}
+
+body[data-ui-kit] .profile-calendar .fc .fc-toolbar {
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+body[data-ui-kit] .profile-calendar .fc .fc-toolbar-title {
+  color: #111827;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+body[data-ui-kit] .profile-calendar .fc .fc-button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+  color: #374151;
+  display: inline-flex;
+  font-size: 0.75rem;
+  font-weight: 600;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0.375rem 0.625rem;
+  text-transform: none;
+}
+
+body[data-ui-kit] .profile-calendar .fc .fc-button:hover,
+body[data-ui-kit] .profile-calendar .fc .fc-button:focus {
+  background: #f9fafb;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+body[data-ui-kit] .profile-calendar .fc .fc-button-primary:not(:disabled).fc-button-active,
+body[data-ui-kit] .profile-calendar .fc .fc-button-primary:not(:disabled):active {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #ffffff;
+}
+
+body[data-ui-kit] .profile-calendar .fc .fc-col-header-cell {
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.625rem 0;
+  text-transform: uppercase;
+}
+
+body[data-ui-kit] .profile-calendar .fc .fc-daygrid-day-number {
+  color: #4b5563;
+  font-size: 0.75rem;
+  padding: 0.5rem;
+}
+
+body[data-ui-kit] .profile-calendar .fc .fc-day-today .fc-daygrid-day-number {
+  align-items: center;
+  background: #2563eb;
+  border-radius: 9999px;
+  color: #ffffff;
+  display: inline-flex;
+  height: 1.5rem;
+  justify-content: center;
+  width: 1.5rem;
+}
+
+body[data-ui-kit] .profile-calendar .fc .fc-event {
+  border: 0;
+  border-left: 3px solid currentColor;
+  border-radius: 0.375rem;
+  box-shadow: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin: 0.125rem 0.25rem;
+  padding: 0.2rem 0.35rem;
+}
+
+body[data-ui-kit] .profile-calendar .fc .profile-calendar-event-task {
+  background: #dbeafe !important;
+  border-left-color: #2563eb;
+  color: #1e3a8a !important;
+}
+
+body[data-ui-kit] .profile-calendar .fc .profile-calendar-event-run {
+  background: #ede9fe !important;
+  border-left-color: #7c3aed;
+  color: #5b21b6 !important;
+}
+
+body[data-ui-kit] .profile-calendar .fc .profile-calendar-event-qual_run {
+  background: #fef3c7 !important;
+  border-left-color: #d97706;
+  color: #92400e !important;
+}
+
+body[data-ui-kit] .profile-calendar .fc .calendar-event-selected {
+  box-shadow: 0 0 0 2px #f59e0b !important;
+  outline: 0 !important;
+  transform: none !important;
+}
+
+@media (max-width: 640px) {
+  body[data-ui-kit] .profile-calendar .fc .fc-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  body[data-ui-kit] .profile-calendar .fc .fc-toolbar-chunk:last-child {
+    width: 100%;
+  }
+
+  body[data-ui-kit] .profile-calendar .fc .fc-button-group {
+    display: flex;
+    width: 100%;
+  }
+
+  body[data-ui-kit] .profile-calendar .fc .fc-button-group .fc-button {
+    flex: 1 1 0;
+  }
+}
