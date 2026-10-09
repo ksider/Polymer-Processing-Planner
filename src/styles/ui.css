@@ -48,6 +48,119 @@ body[data-ui-kit] [data-ai-usage-periods] a[aria-current="page"]:visited {
   color: #ffffff !important;
 }
 
+/* Header notifications deliberately use their own palette: app.css also
+   serves legacy Pure.css pages, but this popover is rendered inside the
+   Tailwind workspace header. */
+body[data-ui-kit] .messages-popover {
+  width: min(26rem, calc(100vw - 2rem));
+  max-height: min(36rem, calc(100dvh - 5rem));
+  right: 1rem;
+  border-color: #d1d5db;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  box-shadow: 0 20px 30px -12px rgb(15 23 42 / 0.28);
+  color: #1f2937;
+  z-index: 70;
+}
+
+body[data-ui-kit] .messages-popover-head,
+body[data-ui-kit] .messages-popover-foot {
+  border-color: #e5e7eb;
+  background: #ffffff;
+  color: #111827;
+}
+
+body[data-ui-kit] .messages-popover-head strong {
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+body[data-ui-kit] .messages-popover-foot .messages-popover-open-link {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  border: 1px solid #1d4ed8;
+  border-radius: 0.375rem;
+  background-color: #1d4ed8 !important;
+  color: #ffffff !important;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.1);
+}
+
+body[data-ui-kit] .messages-popover-foot .messages-popover-open-link:hover,
+body[data-ui-kit] .messages-popover-foot .messages-popover-open-link:focus-visible {
+  border-color: #1e40af;
+  background-color: #1e40af !important;
+  color: #ffffff !important;
+}
+
+body[data-ui-kit] .messages-popover-body {
+  background: #ffffff;
+  padding: 0.5rem;
+}
+
+body[data-ui-kit] .messages-popover-empty {
+  color: #6b7280;
+}
+
+body[data-ui-kit] .messages-popover-item {
+  border-color: #dbe3ee;
+  background: #f8fafc;
+  color: #1f2937;
+  box-shadow: none;
+}
+
+body[data-ui-kit] .messages-popover-item-title {
+  color: #111827;
+  font-size: 0.8125rem;
+}
+
+body[data-ui-kit] .messages-popover-item .small-note {
+  color: #64748b;
+}
+
+body[data-ui-kit] .messages-popover-action {
+  min-height: 1.875rem;
+  border-color: #cbd5e1;
+  border-radius: 0.375rem;
+  background: #ffffff;
+  color: #334155;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
+}
+
+body[data-ui-kit] .messages-popover-action:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+body[data-ui-kit] .messages-popover-action-open {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+body[data-ui-kit] .messages-popover-action-open:hover {
+  border-color: #1e40af;
+  background: #1e40af;
+  color: #ffffff;
+}
+
+body[data-ui-kit] .messages-popover-action:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+body[data-ui-kit] .nav-bell-badge {
+  border: 2px solid #ffffff;
+  background: #dc2626;
+  color: #ffffff;
+}
+
 /* Messenger: Flowbite/Tailwind chat workspace, while the established message
    selectors remain as stable JavaScript contracts. */
 body[data-ui-kit] .messages-workspace {
@@ -228,36 +341,255 @@ body[data-ui-kit] .messages-thread-body {
   padding: 1rem;
 }
 
-body[data-ui-kit] .messages-bubble {
-  background: #ffffff;
-  border-color: #e5e7eb;
-  border-radius: 0.75rem;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+/* Flowbite chat-bubble composition. The stable messages-* names retain the
+   established actions, reply handling, and selected-message behavior. */
+body[data-ui-kit] .messages-bubble-row {
+  align-items: flex-start;
+  gap: 0.625rem;
+}
+
+body[data-ui-kit] .messages-thread-avatar {
+  flex-basis: 2rem;
+  height: 2rem;
+  width: 2rem;
+}
+
+body[data-ui-kit] .messages-flowbite-cluster {
+  align-items: flex-start;
+  max-width: min(76%, 38rem);
+  padding: 0;
+}
+
+body[data-ui-kit] .messages-bubble-row.is-outgoing .messages-flowbite-cluster {
+  align-items: flex-end;
+  padding: 0;
+}
+
+body[data-ui-kit] .messages-flowbite-bubble {
+  display: flex !important;
+  width: 100% !important;
+  border: 0 !important;
+  border-radius: 0 0.75rem 0.75rem 0.75rem !important;
+  padding: 1rem !important;
+  background: #f3f4f6 !important;
+  box-shadow: none !important;
   color: #1f2937;
 }
 
-body[data-ui-kit] .messages-bubble-row.is-outgoing .messages-bubble {
-  background: #dbeafe;
-  border-color: #bfdbfe;
+body[data-ui-kit] .messages-bubble-row.is-outgoing .messages-flowbite-bubble {
+  border-radius: 0.75rem 0 0.75rem 0.75rem !important;
+  background: #1d4ed8 !important;
+  color: #ffffff;
 }
 
-body[data-ui-kit] .messages-bubble-body {
-  color: #374151;
+body[data-ui-kit] .messages-flowbite-bubble-head {
+  min-height: 1.25rem;
 }
 
-body[data-ui-kit] .messages-reply-preview {
-  background: #f3f4f6;
+body[data-ui-kit] .messages-flowbite-bubble .messages-bubble-author {
+  color: inherit;
+}
+
+body[data-ui-kit] .messages-flowbite-time {
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+body[data-ui-kit] .messages-bubble-row.is-outgoing .messages-flowbite-time {
+  color: #dbeafe;
+}
+
+body[data-ui-kit] .messages-flowbite-bubble .messages-bubble-body {
+  margin-top: 0;
+  color: inherit;
+}
+
+body[data-ui-kit] .messages-flowbite-bubble .messages-bubble-meta {
+  margin-top: 0.25rem;
+  padding-right: 0;
+  color: #6b7280;
+}
+
+body[data-ui-kit] .messages-flowbite-bubble .messages-message-no {
+  color: #1d4ed8;
+}
+
+body[data-ui-kit] .messages-bubble-row.is-outgoing .messages-flowbite-bubble .messages-bubble-meta {
+  color: #dbeafe;
+}
+
+body[data-ui-kit] .messages-bubble-row.is-outgoing .messages-flowbite-bubble .messages-message-no {
+  color: #ffffff;
+}
+
+body[data-ui-kit] .messages-flowbite-bubble .messages-reply-preview {
   border-left-color: #60a5fa;
+  background: #ffffff;
   color: #4b5563;
 }
 
-body[data-ui-kit] .messages-attachment-card {
-  background: #f8fafc;
-  border-color: #cbd5e1;
+body[data-ui-kit] .messages-bubble-row.is-outgoing .messages-flowbite-bubble .messages-reply-preview {
+  border-left-color: #bfdbfe;
+  background: #1e40af;
+  color: #eff6ff;
 }
 
-body[data-ui-kit] .messages-bubble-row.is-selected .messages-bubble,
-body[data-ui-kit] .messages-bubble-row:target .messages-bubble {
+body[data-ui-kit] .messages-flowbite-bubble .messages-attachment-card {
+  display: block;
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border-color: #cbd5e1;
+  border-radius: 0.5rem;
+  background: #ffffff;
+  color: #1f2937;
+  text-decoration: none;
+}
+
+body[data-ui-kit] .messages-bubble-row.is-outgoing .messages-flowbite-bubble .messages-attachment-card {
+  border-color: #60a5fa;
+  background: #eff6ff;
+}
+
+body[data-ui-kit] .messages-entity-card-head,
+body[data-ui-kit] .messages-entity-card-main,
+body[data-ui-kit] .messages-entity-card-foot {
+  display: flex;
+  align-items: center;
+}
+
+body[data-ui-kit] .messages-entity-card-head {
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+body[data-ui-kit] .messages-entity-card-type {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.25rem;
+  border-radius: 9999px;
+  background: #e2e8f0;
+  color: #334155;
+  padding: 0.125rem 0.45rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+
+body[data-ui-kit] .messages-entity-card-open {
+  color: #64748b;
+  font-size: 1rem;
+}
+
+body[data-ui-kit] .messages-entity-card-main {
+  align-items: flex-start;
+  gap: 0.625rem;
+  margin-top: 0.625rem;
+}
+
+body[data-ui-kit] .messages-entity-card-icon {
+  display: inline-flex;
+  flex: 0 0 2.25rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 1.25rem;
+}
+
+body[data-ui-kit] .messages-entity-card-title,
+body[data-ui-kit] .messages-entity-card-subtitle {
+  display: block;
+}
+
+body[data-ui-kit] .messages-entity-card-title {
+  overflow-wrap: anywhere;
+  color: #0f172a;
+  font-size: 0.875rem;
+  line-height: 1.3;
+}
+
+body[data-ui-kit] .messages-entity-card-subtitle {
+  margin-top: 0.125rem;
+  overflow-wrap: anywhere;
+  color: #64748b;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+body[data-ui-kit] .messages-entity-card-foot {
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  border-top: 1px solid #dbe3ee;
+  padding-top: 0.5rem;
+  color: #475569;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+body[data-ui-kit] .messages-entity-card-foot > span {
+  color: inherit;
+  font-size: inherit;
+}
+
+body[data-ui-kit] .messages-entity-card:hover {
+  border-color: #60a5fa;
+  background: #f8fbff;
+}
+
+body[data-ui-kit] .messages-entity-card.is-doe .messages-entity-card-icon,
+body[data-ui-kit] .messages-entity-card.is-doe .messages-entity-card-type {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+body[data-ui-kit] .messages-entity-card.is-qualification_step .messages-entity-card-icon,
+body[data-ui-kit] .messages-entity-card.is-qualification_step .messages-entity-card-type {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+body[data-ui-kit] .messages-entity-card.is-report .messages-entity-card-icon,
+body[data-ui-kit] .messages-entity-card.is-report .messages-entity-card-type {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+body[data-ui-kit] .messages-entity-card.is-experiment .messages-entity-card-icon,
+body[data-ui-kit] .messages-entity-card.is-experiment .messages-entity-card-type {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+body[data-ui-kit] .messages-reaction-rail {
+  position: relative;
+  top: auto;
+  right: auto;
+  left: auto;
+  align-self: flex-end;
+  width: 3.4rem;
+  height: 1.8rem;
+  margin-top: -0.1rem;
+  transform: none;
+}
+
+body[data-ui-kit] .messages-bubble-row.is-outgoing .messages-reaction-rail {
+  right: auto;
+  left: auto;
+  align-self: flex-start;
+}
+
+body[data-ui-kit] .messages-reaction-orbit {
+  height: 1.8rem;
+}
+
+body[data-ui-kit] .messages-bubble-row.is-selected .messages-flowbite-bubble,
+body[data-ui-kit] .messages-bubble-row:target .messages-flowbite-bubble {
   box-shadow: 0 0 0 2px #60a5fa, 0 4px 14px rgb(37 99 235 / 0.12);
 }
 

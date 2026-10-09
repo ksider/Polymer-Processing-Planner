@@ -306,9 +306,9 @@
               <% } %>
               <div
                 id="msg-<%= msg.message_id %>"
-                class="messages-bubble-row <%= msg.direction === 'outgoing' ? 'is-outgoing' : 'is-incoming' %> <%= selectedMessageId && Number(selectedMessageId) === Number(msg.message_id) ? 'is-selected' : '' %>"
+                class="messages-bubble-row flex items-start gap-2.5 <%= msg.direction === 'outgoing' ? 'is-outgoing' : 'is-incoming' %> <%= selectedMessageId && Number(selectedMessageId) === Number(msg.message_id) ? 'is-selected' : '' %>"
               >
-                <div class="messages-thread-avatar <%= msg.direction === 'outgoing' ? 'is-outgoing' : 'is-incoming' %>">
+                <div class="messages-thread-avatar size-8 rounded-full <%= msg.direction === 'outgoing' ? 'is-outgoing' : 'is-incoming' %>">
                   <% if ((msg.direction === 'outgoing' && currentUser?.id) || (msg.direction === 'incoming' && msg.sender_user_id)) { %>
                     <img
                       src="<%= avatarUrl(msg.direction === 'outgoing' ? currentUser.id : msg.sender_user_id) %>"
@@ -320,8 +320,8 @@
                     <span class="material-symbols-rounded">notifications</span>
                   <% } %>
                 </div>
-                <div class="messages-bubble-cluster">
-                  <div class="messages-bubble">
+                <div class="messages-bubble-cluster messages-flowbite-cluster flex w-full max-w-[38rem] flex-col gap-1">
+                  <div class="messages-bubble messages-flowbite-bubble flex w-full flex-col p-4 leading-1.5 <%= msg.direction === 'outgoing' ? 'bg-brand text-white rounded-s-base rounded-ee-base' : 'bg-neutral-secondary-soft rounded-e-base rounded-es-base' %>">
                     <div class="messages-bubble-tools">
                       <form class="messages-bubble-tool" action="/messages/rooms/<%= activeRoom.id %>/pins/<%= msg.message_id %>/toggle" method="post">
                         <button class="icon-btn icon-only" type="submit" title="<%= msg.is_pinned ? 'Unpin message' : 'Pin message' %>">
@@ -344,6 +344,25 @@
                         </form>
                       <% } %>
                     </div>
+                    <% const authorLabel = msg.direction === 'outgoing'
+                      ? (currentUser?.name || currentUser?.email || 'You')
+                      : (msg.sender_name || msg.sender_email || 'System'); %>
+                    <% const mentionLabel = msg.direction === 'outgoing'
+                      ? (currentUser?.name || currentUser?.email || '')
+                      : (msg.sender_name || msg.sender_email || ''); %>
+                    <div class="messages-flowbite-bubble-head flex items-center gap-1.5">
+                      <% if (mentionLabel) { %>
+                        <button
+                          class="messages-bubble-author messages-author-link text-sm font-semibold"
+                          type="button"
+                          data-mention-insert="<%= mentionLabel %>"
+                          title="Insert mention"
+                        ><%- formatInline(authorLabel) %></button>
+                      <% } else { %>
+                        <span class="messages-bubble-author text-sm font-semibold"><%- formatInline(authorLabel) %></span>
+                      <% } %>
+                      <span class="messages-flowbite-time text-sm"><%= new Date(msg.message_created_at || msg.created_at).toLocaleString() %></span>
+                    </div>
                     <% if (msg.reply_to_message_id) { %>
                       <a class="messages-reply-preview" href="/messages?view=chat&room_id=<%= activeRoom.id %>&message_id=<%= msg.reply_to_message_id %>">
                         <strong><%- formatInline(msg.reply_sender_name || msg.reply_sender_email || 'Message') %></strong>
@@ -351,41 +370,40 @@
                       </a>
                     <% } %>
                     <% if (msg.subject) { %>
-                      <div class="messages-bubble-subject"><%- formatInline(msg.subject) %></div>
+                      <div class="messages-bubble-subject text-sm font-semibold"><%- formatInline(msg.subject) %></div>
                     <% } %>
                     <% if (msg.body) { %>
-                      <div class="messages-bubble-body"><%- formatInline(msg.body) %></div>
+                      <div class="messages-bubble-body py-2.5 text-sm"><%- formatInline(msg.body) %></div>
                     <% } %>
                     <% if (msg.attachment && msg.attachment.path) { %>
-                      <a class="messages-attachment-card" href="<%= msg.attachment.path %>">
-                        <div class="messages-attachment-card-head">
-                          <span class="messages-room-type"><%= msg.attachment.badge || msg.attachment.entity_type %></span>
-                          <span class="material-symbols-rounded">attachment</span>
+                      <% const attachmentType = String(msg.attachment.entity_type || 'experiment'); %>
+                      <% const attachmentMeta = {
+                        experiment: { label: 'Experiment', icon: 'science' },
+                        qualification_step: { label: 'Qualification step', icon: 'schema' },
+                        doe: { label: 'DOE study', icon: 'timeline' },
+                        report: { label: 'Report', icon: 'description' }
+                      }[attachmentType] || { label: attachmentType, icon: 'attachment' }; %>
+                      <a class="messages-attachment-card messages-entity-card is-<%= attachmentType %>" href="<%= msg.attachment.path %>">
+                        <div class="messages-entity-card-head">
+                          <span class="messages-entity-card-type"><%= msg.attachment.badge || attachmentMeta.label %></span>
+                          <span class="material-symbols-rounded messages-entity-card-open" aria-hidden="true">open_in_new</span>
                         </div>
-                        <strong><%- formatInline(msg.attachment.title) %></strong>
-                        <% if (msg.attachment.subtitle) { %>
-                          <span><%- formatInline(msg.attachment.subtitle) %></span>
-                        <% } %>
+                        <div class="messages-entity-card-main">
+                          <span class="material-symbols-rounded messages-entity-card-icon" aria-hidden="true"><%= attachmentMeta.icon %></span>
+                          <div class="min-w-0">
+                            <strong class="messages-entity-card-title"><%- formatInline(msg.attachment.title) %></strong>
+                            <% if (msg.attachment.subtitle) { %>
+                              <span class="messages-entity-card-subtitle"><%- formatInline(msg.attachment.subtitle) %></span>
+                            <% } %>
+                          </div>
+                        </div>
+                        <div class="messages-entity-card-foot">
+                          <span>Open <%= attachmentMeta.label.toLowerCase() %></span>
+                          <span>#<%= msg.attachment.entity_id %></span>
+                        </div>
                       </a>
                     <% } %>
                     <div class="messages-bubble-meta">
-                      <% const authorLabel = msg.direction === 'outgoing'
-                        ? (currentUser?.name || currentUser?.email || 'You')
-                        : (msg.sender_name || msg.sender_email || 'System'); %>
-                      <% const mentionLabel = msg.direction === 'outgoing'
-                        ? (currentUser?.name || currentUser?.email || '')
-                        : (msg.sender_name || msg.sender_email || ''); %>
-                      <% if (mentionLabel) { %>
-                        <button
-                          class="messages-bubble-author messages-author-link"
-                          type="button"
-                          data-mention-insert="<%= mentionLabel %>"
-                          title="Insert mention"
-                        ><%- formatInline(authorLabel) %></button>
-                      <% } else { %>
-                        <span class="messages-bubble-author"><%- formatInline(authorLabel) %></span>
-                      <% } %>
-                      <span><%= new Date(msg.message_created_at || msg.created_at).toLocaleString() %></span>
                       <a class="messages-message-no" href="/messages?view=chat&room_id=<%= activeRoom.id %>&message_id=<%= msg.message_id %>#msg-<%= msg.message_id %>" title="Direct link to message">#<%= msg.message_no %></a>
                       <% if (msg.direction === 'incoming' && msg.status === 'unread') { %>
                         <span class="messages-unread-pill">new</span>

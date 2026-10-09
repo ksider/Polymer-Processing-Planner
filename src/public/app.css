@@ -170,6 +170,38 @@ sub {
   margin-top: 0.45rem;
 }
 
+.messages-popover-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.9rem;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.messages-popover-action:hover {
+  border-color: #c9b8a8;
+  background: #f8f1e8;
+}
+
+.messages-popover-action-open {
+  border-color: #c76437;
+  background: var(--accent);
+  color: #fff;
+}
+
+.messages-popover-action-open:hover {
+  background: #c94f21;
+}
+
 .messages-workspace {
   padding: 0;
   overflow: hidden;
