@@ -146,19 +146,7 @@
   </section>
 
   <section class="hidden overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm" data-admin-panel="settings" aria-labelledby="applicationSettingsTitle">
-    <div class="border-b border-gray-200 px-5 py-5"><h2 class="text-lg font-semibold text-gray-900" id="applicationSettingsTitle">Application settings</h2><p class="mt-1 text-sm text-gray-500">Security and access settings for this Planner instance.</p></div>
-    <div class="grid gap-6 p-5 lg:grid-cols-2">
-      <form method="post" action="/admin/domain" class="space-y-4 rounded-lg border border-gray-200 p-5 ajax-form">
-        <div><h3 class="font-medium text-gray-900">Allowed Google domain</h3><p class="mt-1 text-sm text-gray-500">Limit Google sign-in to a company domain. Leave empty to allow any domain.</p></div>
-        <div><label class="mb-2 block text-sm font-medium text-gray-900" for="allowed_domain">Domain</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="allowed_domain" name="allowed_domain" type="text" value="<%= settings.allowed_domain ?? '' %>" placeholder="example.com"></div>
-        <button class="rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300" type="submit">Save domain</button>
-      </form>
-      <form method="post" action="/admin/https" class="space-y-4 rounded-lg border border-gray-200 p-5 ajax-form">
-        <div><h3 class="font-medium text-gray-900">HTTPS requirement</h3><p class="mt-1 text-sm text-gray-500">Enable only when Planner is served through an HTTPS reverse proxy.</p></div>
-        <label class="flex cursor-pointer items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700"><input class="size-4 rounded border-gray-300 bg-gray-100 text-blue-600 focus:ring-2 focus:ring-blue-500" type="checkbox" name="require_https" <%= settings.require_https ? 'checked' : '' %>><span>Require HTTPS</span></label>
-        <button class="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-gray-100" type="submit">Update security setting</button>
-      </form>
-    </div>
+    <div class="border-b border-gray-200 px-5 py-5"><h2 class="text-lg font-semibold text-gray-900" id="applicationSettingsTitle">Application settings</h2><p class="mt-1 text-sm text-gray-500">Email delivery and application integrations for this Planner instance.</p></div>
     <div class="border-t border-gray-200 p-5" id="email-delivery-settings">
       <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><h3 class="text-base font-semibold text-gray-900">Email delivery · Resend</h3><p class="mt-1 max-w-3xl text-sm text-gray-500">Store Resend connections, then assign sender addresses to specific application tasks. API keys are encrypted and never shown again.</p></div><span class="inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-medium <%= emailSettingsEncryptionReady ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' %>"><span class="material-symbols-rounded me-1 text-[16px]" aria-hidden="true"><%= emailSettingsEncryptionReady ? 'lock' : 'lock_open' %></span><%= emailSettingsEncryptionReady ? 'Encryption ready' : 'Encryption key required' %></span></div>
       <% if (!emailSettingsEncryptionReady) { %><div class="mt-5 flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><span class="material-symbols-rounded shrink-0" aria-hidden="true">warning</span><p>Add <code class="rounded bg-amber-100 px-1 py-0.5 font-mono text-xs">APP_SETTINGS_ENCRYPTION_KEY</code> to the application environment, restart it, then save a Resend key here. Generate a value with <code class="rounded bg-amber-100 px-1 py-0.5 font-mono text-xs">openssl rand -base64 32</code>.</p></div><% } %>
