@@ -1,21 +1,19 @@
-<%- include("partials/head", { title: title }) %>
-<div class="container">
-  <div class="card auth-card">
-    <h2 class="card-title">Sign in</h2>
-    <% if (error) { %>
-      <div class="auth-error"><%= error %></div>
-    <% } %>
-    <form method="post" action="/auth/login" class="pure-form pure-form-stacked">
-      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-      <label for="email">Email</label>
-      <input id="email" name="email" type="email" autocomplete="username" required>
-      <label for="password">Password</label>
-      <input id="password" name="password" type="password" autocomplete="current-password" required>
-      <button type="submit" class="pure-button pure-button-primary">Sign in</button>
-    </form>
-    <div class="auth-actions">
-      <a href="/auth/request-reset">Forgot password?</a>
-    </div>
+<%- include("partials/head", { title: title, uiKit: true }) %>
+<main class="min-h-[calc(100dvh-73px)] bg-gray-50 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+  <div class="mx-auto grid w-full max-w-6xl overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm lg:grid-cols-[minmax(0,1.15fr)_minmax(24rem,0.85fr)]">
+    <section class="border-b border-gray-200 bg-gradient-to-br from-blue-700 to-blue-950 p-6 text-white sm:p-10 lg:border-b-0 lg:border-r">
+      <a class="inline-flex text-lg font-semibold tracking-tight text-white no-underline" href="/" aria-label="Polymer Processing Planner home">Polymer Processing Planner</a>
+      <div class="mt-12 max-w-xl"><p class="text-sm font-medium text-blue-200">Experiment workspace</p><h1 class="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">From process development to controlled reports.</h1><p class="mt-5 text-base leading-7 text-blue-100">Plan polymer-processing experiments, record qualification and DOE evidence, collaborate with the team, and keep controlled reports in one workspace.</p></div>
+      <div class="mt-10 grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3"><div class="rounded-lg border border-white/15 bg-white/10 p-4"><span class="material-symbols-rounded text-blue-200" aria-hidden="true">science</span><p class="mt-2 text-sm font-medium">Qualification</p></div><div class="rounded-lg border border-white/15 bg-white/10 p-4"><span class="material-symbols-rounded text-blue-200" aria-hidden="true">analytics</span><p class="mt-2 text-sm font-medium">DOE analysis</p></div><div class="rounded-lg border border-white/15 bg-white/10 p-4"><span class="material-symbols-rounded text-blue-200" aria-hidden="true">description</span><p class="mt-2 text-sm font-medium">Controlled reports</p></div></div>
+      <a class="mt-10 inline-flex items-center text-sm font-medium text-white no-underline hover:text-blue-100 hover:underline" href="https://github.com/ksider/Polymer-Processing-Planner" target="_blank" rel="noopener noreferrer"><span class="material-symbols-rounded me-2 text-[20px]" aria-hidden="true">code</span>View project on GitHub<span class="material-symbols-rounded ms-1 text-[18px]" aria-hidden="true">open_in_new</span></a>
+    </section>
+    <section class="p-6 sm:p-10"><div class="mx-auto max-w-md"><div><p class="text-sm font-medium text-blue-700">Welcome back</p><h2 class="mt-1 text-2xl font-semibold tracking-tight text-gray-900">Sign in to Planner</h2><p class="mt-2 text-sm text-gray-500">Use your company email or configured account login.</p></div>
+      <% if (error) { %><div class="mt-6 flex gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert"><span class="material-symbols-rounded shrink-0" aria-hidden="true">error</span><span><%= error %></span></div><% } %>
+      <% if (notice) { %><div class="mt-6 flex gap-3 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800" role="status"><span class="material-symbols-rounded shrink-0" aria-hidden="true">check_circle</span><span><%= notice %></span></div><% } %>
+      <form method="post" action="/auth/login" class="mt-7 space-y-5"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><div><label class="mb-2 block text-sm font-medium text-gray-900" for="email">Email or login</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="email" name="email" type="text" autocomplete="username" required autofocus placeholder="name@example.com or demo"></div><div><label class="mb-2 block text-sm font-medium text-gray-900" for="password">Password</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="password" name="password" type="password" autocomplete="current-password" required></div><button type="submit" class="inline-flex w-full items-center justify-center rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300">Sign in</button></form>
+      <div class="mt-5 flex items-center justify-between gap-4 text-sm"><a class="font-medium text-blue-700 no-underline hover:underline" href="/auth/request-reset">Forgot password?</a><a class="font-medium text-gray-600 no-underline hover:text-blue-700 hover:underline" href="https://github.com/ksider/Polymer-Processing-Planner" target="_blank" rel="noopener noreferrer">Documentation</a></div>
+      <aside class="mt-8 rounded-lg border border-blue-200 bg-blue-50 p-4" aria-label="Demo access"><div class="flex items-start gap-3"><span class="material-symbols-rounded text-blue-700" aria-hidden="true">play_circle</span><div><h3 class="text-sm font-semibold text-blue-950">Demo access</h3><p class="mt-1 text-sm text-blue-900">Explore the workspace with the public demo account.</p><dl class="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm"><dt class="text-blue-800">Login</dt><dd class="font-mono font-medium text-blue-950">demo</dd><dt class="text-blue-800">Password</dt><dd class="font-mono font-medium text-blue-950">demodemo</dd></dl></div></div></aside>
+    </div></section>
   </div>
-</div>
-<%- include("partials/foot") %>
+</main>
+<%- include("partials/foot", { uiKit: true }) %>

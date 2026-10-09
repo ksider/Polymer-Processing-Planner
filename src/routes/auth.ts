@@ -28,7 +28,8 @@ export function createAuthRouter(_db: Db) {
       return res.redirect("/");
     }
     const error = req.query.error ? "Invalid email or password." : null;
-    return res.render("login", { title: "Sign in", error });
+    const notice = req.query.notice === "password-set" ? "Password set. You can now sign in." : null;
+    return res.render("login", { title: "Sign in", error, notice });
   });
 
   router.post(
