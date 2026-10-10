@@ -9,7 +9,7 @@
       </div>
       <div class="flex items-center gap-2">
         <% if (canManage) { %>
-          <a class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2.5 text-sm font-medium text-white no-underline shadow-xs hover:bg-brand-strong focus:outline-none focus:ring-4 focus:ring-brand" href="/experiments/new?process_id=<%= process.id %>">Create experiment</a>
+          <a class="inline-flex items-center justify-center gap-2 rounded-base bg-brand px-3 py-2.5 text-sm font-medium text-white no-underline shadow-xs hover:bg-brand-strong focus:outline-none focus:ring-4 focus:ring-brand-soft" href="/experiments/new?process_id=<%= process.id %>"><span class="material-symbols-rounded text-[19px]" aria-hidden="true">add</span>Create experiment</a>
         <% } %>
       </div>
     </div>

@@ -3,16 +3,16 @@
 <% const inputTableClass = 'min-w-full border-separate border-spacing-y-2 text-left text-sm text-body [&_thead_th]:whitespace-nowrap [&_thead_th]:px-3 [&_thead_th]:py-2 [&_thead_th]:text-xs [&_thead_th]:font-medium [&_thead_th]:uppercase [&_thead_th]:text-body [&_tbody_td]:border-y [&_tbody_td]:border-default-medium [&_tbody_td]:bg-neutral-primary [&_tbody_td]:px-3 [&_tbody_td]:py-2 [&_tbody_td:first-child]:rounded-s-base [&_tbody_td:first-child]:border-s [&_tbody_td:last-child]:rounded-e-base [&_tbody_td:last-child]:border-e' %>
 <div class="flex min-h-[calc(100vh-4rem)] w-full overflow-x-clip bg-gray-50">
   <%- include('partials/experiment_workspace_sidebar', { workspace }) %>
-  <main class="min-w-0 flex-1"><div class="w-full max-w-none px-4 py-5 sm:px-6 lg:px-8">
-    <div class="mb-4 flex items-center justify-between gap-3 lg:hidden"><button class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm" type="button" data-open-experiment-calendar><span class="material-symbols-rounded text-[19px]" aria-hidden="true">calendar_month</span>Calendar</button><a class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 no-underline shadow-sm" href="<%= `${experimentPath(experimentId)}#qualification` %>"><span class="material-symbols-rounded text-[19px]" aria-hidden="true">fact_check</span>Qualification</a></div>
-  <section class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-    <div class="mb-5 flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 pb-4">
-      <a class="inline-flex size-9 items-center justify-center rounded-lg text-gray-500 no-underline hover:bg-gray-100 hover:text-gray-900" href="<%= `${experimentPath(experimentId)}#qualification` %>" aria-label="Back to experiment qualification">
+  <main class="min-w-0 flex-1"><div class="w-full max-w-none px-3 py-3 sm:px-4 lg:px-5">
+    <div class="mb-3 flex items-center justify-between gap-3 lg:hidden"><button class="inline-flex items-center gap-2 rounded-base border border-default-medium bg-neutral-secondary px-3 py-2 text-sm font-medium text-heading shadow-xs" type="button" data-open-experiment-calendar><span class="material-symbols-rounded text-[19px]" aria-hidden="true">calendar_month</span>Calendar</button><a class="inline-flex items-center gap-2 rounded-base border border-default-medium bg-neutral-secondary px-3 py-2 text-sm font-medium text-heading no-underline shadow-xs" href="<%= `${experimentPath(experimentId)}#qualification` %>"><span class="material-symbols-rounded text-[19px]" aria-hidden="true">fact_check</span>Qualification</a></div>
+  <section class="mb-4 rounded-xl border border-default-medium bg-neutral-primary px-4 py-3 shadow-xs" id="qualification-step-overview">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <a class="inline-flex size-9 items-center justify-center rounded-base text-body no-underline hover:bg-neutral-secondary hover:text-heading" href="<%= `${experimentPath(experimentId)}#qualification` %>" aria-label="Back to experiment qualification">
         <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
       </a>
-      <div>
-        <h1 class="text-lg font-semibold tracking-tight text-gray-900">Step <%= step.step_number %>: <%= stepDef?.name || 'Qualification Step' %></h1>
-        <p class="mt-1 text-sm text-gray-500">
+      <div class="min-w-0 flex-1">
+        <h1 class="truncate text-base font-semibold tracking-tight text-heading">Step <%= step.step_number %>: <%= stepDef?.name || 'Qualification Step' %></h1>
+        <p class="mt-0.5 text-xs text-body">
           Responsible:
           <span id="qualStepResponsibleLabel">
             <% if (stepAssigneeId) { %>
@@ -24,8 +24,9 @@
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
+        <button class="inline-flex items-center justify-center rounded-base border border-default-medium bg-neutral-secondary px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-tertiary focus:outline-none focus:ring-4 focus:ring-brand-soft disabled:cursor-not-allowed disabled:opacity-50" type="button" id="openQualFields" <%= step.is_blocked === 1 ? 'disabled' : '' %>>Fields</button>
         <% if (canAssignEntities) { %>
-          <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" id="openQualSettingsDialog" title="Qualification settings">
+          <button class="inline-flex size-9 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="openQualSettingsDialog" title="Qualification settings">
             <span class="material-symbols-rounded" aria-hidden="true">edit</span>
           </button>
         <% } %>
@@ -33,15 +34,22 @@
           <% if (step.is_blocked === 1) { %>
             <form action="/experiments/<%= experimentId %>/qualification/<%= step.step_number %>/block" method="post">
               <input type="hidden" name="action" value="unblock">
-              <button class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50" type="submit">Unblock stage</button>
+              <label class="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-heading" title="Unblock this stage">
+                <input class="peer sr-only" type="checkbox" checked data-block-toggle>
+                <span class="relative h-5 w-9 rounded-full bg-neutral-tertiary after:absolute after:start-0.5 after:top-0.5 after:size-4 after:rounded-full after:bg-neutral-primary after:shadow-xs after:transition-all peer-checked:after:translate-x-4"></span>
+                Stage blocked
+              </label>
             </form>
           <% } else { %>
-            <details>
-              <summary class="inline-flex cursor-pointer list-none items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 [&::-webkit-details-marker]:hidden">Block stage</summary>
-              <form class="mt-3 grid gap-3" action="/experiments/<%= experimentId %>/qualification/<%= step.step_number %>/block" method="post">
-                <label class="grid gap-1 text-sm font-medium text-gray-700">Reason <input class="rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-600 focus:ring-blue-600" name="reason" type="text" maxlength="500" required></label>
+            <details class="relative">
+              <summary class="inline-flex cursor-pointer list-none items-center gap-2 text-sm font-medium text-heading [&::-webkit-details-marker]:hidden">
+                <span class="relative h-5 w-9 rounded-full bg-emerald-500 after:absolute after:start-0.5 after:top-0.5 after:size-4 after:rounded-full after:bg-neutral-primary after:shadow-xs after:transition-all"></span>
+                Block stage
+              </summary>
+              <form class="absolute right-4 z-20 mt-3 grid w-80 gap-3 rounded-base border border-default-medium bg-neutral-primary p-3 shadow-lg" action="/experiments/<%= experimentId %>/qualification/<%= step.step_number %>/block" method="post">
+                <label class="grid gap-1 text-sm font-medium text-heading">Reason <input class="rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" name="reason" type="text" maxlength="500" required></label>
                 <input type="hidden" name="action" value="block">
-                <button class="inline-flex w-fit items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300" type="submit">Confirm block</button>
+                <button class="inline-flex w-fit items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong focus:outline-none focus:ring-4 focus:ring-brand" type="submit">Confirm block</button>
               </form>
             </details>
           <% } %>
@@ -49,17 +57,15 @@
       </div>
     </div>
     <% if (step.is_blocked === 1) { %>
-      <p class="text-sm text-gray-500" role="status">
+      <p class="mt-3 text-sm text-body" role="status">
         This stage is blocked<%= step.blocked_by_label ? ` by ${step.blocked_by_label}` : '' %><%= step.blocked_at ? ` on ${step.blocked_at}` : '' %>.
         Reason: <strong><%= step.blocked_reason || '-' %></strong>
       </p>
     <% } %>
-    <div class="flex flex-wrap items-center gap-2">
-      <button class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" id="openQualFields" <%= step.is_blocked === 1 ? 'disabled' : '' %>>Manage fields</button>
-      <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50" type="button" id="addRunBtn" <%= step.is_blocked === 1 ? 'disabled' : '' %>>Add run</button>
-    </div>
-    <% if (summaryJson) { %>
-      <pre class="qual-summary"><%= summaryJson %></pre>
+    <% if (processTypeCode !== 'extrusion_v1') { %>
+      <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-default pt-3">
+        <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong focus:outline-none focus:ring-4 focus:ring-brand disabled:cursor-not-allowed disabled:opacity-50" type="button" id="addRunBtn" <%= step.is_blocked === 1 ? 'disabled' : '' %>>Add run</button>
+      </div>
     <% } %>
   </section>
 
@@ -67,7 +73,7 @@
   <% if (summaryJson) { try { summaryData = JSON.parse(summaryJson); } catch { summaryData = null; } } %>
   <% const settings = stepSettings || {}; %>
   <% const fmt = (value, digits = 2) => (typeof value === 'number' && Number.isFinite(value) ? formatNumber(value, digits) : '-'); %>
-  <% if (step.step_number === 1) { %>
+  <% if (processTypeCode === 'compounding' && step.step_number === 1) { %>
     <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
         <h2 class="text-lg font-semibold tracking-tight text-gray-900">Recommended Baseline from RTD Stability</h2>
@@ -106,7 +112,7 @@
       </div>
     </div>
   <% } %>
-  <% if (step.step_number === 2) { %>
+  <% if (processTypeCode === 'compounding' && step.step_number === 2) { %>
     <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
         <h2 class="text-lg font-semibold tracking-tight text-gray-900">Recommended SME Window</h2>
@@ -141,7 +147,7 @@
       </div>
     </div>
   <% } %>
-  <% if (step.step_number === 3) { %>
+  <% if (processTypeCode === 'compounding' && step.step_number === 3) { %>
     <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
         <h2 class="text-lg font-semibold tracking-tight text-gray-900">Setup</h2>
@@ -166,6 +172,16 @@
     canWrite: currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')
   }) %>
 
+  <% const isExtrusionStepOne = processTypeCode === 'extrusion_v1' && step.step_number === 1; %>
+  <% const isExtrusionStepTwo = processTypeCode === 'extrusion_v1' && step.step_number === 2; %>
+  <% const isExtrusionStepThree = processTypeCode === 'extrusion_v1' && step.step_number === 3; %>
+  <% if (isExtrusionStepOne) { %>
+    <%- include('partials/extrusion_step1_program', { fields, runs, runValueMap, seriesDefinitions, runSeries, outputDefinitions, stepOutputs, assignableUsers, inputTableClass, formatNumber, step }) %>
+  <% } else if (isExtrusionStepTwo) { %>
+    <%- include('partials/extrusion_step2_program', { fields, runs, runValueMap, seriesDefinitions, runSeries, outputDefinitions, stepOutputs, assignableUsers, inputTableClass, formatNumber, step, stepSettings }) %>
+  <% } else if (isExtrusionStepThree) { %>
+    <%- include('partials/extrusion_step3_program', { fields, runs, runValueMap, outputDefinitions, stepOutputs, assignableUsers, inputTableClass, formatNumber, step, stepSettings, feederThroughputLevels, rheologyReferenceViscosity, stepSummary }) %>
+  <% } else { %>
   <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
     <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
       <h2 class="text-lg font-semibold tracking-tight text-gray-900">Runs</h2>
@@ -180,7 +196,8 @@
         <thead>
           <tr>
             <th>Run</th>
-            <th>Due date</th>
+            <th>Date</th>
+            <th>Responsible</th>
             <% orderedFields.forEach((field) => { %>
               <th>
                 <%- formatInline(field.label) %>
@@ -194,13 +211,21 @@
         </thead>
         <tbody>
           <% if (runs.length === 0) { %>
-            <tr><td colspan="<%= orderedFields.length + 5 %>">No runs yet.</td></tr>
+            <tr><td colspan="<%= orderedFields.length + 6 %>">No runs yet.</td></tr>
           <% } %>
           <% runs.forEach((run) => { %>
             <% const values = runValueMap[String(run.id)] || {}; %>
             <tr data-run-row data-run-id="<%= run.id %>">
               <td><strong><%= run.run_code %></strong></td>
-              <td><input type="date" data-ui-datepicker datepicker-autohide datepicker-format="yyyy-mm-dd" data-run-due value="<%= run.due_at || '' %>"></td>
+              <td><input type="date" data-run-performed value="<%= run.performed_at || '' %>"></td>
+              <td>
+                <select data-run-responsible>
+                  <option value="">Unassigned</option>
+                  <% assignableUsers.forEach((user) => { %>
+                    <option value="<%= user.id %>" <%= Number(run.responsible_user_id) === Number(user.id) ? 'selected' : '' %>><%= user.name || user.email %></option>
+                  <% }); %>
+                </select>
+              </td>
               <% orderedFields.forEach((field) => { %>
                 <% const value = values[String(field.id)]; %>
                 <td>
@@ -241,7 +266,59 @@
     </div>
   </div>
 
-  <% if (step.step_number === 1) { %>
+  <% if (processTypeCode === 'extrusion_v1' && step.step_number === 1) { %>
+    <section class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm" aria-labelledby="extrusionStep1SeriesTitle">
+      <div class="mb-5 border-b border-gray-100 pb-4">
+        <h2 class="text-lg font-semibold tracking-tight text-gray-900" id="extrusionStep1SeriesTitle">Measurement series</h2>
+        <p class="mt-1 text-sm text-gray-500">Import two-column CSV files. The expected axes are fixed by the stage contract and stored with its version.</p>
+      </div>
+      <div class="mb-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div class="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-semibold text-gray-900">Flow curves by temperature</h3>
+            <p class="mt-1 text-xs text-gray-500">Calculated from the scalar run table: apparent shear rate versus apparent viscosity.</p>
+          </div>
+          <span class="rounded-md bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">Calculated</span>
+        </div>
+        <div class="h-80 w-full" id="extrusionFlowCurveChart"></div>
+      </div>
+      <div class="grid gap-4 xl:grid-cols-2">
+        <% seriesDefinitions.forEach((definition, index) => { %>
+          <article class="rounded-lg border border-gray-200 bg-white p-4" data-qual-series-card data-series-code="<%= definition.code %>" data-minimum-points="<%= definition.minimum_points %>">
+            <div class="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 class="text-sm font-semibold text-gray-900"><%= definition.label %></h3>
+                <p class="mt-1 text-xs text-gray-500"><%= definition.description %></p>
+              </div>
+              <span class="shrink-0 rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">v<%= definition.contract_version %></span>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <label class="block text-sm font-medium text-gray-900">
+                Run
+                <select class="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-600 focus:ring-blue-600" data-series-run>
+                  <% runs.forEach((run) => { %><option value="<%= run.id %>"><%= run.run_code %></option><% }); %>
+                </select>
+              </label>
+              <label class="block text-sm font-medium text-gray-900">
+                CSV file
+                <input class="mt-1 block w-full cursor-pointer rounded-lg border border-gray-300 bg-white text-sm text-gray-900 file:me-3 file:border-0 file:border-e file:border-gray-300 file:bg-gray-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-gray-700" type="file" accept=".csv,text/csv,text/plain" data-series-file <%= step.is_blocked === 1 ? 'disabled' : '' %>>
+              </label>
+            </div>
+            <p class="mt-2 text-xs text-gray-500"><%= definition.x.label %> (<%= definition.x.unit %>) → <%= definition.y.label %> (<%= definition.y.unit %>). Header may be present.</p>
+            <div class="mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto">
+              <button class="inline-flex shrink-0 items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-series-import <%= step.is_blocked === 1 ? 'disabled' : '' %>>Import CSV</button>
+              <button class="inline-flex shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-series-clear <%= step.is_blocked === 1 ? 'disabled' : '' %>>Clear</button>
+              <span class="shrink-0 text-xs text-gray-500" data-series-status>Choose a run and CSV file.</span>
+            </div>
+            <div class="mt-4 h-64 w-full" id="extrusionSeriesChart<%= index %>" data-series-chart></div>
+          </article>
+        <% }); %>
+      </div>
+    </section>
+  <% } %>
+  <% } %>
+
+      <% if (processTypeCode === 'compounding' && step.step_number === 1) { %>
     <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
         <h2 class="text-lg font-semibold tracking-tight text-gray-900">MFR vs Screw RPM</h2>
@@ -251,7 +328,7 @@
       </div>
     </div>
   <% } %>
-  <% if (step.step_number === 2) { %>
+      <% if (processTypeCode === 'compounding' && step.step_number === 2) { %>
     <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
         <h2 class="text-lg font-semibold tracking-tight text-gray-900">SME vs Screw RPM (by Melt Temperature)</h2>
@@ -264,7 +341,7 @@
       </p>
     </div>
   <% } %>
-  <% if (step.step_number === 3) { %>
+      <% if (processTypeCode === 'compounding' && step.step_number === 3) { %>
     <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
         <h2 class="text-lg font-semibold tracking-tight text-gray-900">Recommendation (MFR Stability)</h2>
@@ -336,7 +413,7 @@
   </dialog>
 <% } %>
 
-<% if (step.step_number === 3) { %>
+<% if (processTypeCode === 'compounding' && step.step_number === 3) { %>
   <dialog class="m-auto w-[min(96vw,48rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="step3SetupDialog">
     <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
       <strong>Step 3 setup</strong>
@@ -454,12 +531,18 @@
   (function () {
     const experimentId = <%= experimentId %>;
     const stepNumber = <%= step.step_number %>;
-    const table = document.getElementById('compoundingRunsTable');
+    const processTypeCode = <%- jsonForScript(processTypeCode) %>;
+    const table = document.querySelector('[data-extrusion-step-one], [data-extrusion-step-two], [data-extrusion-step-three]') || document.getElementById('compoundingRunsTable');
+    const runTables = Array.from(document.querySelectorAll('[data-run-table]'));
+    if (!runTables.length && table) runTables.push(table);
     const fieldIdByCode = <%- jsonForScript(Object.fromEntries(fields.map((field) => [field.code, field.id]))) %>;
+    const qualificationSeriesDefinitions = <%- jsonForScript(seriesDefinitions || []) %>;
+    let qualificationRunSeries = <%- jsonForScript(runSeries || []) %>;
     const qualSettingsDialog = document.getElementById('qualSettingsDialog');
     const qualSettingsForm = document.getElementById('qualSettingsForm');
     const step3SetupDialog = document.getElementById('step3SetupDialog');
     const step3SetupForm = document.getElementById('step3SetupForm');
+    const extrusionFeederSetupForm = document.getElementById('extrusionFeederSetupForm');
     const qualStepAssigneeInput = document.getElementById('qualStepAssigneeInput');
     const qualStepResponsibleLabel = document.getElementById('qualStepResponsibleLabel');
     const qualAssignableUserById = new Map(<%- jsonForScript((assignableUsers || []).map((user) => [String(user.id), user.name || user.email])) %>);
@@ -510,6 +593,31 @@
       }
       node.textContent = value == null || value === '' ? '-' : String(value);
     };
+    const scientificLive = (value) => {
+      const number = Number(value);
+      if (!Number.isFinite(number)) return '-';
+      const [mantissa, exponent] = number.toExponential(4).split('e');
+      const superscript = String(Number(exponent)).replace(/[-+0-9]/g, (character) => ({ '-': '⁻', '+': '⁺', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' })[character]);
+      return `${Number(mantissa)} × 10${superscript}`;
+    };
+    const updatePumpCharacteristicResult = (summary) => {
+      if (processTypeCode !== 'extrusion_v1' || stepNumber !== 3 || !summary) return;
+      const root = document.querySelector('[data-pump-characteristic-result]'); if (!root) return;
+      const valid = summary.pump_characteristic_fit_valid === true;
+      root.classList.toggle('border-success-medium', valid); root.classList.toggle('bg-success-soft', valid);
+      root.classList.toggle('border-warning-medium', !valid); root.classList.toggle('bg-warning-soft', !valid);
+      root.querySelector('[data-pump-fit-title]').textContent = valid ? 'Fitted equation' : 'Awaiting valid operating-point data';
+      root.querySelector('[data-pump-fit-details]').hidden = !valid;
+      root.querySelector('[data-pump-fit-empty]').hidden = valid;
+      if (!valid) return;
+      root.querySelector('[data-pump-density]').textContent = fmtLive(summary.pump_characteristic_melt_density_kg_m3, 2);
+      root.querySelector('[data-pump-viscosity]').textContent = fmtLive(summary.pump_characteristic_reference_viscosity_pa_s, 2);
+      root.querySelector('[data-pump-outlet-pressure]').textContent = fmtLive(summary.pump_characteristic_outlet_pressure_bar, 2);
+      root.querySelector('[data-pump-a]').textContent = scientificLive(summary.screw_pumping_a_m3_s_rpm);
+      root.querySelector('[data-pump-b]').textContent = scientificLive(summary.screw_pumping_b_m3);
+      root.querySelector('[data-pump-r-squared]').textContent = fmtLive(summary.screw_pumping_r_squared, 3);
+      root.querySelector('[data-pump-point-count]').textContent = String(summary.pump_characteristic_point_count ?? 0);
+    };
     const setReasonText = (text) => {
       const node = document.getElementById('step2RecommendationReason');
       if (!node) return;
@@ -528,7 +636,7 @@
     };
     const getActiveRows = () => {
       const rows = Array.from(table?.querySelectorAll('tr[data-run-row]') || []);
-      return rows.filter((row) => !row.querySelector('input[data-flag="exclude"]')?.checked);
+      return rows.filter((row) => row.dataset.runGroup !== 'pump_characteristic' && !row.querySelector('input[data-flag="exclude"]')?.checked);
     };
     const quantileSorted = (sorted, p) => {
       if (!sorted.length) return null;
@@ -861,15 +969,260 @@
         target.textContent = Number.isFinite(sme) ? String(Math.round(sme * 100) / 100) : '-';
       });
     };
+    const recomputeExtrusionFlowCurve = () => {
+      if (processTypeCode !== 'extrusion_v1' || stepNumber !== 1) return;
+      const container = document.getElementById('extrusionFlowCurveChart');
+      if (!container || !window.echarts) return;
+      const grouped = new Map();
+      getActiveRows().filter((row) => row.closest('[data-extrusion-group="rheology"]')).forEach((row) => {
+        const temperature = numFromRow(row, 'test_temp_c');
+        const pressure = numFromRow(row, 'pressure_drop_pa');
+        const diameterMm = numFromRow(row, 'capillary_diameter_mm') ?? Number(document.querySelector('[data-rheology-shared-code="capillary_diameter_mm"]')?.value);
+        const lengthMm = numFromRow(row, 'capillary_length_mm') ?? Number(document.querySelector('[data-rheology-shared-code="capillary_length_mm"]')?.value);
+        const flowMm3S = numFromRow(row, 'volumetric_flow_mm3_s');
+        if (![temperature, pressure, diameterMm, lengthMm, flowMm3S].every(Number.isFinite)) return;
+        if (diameterMm <= 0 || lengthMm <= 0 || flowMm3S <= 0) return;
+        const diameterM = diameterMm / 1000;
+        const lengthM = lengthMm / 1000;
+        const shearStress = (pressure * diameterM) / (4 * lengthM);
+        const shearRate = (32 * (flowMm3S / 1_000_000_000)) / (Math.PI * Math.pow(diameterM, 3));
+        const viscosity = shearRate > 0 ? shearStress / shearRate : null;
+        if (!Number.isFinite(viscosity) || viscosity <= 0) return;
+        const key = String(temperature);
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push([shearRate, viscosity]);
+      });
+      const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+      if (!grouped.size) {
+        chart.clear();
+        chart.setOption({
+          title: { text: 'Enter capillary measurements to build flow curves', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } }
+        });
+        return;
+      }
+      const colors = ['#1d4ed8', '#059669', '#d97706', '#dc2626', '#7c3aed', '#0891b2'];
+      const series = Array.from(grouped.entries())
+        .sort((a, b) => Number(a[0]) - Number(b[0]))
+        .map(([temperature, points], index) => ({
+          name: `${temperature} °C`,
+          type: 'line',
+          symbol: 'circle',
+          symbolSize: 7,
+          color: colors[index % colors.length],
+          data: points.sort((a, b) => a[0] - b[0])
+        }));
+      chart.setOption({
+        tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+        legend: { top: 0 },
+        grid: { left: 72, right: 24, top: 42, bottom: 58 },
+        xAxis: { type: 'log', name: 'Shear rate (s⁻¹)', nameLocation: 'middle', nameGap: 38 },
+        yAxis: { type: 'log', name: 'Viscosity (Pa·s)', nameLocation: 'middle', nameGap: 52 },
+        series
+      }, { notMerge: true });
+    };
+    const seriesFor = (runId, seriesCode) => qualificationRunSeries.find((series) => (
+      Number(series.run_id) === Number(runId) && series.series_code === seriesCode
+    ));
+    const renderMeasurementSeriesCard = (card) => {
+      if (!window.echarts) return;
+      const code = card.dataset.seriesCode;
+      const runId = Number(card.querySelector('[data-series-run]')?.value || 0);
+      const definition = qualificationSeriesDefinitions.find((item) => item.code === code);
+      const current = seriesFor(runId, code);
+      const status = card.querySelector('[data-series-status]');
+      const container = card.querySelector('[data-series-chart]');
+      if (!definition || !container) return;
+      const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+      if (!current?.points?.length) {
+        if (status) status.textContent = 'No imported points for this run.';
+        chart.clear();
+        chart.setOption({
+          title: { text: 'No series data', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } }
+        });
+        return;
+      }
+      if (status) {
+        status.textContent = `${current.points.length} points${current.source_name ? ` · ${current.source_name}` : ''}`;
+      }
+      chart.setOption({
+        tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+        grid: { left: 64, right: 18, top: 18, bottom: 52 },
+        xAxis: { type: 'value', name: `${definition.x.label} (${definition.x.unit})`, nameLocation: 'middle', nameGap: 34, scale: true },
+        yAxis: { type: 'value', name: `${definition.y.label} (${definition.y.unit})`, nameLocation: 'middle', nameGap: 46, scale: true },
+        series: [{
+          type: 'line',
+          showSymbol: current.points.length <= 250,
+          symbolSize: 5,
+          data: current.points.map((point) => [point.x_value, point.y_value])
+        }]
+      }, { notMerge: true });
+    };
+    const parseSeriesCsv = (text) => {
+      const lines = String(text || '').replace(/^\uFEFF/, '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      if (!lines.length) return [];
+      const sample = lines[0];
+      const delimiter = sample.includes('\t') ? '\t' : (sample.includes(';') ? ';' : ',');
+      const normalizeCell = (cell) => {
+        let value = cell.trim().replace(/^"|"$/g, '');
+        if (delimiter !== ',') value = value.replace(',', '.');
+        return Number(value);
+      };
+      return lines.map((line) => {
+        const cells = line.split(delimiter);
+        if (cells.length < 2) return null;
+        const x = normalizeCell(cells[0]);
+        const y = normalizeCell(cells[1]);
+        return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+      }).filter(Boolean);
+    };
+    const requestSeriesJson = async (url, options) => {
+      const response = await fetch(url, options);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `Request failed (${response.status})`);
+      return payload;
+    };
+    const setupExtrusionSeries = () => {
+      document.querySelectorAll('[data-qual-series-card]').forEach((card) => {
+        const runSelect = card.querySelector('[data-series-run]');
+        const fileInput = card.querySelector('[data-series-file]');
+        const status = card.querySelector('[data-series-status]');
+        runSelect?.addEventListener('change', () => renderMeasurementSeriesCard(card));
+        card.querySelector('[data-series-import]')?.addEventListener('click', async () => {
+          const file = fileInput?.files?.[0];
+          const runId = Number(runSelect?.value || 0);
+          const code = card.dataset.seriesCode;
+          const minimumPoints = Number(card.dataset.minimumPoints || 2);
+          if (!file || !runId || !code) {
+            if (status) status.textContent = 'Choose a run and CSV file first.';
+            return;
+          }
+          try {
+            const points = parseSeriesCsv(await file.text());
+            if (points.length < minimumPoints) throw new Error(`CSV must contain at least ${minimumPoints} numeric rows.`);
+            if (status) status.textContent = 'Importing…';
+            await requestSeriesJson(`/qual-runs/${runId}/series/${encodeURIComponent(code)}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ source_name: file.name, points })
+            });
+            window.location.reload();
+          } catch (error) {
+            if (status) status.textContent = error instanceof Error ? error.message : 'Import failed.';
+          }
+        });
+        card.querySelector('[data-series-clear]')?.addEventListener('click', async () => {
+          const runId = Number(runSelect?.value || 0);
+          const code = card.dataset.seriesCode;
+          if (!runId || !code || !seriesFor(runId, code)) return;
+          if (!window.confirm('Clear this imported series?')) return;
+          try {
+            await requestSeriesJson(`/qual-runs/${runId}/series/${encodeURIComponent(code)}`, { method: 'DELETE' });
+            qualificationRunSeries = qualificationRunSeries.filter((series) => !(
+              Number(series.run_id) === runId && series.series_code === code
+            ));
+            renderMeasurementSeriesCard(card);
+          } catch (error) {
+            if (status) status.textContent = error instanceof Error ? error.message : 'Unable to clear series.';
+          }
+        });
+        renderMeasurementSeriesCard(card);
+      });
+    };
+    const renderExtrusionFeederCharts = () => {
+      if (processTypeCode !== 'extrusion_v1' || stepNumber !== 2 || !window.echarts) return;
+      const stabilityContainer = document.getElementById('extrusionFeederStabilityChart');
+      if (stabilityContainer) {
+        const maximumCapacity = parseNumber(document.querySelector('[name="feeder_max_throughput_kg_h"]')?.value);
+        const showLoading = maximumCapacity != null && maximumCapacity > 0;
+        const rows = getActiveRows();
+        const points = rows.map((row) => {
+          const target = numFromRow(row, 'target_throughput_kg_h');
+          const mean = numFromRow(row, 'mean_throughput_kg_h');
+          const sd = numFromRow(row, 'throughput_sd_kg_h');
+          const cv = mean && sd != null ? (sd / mean) * 100 : null;
+          const error = target && mean != null ? Math.abs(mean - target) / target * 100 : null;
+          const loading = showLoading && target != null ? target / maximumCapacity * 100 : target;
+          return { target, loading, cv, error, run: row.querySelector('strong')?.textContent?.trim() || 'run' };
+        }).filter((point) => Number.isFinite(point.loading) && (Number.isFinite(point.cv) || Number.isFinite(point.error)));
+        const chart = echarts.getInstanceByDom(stabilityContainer) || echarts.init(stabilityContainer);
+        if (!points.length) {
+          chart.clear();
+          chart.setOption({ title: { text: 'Enter throughput, mean and standard deviation to map feeder stability', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } } });
+        } else {
+          const stable = points.filter((point) => point.cv != null && point.cv <= 1.5).map((point) => [point.loading, point.cv]);
+          const unstable = points.filter((point) => point.cv == null || point.cv > 1.5).map((point) => [point.loading, point.cv]);
+          chart.setOption({
+            tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+            legend: { top: 4 },
+            grid: { left: 64, right: 24, top: 42, bottom: 54 },
+            xAxis: { type: 'value', name: showLoading ? 'Feeder loading (%)' : 'Target throughput (kg/h)', nameLocation: 'middle', nameGap: 34, scale: true, max: showLoading ? 100 : null },
+            yAxis: { type: 'value', name: 'CV / dosing error (%)', nameLocation: 'middle', nameGap: 44, min: 0, scale: true },
+            series: [
+              { name: 'CV ≤ 1.5%', type: 'scatter', symbolSize: 9, itemStyle: { color: '#059669' }, data: stable },
+              { name: 'CV > 1.5%', type: 'scatter', symbolSize: 9, itemStyle: { color: '#dc2626' }, data: unstable },
+              { name: 'Dosing error', type: 'line', symbol: 'circle', symbolSize: 7, itemStyle: { color: '#2563eb' }, lineStyle: { color: '#2563eb' }, data: points.filter((point) => point.error != null).map((point) => [point.loading, point.error]).sort((a, b) => a[0] - b[0]) },
+              { name: 'CV acceptance', type: 'line', symbol: 'none', lineStyle: { type: 'dashed', color: '#9ca3af' }, data: points.map((point) => [point.loading, 1.5]).sort((a, b) => a[0] - b[0]) }
+            ]
+          }, { notMerge: true });
+        }
+      }
+    };
+    const renderExtrusionOperatingWindow = () => {
+      if (processTypeCode !== 'extrusion_v1' || stepNumber !== 3 || !window.echarts) return;
+      const container = document.getElementById('extrusionOperatingWindowChart'); if (!container) return;
+      const pressureLimit = parseNumber(document.querySelector('[name="melt_pressure_limit_bar"]')?.value);
+      const torqueLimit = parseNumber(document.querySelector('[name="motor_torque_limit_nm"]')?.value);
+      const points = getActiveRows().map((row) => { const rpm=numFromRow(row,'screw_speed_rpm'); const q=numFromRow(row,'throughput_kg_h'); const p=numFromRow(row,'melt_pressure_bar'); const t=numFromRow(row,'motor_torque_nm'); const stable=row.querySelector(`[data-field-id="${fieldIdByCode.operating_point_stable}"]`)?.checked; return {rpm,q,ok:stable && (pressureLimit==null||p<=pressureLimit) && (torqueLimit==null||t<=torqueLimit)}; }).filter((p)=>Number.isFinite(p.rpm)&&Number.isFinite(p.q));
+      const chart=echarts.getInstanceByDom(container)||echarts.init(container); chart.setOption({tooltip:{trigger:'item'},legend:{top:2},grid:{left:62,right:22,top:36,bottom:46},xAxis:{type:'value',name:'Throughput (kg/h)',nameLocation:'middle',nameGap:30},yAxis:{type:'value',name:'Screw speed (rpm)',nameLocation:'middle',nameGap:42},series:[{name:'Accepted',type:'scatter',symbolSize:11,itemStyle:{color:'#059669'},data:points.filter(p=>p.ok).map(p=>[p.q,p.rpm])},{name:'Outside window',type:'scatter',symbolSize:11,itemStyle:{color:'#dc2626'},data:points.filter(p=>!p.ok).map(p=>[p.q,p.rpm])}]},{notMerge:true});
+    };
+    const renderExtrusionPumpResponse = () => {
+      if (processTypeCode !== 'extrusion_v1' || stepNumber !== 3 || !window.echarts) return;
+      const container = document.getElementById('extrusionPumpResponseChart'); if (!container) return;
+      const pressureLimit = parseNumber(document.querySelector('[name="melt_pressure_limit_bar"]')?.value);
+      const torqueLimit = parseNumber(document.querySelector('[name="motor_torque_limit_nm"]')?.value);
+      const points = getActiveRows().map((row) => {
+        const rpm = numFromRow(row, 'screw_speed_rpm');
+        const throughput = numFromRow(row, 'throughput_kg_h');
+        const pressure = numFromRow(row, 'melt_pressure_bar');
+        const torque = numFromRow(row, 'motor_torque_nm');
+        const run = row.querySelector('strong')?.textContent?.trim() || 'Run';
+        return { specific: rpm != null && rpm > 0 && throughput != null ? throughput / rpm : null, pressure, torque, run };
+      }).filter((point) => Number.isFinite(point.specific) && (Number.isFinite(point.pressure) || Number.isFinite(point.torque)));
+      const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+      if (!points.length) {
+        chart.clear();
+        chart.setOption({ title: { text: 'Enter screw speed, throughput, pressure and torque to plot the response', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } } });
+        return;
+      }
+      const sorted = [...points].sort((a, b) => a.specific - b.specific);
+      chart.setOption({
+        tooltip: { trigger: 'axis', axisPointer: { type: 'cross' }, valueFormatter: (value) => Number(value).toFixed(2) },
+        legend: { top: 2 },
+        grid: { left: 64, right: 68, top: 38, bottom: 50 },
+        xAxis: { type: 'value', name: 'Specific throughput Q/N (kg/h/rpm)', nameLocation: 'middle', nameGap: 32, scale: true },
+        yAxis: [
+          { type: 'value', name: 'Melt pressure (bar)', nameLocation: 'middle', nameGap: 44, scale: true },
+          { type: 'value', name: 'Motor torque (N·m)', nameLocation: 'middle', nameGap: 46, scale: true }
+        ],
+        series: [
+          { name: 'Melt pressure', type: 'line', symbol: 'circle', symbolSize: 8, itemStyle: { color: '#ea580c' }, lineStyle: { color: '#ea580c' }, data: sorted.filter((point) => point.pressure != null).map((point) => ({ value: [point.specific, point.pressure], name: point.run })), markLine: pressureLimit == null ? undefined : { symbol: 'none', label: { formatter: `Pressure limit: ${pressureLimit} bar` }, lineStyle: { type: 'dashed', color: '#ea580c' }, data: [{ yAxis: pressureLimit }] } },
+          { name: 'Motor torque', type: 'line', yAxisIndex: 1, symbol: 'circle', symbolSize: 8, itemStyle: { color: '#7c3aed' }, lineStyle: { color: '#7c3aed' }, data: sorted.filter((point) => point.torque != null).map((point) => ({ value: [point.specific, point.torque], name: point.run })), markLine: torqueLimit == null ? undefined : { symbol: 'none', label: { formatter: `Torque limit: ${torqueLimit} N·m` }, lineStyle: { type: 'dashed', color: '#7c3aed' }, data: [{ yAxis: torqueLimit }] } }
+        ]
+      }, { notMerge: true });
+    };
     const safeRecomputeCharts = () => {
       try { updateStep2DerivedCells(); } catch {}
       try { recomputeStep1Chart(); } catch {}
       try { recomputeStep2Chart(); } catch {}
+      try { renderExtrusionFeederCharts(); } catch {}
+      try { renderExtrusionOperatingWindow(); } catch {}
+      try { renderExtrusionPumpResponse(); } catch {}
       try { recomputeStep1Recommendations(); } catch {}
       try { recomputeStep2Recommendations(); } catch {}
       try { recomputeStep3Recommendations(); } catch {}
       try { recomputeStep3Chart(); } catch {}
       try { recomputeStep3DeviationChart(); } catch {}
+      try { recomputeExtrusionFlowCurve(); } catch {}
     };
     const recomputeStep1Chart = () => {
       if (stepNumber !== 1) return;
@@ -1016,7 +1369,8 @@
       }, { notMerge: true, lazyUpdate: true });
     };
 
-    table?.addEventListener('input', (event) => {
+    const bindRunTable = (runTable) => {
+    runTable.addEventListener('input', (event) => {
       const target = event.target;
       if (!(target instanceof HTMLInputElement)) return;
       const row = target.closest('tr[data-run-row]');
@@ -1038,11 +1392,12 @@
         const form = new FormData();
         form.append('field_id', fieldId);
         form.append('value', fieldType === 'tag' ? JSON.stringify(value) : String(value));
-        await post(`/qual-runs/${runId}/value`, form);
+        const response = await post(`/qual-runs/${runId}/value`, form);
+        updatePumpCharacteristicResult(response?.summary);
       });
     });
 
-    table?.addEventListener('change', async (event) => {
+    runTable.addEventListener('change', async (event) => {
       const target = event.target;
       if (!(target instanceof HTMLInputElement)) return;
       const row = target.closest('tr[data-run-row]');
@@ -1053,7 +1408,7 @@
         const form = new FormData();
         form.append('field_id', target.getAttribute('data-field-id') || '');
         form.append('value', target.checked ? '1' : '0');
-        try { await post(`/qual-runs/${runId}/value`, form); } catch {}
+        try { const response = await post(`/qual-runs/${runId}/value`, form); updatePumpCharacteristicResult(response?.summary); } catch {}
         safeRecomputeCharts();
         return;
       }
@@ -1079,7 +1434,7 @@
       safeRecomputeCharts();
     });
 
-    table?.addEventListener('click', async (event) => {
+    runTable.addEventListener('click', async (event) => {
       const button = event.target.closest('[data-run-delete]');
       if (!button) return;
       const row = button.closest('tr[data-run-row]');
@@ -1091,12 +1446,115 @@
         location.reload();
       } catch {}
     });
+    };
+
+    runTables.forEach(bindRunTable);
 
     document.getElementById('addRunBtn')?.addEventListener('click', async () => {
       try {
         await post(`/experiments/${experimentId}/qualification/${stepNumber}/runs`, new FormData());
         location.reload();
       } catch {}
+    });
+
+    document.querySelectorAll('[data-add-group-run]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const group = button.getAttribute('data-add-group-run');
+        if (!group) return;
+        const form = new FormData();
+        form.append('run_group', group);
+        try {
+          await post(`/experiments/${experimentId}/qualification/${stepNumber}/runs`, form);
+          location.reload();
+        } catch {}
+      });
+    });
+
+    document.addEventListener('change', async (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) return;
+      if (!target.matches('[data-run-performed], [data-run-responsible]')) return;
+      const row = target.closest('[data-run-row]');
+      const runId = target.getAttribute('data-run-id') || row?.getAttribute('data-run-id');
+      if (!runId) return;
+      const scope = row || target.closest('[data-extrusion-group]');
+      const date = scope?.querySelector('[data-run-performed]')?.value || '';
+      const responsible = scope?.querySelector('[data-run-responsible]')?.value || '';
+      const form = new FormData();
+      form.append('performed_at', date);
+      form.append('responsible_user_id', responsible);
+      try { await post(`/qual-runs/${runId}/metadata`, form); } catch {}
+    });
+
+    document.querySelectorAll('[data-step-output]').forEach((input) => {
+      input.addEventListener('input', () => {
+        const code = input.getAttribute('data-step-output');
+        if (!code) return;
+        queueSave(`step-output:${code}`, async () => {
+          const form = new FormData();
+          form.append('value', input.value);
+          await post(`/experiments/${experimentId}/qualification/${stepNumber}/outputs/${encodeURIComponent(code)}`, form);
+        });
+      });
+    });
+
+    document.querySelectorAll('[data-rheology-shared-field]').forEach((input) => {
+      input.addEventListener('input', () => {
+        const fieldId = input.getAttribute('data-rheology-shared-field');
+        if (!fieldId) return;
+        const runIds = Array.from(document.querySelectorAll('[data-extrusion-group="rheology"] tr[data-run-row]'))
+          .map((row) => row.getAttribute('data-run-id'))
+          .filter(Boolean);
+        queueSave(`rheology-shared:${fieldId}`, async () => {
+          await Promise.all(runIds.map(async (runId) => {
+            const form = new FormData();
+            form.append('field_id', fieldId);
+            form.append('value', input.value);
+            await post(`/qual-runs/${runId}/value`, form);
+          }));
+        });
+        safeRecomputeCharts();
+      });
+    });
+
+    const renderSingleSeriesChart = (container) => {
+      if (!window.echarts) return;
+      const runId = Number(container.dataset.runId || 0);
+      const code = container.dataset.seriesCode;
+      const definition = qualificationSeriesDefinitions.find((item) => item.code === code);
+      const series = seriesFor(runId, code);
+      if (!definition) return;
+      const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+      if (!series?.points?.length) {
+        chart.clear();
+        chart.setOption({ title: { text: 'CSV curve will appear here', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } } });
+        return;
+      }
+      chart.setOption({
+        grid: { left: 54, right: 14, top: 18, bottom: 42 },
+        tooltip: { trigger: 'axis' },
+        xAxis: { type: 'value', name: definition.x.unit, nameLocation: 'middle', nameGap: 28 },
+        yAxis: { type: 'value', name: definition.y.unit, nameLocation: 'middle', nameGap: 38 },
+        series: [{ type: 'line', showSymbol: series.points.length < 250, data: series.points.map((point) => [point.x_value, point.y_value]) }]
+      }, { notMerge: true });
+    };
+    document.querySelectorAll('[data-single-series-chart]').forEach(renderSingleSeriesChart);
+    document.querySelectorAll('[data-single-series-import]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const code = button.getAttribute('data-series-code');
+        const runId = Number(button.getAttribute('data-run-id') || 0);
+        const fileInput = document.querySelector(`[data-single-series-file][data-series-code="${code}"][data-run-id="${runId}"]`);
+        const file = fileInput?.files?.[0];
+        if (!code || !runId || !file) return;
+        try {
+          const points = parseSeriesCsv(await file.text());
+          if (points.length < 2) throw new Error('CSV must contain at least two numeric rows.');
+          await requestSeriesJson(`/qual-runs/${runId}/series/${encodeURIComponent(code)}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source_name: file.name, points })
+          });
+          location.reload();
+        } catch {}
+      });
     });
 
     const fieldDialog = document.getElementById('qualFieldDialog');
@@ -1140,7 +1598,20 @@
         }
       });
     }
+    if (window.IMPlanner?.setupAutosaveForm && extrusionFeederSetupForm) {
+      window.IMPlanner.setupAutosaveForm(extrusionFeederSetupForm, {
+        debounceMs: 250,
+        onSuccess: () => safeRecomputeCharts()
+      });
+    }
+    const pumpingSetupForm = document.getElementById('extrusionPumpingSetupForm');
+    if (window.IMPlanner?.setupAutosaveForm && pumpingSetupForm) window.IMPlanner.setupAutosaveForm(pumpingSetupForm, { debounceMs: 250, onSuccess: async (response) => { safeRecomputeCharts(); try { updatePumpCharacteristicResult(await response.json()); } catch {} } });
+    const pumpCharacteristicSettingsForm = document.getElementById('pumpCharacteristicSettingsForm');
+    if (window.IMPlanner?.setupAutosaveForm && pumpCharacteristicSettingsForm) window.IMPlanner.setupAutosaveForm(pumpCharacteristicSettingsForm, { debounceMs: 250, onSuccess: async (response) => { try { updatePumpCharacteristicResult(await response.json()); } catch {} } });
+    document.querySelector('[data-generate-pumping-matrix]')?.addEventListener('click', async () => { const form=new FormData(); form.append('screw_speed_levels_rpm', pumpingSetupForm?.querySelector('[name="screw_speed_levels_rpm"]')?.value || ''); form.append('throughput_levels_kg_h', pumpingSetupForm?.querySelector('[name="throughput_levels_kg_h"]')?.value || ''); try { await post(`/experiments/${experimentId}/qualification/${stepNumber}/matrix`,form); location.reload(); } catch (error) { window.IMPlanner?.notify?.({ type: 'error', message: error?.message || 'Matrix generation failed' }); } });
+    document.querySelector('[data-generate-pump-curve]')?.addEventListener('click', async () => { const form = new FormData(); form.append('screw_speed_levels_rpm', pumpCharacteristicSettingsForm?.querySelector('[name="pump_curve_speed_levels_rpm"]')?.value || ''); form.append('back_pressure_levels_bar', pumpCharacteristicSettingsForm?.querySelector('[name="pump_curve_pressure_levels_bar"]')?.value || ''); try { await post(`/experiments/${experimentId}/qualification/${stepNumber}/pump-curve-matrix`, form); location.reload(); } catch (error) { window.IMPlanner?.notify?.({ type: 'error', message: error?.message || 'Pump-curve generation failed' }); } });
     document.getElementById('targetScrewRpmInput')?.addEventListener('input', syncStep3Settings);
+    setupExtrusionSeries();
     safeRecomputeCharts();
     syncStep3Settings();
     window.addEventListener('resize', () => {
@@ -1159,6 +1630,19 @@
         const chart3 = echarts.getInstanceByDom(container3);
         chart3?.resize();
       }
+      const extrusionFlow = document.getElementById('extrusionFlowCurveChart');
+      if (extrusionFlow && window.echarts) {
+        echarts.getInstanceByDom(extrusionFlow)?.resize();
+      }
+      ['extrusionFeederStabilityChart'].forEach((id) => {
+        const container = document.getElementById(id);
+        if (container && window.echarts) echarts.getInstanceByDom(container)?.resize();
+      });
+      const operatingWindow = document.getElementById('extrusionOperatingWindowChart'); if (operatingWindow && window.echarts) echarts.getInstanceByDom(operatingWindow)?.resize();
+      const pumpResponse = document.getElementById('extrusionPumpResponseChart'); if (pumpResponse && window.echarts) echarts.getInstanceByDom(pumpResponse)?.resize();
+      document.querySelectorAll('[data-series-chart]').forEach((container) => {
+        if (window.echarts) echarts.getInstanceByDom(container)?.resize();
+      });
     });
 
     fieldDialog?.addEventListener('change', async (event) => {
@@ -1210,6 +1694,9 @@
         await post(`/experiments/${experimentId}/qualification/${stepNumber}/fields`, body);
         location.reload();
       } catch {}
+    });
+    document.querySelector('[data-block-toggle]')?.addEventListener('change', (event) => {
+      event.target.closest('form')?.requestSubmit();
     });
   })();
 </script>

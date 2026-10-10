@@ -737,11 +737,15 @@ function initDb(db: Db) {
       step_id INTEGER NOT NULL,
       run_order INTEGER NOT NULL,
       run_code TEXT NOT NULL,
+      run_group TEXT NOT NULL DEFAULT 'default',
       due_at TEXT,
+      performed_at TEXT,
+      responsible_user_id INTEGER,
       done INTEGER NOT NULL DEFAULT 0,
       exclude_from_analysis INTEGER NOT NULL DEFAULT 0,
       FOREIGN KEY (experiment_id) REFERENCES experiments(id) ON DELETE CASCADE,
-      FOREIGN KEY (step_id) REFERENCES qual_steps(id) ON DELETE CASCADE
+      FOREIGN KEY (step_id) REFERENCES qual_steps(id) ON DELETE CASCADE,
+      FOREIGN KEY (responsible_user_id) REFERENCES users(id) ON DELETE SET NULL
     );
     CREATE TABLE IF NOT EXISTS qual_fields (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -771,6 +775,31 @@ function initDb(db: Db) {
       FOREIGN KEY (run_id) REFERENCES qual_runs(id) ON DELETE CASCADE,
       FOREIGN KEY (field_id) REFERENCES qual_fields(id) ON DELETE CASCADE
     );
+    CREATE TABLE IF NOT EXISTS qual_run_series (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      experiment_id INTEGER NOT NULL,
+      step_id INTEGER NOT NULL,
+      run_id INTEGER NOT NULL,
+      series_code TEXT NOT NULL,
+      contract_version INTEGER NOT NULL,
+      source_name TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(run_id, series_code),
+      FOREIGN KEY (experiment_id) REFERENCES experiments(id) ON DELETE CASCADE,
+      FOREIGN KEY (step_id) REFERENCES qual_steps(id) ON DELETE CASCADE,
+      FOREIGN KEY (run_id) REFERENCES qual_runs(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS qual_run_series_points (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      series_id INTEGER NOT NULL,
+      point_order INTEGER NOT NULL,
+      x_value REAL NOT NULL,
+      y_value REAL NOT NULL,
+      extra_json TEXT,
+      UNIQUE(series_id, point_order),
+      FOREIGN KEY (series_id) REFERENCES qual_run_series(id) ON DELETE CASCADE
+    );
     CREATE TABLE IF NOT EXISTS qual_step_summary (
       experiment_id INTEGER NOT NULL,
       step_number INTEGER NOT NULL,
@@ -786,6 +815,19 @@ function initDb(db: Db) {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       PRIMARY KEY (experiment_id, step_number),
       FOREIGN KEY (experiment_id) REFERENCES experiments(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS qual_step_outputs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      experiment_id INTEGER NOT NULL,
+      step_id INTEGER NOT NULL,
+      output_group TEXT NOT NULL,
+      output_code TEXT NOT NULL,
+      value_real REAL,
+      value_text TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(step_id, output_code),
+      FOREIGN KEY (experiment_id) REFERENCES experiments(id) ON DELETE CASCADE,
+      FOREIGN KEY (step_id) REFERENCES qual_steps(id) ON DELETE CASCADE
     );
   `);
 
@@ -816,6 +858,9 @@ function initDb(db: Db) {
     CREATE INDEX IF NOT EXISTS idx_qual_step_summary_experiment_step ON qual_step_summary(experiment_id, step_number);
     CREATE INDEX IF NOT EXISTS idx_qual_runs_experiment_id ON qual_runs(experiment_id);
     CREATE INDEX IF NOT EXISTS idx_qual_run_values_run_id ON qual_run_values(run_id);
+    CREATE INDEX IF NOT EXISTS idx_qual_run_series_step_run ON qual_run_series(step_id, run_id, series_code);
+    CREATE INDEX IF NOT EXISTS idx_qual_run_series_points_series ON qual_run_series_points(series_id, point_order);
+    CREATE INDEX IF NOT EXISTS idx_qual_step_outputs_step_group ON qual_step_outputs(step_id, output_group);
     CREATE INDEX IF NOT EXISTS idx_report_configs_experiment_id ON report_configs(experiment_id);
     CREATE INDEX IF NOT EXISTS idx_param_definitions_scope_group ON param_definitions(scope, group_label, id);
     CREATE INDEX IF NOT EXISTS idx_param_definitions_scope_kind_group ON param_definitions(scope, field_kind, group_label, id);
@@ -963,6 +1008,24 @@ function initDb(db: Db) {
       `INSERT INTO processes (process_type_id, name, route_code, owner_user_id, status, meta_json, created_at)
        VALUES (?, ?, ?, ?, 'active', NULL, ?)`
     ).run(coatingTypeId, "Coating Default Process", "coating", adminRow?.id ?? null, processNow);
+  }
+
+  const extrusionType = db
+    .prepare("SELECT id FROM process_types WHERE code = ? LIMIT 1")
+    .get("extrusion_v1") as { id: number } | undefined;
+  const extrusionTypeId = extrusionType?.id ?? Number(
+    db.prepare(
+      "INSERT INTO process_types (code, name, created_at) VALUES (?, ?, ?)"
+    ).run("extrusion_v1", "Extrusion v1", processNow).lastInsertRowid
+  );
+  const extrusionProcess = db
+    .prepare("SELECT id FROM processes WHERE process_type_id = ? AND name = ? LIMIT 1")
+    .get(extrusionTypeId, "Extrusion v1 Default Process") as { id: number } | undefined;
+  if (!extrusionProcess) {
+    db.prepare(
+      `INSERT INTO processes (process_type_id, name, route_code, owner_user_id, status, meta_json, created_at)
+       VALUES (?, ?, ?, ?, 'active', NULL, ?)`
+    ).run(extrusionTypeId, "Extrusion v1 Default Process", "extrusion-v1", adminRow?.id ?? null, processNow);
   }
 
   if (!hasColumn(db, "analysis_fields", "is_standard")) {
@@ -1495,7 +1558,17 @@ function initDb(db: Db) {
   if (!hasColumn(db, "qual_runs", "due_at")) {
     db.exec("ALTER TABLE qual_runs ADD COLUMN due_at TEXT");
   }
+  if (!hasColumn(db, "qual_runs", "run_group")) {
+    db.exec("ALTER TABLE qual_runs ADD COLUMN run_group TEXT NOT NULL DEFAULT 'default'");
+  }
+  if (!hasColumn(db, "qual_runs", "performed_at")) {
+    db.exec("ALTER TABLE qual_runs ADD COLUMN performed_at TEXT");
+  }
+  if (!hasColumn(db, "qual_runs", "responsible_user_id")) {
+    db.exec("ALTER TABLE qual_runs ADD COLUMN responsible_user_id INTEGER");
+  }
   db.exec("CREATE INDEX IF NOT EXISTS idx_qual_runs_due_at ON qual_runs(due_at)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_qual_runs_step_group ON qual_runs(step_id, run_group, run_order)");
   if (!hasColumn(db, "qual_steps", "stage_code")) {
     db.exec("ALTER TABLE qual_steps ADD COLUMN stage_code TEXT");
   }

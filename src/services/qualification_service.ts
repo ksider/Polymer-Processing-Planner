@@ -11,10 +11,12 @@ import {
   insertQualField,
   updateQualField,
   listQualRunValues,
+  getQualRunSeries,
   upsertQualRunValue,
   upsertQualSummary,
   getQualStepSettings,
-  upsertQualStepSettings
+  upsertQualStepSettings,
+  listQualStepOutputs
 } from "../repos/qual_repo.js";
 import type { QualField } from "../repos/qual_repo.js";
 import { listMachineParams } from "../repos/machine_params_repo.js";
@@ -36,6 +38,67 @@ type StepDefinition = {
     derived_formula_code?: string | null;
   }>;
 };
+
+export type QualificationSeriesDefinition = {
+  code: string;
+  label: string;
+  description: string;
+  contract_version: number;
+  x: { code: string; label: string; unit: string };
+  y: { code: string; label: string; unit: string };
+  minimum_points: number;
+};
+
+const extrusionStep1SeriesDefinitions: QualificationSeriesDefinition[] = [
+  {
+    code: "dsc_thermogram",
+    label: "DSC thermogram",
+    description: "Temperature-programmed DSC heat-flow series.",
+    contract_version: 1,
+    x: { code: "temperature_c", label: "Temperature", unit: "°C" },
+    y: { code: "heat_flow_w_g", label: "Heat flow", unit: "W/g" },
+    minimum_points: 2
+  },
+  {
+    code: "tga_thermogram",
+    label: "TGA thermogram",
+    description: "Temperature-programmed remaining-mass series.",
+    contract_version: 1,
+    x: { code: "temperature_c", label: "Temperature", unit: "°C" },
+    y: { code: "remaining_mass_pct", label: "Remaining mass", unit: "%" },
+    minimum_points: 2
+  }
+];
+
+export type QualificationOutputDefinition = {
+  group: string;
+  code: string;
+  label: string;
+  unit: string | null;
+  field_type: "number" | "text";
+  description: string;
+};
+
+export const extrusionStep1OutputDefinitions: QualificationOutputDefinition[] = [
+  { group: "rheology", code: "rheology_reference_viscosity_pa_s", label: "Reference viscosity", unit: "Pa·s", field_type: "number", description: "Manual baseline selected from the flow curve." },
+  { group: "rheology", code: "flow_behavior_index_n", label: "Flow behavior index n", unit: null, field_type: "number", description: "Manual fit today; R fit will replace it later." },
+  { group: "thermal_hold", code: "max_thermal_hold_min", label: "Maximum thermal hold", unit: "min", field_type: "number", description: "Longest hold without unacceptable viscosity change." },
+  { group: "dsc", code: "processing_temp_min_c", label: "Minimum processing temperature", unit: "°C", field_type: "number", description: "Manual value derived from the DSC heating/cooling curve." },
+  { group: "dsc", code: "dsc_melting_peak_c", label: "Melting peak", unit: "°C", field_type: "number", description: "Manual peak temperature from DSC." },
+  { group: "tga", code: "processing_temp_max_c", label: "Maximum processing temperature", unit: "°C", field_type: "number", description: "Manual value below the onset of degradation." },
+  { group: "tga", code: "tga_degradation_onset_c", label: "Degradation onset", unit: "°C", field_type: "number", description: "Manual onset temperature from TGA." }
+];
+
+const extrusionStep2OutputDefinitions: QualificationOutputDefinition[] = [
+  { group: "feeder", code: "feeder_stable_throughput_min_kg_h", label: "Minimum stable throughput", unit: "kg/h", field_type: "number", description: "Lowest accepted feeder setpoint to pass to the process window." },
+  { group: "feeder", code: "feeder_stable_throughput_max_kg_h", label: "Maximum stable throughput", unit: "kg/h", field_type: "number", description: "Highest accepted feeder setpoint to pass to the process window." }
+];
+
+const extrusionStep3OutputDefinitions: QualificationOutputDefinition[] = [
+  { group: "operating_window", code: "operating_window_min_screw_rpm", label: "Minimum accepted screw speed", unit: "rpm", field_type: "number", description: "Lowest screw-speed level represented by accepted operating points." },
+  { group: "operating_window", code: "operating_window_max_screw_rpm", label: "Maximum accepted screw speed", unit: "rpm", field_type: "number", description: "Highest screw-speed level represented by accepted operating points." },
+  { group: "operating_window", code: "operating_window_max_throughput_kg_h", label: "Maximum accepted throughput", unit: "kg/h", field_type: "number", description: "Highest accepted throughput at the pressure and torque limits." }
+];
 
 const defectTags = JSON.stringify([
   "short_shot",
@@ -317,6 +380,97 @@ const coatingStepDefinitions: StepDefinition[] = [
   }
 ];
 
+// This is a process catalogue, not a configurable workflow.  The fields and
+// formula codes below are versioned with the application so an extrusion
+// result always has a reproducible engineering meaning.
+const extrusionStepDefinitions: StepDefinition[] = [
+  {
+    step_number: 1,
+    name: "Raw Material Rheological & Thermal Profiling",
+    default_runs: 1,
+    fields: [
+      { code: "test_temp_c", label: "Test temperature", field_type: "number", unit: "°C", group_label: "Inputs", required: 1 },
+      { code: "pressure_drop_pa", label: "Capillary pressure drop", field_type: "number", unit: "Pa", group_label: "Measurements", required: 1 },
+      { code: "capillary_diameter_mm", label: "Capillary diameter", field_type: "number", unit: "mm", group_label: "Inputs", required: 1 },
+      { code: "capillary_length_mm", label: "Capillary length", field_type: "number", unit: "mm", group_label: "Inputs", required: 1 },
+      { code: "volumetric_flow_mm3_s", label: "Volumetric flow", field_type: "number", unit: "mm³/s", group_label: "Measurements", required: 1 },
+      { code: "extrudate_mass_g", label: "Extrudate mass", field_type: "number", unit: "g", group_label: "Measurements" },
+      { code: "collection_time_s", label: "Collection time", field_type: "number", unit: "s", group_label: "Measurements" },
+      { code: "point_stable", label: "Pressure stable (±1% / 30 s)", field_type: "boolean", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_pressure_stability" },
+      { code: "apparent_shear_stress_pa", label: "Apparent shear stress", field_type: "number", unit: "Pa", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_apparent_shear_stress" },
+      { code: "apparent_shear_rate_s", label: "Apparent shear rate", field_type: "number", unit: "s⁻¹", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_apparent_shear_rate" },
+      { code: "apparent_viscosity_pa_s", label: "Apparent viscosity", field_type: "number", unit: "Pa·s", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_apparent_viscosity" },
+      { code: "mfr_g_10min", label: "MFR", field_type: "number", unit: "g/10 min", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_mfr" }
+      ,{ code: "rheology_pressure_stable", label: "Pressure stable (±1% / 30 s)", field_type: "boolean", group_label: "Measurements" }
+      ,{ code: "thermal_hold_temp_c", label: "Hold temperature", field_type: "number", unit: "°C", group_label: "Thermal hold inputs", required: 1 }
+      ,{ code: "thermal_hold_time_min", label: "Hold time", field_type: "number", unit: "min", group_label: "Thermal hold inputs", required: 1 }
+      ,{ code: "thermal_hold_shear_rate_s", label: "Shear rate", field_type: "number", unit: "s⁻¹", group_label: "Thermal hold inputs", required: 1 }
+      ,{ code: "thermal_hold_viscosity_pa_s", label: "Measured viscosity", field_type: "number", unit: "Pa·s", group_label: "Thermal hold measurements", required: 1 }
+    ]
+  },
+  {
+    step_number: 2,
+    name: "Gravimetric Feeder Stability & Dosing Capacity",
+    default_runs: 6,
+    fields: [
+      { code: "target_throughput_kg_h", label: "Feed-rate setpoint", field_type: "number", unit: "kg/h", group_label: "Inputs", required: 1 },
+      { code: "mean_throughput_kg_h", label: "Mean measured throughput", field_type: "number", unit: "kg/h", group_label: "Measurements", required: 1 },
+      { code: "throughput_sd_kg_h", label: "Throughput standard deviation", field_type: "number", unit: "kg/h", group_label: "Measurements", required: 1 },
+      { code: "sampling_window_min", label: "Sampling window", field_type: "number", unit: "min", group_label: "Measurements", required: 1 },
+      { code: "feed_cv_pct", label: "Feed CV", field_type: "number", unit: "%", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_feed_cv" },
+      { code: "feed_error_pct", label: "Feed error", field_type: "number", unit: "%", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_feed_error" }
+    ]
+  },
+  {
+    step_number: 3,
+    name: "Pumping Characterization & Motor Operating Window",
+    default_runs: 9,
+    fields: [
+      { code: "screw_speed_rpm", label: "Screw speed", field_type: "number", unit: "rpm", group_label: "Inputs", required: 1 },
+      { code: "throughput_kg_h", label: "Feeder throughput", field_type: "number", unit: "kg/h", group_label: "Inputs", required: 1 },
+      { code: "motor_torque_nm", label: "Motor torque", field_type: "number", unit: "N·m", group_label: "Measurements", required: 1 },
+      { code: "motor_torque_limit_nm", label: "Motor torque limit", field_type: "number", unit: "N·m", group_label: "Inputs", required: 1 },
+      { code: "melt_pressure_bar", label: "Melt pressure before die", field_type: "number", unit: "bar", group_label: "Measurements", required: 1 },
+      { code: "target_back_pressure_bar", label: "Back-pressure target", field_type: "number", unit: "bar", group_label: "Inputs" },
+      { code: "melt_temp_c", label: "Melt temperature", field_type: "number", unit: "°C", group_label: "Measurements" },
+      { code: "operating_point_stable", label: "Pressure and torque stable", field_type: "boolean", group_label: "Measurements", required: 1 },
+      { code: "specific_throughput_kg_h_rpm", label: "Specific throughput", field_type: "number", unit: "kg/h/rpm", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_specific_throughput" },
+      { code: "motor_load_pct", label: "Motor load", field_type: "number", unit: "%", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_motor_load" }
+    ]
+  },
+  {
+    step_number: 4,
+    name: "Thermal & Dissipative Energy Mapping",
+    default_runs: 9,
+    fields: [
+      { code: "screw_speed_rpm", label: "Screw speed", field_type: "number", unit: "rpm", group_label: "Inputs", required: 1 },
+      { code: "throughput_kg_h", label: "Throughput", field_type: "number", unit: "kg/h", group_label: "Inputs", required: 1 },
+      { code: "barrel_set_temp_c", label: "Barrel set temperature", field_type: "number", unit: "°C", group_label: "Inputs", required: 1 },
+      { code: "motor_torque_nm", label: "Motor torque", field_type: "number", unit: "N·m", group_label: "Measurements", required: 1 },
+      { code: "no_load_torque_nm", label: "No-load torque", field_type: "number", unit: "N·m", group_label: "Measurements", required: 1 },
+      { code: "melt_temp_c", label: "Melt temperature", field_type: "number", unit: "°C", group_label: "Measurements", required: 1 },
+      { code: "mechanical_power_kw", label: "Mechanical power", field_type: "number", unit: "kW", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_mechanical_power" },
+      { code: "sme_kwh_kg", label: "Specific mechanical energy", field_type: "number", unit: "kWh/kg", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_sme" },
+      { code: "dissipative_temp_rise_c", label: "Dissipative temperature rise", field_type: "number", unit: "°C", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_dissipative_temp_rise" }
+    ]
+  },
+  {
+    step_number: 5,
+    name: "Residence Time Distribution & Self-Wiping Assessment",
+    default_runs: 6,
+    fields: [
+      { code: "screw_speed_rpm", label: "Screw speed", field_type: "number", unit: "rpm", group_label: "Inputs", required: 1 },
+      { code: "throughput_kg_h", label: "Throughput", field_type: "number", unit: "kg/h", group_label: "Inputs", required: 1 },
+      { code: "mean_residence_time_s", label: "Mean residence time", field_type: "number", unit: "s", group_label: "Measurements", required: 1 },
+      { code: "rtd_width_s", label: "RTD width (10–90%)", field_type: "number", unit: "s", group_label: "Measurements" },
+      { code: "free_volume_l", label: "Free extruder volume", field_type: "number", unit: "L", group_label: "Inputs", required: 1 },
+      { code: "melt_density_kg_l", label: "Melt density", field_type: "number", unit: "kg/L", group_label: "Inputs", required: 1 },
+      { code: "specific_throughput_kg_h_rpm", label: "Specific throughput", field_type: "number", unit: "kg/h/rpm", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_specific_throughput" },
+      { code: "degree_of_fill_pct", label: "Degree of fill", field_type: "number", unit: "%", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_degree_of_fill" }
+    ]
+  }
+];
+
 function getProcessTypeCodeForExperiment(db: Db, experimentId: number): string {
   const experiment = getExperiment(db, experimentId);
   if (!experiment || !experiment.process_id) return "injection";
@@ -327,6 +481,7 @@ function getProcessTypeCodeForExperiment(db: Db, experimentId: number): string {
 function getStepDefinitionsForProcessType(processTypeCode: string): StepDefinition[] {
   if (processTypeCode === "compounding") return compoundingStepDefinitions;
   if (processTypeCode === "coating") return coatingStepDefinitions;
+  if (processTypeCode === "extrusion_v1") return extrusionStepDefinitions;
   return injectionStepDefinitions;
 }
 
@@ -348,6 +503,36 @@ export function getQualificationStepsForExperiment(db: Db, experimentId: number)
 export function getStepDefinitionForExperiment(db: Db, experimentId: number, stepNumber: number) {
   const processTypeCode = getProcessTypeCodeForExperiment(db, experimentId);
   return getStepDefinitionsForProcessType(processTypeCode).find((step) => step.step_number === stepNumber) ?? null;
+}
+
+export function getQualificationSeriesDefinitionsForExperiment(
+  db: Db,
+  experimentId: number,
+  stepNumber: number
+) {
+  const processTypeCode = getProcessTypeCodeForExperiment(db, experimentId);
+  if (processTypeCode === "extrusion_v1" && stepNumber === 1) {
+    return extrusionStep1SeriesDefinitions;
+  }
+  return [];
+}
+
+export function getQualificationOutputDefinitionsForExperiment(
+  db: Db,
+  experimentId: number,
+  stepNumber: number
+) {
+  const processTypeCode = getProcessTypeCodeForExperiment(db, experimentId);
+  if (processTypeCode === "extrusion_v1" && stepNumber === 1) {
+    return extrusionStep1OutputDefinitions;
+  }
+  if (processTypeCode === "extrusion_v1" && stepNumber === 2) {
+    return extrusionStep2OutputDefinitions;
+  }
+  if (processTypeCode === "extrusion_v1" && stepNumber === 3) {
+    return extrusionStep3OutputDefinitions;
+  }
+  return [];
 }
 
 export function getQualificationStepName(db: Db, experimentId: number, stepNumber: number): string {
@@ -403,10 +588,16 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
       const existingField = fields.find((item) => item.code === field.code);
       if (!existingField) continue;
       const updatePatch: Partial<{
+        label: string;
         is_derived: 0 | 1;
         derived_formula_code: string | null;
         allowed_values_json: string | null;
       }> = {};
+      const shouldRefreshLabel =
+        processTypeCode === "extrusion_v1" &&
+        ((step.step_number === 2 && field.code === "target_throughput_kg_h" && existingField.label === "Target throughput") ||
+          (step.step_number === 3 && field.code === "throughput_kg_h" && ["Throughput", "Feeder throughput (from Step 2)"].includes(existingField.label)));
+      if (shouldRefreshLabel) updatePatch.label = field.label;
       if ((existingField.is_derived ?? 0) !== (field.is_derived ?? 0)) {
         updatePatch.is_derived = (field.is_derived ?? 0) as 0 | 1;
       }
@@ -554,7 +745,17 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
       }
     }
     const runs = listQualRuns(db, step.id);
-    if (runs.length === 0) {
+    if (processTypeCode === "extrusion_v1" && step.step_number === 1) {
+      // Step 1 is a material-characterisation programme, not one nine-row
+      // table: two sweep groups plus three single-test records.
+      db.prepare("UPDATE qual_runs SET run_group = 'rheology' WHERE step_id = ? AND run_group = 'default'")
+        .run(step.id);
+      const grouped = new Set(listQualRuns(db, step.id).map((run) => run.run_group));
+      if (!grouped.has("rheology")) createQualRuns(db, experimentId, step.id, 1, "rheology");
+      if (!grouped.has("thermal_hold")) createQualRuns(db, experimentId, step.id, 1, "thermal_hold");
+      if (!grouped.has("dsc")) createQualRuns(db, experimentId, step.id, 1, "dsc");
+      if (!grouped.has("tga")) createQualRuns(db, experimentId, step.id, 1, "tga");
+    } else if (!(processTypeCode === "extrusion_v1" && step.step_number === 3) && runs.length === 0) {
       createQualRuns(db, experimentId, step.id, def.default_runs);
     }
   }
@@ -762,7 +963,7 @@ export function recomputeDerivedAndSummary(
       const value = valueMap.get(field.id);
       return value?.value_real ?? null;
     };
-    const setDerived = (code: string, value: number | string | null) => {
+    const setDerived = (code: string, value: number | string | boolean | null) => {
       const field = fieldByCode.get(code);
       if (!field || !field.is_derived) return;
       if (field.field_type === "number") {
@@ -770,6 +971,14 @@ export function recomputeDerivedAndSummary(
           run_id: run.id,
           field_id: field.id,
           value_real: Number.isFinite(value as number) ? (value as number) : null,
+          value_text: null,
+          value_tags_json: null
+        });
+      } else if (field.field_type === "boolean") {
+        upsertQualRunValue(db, {
+          run_id: run.id,
+          field_id: field.id,
+          value_real: value == null ? null : (value === true || value === 1 ? 1 : 0),
           value_text: null,
           value_tags_json: null
         });
@@ -904,6 +1113,119 @@ export function recomputeDerivedAndSummary(
         // SME proxy supports either torque% or motor current, whichever is available.
         const smeProxy = (driveSignal * rpm) / throughput * 0.01;
         setDerived("SME_kJ_kg", smeProxy);
+      }
+    }
+    if (processTypeCode === "extrusion_v1") {
+      const screwSpeed = getNumber("screw_speed_rpm");
+      const throughput = getNumber("throughput_kg_h");
+      const setSpecificThroughput = () => {
+        if (screwSpeed != null && screwSpeed > 0 && throughput != null) {
+          setDerived("specific_throughput_kg_h_rpm", throughput / screwSpeed);
+        }
+      };
+      if (stepNumber === 1) {
+        const pressure = getNumber("pressure_drop_pa");
+        const diameterMm = getNumber("capillary_diameter_mm");
+        const lengthMm = getNumber("capillary_length_mm");
+        const flowMm3S = getNumber("volumetric_flow_mm3_s");
+        const diameterM = diameterMm != null ? diameterMm / 1000 : null;
+        const lengthM = lengthMm != null ? lengthMm / 1000 : null;
+        const shearStress =
+          pressure != null && diameterM != null && lengthM != null && lengthM > 0
+            ? (pressure * diameterM) / (4 * lengthM)
+            : null;
+        const shearRate =
+          flowMm3S != null && diameterM != null && diameterM > 0
+            ? (32 * (flowMm3S / 1_000_000_000)) / (Math.PI * Math.pow(diameterM, 3))
+            : null;
+        if (shearStress != null) setDerived("apparent_shear_stress_pa", shearStress);
+        if (shearRate != null) setDerived("apparent_shear_rate_s", shearRate);
+        if (shearStress != null && shearRate != null && shearRate > 0) {
+          setDerived("apparent_viscosity_pa_s", shearStress / shearRate);
+        }
+        const mass = getNumber("extrudate_mass_g");
+        const time = getNumber("collection_time_s");
+        if (mass != null && time != null && time > 0) {
+          setDerived("mfr_g_10min", (600 * mass) / time);
+        }
+        const pressureSeries = getQualRunSeries(db, run.id, "pressure_stability");
+        if (pressureSeries && pressureSeries.points.length >= 2) {
+          const sorted = [...pressureSeries.points].sort((a, b) => a.x_value - b.x_value);
+          const endTime = sorted[sorted.length - 1].x_value;
+          const windowPoints = sorted.filter((point) => point.x_value >= endTime - 30);
+          const windowSpan = windowPoints.length >= 2
+            ? windowPoints[windowPoints.length - 1].x_value - windowPoints[0].x_value
+            : 0;
+          const meanPressure = windowPoints.length
+            ? windowPoints.reduce((sum, point) => sum + point.y_value, 0) / windowPoints.length
+            : 0;
+          const maxDeviationPct = meanPressure !== 0
+            ? Math.max(...windowPoints.map((point) => Math.abs((point.y_value - meanPressure) / meanPressure) * 100))
+            : Number.POSITIVE_INFINITY;
+          setDerived("point_stable", windowSpan >= 30 && maxDeviationPct <= 1);
+        } else {
+          setDerived("point_stable", null);
+        }
+      }
+      if (stepNumber === 2) {
+        const target = getNumber("target_throughput_kg_h");
+        const mean = getNumber("mean_throughput_kg_h");
+        const standardDeviation = getNumber("throughput_sd_kg_h");
+        if (mean != null && mean > 0 && standardDeviation != null) {
+          setDerived("feed_cv_pct", (standardDeviation / mean) * 100);
+        }
+        if (target != null && target > 0 && mean != null) {
+          setDerived("feed_error_pct", (Math.abs(mean - target) / target) * 100);
+        }
+      }
+      if (stepNumber === 3) {
+        setSpecificThroughput();
+        const torque = getNumber("motor_torque_nm");
+        const limit = getNumber("motor_torque_limit_nm");
+        if (torque != null && limit != null && limit > 0) {
+          setDerived("motor_load_pct", (torque / limit) * 100);
+        }
+      }
+      if (stepNumber === 4) {
+        const torque = getNumber("motor_torque_nm");
+        const noLoadTorque = getNumber("no_load_torque_nm");
+        const meltTemp = getNumber("melt_temp_c");
+        const barrelTemp = getNumber("barrel_set_temp_c");
+        if (screwSpeed != null && torque != null) {
+          setDerived("mechanical_power_kw", (2 * Math.PI * screwSpeed * torque) / 60_000);
+        }
+        if (
+          screwSpeed != null &&
+          throughput != null &&
+          throughput > 0 &&
+          torque != null &&
+          noLoadTorque != null
+        ) {
+          setDerived("sme_kwh_kg", (screwSpeed * (torque - noLoadTorque)) / (9549 * throughput));
+        }
+        if (meltTemp != null && barrelTemp != null) {
+          setDerived("dissipative_temp_rise_c", meltTemp - barrelTemp);
+        }
+      }
+      if (stepNumber === 5) {
+        setSpecificThroughput();
+        const residenceTime = getNumber("mean_residence_time_s");
+        const freeVolumeL = getNumber("free_volume_l");
+        const meltDensity = getNumber("melt_density_kg_l");
+        if (
+          throughput != null &&
+          residenceTime != null &&
+          freeVolumeL != null &&
+          freeVolumeL > 0 &&
+          meltDensity != null &&
+          meltDensity > 0
+        ) {
+          const throughputKgS = throughput / 3600;
+          setDerived(
+            "degree_of_fill_pct",
+            (throughputKgS * residenceTime) / (freeVolumeL * meltDensity) * 100
+          );
+        }
       }
     }
   }
@@ -1303,6 +1625,145 @@ function buildStepSummary(
         summaries.dispersion_pass_rate_pct =
           (dispersionOk.filter((v) => v).length / dispersionOk.length) * 100;
       }
+    }
+  }
+
+  if (processTypeCode === "extrusion_v1") {
+    const activeRows = runValues.filter((row) => row.run.exclude_from_analysis !== 1);
+    const valuesFor = (code: string) => activeRows
+      .map((row) => numberFor(row.values, code))
+      .filter((value): value is number => Number.isFinite(value));
+    const minMax = (prefix: string, values: number[]) => {
+      if (!values.length) return;
+      summaries[`${prefix}_min`] = Math.min(...values);
+      summaries[`${prefix}_max`] = Math.max(...values);
+    };
+    if (stepNumber === 1) {
+      const stableRows = activeRows.filter((row) =>
+        boolFor(row.values, "rheology_pressure_stable") === true || boolFor(row.values, "point_stable") === true
+      );
+      const windowRows = stableRows.length ? stableRows : activeRows;
+      const windowTemperatures = windowRows
+        .map((row) => numberFor(row.values, "test_temp_c"))
+        .filter((value): value is number => Number.isFinite(value));
+      minMax("processing_temp_c", windowTemperatures);
+      summaries.stable_point_count = stableRows.length;
+      minMax("apparent_shear_rate_s", valuesFor("apparent_shear_rate_s"));
+      minMax("apparent_viscosity_pa_s", valuesFor("apparent_viscosity_pa_s"));
+      listQualStepOutputs(db, stepId).forEach((output) => {
+        summaries[output.output_code] = output.value_real ?? output.value_text ?? null;
+      });
+    }
+    if (stepNumber === 2) {
+      const stableRows = activeRows.filter((row) => {
+        const cv = numberFor(row.values, "feed_cv_pct");
+        return cv != null && cv <= 1.5;
+      });
+      const stableThroughputs = stableRows
+        .map((row) => numberFor(row.values, "mean_throughput_kg_h"))
+        .filter((value): value is number => Number.isFinite(value));
+      minMax("stable_throughput_kg_h", stableThroughputs);
+      summaries.feed_cv_acceptance_pct = 1.5;
+      summaries.stable_feeder_point_count = stableRows.length;
+      listQualStepOutputs(db, stepId).forEach((output) => {
+        summaries[output.output_code] = output.value_real ?? output.value_text ?? null;
+      });
+    }
+    if (stepNumber === 3) {
+      const matrixRows = activeRows.filter((row) => row.run.run_group !== "pump_characteristic");
+      const matrixValuesFor = (code: string) => matrixRows
+        .map((row) => numberFor(row.values, code))
+        .filter((value): value is number => Number.isFinite(value));
+      minMax("specific_throughput_kg_h_rpm", matrixValuesFor("specific_throughput_kg_h_rpm"));
+      minMax("motor_load_pct", matrixValuesFor("motor_load_pct"));
+      minMax("melt_pressure_bar", matrixValuesFor("melt_pressure_bar"));
+      minMax("throughput_kg_h", matrixValuesFor("throughput_kg_h"));
+      let pressureLimit: number | null = null;
+      let torqueLimit: number | null = null;
+      let meltDensity: number | null = null;
+      let referenceViscosity: number | null = null;
+      let outletPressureBar = 0;
+      try {
+        const settings = JSON.parse(getQualStepSettings(db, experimentId, stepNumber) || "{}");
+        pressureLimit = Number(settings.melt_pressure_limit_bar);
+        torqueLimit = Number(settings.motor_torque_limit_nm);
+        meltDensity = Number(settings.melt_density_kg_m3);
+        referenceViscosity = Number(settings.reference_viscosity_pa_s);
+        outletPressureBar = Number(settings.die_outlet_pressure_bar ?? 0);
+        if (!Number.isFinite(pressureLimit) || pressureLimit! <= 0) pressureLimit = null;
+        if (!Number.isFinite(torqueLimit) || torqueLimit! <= 0) torqueLimit = null;
+        if (!Number.isFinite(meltDensity) || meltDensity! <= 0) meltDensity = null;
+        if (!Number.isFinite(referenceViscosity) || referenceViscosity! <= 0) referenceViscosity = null;
+        if (!Number.isFinite(outletPressureBar)) outletPressureBar = 0;
+      } catch {}
+      const accepted = matrixRows.filter((row) => {
+        const stable = boolFor(row.values, "operating_point_stable");
+        const pressure = numberFor(row.values, "melt_pressure_bar");
+        const torque = numberFor(row.values, "motor_torque_nm");
+        return stable === true && pressure != null && torque != null &&
+          (pressureLimit == null || pressure <= pressureLimit) &&
+          (torqueLimit == null || torque <= torqueLimit);
+      });
+      const acceptedSpeeds = accepted.map((row) => numberFor(row.values, "screw_speed_rpm")).filter((value): value is number => Number.isFinite(value));
+      const acceptedThroughputs = accepted.map((row) => numberFor(row.values, "throughput_kg_h")).filter((value): value is number => Number.isFinite(value));
+      minMax("operating_window_screw_rpm", acceptedSpeeds);
+      minMax("operating_window_throughput_kg_h", acceptedThroughputs);
+      summaries.accepted_operating_point_count = accepted.length;
+      summaries.melt_pressure_limit_bar = pressureLimit;
+      summaries.motor_torque_limit_nm = torqueLimit;
+      summaries.accepted_operating_points = accepted.map((row) => ({
+        run_code: row.run.run_code,
+        screw_speed_rpm: numberFor(row.values, "screw_speed_rpm"),
+        throughput_kg_h: numberFor(row.values, "throughput_kg_h")
+      }));
+      listQualStepOutputs(db, stepId).forEach((output) => {
+        summaries[output.output_code] = output.value_real ?? output.value_text ?? null;
+      });
+      const pumpRows = activeRows.filter((row) => row.run.run_group === "pump_characteristic" && boolFor(row.values, "operating_point_stable") === true);
+      const fitRows = pumpRows.map((row) => {
+        const screwSpeed = numberFor(row.values, "screw_speed_rpm");
+        const massThroughput = numberFor(row.values, "throughput_kg_h");
+        const meltPressure = numberFor(row.values, "melt_pressure_bar");
+        if (screwSpeed == null || massThroughput == null || meltPressure == null || !meltDensity || !referenceViscosity) return null;
+        const volumeThroughput = massThroughput / (3600 * meltDensity);
+        const pressureTerm = -((meltPressure - outletPressureBar) * 100000) / referenceViscosity;
+        return { screwSpeed, massThroughput, meltPressure, volumeThroughput, pressureTerm };
+      }).filter((row): row is { screwSpeed: number; massThroughput: number; meltPressure: number; volumeThroughput: number; pressureTerm: number } => row !== null);
+      summaries.pump_characteristic_point_count = fitRows.length;
+      summaries.pump_characteristic_formula = "Qv = A·N − B·ΔP/η";
+      summaries.pump_characteristic_melt_density_kg_m3 = meltDensity;
+      summaries.pump_characteristic_reference_viscosity_pa_s = referenceViscosity;
+      summaries.pump_characteristic_outlet_pressure_bar = outletPressureBar;
+      if (fitRows.length >= 3) {
+        const s11 = fitRows.reduce((sum, row) => sum + row.screwSpeed ** 2, 0);
+        const s22 = fitRows.reduce((sum, row) => sum + row.pressureTerm ** 2, 0);
+        const s12 = fitRows.reduce((sum, row) => sum + row.screwSpeed * row.pressureTerm, 0);
+        const t1 = fitRows.reduce((sum, row) => sum + row.screwSpeed * row.volumeThroughput, 0);
+        const t2 = fitRows.reduce((sum, row) => sum + row.pressureTerm * row.volumeThroughput, 0);
+        const determinant = s11 * s22 - s12 ** 2;
+        if (Math.abs(determinant) > 1e-18) {
+          const a = (t1 * s22 - t2 * s12) / determinant;
+          const b = (s11 * t2 - s12 * t1) / determinant;
+          const mean = fitRows.reduce((sum, row) => sum + row.volumeThroughput, 0) / fitRows.length;
+          const residual = fitRows.reduce((sum, row) => sum + (row.volumeThroughput - (a * row.screwSpeed + b * row.pressureTerm)) ** 2, 0);
+          const total = fitRows.reduce((sum, row) => sum + (row.volumeThroughput - mean) ** 2, 0);
+          const rSquared = total > 0 ? 1 - residual / total : null;
+          summaries.screw_pumping_a_m3_s_rpm = a;
+          summaries.screw_pumping_b_m3 = b;
+          summaries.screw_pumping_r_squared = rSquared;
+          summaries.pump_characteristic_fit_valid = a > 0 && b > 0 && (rSquared == null || rSquared >= 0.8);
+        }
+      }
+    }
+    if (stepNumber === 4) {
+      minMax("sme_kwh_kg", valuesFor("sme_kwh_kg"));
+      minMax("melt_temp_c", valuesFor("melt_temp_c"));
+      minMax("dissipative_temp_rise_c", valuesFor("dissipative_temp_rise_c"));
+    }
+    if (stepNumber === 5) {
+      minMax("mean_residence_time_s", valuesFor("mean_residence_time_s"));
+      minMax("degree_of_fill_pct", valuesFor("degree_of_fill_pct"));
+      minMax("rtd_width_s", valuesFor("rtd_width_s"));
     }
   }
 

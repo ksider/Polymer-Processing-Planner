@@ -1,0 +1,51 @@
+<% const fieldByCode = new Map(fields.filter((field) => field.is_enabled === 1).map((field) => [field.code, field])); %>
+<% const outputByCode = new Map((stepOutputs || []).map((output) => [output.output_code, output])); %>
+<% const groups = {
+  rheology: { title: 'Capillary rheometry', description: 'Sweep shear rate at each temperature. Each row is one steady-state rheometer point.', tone: 'bg-blue-50 text-blue-800', codes: ['test_temp_c', 'pressure_drop_pa', 'volumetric_flow_mm3_s', 'extrudate_mass_g', 'collection_time_s', 'rheology_pressure_stable', 'apparent_shear_rate_s', 'apparent_viscosity_pa_s', 'mfr_g_10min'] },
+  thermal_hold: { title: 'Thermal-hold stability', description: 'Repeat at fixed temperature and shear rate; each row is one hold duration.', tone: 'bg-amber-50 text-amber-800', codes: ['thermal_hold_temp_c', 'thermal_hold_time_min', 'thermal_hold_shear_rate_s', 'thermal_hold_viscosity_pa_s'] },
+  dsc: { title: 'DSC heating / cooling', description: 'One heating–cooling curve. Import the instrument export and transcribe the characteristic values below.', tone: 'bg-violet-50 text-violet-800', series: 'dsc_thermogram' },
+  tga: { title: 'TGA thermogram', description: 'One thermal-gravimetric curve. Import the instrument export and transcribe the onset below.', tone: 'bg-rose-50 text-rose-800', series: 'tga_thermogram' }
+}; %>
+<% const renderValue = (run, field) => (runValueMap[String(run.id)] || {})[String(field.id)]; %>
+<section class="mb-6 space-y-5" data-extrusion-step-one>
+  <div class="rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs">
+    <h2 class="text-base font-semibold text-heading">Material characterisation programme</h2>
+    <p class="mt-1 text-sm text-body">Two multi-run studies establish flow and thermal-hold stability. DSC, TGA and moisture are individual material tests. Handoff results are entered manually for now and stored as explicit stage outputs for later steps.</p>
+  </div>
+
+  <% Object.entries(groups).forEach(([groupCode, group]) => { %>
+    <% const groupRuns = runs.filter((run) => run.run_group === groupCode); %>
+    <% const groupOutputs = (outputDefinitions || []).filter((output) => output.group === groupCode); %>
+    <article class="overflow-hidden rounded-xl border border-default-medium bg-neutral-primary shadow-xs" data-extrusion-group="<%= groupCode %>">
+      <div class="flex flex-wrap items-start justify-between gap-3 border-b border-default px-5 py-4">
+        <div>
+          <div class="flex items-center gap-2"><h3 class="text-sm font-semibold text-heading"><%= group.title %></h3><span class="rounded-full px-2 py-0.5 text-xs font-medium <%= group.tone %>"><%= groupCode === 'rheology' || groupCode === 'thermal_hold' ? 'Run series' : 'Single test' %></span></div>
+          <p class="mt-1 text-sm text-body"><%= group.description %></p>
+          <% if (groupCode === 'rheology') { const geometryRun = groupRuns[0]; const diameterField = fieldByCode.get('capillary_diameter_mm'); const lengthField = fieldByCode.get('capillary_length_mm'); %>
+            <div class="mt-3 grid max-w-xl gap-3 sm:grid-cols-2">
+              <% [diameterField, lengthField].filter(Boolean).forEach((field) => { const value = geometryRun ? renderValue(geometryRun, field) : null; %>
+                <label class="text-sm font-medium text-heading"><%= field.label %> <span class="text-body">(<%= field.unit %>)</span><input type="number" step="any" data-rheology-shared-field="<%= field.id %>" data-rheology-shared-code="<%= field.code %>" value="<%= value?.value_real ?? '' %>" placeholder="Shared by all runs"></label>
+              <% }); %>
+            </div>
+          <% } %>
+        </div>
+        <% if (groupCode === 'rheology' || groupCode === 'thermal_hold') { %><button class="inline-flex items-center justify-center gap-2 rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong" type="button" data-add-group-run="<%= groupCode %>" <%= step.is_blocked === 1 ? 'disabled' : '' %>><span class="material-symbols-rounded text-[18px]" aria-hidden="true">add</span>Add run</button><% } %>
+      </div>
+
+      <% if (group.codes) { %>
+        <% const groupFields = group.codes.map((code) => fieldByCode.get(code)).filter(Boolean); %>
+        <div class="overflow-x-auto p-4"><table class="<%= inputTableClass %>"><thead><tr><th>Run</th><th>Date</th><th>Responsible</th><% groupFields.forEach((field) => { %><th><%= field.label %><% if (field.unit) { %> <span class="normal-case text-body">(<%= field.unit %>)</span><% } %></th><% }); %><th>Done</th><th>Exclude</th><th></th></tr></thead><tbody>
+          <% groupRuns.forEach((run) => { %><tr data-run-row data-run-id="<%= run.id %>"><td><strong><%= run.run_code %></strong></td><td><input type="date" data-run-performed value="<%= run.performed_at || '' %>"></td><td><select data-run-responsible><option value="">Unassigned</option><% assignableUsers.forEach((user) => { %><option value="<%= user.id %>" <%= Number(run.responsible_user_id) === Number(user.id) ? 'selected' : '' %>><%= user.name || user.email %></option><% }) %></select></td><% groupFields.forEach((field) => { const value = renderValue(run, field); %><td><% if (field.is_derived) { %><span data-derived-code="<%= field.code %>"><%= formatNumber(value?.value_real) %></span><% } else if (field.field_type === 'boolean') { %><input type="checkbox" data-field-id="<%= field.id %>" data-field-type="boolean" <%= value?.value_real === 1 ? 'checked' : '' %>><% } else { %><input type="number" step="any" data-field-id="<%= field.id %>" data-field-type="number" value="<%= value?.value_real ?? '' %>"><% } %></td><% }); %><td><input type="checkbox" data-flag="done" <%= run.done === 1 ? 'checked' : '' %>></td><td><input type="checkbox" data-flag="exclude" <%= run.exclude_from_analysis === 1 ? 'checked' : '' %>></td><td><button class="inline-flex size-8 items-center justify-center rounded-base text-danger hover:bg-danger-soft" type="button" data-run-delete title="Delete run"><span class="material-symbols-rounded text-[18px]">delete</span></button></td></tr><% }); %>
+        </tbody></table></div>
+        <% if (groupCode === 'rheology') { %>
+          <div class="border-t border-default px-5 py-4"><div class="mb-3 flex items-center justify-between gap-3"><div><h4 class="text-sm font-medium text-heading">Flow curve</h4><p class="mt-1 text-xs text-body">Calculated from pressure drop, volumetric flow and the shared capillary geometry.</p></div><span class="rounded-full bg-neutral-secondary px-2 py-0.5 text-xs font-medium text-body">Calculated</span></div><div class="h-80 w-full" id="extrusionFlowCurveChart"></div></div>
+        <% } %>
+      <% } else { %>
+        <% const run = groupRuns[0]; const seriesDefinition = (seriesDefinitions || []).find((definition) => definition.code === group.series); const currentSeries = run && (runSeries || []).find((series) => Number(series.run_id) === Number(run.id) && series.series_code === group.series); %>
+        <div class="p-5"><div class="flex flex-wrap items-end gap-3"><label class="!mb-0 min-w-52 flex-1">Date<input type="date" data-run-performed value="<%= run?.performed_at || '' %>" <%= run ? `data-run-id=${run.id}` : 'disabled' %>></label><label class="!mb-0 min-w-52 flex-1">Responsible<select data-run-responsible <%= run ? `data-run-id=${run.id}` : 'disabled' %>><option value="">Unassigned</option><% assignableUsers.forEach((user) => { %><option value="<%= user.id %>" <%= Number(run?.responsible_user_id) === Number(user.id) ? 'selected' : '' %>><%= user.name || user.email %></option><% }) %></select></label><% if (seriesDefinition) { %><label class="!mb-0 min-w-72 flex-[2]">CSV curve <input class="block w-full cursor-pointer rounded-base border border-default-medium bg-neutral-secondary-medium p-0 text-sm text-heading shadow-xs file:me-3 file:border-0 file:border-e file:border-default-medium file:bg-neutral-tertiary file:px-3 file:py-2.5 file:text-sm file:font-medium file:text-heading hover:file:bg-neutral-secondary focus:outline-none" type="file" accept=".csv,text/csv,text/plain" data-ui-control-exempt data-single-series-file data-series-code="<%= seriesDefinition.code %>" data-run-id="<%= run?.id || '' %>" <%= run ? '' : 'disabled' %>></label><div class="flex self-end"><button class="inline-flex shrink-0 items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong" type="button" data-single-series-import data-series-code="<%= seriesDefinition.code %>" data-run-id="<%= run?.id || '' %>" <%= run ? '' : 'disabled' %>>Import CSV</button></div><% } %></div><div class="mt-4 h-64 w-full rounded-base border border-default bg-neutral-secondary p-2" data-single-series-chart data-series-code="<%= group.series || '' %>" data-run-id="<%= run?.id || '' %>"></div></div>
+      <% } %>
+
+      <div class="border-t border-default bg-neutral-secondary px-5 py-4"><div class="mb-3 flex items-center gap-2"><span class="material-symbols-rounded text-[18px] text-brand">output</span><h4 class="text-sm font-medium text-heading">Result passed to next steps</h4></div><div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><% groupOutputs.forEach((output) => { const current = outputByCode.get(output.code); %><label class="text-sm font-medium text-heading"><%= output.label %><span class="ms-1 text-xs font-normal text-body"><%= output.unit || '' %></span><input type="number" step="any" data-step-output="<%= output.code %>" value="<%= current?.value_real ?? '' %>" placeholder="Manual value"><span class="mt-1 block text-xs font-normal text-body"><%= output.description %></span></label><% }); %><% if (!groupOutputs.length) { %><span class="text-sm text-body">No numeric handoff output for this block.</span><% } %></div></div>
+    </article>
+  <% }); %>
+</section>

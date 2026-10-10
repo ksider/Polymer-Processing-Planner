@@ -3,6 +3,8 @@ import type { Db } from "../db.js";
 import {
   ensureQualificationDefaults,
   getStepDefinitionForExperiment,
+  getQualificationSeriesDefinitionsForExperiment,
+  getQualificationOutputDefinitionsForExperiment,
   recomputeDerivedAndSummary,
   saveQualRunValue,
   addCavityFields,
@@ -15,6 +17,7 @@ import {
   listQualFields,
   listQualRuns,
   listQualRunValues,
+  listQualRunSeries,
   listQualSummaries,
   createQualRuns,
   getQualStepSettings,
@@ -23,7 +26,12 @@ import {
   updateQualField,
   updateQualRunFlags,
   updateQualRunDueAt,
-  setQualStepBlocked
+  updateQualRunMetadata,
+  setQualStepBlocked,
+  replaceQualRunSeries,
+  deleteQualRunSeries,
+  listQualStepOutputs,
+  upsertQualStepOutput
 } from "../repos/qual_repo.js";
 import { getExperiment } from "../repos/experiments_repo.js";
 import { getProcessById } from "../repos/processes_repo.js";
@@ -106,7 +114,7 @@ export function createQualificationRouter(db: Db) {
     if (!step) return res.status(404).send("Step not found");
     const fields = listQualFields(db, step.id);
     let runs = listQualRuns(db, step.id);
-    if (step.is_blocked !== 1 && (stepNumber === 2 || stepNumber === 3) && runs.length === 0) {
+    if (step.is_blocked !== 1 && (stepNumber === 2 || (stepNumber === 3 && processTypeCode !== "extrusion_v1")) && runs.length === 0) {
       createQualRuns(db, experimentId, step.id, 1);
       runs = listQualRuns(db, step.id);
     }
@@ -148,10 +156,40 @@ export function createQualificationRouter(db: Db) {
     const summaryRow = listQualSummaries(db, experimentId).find(
       (row) => row.step_number === stepNumber
     );
+    let stepSummary: Record<string, unknown> = {};
+    try {
+      stepSummary = JSON.parse(summaryRow?.summary_json || "{}") as Record<string, unknown>;
+    } catch {
+      stepSummary = {};
+    }
+    const seriesDefinitions = getQualificationSeriesDefinitionsForExperiment(
+      db,
+      experimentId,
+      stepNumber
+    );
+    const runSeries = seriesDefinitions.length ? listQualRunSeries(db, step.id) : [];
+    const outputDefinitions = getQualificationOutputDefinitionsForExperiment(db, experimentId, stepNumber);
+    const stepOutputs = outputDefinitions.length ? listQualStepOutputs(db, step.id) : [];
+    const feederStep = processTypeCode === "extrusion_v1" && stepNumber === 3
+      ? getQualStep(db, experimentId, 2)
+      : null;
+    const feederOutputs = feederStep ? listQualStepOutputs(db, feederStep.id) : [];
+    const feederOutputByCode = new Map(feederOutputs.map((output) => [output.output_code, output.value_real]));
+    const feederMin = feederOutputByCode.get("feeder_stable_throughput_min_kg_h");
+    const feederMax = feederOutputByCode.get("feeder_stable_throughput_max_kg_h");
+    const feederThroughputLevels = Number.isFinite(feederMin) && Number.isFinite(feederMax) && (feederMax as number) >= (feederMin as number)
+      ? [feederMin as number, ((feederMin as number) + (feederMax as number)) / 2, feederMax as number]
+      : [];
+    const rheologyStep = processTypeCode === "extrusion_v1" && stepNumber === 3
+      ? getQualStep(db, experimentId, 1)
+      : null;
+    const rheologyReferenceViscosity = rheologyStep
+      ? listQualStepOutputs(db, rheologyStep.id).find((output) => output.output_code === "rheology_reference_viscosity_pa_s")?.value_real ?? null
+      : null;
     // The original IM panels are retained for their six established studies.
     // Every other catalogue stage uses the shared table/detail shell, so a new
     // code-owned stage never needs a new micro-application or a six-step fork.
-    if (processTypeCode === "compounding" || processTypeCode === "coating" || stepNumber > 6) {
+    if (processTypeCode !== "injection" || stepNumber > 6) {
       return res.render("qualification_step_compounding", {
         experimentId,
         step,
@@ -162,6 +200,14 @@ export function createQualificationRouter(db: Db) {
         runValueMap,
         stepSettings,
         summaryJson: summaryRow?.summary_json ?? null,
+        stepSummary,
+        processTypeCode,
+        seriesDefinitions,
+        runSeries,
+        outputDefinitions,
+        stepOutputs,
+        feederThroughputLevels,
+        rheologyReferenceViscosity,
         canAssignEntities,
         assignableUsers,
         stepAssigneeId,
@@ -368,7 +414,76 @@ export function createQualificationRouter(db: Db) {
 
     saveQualRunValue(db, runId, field.id, field.field_type, value);
     recomputeDerivedAndSummary(db, run.experiment_id, run.step_id, step.step_number);
+    const summaryRow = listQualSummaries(db, run.experiment_id).find((item) => item.step_number === step.step_number);
+    let summary: Record<string, unknown> = {};
+    try { summary = JSON.parse(summaryRow?.summary_json || "{}"); } catch {}
+    return res.json({ ok: true, summary });
+  });
 
+  router.post("/qual-runs/:id/series/:seriesCode", ensureQualRunAccess, (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer", "operator"])) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const runId = Number(req.params.id);
+    const run = getQualRun(db, runId);
+    if (!run) return res.status(404).json({ error: "Run not found" });
+    const step = getQualStepById(db, run.step_id);
+    if (!step) return res.status(404).json({ error: "Step not found" });
+    if (rejectBlockedStep(res, step)) return;
+    const seriesCode = String(req.params.seriesCode || "").trim();
+    const definition = getQualificationSeriesDefinitionsForExperiment(
+      db,
+      run.experiment_id,
+      step.step_number
+    ).find((item) => item.code === seriesCode);
+    if (!definition) return res.status(404).json({ error: "Series is not declared for this stage" });
+    const rawPoints = Array.isArray(req.body?.points) ? req.body.points : [];
+    if (rawPoints.length < definition.minimum_points) {
+      return res.status(400).json({ error: `At least ${definition.minimum_points} points are required` });
+    }
+    if (rawPoints.length > 50_000) {
+      return res.status(400).json({ error: "A series cannot contain more than 50000 points" });
+    }
+    const points = rawPoints.map((point: unknown) => {
+      const value = point as { x?: unknown; y?: unknown };
+      return { x: Number(value?.x), y: Number(value?.y) };
+    });
+    if (points.some((point: { x: number; y: number }) => !Number.isFinite(point.x) || !Number.isFinite(point.y))) {
+      return res.status(400).json({ error: "Every series point must contain finite x and y values" });
+    }
+    const sourceName = String(req.body?.source_name || "").trim().slice(0, 255) || null;
+    replaceQualRunSeries(db, {
+      experimentId: run.experiment_id,
+      stepId: step.id,
+      runId,
+      seriesCode,
+      contractVersion: definition.contract_version,
+      sourceName,
+      points
+    });
+    recomputeDerivedAndSummary(db, run.experiment_id, step.id, step.step_number);
+    return res.json({ ok: true, point_count: points.length });
+  });
+
+  router.delete("/qual-runs/:id/series/:seriesCode", ensureQualRunAccess, (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer", "operator"])) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const runId = Number(req.params.id);
+    const run = getQualRun(db, runId);
+    if (!run) return res.status(404).json({ error: "Run not found" });
+    const step = getQualStepById(db, run.step_id);
+    if (!step) return res.status(404).json({ error: "Step not found" });
+    if (rejectBlockedStep(res, step)) return;
+    const seriesCode = String(req.params.seriesCode || "").trim();
+    const isDeclared = getQualificationSeriesDefinitionsForExperiment(
+      db,
+      run.experiment_id,
+      step.step_number
+    ).some((item) => item.code === seriesCode);
+    if (!isDeclared) return res.status(404).json({ error: "Series is not declared for this stage" });
+    deleteQualRunSeries(db, runId, seriesCode);
+    recomputeDerivedAndSummary(db, run.experiment_id, step.id, step.step_number);
     return res.json({ ok: true });
   });
 
@@ -408,6 +523,57 @@ export function createQualificationRouter(db: Db) {
     return res.json({ ok: true, due_at: dueAt });
   });
 
+  router.post("/qual-runs/:id/metadata", ensureQualRunAccess, (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer", "operator"])) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const runId = Number(req.params.id);
+    const run = getQualRun(db, runId);
+    if (!run) return res.status(404).json({ error: "Run not found" });
+    const step = getQualStepById(db, run.step_id);
+    if (!step) return res.status(404).json({ error: "Step not found" });
+    if (rejectBlockedStep(res, step)) return;
+    const performedAtRaw = String(req.body?.performed_at ?? "").trim();
+    const performedAt = /^\d{4}-\d{2}-\d{2}$/.test(performedAtRaw) ? performedAtRaw : null;
+    const rawUserId = Number(req.body?.responsible_user_id);
+    const responsibleUserId = Number.isInteger(rawUserId) && rawUserId > 0 ? rawUserId : null;
+    if (responsibleUserId && !findUserById(db, responsibleUserId)) {
+      return res.status(400).json({ error: "Responsible user not found" });
+    }
+    updateQualRunMetadata(db, runId, { performedAt, responsibleUserId });
+    return res.json({ ok: true, performed_at: performedAt, responsible_user_id: responsibleUserId });
+  });
+
+  router.post("/experiments/:id/qualification/:step/outputs/:outputCode", (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer", "operator"])) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    const step = getQualStep(db, experimentId, stepNumber);
+    if (!step) return res.status(404).json({ error: "Step not found" });
+    if (rejectBlockedStep(res, step)) return;
+    const outputCode = String(req.params.outputCode || "").trim();
+    const definition = getQualificationOutputDefinitionsForExperiment(db, experimentId, stepNumber)
+      .find((item) => item.code === outputCode);
+    if (!definition) return res.status(404).json({ error: "Output is not declared for this stage" });
+    const rawValue = String(req.body?.value ?? "").trim();
+    const valueReal = definition.field_type === "number" && rawValue !== "" ? Number(rawValue) : null;
+    if (definition.field_type === "number" && rawValue !== "" && !Number.isFinite(valueReal)) {
+      return res.status(400).json({ error: "A finite numeric value is required" });
+    }
+    upsertQualStepOutput(db, {
+      experiment_id: experimentId,
+      step_id: step.id,
+      output_group: definition.group,
+      output_code: definition.code,
+      value_real: valueReal,
+      value_text: definition.field_type === "text" ? rawValue || null : null
+    });
+    recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
+    return res.json({ ok: true });
+  });
+
   router.post("/experiments/:id/qualification/:step/runs", (req, res) => {
     if (!hasRole(req, ["admin", "manager", "engineer"])) {
       return res.status(403).json({ error: "Forbidden" });
@@ -416,10 +582,85 @@ export function createQualificationRouter(db: Db) {
     const stepNumber = Number(req.params.step);
     const step = getQualStep(db, experimentId, stepNumber);
     if (!step) return res.status(404).json({ error: "Step not found" });
-    createQualRuns(db, experimentId, step.id, 1);
+    const runGroup = String(req.body?.run_group ?? "default").trim().toLowerCase();
+    const allowedGroups = new Set(["default", "rheology", "thermal_hold", "pump_characteristic"]);
+    if (!allowedGroups.has(runGroup)) return res.status(400).json({ error: "Invalid run group" });
+    createQualRuns(db, experimentId, step.id, 1, runGroup);
     const runs = listQualRuns(db, step.id);
     const run = runs[runs.length - 1];
+    if (getQualificationOutputDefinitionsForExperiment(db, experimentId, stepNumber).length > 0 && runGroup === "rheology" && run) {
+      const referenceRun = runs.find((item) => item.id !== run.id && item.run_group === "rheology");
+      if (referenceRun) {
+        const geometryFields = listQualFields(db, step.id).filter((field) =>
+          ["capillary_diameter_mm", "capillary_length_mm"].includes(field.code)
+        );
+        const sourceValues = new Map(listQualRunValues(db, referenceRun.id).map((value) => [value.field_id, value]));
+        geometryFields.forEach((field) => {
+          const value = sourceValues.get(field.id);
+          if (value?.value_real != null) saveQualRunValue(db, run.id, field.id, "number", value.value_real);
+        });
+      }
+    }
     return res.json({ run });
+  });
+
+  router.post("/experiments/:id/qualification/:step/matrix", (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer"])) return res.status(403).json({ error: "Forbidden" });
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    const step = getQualStep(db, experimentId, stepNumber);
+    if (!step || stepNumber !== 3) return res.status(404).json({ error: "Step not found" });
+    if (rejectBlockedStep(res, step)) return;
+    const parseLevels = (value: unknown) => [...new Set(String(value || "").split(/[;,\s]+/).map(Number).filter((item) => Number.isFinite(item) && item > 0))].sort((a, b) => a - b);
+    const speeds = parseLevels(req.body?.screw_speed_levels_rpm);
+    const feederStep = getQualStep(db, experimentId, 2);
+    const feederOutputs = feederStep ? new Map(listQualStepOutputs(db, feederStep.id).map((output) => [output.output_code, output.value_real])) : new Map<string, number | null>();
+    const feederMin = feederOutputs.get("feeder_stable_throughput_min_kg_h");
+    const feederMax = feederOutputs.get("feeder_stable_throughput_max_kg_h");
+    const inheritedThroughputs = Number.isFinite(feederMin) && Number.isFinite(feederMax) && (feederMax as number) >= (feederMin as number)
+      ? [feederMin as number, ((feederMin as number) + (feederMax as number)) / 2, feederMax as number]
+      : [];
+    const requestedThroughputs = parseLevels(req.body?.throughput_levels_kg_h);
+    const throughputs = requestedThroughputs.length ? requestedThroughputs : inheritedThroughputs;
+    if (!speeds.length || !throughputs.length) return res.status(400).json({ error: "Enter feed-rate levels, or confirm the stable feeder range in Step 2" });
+    const cells = speeds.flatMap((speed) => throughputs.map((throughput) => ({ speed, throughput })));
+    let runs = listQualRuns(db, step.id).filter((run) => run.run_group === "default");
+    while (runs.length < cells.length) { createQualRuns(db, experimentId, step.id, 1); runs = listQualRuns(db, step.id).filter((run) => run.run_group === "default"); }
+    const fields = new Map(listQualFields(db, step.id).map((field) => [field.code, field]));
+    const rpm = fields.get("screw_speed_rpm"); const throughput = fields.get("throughput_kg_h");
+    if (!rpm || !throughput) return res.status(400).json({ error: "Matrix fields unavailable" });
+    cells.forEach((cell, index) => { saveQualRunValue(db, runs[index].id, rpm.id, "number", cell.speed); saveQualRunValue(db, runs[index].id, throughput.id, "number", cell.throughput); });
+    recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
+    return res.json({ ok: true, run_count: cells.length });
+  });
+
+  router.post("/experiments/:id/qualification/:step/pump-curve-matrix", (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer"])) return res.status(403).json({ error: "Forbidden" });
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    const step = getQualStep(db, experimentId, stepNumber);
+    if (!step || stepNumber !== 3) return res.status(404).json({ error: "Step not found" });
+    if (rejectBlockedStep(res, step)) return;
+    const parseLevels = (value: unknown) => [...new Set(String(value || "").split(/[;,\s]+/).map(Number).filter((item) => Number.isFinite(item) && item > 0))].sort((a, b) => a - b);
+    const speeds = parseLevels(req.body?.screw_speed_levels_rpm);
+    const pressures = parseLevels(req.body?.back_pressure_levels_bar);
+    if (!speeds.length || !pressures.length) return res.status(400).json({ error: "Enter screw-speed and back-pressure levels" });
+    const cells = speeds.flatMap((speed) => pressures.map((pressure) => ({ speed, pressure })));
+    let runs = listQualRuns(db, step.id).filter((run) => run.run_group === "pump_characteristic");
+    while (runs.length < cells.length) {
+      createQualRuns(db, experimentId, step.id, 1, "pump_characteristic");
+      runs = listQualRuns(db, step.id).filter((run) => run.run_group === "pump_characteristic");
+    }
+    const fields = new Map(listQualFields(db, step.id).map((field) => [field.code, field]));
+    const rpm = fields.get("screw_speed_rpm");
+    const targetPressure = fields.get("target_back_pressure_bar");
+    if (!rpm || !targetPressure) return res.status(400).json({ error: "Pump-curve fields unavailable" });
+    cells.forEach((cell, index) => {
+      saveQualRunValue(db, runs[index].id, rpm.id, "number", cell.speed);
+      saveQualRunValue(db, runs[index].id, targetPressure.id, "number", cell.pressure);
+    });
+    recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
+    return res.json({ ok: true, run_count: cells.length });
   });
 
   router.post("/experiments/:id/qualification/:step/runs/:runId/delete", (req, res) => {
@@ -1058,15 +1299,31 @@ export function createQualificationRouter(db: Db) {
       cpw_temp_step_c: parseSettingValue(req.body.cpw_temp_step_c),
       cpw_hold_step_bar: parseSettingValue(req.body.cpw_hold_step_bar),
       target_screw_rpm: parseSettingValue(req.body.target_screw_rpm),
+      feeder_max_throughput_kg_h: parseSettingValue(req.body.feeder_max_throughput_kg_h),
+      material_bulk_density_kg_m3: parseSettingValue(req.body.material_bulk_density_kg_m3),
+      feeder_temperature_c: parseSettingValue(req.body.feeder_temperature_c),
+      feeder_screw_geometry: req.body.feeder_screw_geometry ? String(req.body.feeder_screw_geometry).trim() : null,
+      screw_speed_levels_rpm: req.body.screw_speed_levels_rpm ? String(req.body.screw_speed_levels_rpm).trim() : null,
+      throughput_levels_kg_h: req.body.throughput_levels_kg_h ? String(req.body.throughput_levels_kg_h).trim() : null,
+      melt_pressure_limit_bar: parseSettingValue(req.body.melt_pressure_limit_bar),
+      motor_torque_limit_nm: parseSettingValue(req.body.motor_torque_limit_nm),
+      melt_density_kg_m3: parseSettingValue(req.body.melt_density_kg_m3),
+      reference_viscosity_pa_s: parseSettingValue(req.body.reference_viscosity_pa_s),
+      die_outlet_pressure_bar: parseSettingValue(req.body.die_outlet_pressure_bar),
+      barrel_temperature_profile: req.body.barrel_temperature_profile ? String(req.body.barrel_temperature_profile).trim() : null,
+      die_geometry: req.body.die_geometry ? String(req.body.die_geometry).trim() : null,
       custom_fields: customFields
     };
     upsertQualStepSettings(db, experimentId, stepNumber, JSON.stringify(settings));
     recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
+    const summaryRow = listQualSummaries(db, experimentId).find((item) => item.step_number === stepNumber);
+    let summary: Record<string, unknown> = {};
+    try { summary = JSON.parse(summaryRow?.summary_json || "{}"); } catch {}
     const wantsJson =
       req.xhr ||
       String(req.get("X-Requested-With") || "").toLowerCase() === "xmlhttprequest" ||
       String(req.get("Accept") || "").toLowerCase().includes("application/json");
-    if (wantsJson) return res.json({ ok: true });
+    if (wantsJson) return res.json({ ok: true, summary });
     return res.redirect(`/experiments/${experimentId}/qualification/${stepNumber}`);
   });
 

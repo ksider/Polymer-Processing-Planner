@@ -29,7 +29,10 @@ export type QualRun = {
   step_id: number;
   run_order: number;
   run_code: string;
+  run_group: string;
   due_at: string | null;
+  performed_at: string | null;
+  responsible_user_id: number | null;
   done: number;
   exclude_from_analysis: number;
 };
@@ -56,6 +59,38 @@ export type QualRunValue = {
   value_real: number | null;
   value_text: string | null;
   value_tags_json: string | null;
+};
+
+export type QualRunSeries = {
+  id: number;
+  experiment_id: number;
+  step_id: number;
+  run_id: number;
+  series_code: string;
+  contract_version: number;
+  source_name: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type QualRunSeriesPoint = {
+  id: number;
+  series_id: number;
+  point_order: number;
+  x_value: number;
+  y_value: number;
+  extra_json: string | null;
+};
+
+export type QualStepOutput = {
+  id: number;
+  experiment_id: number;
+  step_id: number;
+  output_group: string;
+  output_code: string;
+  value_real: number | null;
+  value_text: string | null;
+  updated_at: string;
 };
 
 const qualStepSelect = `
@@ -176,7 +211,7 @@ export function setQualStepBlocked(
 export function listQualRuns(db: Db, stepId: number): QualRun[] {
   return db
     .prepare(
-      "SELECT id, experiment_id, step_id, run_order, run_code, due_at, done, exclude_from_analysis FROM qual_runs WHERE step_id = ? ORDER BY run_order"
+      "SELECT id, experiment_id, step_id, run_order, run_code, run_group, due_at, performed_at, responsible_user_id, done, exclude_from_analysis FROM qual_runs WHERE step_id = ? ORDER BY run_order"
     )
     .all(stepId) as QualRun[];
 }
@@ -184,13 +219,19 @@ export function listQualRuns(db: Db, stepId: number): QualRun[] {
 export function getQualRun(db: Db, runId: number): QualRun | null {
   const row = db
     .prepare(
-      "SELECT id, experiment_id, step_id, run_order, run_code, due_at, done, exclude_from_analysis FROM qual_runs WHERE id = ?"
+      "SELECT id, experiment_id, step_id, run_order, run_code, run_group, due_at, performed_at, responsible_user_id, done, exclude_from_analysis FROM qual_runs WHERE id = ?"
     )
     .get(runId) as QualRun | undefined;
   return row ?? null;
 }
 
-export function createQualRuns(db: Db, experimentId: number, stepId: number, count: number) {
+export function createQualRuns(
+  db: Db,
+  experimentId: number,
+  stepId: number,
+  count: number,
+  runGroup = "default"
+) {
   const current = db
     .prepare("SELECT COALESCE(MAX(run_order), 0) as max_order FROM qual_runs WHERE step_id = ?")
     .get(stepId) as { max_order: number };
@@ -198,14 +239,25 @@ export function createQualRuns(db: Db, experimentId: number, stepId: number, cou
     .prepare("SELECT step_number FROM qual_steps WHERE id = ?")
     .get(stepId) as { step_number: number } | undefined;
   const stepNumber = step?.step_number ?? stepId;
+  const groupCount = db
+    .prepare("SELECT COUNT(*) AS count FROM qual_runs WHERE step_id = ? AND run_group = ?")
+    .get(stepId, runGroup) as { count: number };
+  const groupPrefix: Record<string, string> = {
+    rheology: "RH",
+    thermal_hold: "TH",
+    dsc: "DSC",
+    tga: "TGA",
+    moisture: "M"
+  };
+  const prefix = groupPrefix[runGroup] ?? "R";
   const insert = db.prepare(
-    `INSERT INTO qual_runs (experiment_id, step_id, run_order, run_code, due_at, done, exclude_from_analysis)
-     VALUES (?, ?, ?, ?, NULL, 0, 0)`
+    `INSERT INTO qual_runs (experiment_id, step_id, run_order, run_code, run_group, due_at, done, exclude_from_analysis)
+     VALUES (?, ?, ?, ?, ?, NULL, 0, 0)`
   );
   for (let i = 1; i <= count; i += 1) {
     const order = current.max_order + i;
-    const runCode = `E${experimentId}-Q${stepNumber}-R${String(order).padStart(3, "0")}`;
-    insert.run(experimentId, stepId, order, runCode);
+    const runCode = `E${experimentId}-Q${stepNumber}-${prefix}${String(groupCount.count + i).padStart(3, "0")}`;
+    insert.run(experimentId, stepId, order, runCode, runGroup);
   }
 }
 
@@ -293,6 +345,85 @@ export function upsertQualRunValue(db: Db, value: QualRunValue) {
   ).run(value.run_id, value.field_id, value.value_real, value.value_text, value.value_tags_json);
 }
 
+export function listQualRunSeries(db: Db, stepId: number) {
+  const series = db.prepare(
+    `SELECT id, experiment_id, step_id, run_id, series_code, contract_version,
+            source_name, created_at, updated_at
+     FROM qual_run_series WHERE step_id = ? ORDER BY run_id, series_code`
+  ).all(stepId) as QualRunSeries[];
+  const pointStmt = db.prepare(
+    `SELECT id, series_id, point_order, x_value, y_value, extra_json
+     FROM qual_run_series_points WHERE series_id = ? ORDER BY point_order`
+  );
+  return series.map((item) => ({
+    ...item,
+    points: pointStmt.all(item.id) as QualRunSeriesPoint[]
+  }));
+}
+
+export function getQualRunSeries(db: Db, runId: number, seriesCode: string) {
+  const series = db.prepare(
+    `SELECT id, experiment_id, step_id, run_id, series_code, contract_version,
+            source_name, created_at, updated_at
+     FROM qual_run_series WHERE run_id = ? AND series_code = ?`
+  ).get(runId, seriesCode) as QualRunSeries | undefined;
+  if (!series) return null;
+  const points = db.prepare(
+    `SELECT id, series_id, point_order, x_value, y_value, extra_json
+     FROM qual_run_series_points WHERE series_id = ? ORDER BY point_order`
+  ).all(series.id) as QualRunSeriesPoint[];
+  return { ...series, points };
+}
+
+export function replaceQualRunSeries(
+  db: Db,
+  input: {
+    experimentId: number;
+    stepId: number;
+    runId: number;
+    seriesCode: string;
+    contractVersion: number;
+    sourceName: string | null;
+    points: Array<{ x: number; y: number; extraJson?: string | null }>;
+  }
+) {
+  const replace = db.transaction(() => {
+    db.prepare(
+      `INSERT INTO qual_run_series
+       (experiment_id, step_id, run_id, series_code, contract_version, source_name, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+       ON CONFLICT(run_id, series_code) DO UPDATE SET
+         contract_version = excluded.contract_version,
+         source_name = excluded.source_name,
+         updated_at = datetime('now')`
+    ).run(
+      input.experimentId,
+      input.stepId,
+      input.runId,
+      input.seriesCode,
+      input.contractVersion,
+      input.sourceName
+    );
+    const series = db.prepare(
+      "SELECT id FROM qual_run_series WHERE run_id = ? AND series_code = ?"
+    ).get(input.runId, input.seriesCode) as { id: number };
+    db.prepare("DELETE FROM qual_run_series_points WHERE series_id = ?").run(series.id);
+    const insertPoint = db.prepare(
+      `INSERT INTO qual_run_series_points
+       (series_id, point_order, x_value, y_value, extra_json) VALUES (?, ?, ?, ?, ?)`
+    );
+    input.points.forEach((point, index) => {
+      insertPoint.run(series.id, index + 1, point.x, point.y, point.extraJson ?? null);
+    });
+    return series.id;
+  });
+  return replace();
+}
+
+export function deleteQualRunSeries(db: Db, runId: number, seriesCode: string) {
+  db.prepare("DELETE FROM qual_run_series WHERE run_id = ? AND series_code = ?").run(runId, seriesCode);
+}
+
 export function updateQualRunFlags(db: Db, runId: number, done: number, exclude: number) {
   db.prepare("UPDATE qual_runs SET done = ?, exclude_from_analysis = ? WHERE id = ?").run(
     done,
@@ -303,6 +434,50 @@ export function updateQualRunFlags(db: Db, runId: number, done: number, exclude:
 
 export function updateQualRunDueAt(db: Db, runId: number, dueAt: string | null) {
   db.prepare("UPDATE qual_runs SET due_at = ? WHERE id = ?").run(dueAt, runId);
+}
+
+export function updateQualRunMetadata(
+  db: Db,
+  runId: number,
+  input: { performedAt: string | null; responsibleUserId: number | null }
+) {
+  db.prepare("UPDATE qual_runs SET performed_at = ?, responsible_user_id = ? WHERE id = ?").run(
+    input.performedAt,
+    input.responsibleUserId,
+    runId
+  );
+}
+
+export function listQualStepOutputs(db: Db, stepId: number): QualStepOutput[] {
+  return db
+    .prepare(
+      `SELECT id, experiment_id, step_id, output_group, output_code, value_real, value_text, updated_at
+       FROM qual_step_outputs WHERE step_id = ? ORDER BY output_group, output_code`
+    )
+    .all(stepId) as QualStepOutput[];
+}
+
+export function upsertQualStepOutput(
+  db: Db,
+  input: Omit<QualStepOutput, "id" | "updated_at">
+) {
+  db.prepare(
+    `INSERT INTO qual_step_outputs
+     (experiment_id, step_id, output_group, output_code, value_real, value_text, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(step_id, output_code) DO UPDATE SET
+       output_group = excluded.output_group,
+       value_real = excluded.value_real,
+       value_text = excluded.value_text,
+       updated_at = datetime('now')`
+  ).run(
+    input.experiment_id,
+    input.step_id,
+    input.output_group,
+    input.output_code,
+    input.value_real,
+    input.value_text
+  );
 }
 
 export function upsertQualSummary(

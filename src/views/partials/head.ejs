@@ -4,7 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><%= title %></title>
-  <link rel="stylesheet" href="/vendor/purecss/build/pure-min.css">
+  <% if (typeof uiKit !== "undefined" && uiKit) { %>
+    <!-- Keep only the legacy components still referenced by migrated views.
+         The full Pure bundle also ships a global Normalize reset which
+         overrides layered Tailwind utilities such as anchor backgrounds. -->
+    <link rel="stylesheet" href="/vendor/purecss/build/buttons-min.css">
+    <link rel="stylesheet" href="/vendor/purecss/build/forms-min.css">
+    <link rel="stylesheet" href="/vendor/purecss/build/grids-min.css">
+    <link rel="stylesheet" href="/vendor/purecss/build/menus-min.css">
+    <link rel="stylesheet" href="/vendor/purecss/build/tables-min.css">
+  <% } else { %>
+    <link rel="stylesheet" href="/vendor/purecss/build/pure-min.css">
+  <% } %>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:wght@400">
   <link rel="stylesheet" href="/app.css">
   <% if (typeof uiKit !== "undefined" && uiKit) { %>

@@ -1,0 +1,30 @@
+<% const displayedFields = tableFields || activeFields; %>
+<section class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm" <%- tableDataAttribute %> data-run-table>
+  <div class="border-b border-gray-100 px-5 py-4">
+    <h2 class="text-lg font-semibold tracking-tight text-gray-900"><%= title %></h2>
+    <p class="mt-1 text-sm text-body"><%= description %></p>
+  </div>
+  <div class="overflow-x-auto p-4">
+    <table class="<%= inputTableClass %> min-w-[1100px] text-xs">
+      <thead><tr><th class="whitespace-nowrap">Run</th><th>Date</th><th>Responsible</th><% displayedFields.forEach((field) => { %><th class="whitespace-nowrap text-xs"><%= compactLabelByCode[field.code] || field.label %><% if (field.unit) { %> <span class="normal-case text-body">(<%= field.unit %>)</span><% } %></th><% }); %><th>Done</th><th>Exclude</th><th></th></tr></thead>
+      <tbody>
+        <% if (!runs.length) { %>
+          <tr><td colspan="<%= displayedFields.length + 6 %>" class="py-6 text-center text-sm text-body"><%= emptyMessage %></td></tr>
+        <% } %>
+        <% runs.forEach((run) => { const values = valuesFor(run); %>
+          <tr data-run-row data-run-id="<%= run.id %>" data-run-group="<%= run.run_group %>">
+            <td class="whitespace-nowrap"><strong><%= run.run_code %></strong></td>
+            <td><input class="w-32" type="date" data-run-performed value="<%= run.performed_at || '' %>"></td>
+            <td><select class="w-36" data-run-responsible><option value="">Unassigned</option><% assignableUsers.forEach((user) => { %><option value="<%= user.id %>" <%= Number(run.responsible_user_id) === Number(user.id) ? 'selected' : '' %>><%= user.name || user.email %></option><% }) %></select></td>
+            <% displayedFields.forEach((field) => { const value = values[String(field.id)]; %>
+              <td><% if (field.is_derived) { %><span class="whitespace-nowrap" data-derived-code="<%= field.code %>"><%= formatNumber(value?.value_real) %></span><% } else if (field.field_type === 'boolean') { %><input type="checkbox" data-field-id="<%= field.id %>" data-field-type="boolean" <%= value?.value_real === 1 ? 'checked' : '' %>><% } else { %><input class="w-20" type="number" step="any" data-field-id="<%= field.id %>" data-field-type="number" value="<%= value?.value_real ?? '' %>"><% } %></td>
+            <% }); %>
+            <td><input type="checkbox" data-flag="done" <%= run.done === 1 ? 'checked' : '' %>></td>
+            <td><input type="checkbox" data-flag="exclude" <%= run.exclude_from_analysis === 1 ? 'checked' : '' %>></td>
+            <td><button class="inline-flex size-7 items-center justify-center rounded-base text-danger hover:bg-danger-soft" type="button" data-run-delete title="Delete run"><span class="material-symbols-rounded text-base">delete</span></button></td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+</section>

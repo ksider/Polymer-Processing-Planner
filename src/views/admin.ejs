@@ -216,10 +216,14 @@
     </div>
   </section>
 
-  <section class="hidden overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm" id="experiments" data-admin-panel="experiments" aria-labelledby="experimentsTitle">
+  <section class="hidden overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm" data-admin-panel="processes" aria-labelledby="processesWorkspaceTitle">
+    <div class="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 class="text-lg font-semibold text-gray-900" id="processesWorkspaceTitle">Processes</h2><p class="mt-1 text-sm text-gray-500">Manage processes, their experiments, and reports from one place.</p></div><div class="inline-flex w-fit rounded-lg bg-gray-100 p-1 text-sm font-medium" role="tablist" aria-label="Process administration"><button class="rounded-md bg-white px-3 py-1.5 text-gray-900 shadow-sm" type="button" data-processes-tab="process-settings" role="tab" aria-selected="true">Process settings</button><button class="rounded-md px-3 py-1.5 text-gray-500 hover:text-gray-900" type="button" data-processes-tab="experiments" role="tab" aria-selected="false">Experiments</button><button class="rounded-md px-3 py-1.5 text-gray-500 hover:text-gray-900" type="button" data-processes-tab="reports" role="tab" aria-selected="false">Reports</button></div></div>
+  </section>
+
+  <section class="hidden overflow-visible rounded-lg border border-gray-200 bg-white shadow-sm" id="experiments" data-admin-panel="processes" data-processes-tab-panel="experiments" aria-labelledby="experimentsTitle">
     <div class="flex flex-col gap-4 border-b border-gray-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 class="text-lg font-semibold text-gray-900" id="experimentsTitle">Experiments</h2><p class="mt-1 text-sm text-gray-500">Manage ownership, archive state, and experiment progress.</p></div><div class="inline-flex w-fit rounded-lg bg-gray-100 p-1 text-sm font-medium" role="tablist" aria-label="Experiment status"><button class="rounded-md bg-white px-3 py-1.5 text-gray-900 shadow-sm" type="button" data-exp-tab="active" role="tab" aria-selected="true">Active</button><button class="rounded-md px-3 py-1.5 text-gray-500 hover:text-gray-900" type="button" data-exp-tab="archived" role="tab" aria-selected="false">Archived</button></div></div>
     <div id="adminExperimentToastArea"></div>
-    <div class="relative overflow-x-auto">
+    <div class="relative overflow-visible">
       <table class="w-full text-left text-sm text-gray-500">
         <thead class="bg-gray-50 text-xs uppercase text-gray-700">
           <tr>
@@ -234,25 +238,29 @@
               <td class="px-5 py-4">
                 <% if (exp.archived_at) { %>
                   <form id="experimentOwnerForm-<%= exp.id %>" method="post" action="/admin/experiments/<%= exp.id %>/restore" class="ajax-form" data-exp-action="restore">
-                    <select class="block min-w-40 rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" name="owner_user_id">
-                      <option value="">No owner</option>
-                      <% users.forEach(function(user) { %>
-                        <option value="<%= user.id %>" <%= exp.owner_user_id === user.id ? 'selected' : '' %>>
-                          <%= user.name ? user.name : user.email %>
-                        </option>
-                      <% }); %>
-                    </select>
+                    <% const archivedOwner = users.find((user) => user.id === exp.owner_user_id); %>
+                    <div class="relative min-w-48" data-owner-picker>
+                      <input type="hidden" name="owner_user_id" value="<%= exp.owner_user_id || '' %>">
+                      <span class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3 text-gray-500"><span class="material-symbols-rounded text-[20px]" aria-hidden="true">person</span></span>
+                      <button id="experimentOwnerButton-<%= exp.id %>" class="flex w-full items-center justify-between rounded-lg border border-gray-300 bg-gray-50 py-2.5 ps-10 pe-3 text-left text-sm text-gray-900 hover:bg-gray-100 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100" type="button" data-dropdown-toggle="experimentOwnerMenu-<%= exp.id %>" data-dropdown-placement="bottom-start" aria-label="Select experiment owner"><span class="truncate" data-owner-picker-label><%= archivedOwner ? (archivedOwner.name || archivedOwner.email) : 'No owner' %></span><span class="material-symbols-rounded ms-3 shrink-0 text-[20px] text-gray-500" aria-hidden="true">expand_more</span></button>
+                      <div id="experimentOwnerMenu-<%= exp.id %>" class="z-20 hidden w-full min-w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                        <button class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100" type="button" data-owner-choice data-owner-value="" data-owner-label="No owner">No owner</button>
+                        <% users.forEach(function(user) { %><button class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100" type="button" data-owner-choice data-owner-value="<%= user.id %>" data-owner-label="<%= user.name || user.email %>"><%= user.name || user.email %></button><% }); %>
+                      </div>
+                    </div>
                   </form>
                 <% } else { %>
                 <form id="experimentOwnerForm-<%= exp.id %>" method="post" action="/admin/experiments/<%= exp.id %>/owner" class="ajax-form autosave-form" data-exp-action="owner-update">
-                  <select class="block min-w-40 rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" name="owner_user_id">
-                    <option value="">No owner</option>
-                    <% users.forEach(function(user) { %>
-                      <option value="<%= user.id %>" <%= exp.owner_user_id === user.id ? 'selected' : '' %>>
-                        <%= user.name ? user.name : user.email %>
-                      </option>
-                    <% }); %>
-                  </select>
+                  <% const activeOwner = users.find((user) => user.id === exp.owner_user_id); %>
+                  <div class="relative min-w-48" data-owner-picker>
+                    <input type="hidden" name="owner_user_id" value="<%= exp.owner_user_id || '' %>" data-autosave="experimentOwnerForm-<%= exp.id %>">
+                    <span class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3 text-gray-500"><span class="material-symbols-rounded text-[20px]" aria-hidden="true">person</span></span>
+                    <button id="experimentOwnerButton-<%= exp.id %>" class="flex w-full items-center justify-between rounded-lg border border-gray-300 bg-gray-50 py-2.5 ps-10 pe-3 text-left text-sm text-gray-900 hover:bg-gray-100 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100" type="button" data-dropdown-toggle="experimentOwnerMenu-<%= exp.id %>" data-dropdown-placement="bottom-start" aria-label="Select experiment owner"><span class="truncate" data-owner-picker-label><%= activeOwner ? (activeOwner.name || activeOwner.email) : 'No owner' %></span><span class="material-symbols-rounded ms-3 shrink-0 text-[20px] text-gray-500" aria-hidden="true">expand_more</span></button>
+                    <div id="experimentOwnerMenu-<%= exp.id %>" class="z-20 hidden w-full min-w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                      <button class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100" type="button" data-owner-choice data-owner-value="" data-owner-label="No owner">No owner</button>
+                      <% users.forEach(function(user) { %><button class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100" type="button" data-owner-choice data-owner-value="<%= user.id %>" data-owner-label="<%= user.name || user.email %>"><%= user.name || user.email %></button><% }); %>
+                    </div>
+                  </div>
                 </form>
                 <% } %>
               </td>
@@ -281,7 +289,7 @@
     </div>
   </section>
 
-  <section class="hidden overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm" id="reports" data-admin-panel="reports" aria-labelledby="reportsTitle">
+  <section class="hidden overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm" id="reports" data-admin-panel="processes" data-processes-tab-panel="reports" aria-labelledby="reportsTitle">
     <div class="flex flex-col gap-4 border-b border-gray-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 class="text-lg font-semibold text-gray-900" id="reportsTitle">Reports</h2><p class="mt-1 text-sm text-gray-500">Monitor ownership, deadlines, document readiness, and signature workflow across experiments.</p></div><span class="inline-flex w-fit rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700"><%= reports.length %> total</span></div>
     <% if (!reports.length) { %>
       <div class="px-5 py-12 text-center"><span class="material-symbols-rounded text-3xl text-gray-400" aria-hidden="true">description</span><p class="mt-2 text-sm text-gray-500">No reports have been created yet.</p></div>
@@ -290,10 +298,10 @@
     <% } %>
   </section>
 
-  <section class="hidden overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm" id="processes" data-admin-panel="processes" aria-labelledby="processesTitle">
-    <div class="border-b border-gray-200 px-5 py-5"><h2 class="text-lg font-semibold text-gray-900" id="processesTitle">Processes on Home</h2><p class="mt-1 text-sm text-gray-500">Set the address, owner, and home-page visibility for each process.</p></div>
+  <section class="hidden overflow-visible rounded-lg border border-gray-200 bg-white shadow-sm" id="processes" data-admin-panel="processes" data-processes-tab-panel="process-settings" aria-labelledby="processesTitle">
+    <div class="border-b border-gray-200 px-5 py-5"><h2 class="text-lg font-semibold text-gray-900" id="processesTitle">Process settings</h2><p class="mt-1 text-sm text-gray-500">Set the address, owner, and home-page visibility for each process.</p></div>
     <div id="adminProcessToastArea"></div>
-    <div class="relative overflow-x-auto">
+    <div class="relative overflow-visible">
       <table class="w-full text-left text-sm text-gray-500">
         <thead class="bg-gray-50 text-xs uppercase text-gray-700">
           <tr>
@@ -321,14 +329,16 @@
               </td>
               <td class="px-5 py-4">
                 <form>
-                  <select class="block min-w-40 rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" name="owner_user_id" form="processSettingsForm-<%= process.id %>" data-autosave="processSettingsForm-<%= process.id %>">
-                    <option value="">Unassigned</option>
-                    <% users.forEach((user) => { %>
-                      <option value="<%= user.id %>" <%= process.owner_user_id === user.id ? 'selected' : '' %>>
-                        <%= user.name ? user.name : user.email %>
-                      </option>
-                    <% }) %>
-                  </select>
+                  <% const processOwner = users.find((user) => user.id === process.owner_user_id); %>
+                  <div class="relative min-w-48" data-owner-picker>
+                    <input type="hidden" name="owner_user_id" value="<%= process.owner_user_id || '' %>" form="processSettingsForm-<%= process.id %>" data-autosave="processSettingsForm-<%= process.id %>">
+                    <span class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3 text-gray-500"><span class="material-symbols-rounded text-[20px]" aria-hidden="true">person</span></span>
+                    <button id="processOwnerButton-<%= process.id %>" class="flex w-full items-center justify-between rounded-lg border border-gray-300 bg-gray-50 py-2.5 ps-10 pe-3 text-left text-sm text-gray-900 hover:bg-gray-100 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100" type="button" data-dropdown-toggle="processOwnerMenu-<%= process.id %>" data-dropdown-placement="bottom-start" aria-label="Select process owner"><span class="truncate" data-owner-picker-label><%= processOwner ? (processOwner.name || processOwner.email) : 'Unassigned' %></span><span class="material-symbols-rounded ms-3 shrink-0 text-[20px] text-gray-500" aria-hidden="true">expand_more</span></button>
+                    <div id="processOwnerMenu-<%= process.id %>" class="z-20 hidden w-full min-w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                      <button class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100" type="button" data-owner-choice data-owner-value="" data-owner-label="Unassigned">Unassigned</button>
+                      <% users.forEach((user) => { %><button class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100" type="button" data-owner-choice data-owner-value="<%= user.id %>" data-owner-label="<%= user.name || user.email %>"><%= user.name || user.email %></button><% }) %>
+                    </div>
+                  </div>
                 </form>
               </td>
               <td class="px-5 py-4">
@@ -565,6 +575,26 @@
   };
   bindAutosaveSelects();
 
+  document.querySelectorAll('[data-owner-choice]').forEach((choice) => {
+    choice.addEventListener('click', () => {
+      const picker = choice.closest('[data-owner-picker]');
+      const value = picker?.querySelector('input[name="owner_user_id"]');
+      const label = picker?.querySelector('[data-owner-picker-label]');
+      const menu = picker?.querySelector('[id$="OwnerMenu-"]') || picker?.querySelector('[id*="OwnerMenu-"]');
+      if (!picker || !value || !label) return;
+
+      value.value = choice.dataset.ownerValue || '';
+      label.textContent = choice.dataset.ownerLabel || '';
+      value.dispatchEvent(new Event('change', { bubbles: true }));
+
+      if (menu) {
+        const dropdown = window.FlowbiteInstances?.getInstance?.('Dropdown', menu.id);
+        if (dropdown) dropdown.hide();
+        else menu.classList.add('hidden');
+      }
+    });
+  });
+
   const showToast = (message, kind = 'success') => {
     window.IMPlanner?.notify?.({ type: kind, message });
   };
@@ -753,12 +783,36 @@
   });
   setExpTab('active');
 
+  const processesTabButtons = Array.from(document.querySelectorAll('[data-processes-tab]'));
+  const processesTabPanels = Array.from(document.querySelectorAll('[data-processes-tab-panel]'));
+  const processTabNames = new Set(processesTabPanels.map((panel) => panel.dataset.processesTabPanel));
+  let activeProcessesTab = 'process-settings';
+  const setProcessesTab = (requestedTab) => {
+    const tab = processTabNames.has(requestedTab) ? requestedTab : 'process-settings';
+    activeProcessesTab = tab;
+    processesTabPanels.forEach((panel) => panel.classList.toggle('hidden', panel.dataset.processesTabPanel !== tab));
+    processesTabButtons.forEach((button) => {
+      const active = button.dataset.processesTab === tab;
+      button.classList.toggle('bg-white', active);
+      button.classList.toggle('text-gray-900', active);
+      button.classList.toggle('shadow-sm', active);
+      button.classList.toggle('text-gray-500', !active);
+      button.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+  };
+  processesTabButtons.forEach((button) => button.addEventListener('click', () => setProcessesTab(button.dataset.processesTab || 'process-settings')));
+  const initialHashSection = window.location.hash.slice(1);
+  setProcessesTab(initialHashSection === 'experiments' || initialHashSection === 'reports' ? initialHashSection : 'process-settings');
+
   const adminPanels = Array.from(document.querySelectorAll('[data-admin-panel]'));
   const adminSectionButtons = Array.from(document.querySelectorAll('[data-admin-section]'));
   const adminSectionNames = new Set(adminPanels.map((panel) => panel.dataset.adminPanel));
   const setAdminSection = (requestedSection, writeHash = true) => {
-    const section = adminSectionNames.has(requestedSection) ? requestedSection : 'overview';
+    const processTabAlias = requestedSection === 'experiments' || requestedSection === 'reports' ? requestedSection : null;
+    if (processTabAlias) setProcessesTab(processTabAlias);
+    const section = processTabAlias ? 'processes' : (adminSectionNames.has(requestedSection) ? requestedSection : 'overview');
     adminPanels.forEach((panel) => panel.classList.toggle('hidden', panel.dataset.adminPanel !== section));
+    if (section === 'processes') setProcessesTab(processTabAlias || activeProcessesTab);
     adminSectionButtons.forEach((button) => {
       const active = button.dataset.adminSection === section;
       if (active) button.setAttribute('aria-current', 'page');

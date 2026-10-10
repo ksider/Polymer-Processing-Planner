@@ -11,6 +11,7 @@ import {
   getProcessById,
   getProcessByRouteCode,
   getProcessRouteCode,
+  listProcessesForOwner,
   listProcessesWithStats,
   normalizeRouteCode,
   updateProcessSettings
@@ -60,6 +61,9 @@ export function createHomeRouter(db: Db) {
 
   const renderProcesses = (req: express.Request, res: express.Response) => {
     const isPrivileged = req.user?.role === "admin" || req.user?.role === "manager";
+    const canCreateExperiment =
+      ["admin", "manager", "engineer"].includes(req.user?.role ?? "") ||
+      Boolean(req.user?.id && listProcessesForOwner(db, req.user.id).length);
     const allProcesses = listProcessesWithStats(db);
     const visibleProcessIds = new Set(
       allProcesses
@@ -148,6 +152,7 @@ export function createHomeRouter(db: Db) {
       experiments: enrich(experiments),
       processCards,
       selectedProcess,
+      canCreateExperiment,
       isAdmin,
       assignableUsers
     });
@@ -157,7 +162,9 @@ export function createHomeRouter(db: Db) {
     const process = getProcessById(db, processId);
     if (!process) return res.status(404).send("Process not found");
     const isPrivileged = req.user?.role === "admin" || req.user?.role === "manager";
-    const canManage = isPrivileged || (req.user?.id != null && process.owner_user_id === req.user.id);
+    const canManage =
+      ["admin", "manager", "engineer"].includes(req.user?.role ?? "") ||
+      (req.user?.id != null && process.owner_user_id === req.user.id);
     const isAdmin = req.user?.role === "admin";
     const experiments = isPrivileged
       ? listExperimentsByProcessWithMeta(db, processId, false)
@@ -231,7 +238,10 @@ export function createHomeRouter(db: Db) {
     const experiments = req.user?.id
       ? listExperimentsForUserWithMeta(db, req.user.id, false)
       : [];
-    res.render("my_experiments", { experiments: enrich(experiments) });
+    const canCreateExperiment =
+      ["admin", "manager", "engineer"].includes(req.user?.role ?? "") ||
+      Boolean(req.user?.id && listProcessesForOwner(db, req.user.id).length);
+    res.render("my_experiments", { experiments: enrich(experiments), canCreateExperiment });
   });
 
   return router;

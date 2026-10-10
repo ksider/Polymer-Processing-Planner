@@ -5,9 +5,12 @@ import fs from "node:fs";
 import os from "node:os";
 import bcrypt from "bcryptjs";
 import request from "supertest";
+import { Script } from "node:vm";
 import { openDb } from "../db.js";
 import { createUser } from "../repos/users_repo.js";
 import { getCsrfToken } from "./csrf_test_helpers.js";
+import { createExperimentWithDefaults } from "../services/experiments_service.js";
+import { ensureQualificationDefaults } from "../services/qualification_service.js";
 
 let dbPath = "";
 
@@ -67,6 +70,32 @@ test("process routing, route_code settings and process-owner access", async () =
 
   assert.ok(processRow.id > 0);
   assert.equal(processRow.route_code, "injection");
+  await adminAgent.get("/").expect(200).expect(/Create experiment/);
+  await adminAgent.get("/my-experiments").expect(200).expect(/Create experiment/);
+
+  const extrusionProcess = db
+    .prepare(
+      `SELECT p.id FROM processes p JOIN process_types pt ON pt.id = p.process_type_id
+       WHERE pt.code = 'extrusion_v1' LIMIT 1`
+    )
+    .get() as { id: number } | undefined;
+  assert.ok(extrusionProcess?.id, "extrusion_v1 process is seeded");
+  const extrusionExperimentId = createExperimentWithDefaults(db, {
+    name: "Extrusion route smoke",
+    process_id: extrusionProcess!.id
+  });
+  ensureQualificationDefaults(db, extrusionExperimentId);
+  const extrusionStepResponse = await adminAgent
+    .get(`/extrusion-v1/${extrusionExperimentId}/qualification/1`)
+    .expect(200)
+    .expect(/Measurement series/)
+    .expect(/Flow curves by temperature/);
+  const inlineScripts = Array.from(extrusionStepResponse.text.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g));
+  const qualificationScript = inlineScripts
+    .map((match) => match[1])
+    .find((source) => source.includes("qualificationSeriesDefinitions"));
+  assert.ok(qualificationScript, "extrusion qualification script is rendered");
+  assert.doesNotThrow(() => new Script(qualificationScript));
 
   const experimentCsrf = await getCsrfToken(adminAgent, "/");
   await adminAgent
@@ -85,7 +114,7 @@ test("process routing, route_code settings and process-owner access", async () =
   assert.ok(experiment.id > 0);
   assert.equal(experiment.process_id, processRow.id);
 
-  await adminAgent.get("/injection").expect(200);
+  await adminAgent.get("/injection").expect(200).expect(/Create experiment/);
   await adminAgent.get(`/injection/${experiment.id}`).expect(200);
   await adminAgent
     .get(`/experiments/${experiment.id}`)

@@ -2,8 +2,18 @@
 <%- include('partials/experiment_workspace_nav') %>
 <main class="min-h-[calc(100vh-4rem)] bg-gray-50"><div class="w-full max-w-none px-3 py-3 sm:px-4 lg:px-5">
   <section class="mb-4 rounded-xl border border-default-medium bg-neutral-primary px-4 py-3 shadow-xs">
-    <h1 class="text-base font-semibold tracking-tight text-heading">My experiments</h1>
-    <p class="mt-0.5 text-xs text-body">Experiments assigned to you.</p>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 class="text-base font-semibold tracking-tight text-heading">My experiments</h1>
+        <p class="mt-0.5 text-xs text-body">Experiments assigned to you.</p>
+      </div>
+      <% if (canCreateExperiment) { %>
+        <a class="inline-flex items-center justify-center gap-2 rounded-base bg-brand px-3 py-2.5 text-sm font-medium text-white no-underline shadow-xs hover:bg-brand-strong focus:outline-none focus:ring-4 focus:ring-brand-soft" href="/experiments/new">
+          <span class="material-symbols-rounded text-[19px]" aria-hidden="true">add</span>
+          Create experiment
+        </a>
+      <% } %>
+    </div>
   </section>
 
   <section class="rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs">

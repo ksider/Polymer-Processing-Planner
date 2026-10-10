@@ -1,0 +1,92 @@
+<%
+  const fieldByCode = new Map(fields.filter((field) => field.is_enabled === 1).map((field) => [field.code, field]));
+  const valueFor = (run, field) => (runValueMap[String(run.id)] || {})[String(field.id)];
+  const fieldsInOrder = [
+    'target_throughput_kg_h',
+    'mean_throughput_kg_h',
+    'throughput_sd_kg_h',
+    'sampling_window_min',
+    'feed_cv_pct',
+    'feed_error_pct'
+  ].map((code) => fieldByCode.get(code)).filter(Boolean);
+  const outputByCode = new Map(stepOutputs.map((output) => [output.output_code, output]));
+  const feederSettings = stepSettings || {};
+%>
+<section class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm" aria-labelledby="feederConditionsTitle">
+  <div class="mb-5 border-b border-gray-100 pb-4">
+    <h2 class="text-lg font-semibold tracking-tight text-gray-900" id="feederConditionsTitle">Controlled feeder conditions</h2>
+    <p class="mt-1 text-sm text-gray-500">Keep these conditions fixed across the loading sweep. The maximum capacity converts the graph to feeder loading.</p>
+  </div>
+  <form class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" id="extrusionFeederSetupForm" action="/experiments/<%= step.experiment_id %>/qualification/<%= step.step_number %>/settings" method="post">
+    <label class="block text-sm font-medium text-gray-900">Maximum feeder throughput <span class="font-normal text-gray-500">(kg/h)</span><input class="mt-2 block w-full" name="feeder_max_throughput_kg_h" type="number" min="0" step="any" value="<%= feederSettings.feeder_max_throughput_kg_h ?? '' %>" placeholder="Nameplate capacity"></label>
+    <label class="block text-sm font-medium text-gray-900">Material bulk density <span class="font-normal text-gray-500">(kg/m³)</span><input class="mt-2 block w-full" name="material_bulk_density_kg_m3" type="number" min="0" step="any" value="<%= feederSettings.material_bulk_density_kg_m3 ?? '' %>"></label>
+    <label class="block text-sm font-medium text-gray-900">Feeder temperature <span class="font-normal text-gray-500">(°C)</span><input class="mt-2 block w-full" name="feeder_temperature_c" type="number" step="any" value="<%= feederSettings.feeder_temperature_c ?? 23 %>"></label>
+    <label class="block text-sm font-medium text-gray-900">Feeder screw geometry<input class="mt-2 block w-full" name="feeder_screw_geometry" type="text" value="<%= feederSettings.feeder_screw_geometry ?? '' %>" placeholder="e.g. twin screw, 20 mm"></label>
+    <span class="sr-only" data-autosave-status></span>
+  </form>
+</section>
+
+<section class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm" data-extrusion-step-two>
+  <div class="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 p-5">
+    <div>
+      <h2 class="text-lg font-semibold tracking-tight text-gray-900">Feeder stability sweep</h2>
+      <p class="mt-1 max-w-3xl text-sm text-gray-500">Measure a series of feed-rate setpoints. Each row is one stable sampling window recorded from the gravimetric check.</p>
+    </div>
+    <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-add-group-run="default" <%= step.is_blocked === 1 ? 'disabled' : '' %>>Add setpoint</button>
+  </div>
+  <div class="overflow-x-auto p-4">
+    <table class="<%= inputTableClass %> min-w-[1160px]">
+      <thead>
+        <tr>
+          <th>Run</th><th>Date</th><th>Responsible</th>
+          <% fieldsInOrder.forEach((field) => { %>
+            <th><%= field.label %><% if (field.unit) { %> <span class="normal-case text-body">(<%= field.unit %>)</span><% } %></th>
+          <% }); %>
+          <th>Done</th><th>Exclude</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (!runs.length) { %><tr><td colspan="<%= fieldsInOrder.length + 6 %>" class="text-body">No setpoints yet.</td></tr><% } %>
+        <% runs.forEach((run) => { %>
+          <tr data-run-row data-run-id="<%= run.id %>">
+            <td><strong class="whitespace-nowrap"><%= run.run_code %></strong></td>
+            <td><input class="min-w-36" type="date" data-run-performed value="<%= run.performed_at || '' %>"></td>
+            <td><select class="min-w-40" data-run-responsible><option value="">Unassigned</option><% assignableUsers.forEach((user) => { %><option value="<%= user.id %>" <%= Number(run.responsible_user_id) === Number(user.id) ? 'selected' : '' %>><%= user.name || user.email %></option><% }); %></select></td>
+            <% fieldsInOrder.forEach((field) => { const value = valueFor(run, field); %>
+              <td>
+                <% if (field.is_derived) { %><span class="whitespace-nowrap text-sm text-gray-600" data-derived-code="<%= field.code %>"><%= formatNumber(value?.value_real) %></span>
+                <% } else { %><input class="min-w-28" type="number" step="any" data-field-id="<%= field.id %>" data-field-type="number" value="<%= value?.value_real ?? '' %>"><% } %>
+              </td>
+            <% }); %>
+            <td><input type="checkbox" data-flag="done" <%= run.done === 1 ? 'checked' : '' %>></td>
+            <td><input type="checkbox" data-flag="exclude" <%= run.exclude_from_analysis === 1 ? 'checked' : '' %>></td>
+            <td><button class="inline-flex size-8 items-center justify-center rounded-base text-danger hover:bg-danger-soft" type="button" data-run-delete title="Delete setpoint"><span class="material-symbols-rounded text-[18px]" aria-hidden="true">delete</span></button></td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm" aria-labelledby="feederAssessmentTitle">
+  <div class="mb-5 border-b border-gray-100 pb-4">
+    <h2 class="text-lg font-semibold tracking-tight text-gray-900" id="feederAssessmentTitle">Feeder stability assessment</h2>
+    <p class="mt-1 text-sm text-gray-500">This test is evaluated manually: record the mean throughput, standard deviation and sampling window from the gravimetric check in the table above. No instrument export is assumed.</p>
+  </div>
+  <div class="min-h-72 rounded-lg border border-gray-200 bg-gray-50 p-2"><div class="h-72 w-full" id="extrusionFeederStabilityChart"></div></div>
+</section>
+
+<section class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm" aria-labelledby="feederResultTitle">
+  <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
+    <div><h2 class="text-lg font-semibold tracking-tight text-gray-900" id="feederResultTitle">Result passed to next steps</h2><p class="mt-1 text-sm text-gray-500">Confirm the accepted feeder capacity window after reviewing CV and dosing error.</p></div>
+    <span class="rounded-md bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">Manual confirmation</span>
+  </div>
+  <div class="grid gap-4 sm:grid-cols-2">
+    <% outputDefinitions.forEach((definition) => { const output = outputByCode.get(definition.code); %>
+      <label class="block text-sm font-medium text-gray-900"><%= definition.label %><% if (definition.unit) { %> <span class="font-normal text-gray-500">(<%= definition.unit %>)</span><% } %>
+        <input class="mt-2 block w-full" type="number" step="any" value="<%= output?.value_real ?? '' %>" data-step-output="<%= definition.code %>" placeholder="Enter accepted value">
+        <span class="mt-1 block text-xs font-normal text-gray-500"><%= definition.description %></span>
+      </label>
+    <% }); %>
+  </div>
+</section>

@@ -6,17 +6,17 @@
   <main class="min-w-0 flex-1">
     <div class="w-full max-w-none px-3 py-3 sm:px-4 lg:px-5">
       <div class="mb-3 flex items-center justify-between gap-3 lg:hidden"><button class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm" type="button" data-open-experiment-calendar><span class="material-symbols-rounded text-[19px]" aria-hidden="true">calendar_month</span>Calendar</button><a class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 no-underline shadow-sm" href="<%= `${experimentPath(experiment)}#tasks` %>"><span class="material-symbols-rounded text-[19px]" aria-hidden="true">assignment</span>Tasks</a></div>
-  <section class="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm" id="experiment-overview">
+  <section class="mb-4 rounded-xl border border-default-medium bg-neutral-primary px-4 py-3 shadow-xs" id="experiment-overview">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <a class="inline-flex size-9 items-center justify-center rounded-lg text-gray-500 no-underline hover:bg-gray-100 hover:text-gray-900" href="<%= processPath(experiment.process_id) %>" aria-label="Back to process">
+      <a class="inline-flex size-9 items-center justify-center rounded-base text-body no-underline hover:bg-neutral-secondary hover:text-heading" href="<%= processPath(experiment.process_id) %>" aria-label="Back to process">
         <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
       </a>
       <div class="min-w-0 flex-1">
-        <h1 class="truncate text-base font-semibold tracking-tight text-gray-900"><%- formatInline(experiment.name) %></h1>
+        <h1 class="truncate text-base font-semibold tracking-tight text-heading"><%- formatInline(experiment.name) %></h1>
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
-          <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" id="openMachineEdit" title="Edit experiment">
+          <button class="inline-flex size-9 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="openMachineEdit" title="Edit experiment">
             <span class="material-symbols-rounded" aria-hidden="true">edit</span>
           </button>
         <% } %>

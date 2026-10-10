@@ -1,0 +1,88 @@
+<%
+  const activeFields = fields.filter((field) => field.is_enabled === 1);
+  const valuesFor = (run) => runValueMap[String(run.id)] || {};
+  const outputByCode = new Map(stepOutputs.map((output) => [output.output_code, output]));
+  const setup = stepSettings || {};
+  const characteristic = stepSummary || {};
+  const hasCharacteristicFit = characteristic.pump_characteristic_fit_valid === true;
+  const matrixRuns = runs.filter((run) => run.run_group !== 'pump_characteristic');
+  const pumpCharacteristicRuns = runs.filter((run) => run.run_group === 'pump_characteristic');
+  const matrixFields = activeFields.filter((field) => field.code !== 'target_back_pressure_bar');
+  const pumpFields = activeFields.filter((field) => field.code !== 'motor_torque_limit_nm');
+  const compactLabelByCode = { screw_speed_rpm: 'N', throughput_kg_h: 'Q', motor_torque_nm: 'Torque', motor_torque_limit_nm: 'M limit', melt_pressure_bar: 'P melt', target_back_pressure_bar: 'P target', melt_temp_c: 'T melt', operating_point_stable: 'Stable', specific_throughput_kg_h_rpm: 'Q/N', motor_load_pct: 'Load' };
+  const superscript = (value) => String(value).replace(/[-+0-9]/g, (character) => ({ '-': '⁻', '+': '⁺', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' })[character]);
+  const scientificDisplay = (value) => {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '-';
+    const [mantissa, exponent] = number.toExponential(4).split('e');
+    return `${Number(mantissa)} × 10${superscript(Number(exponent))}`;
+  };
+%>
+<section class="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+  <div class="mb-5 border-b border-gray-100 pb-4"><h2 class="text-lg font-semibold tracking-tight text-gray-900">Operating-point matrix</h2><p class="mt-1 text-sm text-gray-500">Generate the screw-speed × feeder-throughput matrix from the stable range in Step 2. Its values are starting points and can be adjusted per run.</p></div>
+  <form id="extrusionPumpingSetupForm" action="/experiments/<%= step.experiment_id %>/qualification/3/settings" method="post">
+    <fieldset class="max-w-3xl rounded-base border border-default-medium bg-neutral-secondary p-4">
+      <legend class="px-1 text-sm font-semibold text-heading">Matrix generation</legend>
+      <div class="grid gap-4 md:grid-cols-[15rem_15rem_auto] md:items-end">
+        <label class="text-sm font-medium text-gray-900">Screw-speed levels <span class="font-normal text-gray-500">(rpm)</span><input class="mt-2 block w-full" name="screw_speed_levels_rpm" value="<%= setup.screw_speed_levels_rpm ?? '100, 200, 300' %>"></label>
+        <label class="text-sm font-medium text-gray-900">Feed-rate levels <span class="font-normal text-gray-500">(kg/h)</span><input class="mt-2 block w-full" name="throughput_levels_kg_h" value="<%= setup.throughput_levels_kg_h ?? (feederThroughputLevels || []).join(', ') %>" placeholder="e.g. 12, 30, 48"><span class="mt-1 block text-xs font-normal text-body">Prefilled from the stable range in Step 2; editable for this matrix.</span></label>
+        <button class="inline-flex justify-center rounded-base bg-brand px-3 py-2.5 text-sm font-medium text-white shadow-xs hover:bg-brand-strong" type="button" data-generate-pumping-matrix>Generate matrix</button>
+      </div>
+    </fieldset>
+    <div class="mt-5 grid max-w-4xl gap-4 border-t border-gray-100 pt-5 sm:grid-cols-2 xl:grid-cols-4">
+      <label class="text-sm font-medium text-gray-900">Pressure limit <span class="font-normal text-gray-500">(bar)</span><input class="mt-2 block w-full" type="number" name="melt_pressure_limit_bar" value="<%= setup.melt_pressure_limit_bar ?? '' %>"></label>
+      <label class="text-sm font-medium text-gray-900">Torque limit <span class="font-normal text-gray-500">(N·m)</span><input class="mt-2 block w-full" type="number" name="motor_torque_limit_nm" value="<%= setup.motor_torque_limit_nm ?? '' %>"></label>
+      <label class="text-sm font-medium text-gray-900">Die geometry<input class="mt-2 block w-full" name="die_geometry" value="<%= setup.die_geometry ?? '' %>"></label>
+      <label class="text-sm font-medium text-gray-900">Barrel temperature profile<input class="mt-2 block w-full" name="barrel_temperature_profile" value="<%= setup.barrel_temperature_profile ?? '' %>"></label>
+    </div>
+  </form>
+</section>
+<%- include('extrusion_step3_runs_table', { runs: matrixRuns, title: 'Operating-point matrix runs', description: 'Generated from the selected screw-speed and feeder-throughput levels. These rows determine the operating window.', emptyMessage: 'Generate the operating-point matrix to add runs.', tableDataAttribute: 'data-extrusion-step-three', activeFields, tableFields: matrixFields, valuesFor, compactLabelByCode, assignableUsers, inputTableClass, formatNumber }) %>
+<section class="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm"><h2 class="text-lg font-semibold text-gray-900">Operating window</h2><p class="mt-1 text-sm text-body">Accepted points are within the pressure and torque limits and marked stable.</p><div class="mt-4 h-72" id="extrusionOperatingWindowChart"></div><div class="mt-4 grid gap-4 sm:grid-cols-3"><% outputDefinitions.forEach((definition)=>{const output=outputByCode.get(definition.code);%><label class="text-sm font-medium text-gray-900"><%= definition.label %><input class="mt-2 block w-full" type="number" data-step-output="<%= definition.code %>" value="<%= output?.value_real??'' %>"></label><% }) %></div></section>
+<section class="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm"><h2 class="text-lg font-semibold text-gray-900">Pressure and torque vs specific throughput</h2><p class="mt-1 text-sm text-body">Pressure and motor torque plotted against Q/N; dashed lines show the configured operating limits.</p><div class="mt-4 h-72" id="extrusionPumpResponseChart"></div></section>
+<section class="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+  <div class="border-b border-gray-100 pb-4"><h2 class="text-lg font-semibold tracking-tight text-gray-900">Screw pumping characteristic</h2><p class="mt-1 max-w-3xl text-sm text-body">A separate calibration series: at each screw speed, vary die resistance or back pressure and measure the actual discharge after steady state.</p></div>
+  <form id="pumpCharacteristicSettingsForm" class="mt-5" action="/experiments/<%= step.experiment_id %>/qualification/3/settings" method="post">
+    <fieldset class="max-w-4xl rounded-base border border-default-medium bg-neutral-secondary p-4">
+      <legend class="px-1 text-sm font-semibold text-heading">Calibration generator and model</legend>
+      <div class="grid gap-4 lg:grid-cols-[15rem_15rem_auto] lg:items-end">
+        <label class="text-sm font-medium text-heading">Screw-speed levels <span class="font-normal text-body">(rpm)</span><input class="mt-2 block w-full" name="pump_curve_speed_levels_rpm" value="<%= setup.pump_curve_speed_levels_rpm ?? '100, 200, 300' %>"></label>
+        <label class="text-sm font-medium text-heading">Back-pressure targets <span class="font-normal text-body">(bar)</span><input class="mt-2 block w-full" name="pump_curve_pressure_levels_bar" value="<%= setup.pump_curve_pressure_levels_bar ?? '30, 90, 150' %>"></label>
+        <button class="inline-flex justify-center rounded-base bg-brand px-3 py-2.5 text-sm font-medium text-white shadow-xs hover:bg-brand-strong" type="button" data-generate-pump-curve>Generate calibration runs</button>
+      </div>
+      <p class="mt-3 text-xs text-body">The generator creates the RPM × target-pressure grid. Target pressure is a setting; use the measured melt pressure and measured discharge for the fit.</p>
+      <div class="mt-4 grid gap-4 border-t border-default pt-4 sm:grid-cols-3">
+        <label class="text-sm font-medium text-heading">Melt density <span class="font-normal text-body">(kg/m³)</span><input class="mt-2 block w-full" type="number" min="0" step="any" name="melt_density_kg_m3" value="<%= setup.melt_density_kg_m3 ?? '' %>" placeholder="e.g. 850"></label>
+        <label class="text-sm font-medium text-heading">Reference viscosity <span class="font-normal text-body">(Pa·s)</span><input class="mt-2 block w-full" type="number" min="0" step="any" name="reference_viscosity_pa_s" value="<%= setup.reference_viscosity_pa_s ?? rheologyReferenceViscosity ?? '' %>"><span class="mt-1 block text-xs font-normal text-body">Step 1: <%= rheologyReferenceViscosity ?? 'not confirmed' %> Pa·s</span></label>
+        <label class="text-sm font-medium text-heading">Die outlet pressure <span class="font-normal text-body">(bar, gauge)</span><input class="mt-2 block w-full" type="number" step="any" name="die_outlet_pressure_bar" value="<%= setup.die_outlet_pressure_bar ?? 0 %>"></label>
+      </div>
+    </fieldset>
+  </form>
+  <div class="mt-5">
+    <%- include('extrusion_step3_runs_table', { runs: pumpCharacteristicRuns, title: 'Pump-characteristic calibration runs', description: 'For each generated target pressure, record actual melt pressure, actual discharge and torque after steady state. These rows alone are used to calculate A and B.', emptyMessage: 'Generate the calibration grid to add pump-characteristic runs.', tableDataAttribute: 'data-pump-characteristic-table', activeFields, tableFields: pumpFields, valuesFor, compactLabelByCode, assignableUsers, inputTableClass, formatNumber }) %>
+  </div>
+  <div class="mt-5 rounded-base border p-4 text-sm text-heading <%= hasCharacteristicFit ? 'border-success-medium bg-success-soft' : 'border-warning-medium bg-warning-soft' %>" data-pump-characteristic-result>
+    <p class="font-medium" data-pump-fit-title><%= hasCharacteristicFit ? 'Fitted equation' : 'Awaiting valid pump-curve data' %></p>
+    <div data-pump-fit-details <%= hasCharacteristicFit ? '' : 'hidden' %>>
+      <div class="mt-3 overflow-x-auto rounded-base border border-default bg-white px-4 py-3 text-center text-lg text-heading" aria-label="Screw pumping characteristic equation">
+        <span class="whitespace-nowrap"><button class="font-serif italic underline decoration-dotted underline-offset-4" type="button" data-tooltip-target="pump-symbol-qv" data-tooltip-placement="top">Q<sub class="text-xs not-italic">v</sub></button> = <button class="font-serif italic underline decoration-dotted underline-offset-4" type="button" data-tooltip-target="pump-symbol-a" data-tooltip-placement="top">A</button> · <button class="font-serif italic underline decoration-dotted underline-offset-4" type="button" data-tooltip-target="pump-symbol-n" data-tooltip-placement="top">N</button> − <button class="font-serif italic underline decoration-dotted underline-offset-4" type="button" data-tooltip-target="pump-symbol-b" data-tooltip-placement="top">B</button> · <span class="inline-flex translate-y-1 flex-col align-middle leading-none"><button class="border-b border-heading px-1 pb-1 font-serif italic underline decoration-dotted underline-offset-4" type="button" data-tooltip-target="pump-symbol-dp" data-tooltip-placement="top">ΔP</button><button class="px-1 pt-1 font-serif italic underline decoration-dotted underline-offset-4" type="button" data-tooltip-target="pump-symbol-eta" data-tooltip-placement="top">η</button></span></span>
+      </div>
+      <div class="mt-3 overflow-x-auto rounded-base border border-default bg-white px-4 py-3 text-center text-base text-heading" aria-label="Pump characteristic input conversions">
+        <span class="whitespace-nowrap"><button class="font-serif italic underline decoration-dotted underline-offset-4" type="button" data-tooltip-target="pump-symbol-qv" data-tooltip-placement="top">Q<sub class="text-xs not-italic">v</sub></button> = <span class="inline-flex translate-y-1 flex-col align-middle leading-none"><button class="border-b border-heading px-1 pb-1 font-serif italic underline decoration-dotted underline-offset-4" type="button" data-tooltip-target="pump-symbol-mdot" data-tooltip-placement="top">ṁ</button><span class="px-1 pt-1">3600 · <button class="font-serif italic underline decoration-dotted underline-offset-4" type="button" data-tooltip-target="pump-symbol-rho" data-tooltip-placement="top">ρ</button></span></span>, &nbsp; <button class="font-serif italic underline decoration-dotted underline-offset-4" type="button" data-tooltip-target="pump-symbol-dp" data-tooltip-placement="top">ΔP</button> = (<button class="font-serif italic underline decoration-dotted underline-offset-4" type="button" data-tooltip-target="pump-symbol-pmelt" data-tooltip-placement="top">P<sub class="text-xs not-italic">melt</sub></button> − <button class="font-serif italic underline decoration-dotted underline-offset-4" type="button" data-tooltip-target="pump-symbol-poutlet" data-tooltip-placement="top">P<sub class="text-xs not-italic">outlet</sub></button>) · 10<sup>5</sup></span>
+      </div>
+      <div id="pump-symbol-qv" role="tooltip" class="tooltip invisible absolute z-10 inline-block max-w-56 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Volumetric discharge of melt, m³/s.<div class="tooltip-arrow" data-popper-arrow></div></div>
+      <div id="pump-symbol-a" role="tooltip" class="tooltip invisible absolute z-10 inline-block max-w-56 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Drag-flow coefficient: the flow contributed by one rpm of screw speed.<div class="tooltip-arrow" data-popper-arrow></div></div>
+      <div id="pump-symbol-n" role="tooltip" class="tooltip invisible absolute z-10 inline-block max-w-56 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Screw rotation speed, rpm.<div class="tooltip-arrow" data-popper-arrow></div></div>
+      <div id="pump-symbol-b" role="tooltip" class="tooltip invisible absolute z-10 inline-block max-w-56 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Pressure-flow coefficient: the loss of flow caused by pressure resistance.<div class="tooltip-arrow" data-popper-arrow></div></div>
+      <div id="pump-symbol-dp" role="tooltip" class="tooltip invisible absolute z-10 inline-block max-w-56 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Pressure difference across the die, Pa.<div class="tooltip-arrow" data-popper-arrow></div></div>
+      <div id="pump-symbol-eta" role="tooltip" class="tooltip invisible absolute z-10 inline-block max-w-56 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Apparent melt viscosity at the test condition, Pa·s.<div class="tooltip-arrow" data-popper-arrow></div></div>
+      <div id="pump-symbol-mdot" role="tooltip" class="tooltip invisible absolute z-10 inline-block max-w-56 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Measured mass discharge from the pump-curve run, kg/h.<div class="tooltip-arrow" data-popper-arrow></div></div>
+      <div id="pump-symbol-rho" role="tooltip" class="tooltip invisible absolute z-10 inline-block max-w-56 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Melt density used to convert kg/h to m³/s.<div class="tooltip-arrow" data-popper-arrow></div></div>
+      <div id="pump-symbol-pmelt" role="tooltip" class="tooltip invisible absolute z-10 inline-block max-w-56 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Gauge melt pressure measured immediately before the die, bar.<div class="tooltip-arrow" data-popper-arrow></div></div>
+      <div id="pump-symbol-poutlet" role="tooltip" class="tooltip invisible absolute z-10 inline-block max-w-56 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity">Gauge pressure after the die; normally zero for discharge to atmosphere.<div class="tooltip-arrow" data-popper-arrow></div></div>
+      <p class="mt-3 text-body">Least-squares fit: ρ = <span data-pump-density><%= characteristic.pump_characteristic_melt_density_kg_m3 %></span> kg/m³, η = <span data-pump-viscosity><%= characteristic.pump_characteristic_reference_viscosity_pa_s %></span> Pa·s, P<sub>outlet</sub> = <span data-pump-outlet-pressure><%= characteristic.pump_characteristic_outlet_pressure_bar %></span> bar.</p>
+      <dl class="mt-4 grid gap-4 sm:grid-cols-3"><div><dt class="text-body">A</dt><dd class="mt-1 font-semibold"><span data-pump-a><%= scientificDisplay(characteristic.screw_pumping_a_m3_s_rpm) %></span> m³/(s·rpm)</dd></div><div><dt class="text-body">B</dt><dd class="mt-1 font-semibold"><span data-pump-b><%= scientificDisplay(characteristic.screw_pumping_b_m3) %></span> m³</dd></div><div><dt class="text-body">R² / stable points</dt><dd class="mt-1 font-semibold"><span data-pump-r-squared><%= formatNumber(characteristic.screw_pumping_r_squared, 3) %></span> / <span data-pump-point-count><%= characteristic.pump_characteristic_point_count %></span></dd></div></dl>
+    </div>
+    <p data-pump-fit-empty <%= hasCharacteristicFit ? 'hidden' : '' %>>Complete at least three stable pump-characteristic points with different screw speed and pressure, then set melt density and reference viscosity to calculate A and B.</p>
+  </div>
+</section>
