@@ -1711,7 +1711,7 @@ function initDb(db: Db) {
         allowed_values_json: string | null;
       }>;
     const insertExperimentField = db.prepare(
-      `INSERT INTO analysis_fields
+      `INSERT OR IGNORE INTO analysis_fields
        (scope_type, scope_id, code, label, field_type, unit, group_label, allowed_values_json, is_standard, is_active)
        VALUES ('EXPERIMENT', ?, ?, ?, ?, ?, ?, ?, 0, 1)`
     );

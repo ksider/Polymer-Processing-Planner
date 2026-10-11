@@ -13,7 +13,8 @@
     "audit:doe-analysis": "tsx src/tools/audit_doe_analysis_data.ts",
     "analytics:r:setup": "cd analytics-r && Rscript setup_local.R",
     "analytics:r:test": "cd analytics-r && Rscript tests/run_tests.R",
-    "seed:messages": "tsx src/tools/seed_messages_debug.ts"
+    "seed:messages": "tsx src/tools/seed_messages_debug.ts",
+    "seed:extrusion-demo": "tsx src/tools/seed_extrusion_demo.ts"
   },
   "dependencies": {
     "@editorjs/delimiter": "^1.4.2",
