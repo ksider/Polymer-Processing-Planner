@@ -75,7 +75,7 @@
         </div>
       </div>
       <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        <% (qualificationCards || []).forEach((card) => { %>
+        <% (coreQualificationCards || qualificationCards || []).forEach((card) => { %>
           <article class="rounded-lg border border-gray-200 bg-white p-4">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <a class="font-medium text-blue-700 no-underline hover:underline" href="/experiments/<%= experiment.id %>/qualification/<%= card.stepNumber %>">Step <%= card.stepNumber %></a>
@@ -114,15 +114,31 @@
           </article>
         <% }); %>
       </div>
-      <% if ((optionalQualificationStudies || []).length) { %>
+      <% if ((enabledConditionalQualificationCards || []).length) { %>
+        <section class="mt-2 rounded-xl border border-violet-200 bg-violet-50/60 p-4">
+          <div class="flex flex-wrap items-start justify-between gap-3"><div><h3 class="text-sm font-semibold text-violet-950">Enabled conditional &amp; scale-up studies</h3><p class="mt-1 text-sm text-violet-800">These studies are applicable to this formulation or transfer. They remain separate from the required core sequence.</p></div><span class="inline-flex rounded-full bg-violet-100 px-2.5 py-1 text-xs font-medium text-violet-800"><%= enabledConditionalQualificationCards.length %> enabled</span></div>
+          <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <% enabledConditionalQualificationCards.forEach((card) => { %>
+              <article class="rounded-base border border-violet-200 bg-neutral-primary p-4 shadow-xs">
+                <div class="flex items-start justify-between gap-3"><a class="font-medium text-violet-800 no-underline hover:underline" href="/experiments/<%= experiment.id %>/qualification/<%= card.stepNumber %>">Step <%= card.stepNumber %></a><span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium <%= statusTone(card.status) %>"><%= card.statusLabel %></span></div>
+                <div class="mt-2 text-sm font-medium text-heading"><%- formatInline(card.name) %></div>
+                <div class="mt-3 grid gap-2 rounded-base bg-violet-50 p-3"><% if (card.summaryItems && card.summaryItems.length) { %><% card.summaryItems.forEach((item) => { %><div class="flex items-center justify-between gap-3"><span class="text-sm text-violet-800"><%= item.label %></span><strong class="text-heading"><%= item.value %></strong></div><% }); %><% } else { %><span class="text-sm text-violet-800">No confirmed result yet.</span><% } %></div>
+                <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %><form class="mt-3" method="post" action="/experiments/<%= experiment.id %>/qualification/<%= card.stepNumber %>/applicability"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="inline-flex items-center justify-center rounded-base border border-violet-200 bg-neutral-primary px-3 py-2 text-sm font-medium text-violet-800 shadow-xs hover:bg-violet-100" type="submit">Disable study</button></form><% } %>
+              </article>
+            <% }); %>
+          </div>
+        </section>
+      <% } %>
+      <% const unavailableConditionalStudies = (optionalQualificationStudies || []).filter((study) => !study.enabled); %>
+      <% if (unavailableConditionalStudies.length) { %>
         <div class="mt-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4">
-          <div class="flex flex-wrap items-start justify-between gap-3"><div><h3 class="text-sm font-semibold text-gray-900">Conditional studies</h3><p class="mt-1 text-sm text-gray-500">Enable only the code-owned studies required by this formulation and line. Disabling a study hides it from the workspace; its recorded data is retained.</p></div><span class="inline-flex rounded-full bg-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700"><%= (optionalQualificationStudies || []).filter((study) => study.enabled).length %> enabled</span></div>
+          <div class="flex flex-wrap items-start justify-between gap-3"><div><h3 class="text-sm font-semibold text-gray-900">Available conditional studies</h3><p class="mt-1 text-sm text-gray-500">Enable a code-owned study only if this formulation, equipment or scale-up task requires it.</p></div><span class="inline-flex rounded-full bg-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700"><%= unavailableConditionalStudies.length %> available</span></div>
           <div class="mt-4 grid gap-3 xl:grid-cols-2">
-            <% (optionalQualificationStudies || []).forEach((study) => { %>
+            <% unavailableConditionalStudies.forEach((study) => { %>
               <div class="flex items-center justify-between gap-3 rounded-base border border-default-medium bg-neutral-primary p-3"><div><p class="text-sm font-medium text-heading">Step <%= study.stepNumber %> · <%= study.name %></p><p class="mt-1 text-xs text-body"><%= study.description %></p></div>
                 <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
-                  <form method="post" action="/experiments/<%= experiment.id %>/qualification/<%= study.stepNumber %>/applicability"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><% if (!study.enabled) { %><input type="hidden" name="enabled" value="1"><button class="inline-flex shrink-0 items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong" type="submit">Enable</button><% } else { %><button class="inline-flex shrink-0 items-center justify-center rounded-base border border-default-medium bg-neutral-primary px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-secondary" type="submit">Disable</button><% } %></form>
-                <% } else { %><span class="text-xs font-medium <%= study.enabled ? 'text-success' : 'text-body' %>"><%= study.enabled ? 'Enabled' : 'Not applicable' %></span><% } %>
+                  <form method="post" action="/experiments/<%= experiment.id %>/qualification/<%= study.stepNumber %>/applicability"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="enabled" value="1"><button class="inline-flex shrink-0 items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong" type="submit">Enable</button></form>
+                <% } else { %><span class="text-xs font-medium text-body">Not applicable</span><% } %>
               </div>
             <% }); %>
           </div>

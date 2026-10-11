@@ -39,7 +39,7 @@
             <details open class="group">
               <summary class="<%= folder %>"><span class="material-symbols-rounded text-[18px] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span><span class="material-symbols-rounded text-[18px]" aria-hidden="true">fact_check</span>Qualification</summary>
               <ul class="<%= nested %>" role="group">
-                <% (workspace.qualificationCards || []).forEach((stage) => { %>
+                <% (workspace.coreQualificationCards || workspace.qualificationCards || []).forEach((stage) => { %>
                   <li role="treeitem" aria-expanded="false">
                     <details class="group">
                       <summary class="<%= folder %>"><span class="material-symbols-rounded text-[18px] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span><span class="size-2 shrink-0 rounded-full <%= stage.status === 'blocked' ? 'bg-red-500' : stage.status === 'done' ? 'bg-emerald-500' : stage.status === 'in_progress' ? 'bg-blue-500' : 'bg-gray-300' %>"></span><span class="truncate">Step <%= stage.stepNumber %> · <%= stage.name %></span></summary>
@@ -56,6 +56,18 @@
                     </details>
                   </li>
                 <% }); %>
+                <% if ((workspace.conditionalQualificationCards || []).length) { %>
+                  <li role="treeitem" aria-expanded="true">
+                    <details open class="group">
+                      <summary class="<%= folder %> text-violet-800"><span class="material-symbols-rounded text-[17px] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span><span class="material-symbols-rounded text-[17px]" aria-hidden="true">account_tree</span><span class="truncate">Conditional &amp; scale-up</span></summary>
+                      <ul class="<%= nested %>" role="group">
+                        <% workspace.conditionalQualificationCards.forEach((stage) => { %>
+                          <li role="treeitem"><a class="<%= leaf %> text-violet-800 hover:text-violet-950" href="<%= workspacePath %>/qualification/<%= stage.stepNumber %>"><span class="size-2 shrink-0 rounded-full <%= stage.status === 'blocked' ? 'bg-red-500' : stage.status === 'done' ? 'bg-emerald-500' : stage.status === 'in_progress' ? 'bg-blue-500' : 'bg-violet-300' %>"></span><span class="truncate">Step <%= stage.stepNumber %> · <%= stage.name %></span></a></li>
+                        <% }); %>
+                      </ul>
+                    </details>
+                  </li>
+                <% } %>
               </ul>
             </details>
           </li>

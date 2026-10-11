@@ -63,6 +63,8 @@ export function buildExperimentWorkspace(db: Db, experimentId: number) {
   return {
     experiment,
     qualificationCards,
+    coreQualificationCards: qualificationCards.filter((stage) => stage.stepNumber <= 5),
+    conditionalQualificationCards: qualificationCards.filter((stage) => stage.stepNumber > 5),
     doeStudies,
     reports: listReportConfigs(db, experimentId),
     tasks: listTasksByExperiment(db, experimentId).map((task) => ({
