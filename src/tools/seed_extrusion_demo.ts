@@ -107,25 +107,25 @@ function seedStepOne(db: Db, experimentId: number, ownerId: number | null) {
   const step = getQualStep(db, experimentId, 1)!;
   const fields = listQualFields(db, step.id);
   const runs = listQualRuns(db, step.id);
-  const rheology = runs.find((run) => run.run_group === "rheology");
-  const hold = runs.find((run) => run.run_group === "thermal_hold");
+  const rheologyRuns = ensureRuns(db, experimentId, step.id, 4, "rheology");
+  const holdRuns = ensureRuns(db, experimentId, step.id, 3, "thermal_hold");
   const dsc = runs.find((run) => run.run_group === "dsc");
   const tga = runs.find((run) => run.run_group === "tga");
-  if (!rheology || !hold || !dsc || !tga) throw new Error("Step 1 default test groups are missing.");
-  fillRun(db, fields, rheology, {
-    test_temp_c: 210, pressure_drop_pa: 1_280_000, capillary_diameter_mm: 1,
-    capillary_length_mm: 20, volumetric_flow_mm3_s: 780, extrudate_mass_g: 2.45,
-    collection_time_s: 60, rheology_pressure_stable: true
-  }, ownerId);
-  replaceQualRunSeries(db, {
-    experimentId, stepId: step.id, runId: rheology.id, seriesCode: "pressure_stability", contractVersion: 1,
-    sourceName: "demo-capillary-pressure.csv",
-    points: [{ x: 0, y: 1_278_000 }, { x: 15, y: 1_285_000 }, { x: 30, y: 1_281_000 }, { x: 45, y: 1_282_000 }]
+  if (!rheologyRuns.length || !holdRuns.length || !dsc || !tga) throw new Error("Step 1 default test groups are missing.");
+  [[4, 3_600_000, 0.04], [8, 5_600_000, 0.08], [12, 7_300_000, 0.12], [16, 8_700_000, 0.16]].forEach((row, index) => {
+    fillRun(db, fields, rheologyRuns[index], {
+      test_temp_c: 210, pressure_drop_pa: row[1], capillary_diameter_mm: 1, capillary_length_mm: 20,
+      volumetric_flow_mm3_s: row[0], extrudate_mass_g: row[2], collection_time_s: 60, rheology_pressure_stable: true
+    }, ownerId);
+    replaceQualRunSeries(db, {
+      experimentId, stepId: step.id, runId: rheologyRuns[index].id, seriesCode: "pressure_stability", contractVersion: 1,
+      sourceName: "demo-capillary-pressure.csv",
+      points: [{ x: 0, y: row[1] * 0.997 }, { x: 15, y: row[1] * 1.003 }, { x: 30, y: row[1] }, { x: 45, y: row[1] * 1.001 }]
+    });
   });
-  fillRun(db, fields, hold, {
-    thermal_hold_temp_c: 220, thermal_hold_time_min: 30, thermal_hold_shear_rate_s: 100,
-    thermal_hold_viscosity_pa_s: 760
-  }, ownerId);
+  [[0, 825], [15, 808], [30, 782]].forEach((row, index) => fillRun(db, fields, holdRuns[index], {
+    thermal_hold_temp_c: 220, thermal_hold_time_min: row[0], thermal_hold_shear_rate_s: 100, thermal_hold_viscosity_pa_s: row[1]
+  }, ownerId));
   fillRun(db, fields, dsc, { test_temp_c: 25 }, ownerId);
   replaceQualRunSeries(db, {
     experimentId, stepId: step.id, runId: dsc.id, seriesCode: "dsc_thermogram", contractVersion: 1,
@@ -143,6 +143,7 @@ function seedStepOne(db: Db, experimentId: number, ownerId: number | null) {
     rheology_reference_viscosity_pa_s: 820, flow_behavior_index_n: 0.42, max_thermal_hold_min: 30,
     processing_temp_min_c: 175, dsc_melting_peak_c: 163, processing_temp_max_c: 300, tga_degradation_onset_c: 325
   });
+  recomputeDerivedAndSummary(db, experimentId, step.id, 1);
   updateQualStepStatus(db, step.id, "DONE");
 }
 
@@ -150,7 +151,10 @@ function seedStepTwo(db: Db, experimentId: number, ownerId: number | null) {
   const step = getQualStep(db, experimentId, 2)!;
   const fields = listQualFields(db, step.id);
   const runs = ensureRuns(db, experimentId, step.id, 6, "default");
-  [[10, 8, 8.02, 0.06], [20, 16, 16.05, 0.09], [30, 24, 23.94, 0.12], [40, 32, 31.9, 0.18], [50, 40, 39.7, 0.3], [60, 48, 47.45, 0.56]].forEach((row, index) => {
+  upsertQualStepSettings(db, experimentId, 2, JSON.stringify({
+    feeder_max_throughput_kg_h: 48, material_bulk_density_kg_m3: 520, feeder_temperature_c: 23, feeder_screw_geometry: "Twin screw, 20 mm"
+  }));
+  [[10, 8, 8.02, 0.06], [20, 16, 16.05, 0.09], [30, 24, 23.94, 0.12], [40, 32, 31.9, 0.18], [50, 40, 39.7, 0.3], [60, 48, 47.45, 0.95]].forEach((row, index) => {
     fillRun(db, fields, runs[index], {
       feeder_speed_rpm: row[0], target_throughput_kg_h: row[1], mean_throughput_kg_h: row[2],
       throughput_sd_kg_h: row[3], sampling_window_min: 10
@@ -158,12 +162,19 @@ function seedStepTwo(db: Db, experimentId: number, ownerId: number | null) {
   });
   recomputeDerivedAndSummary(db, experimentId, step.id, 2);
   putOutputs(db, experimentId, step.id, 2, { feeder_stable_throughput_min_kg_h: 8, feeder_stable_throughput_max_kg_h: 40 });
+  recomputeDerivedAndSummary(db, experimentId, step.id, 2);
   updateQualStepStatus(db, step.id, "DONE");
 }
 
 function seedStepThree(db: Db, experimentId: number, ownerId: number | null) {
   const step = getQualStep(db, experimentId, 3)!;
   const fields = listQualFields(db, step.id);
+  upsertQualStepSettings(db, experimentId, 3, JSON.stringify({
+    screw_speed_levels_rpm: "150, 250, 350", throughput_levels_kg_h: "12, 24, 40",
+    melt_pressure_limit_bar: 100, motor_torque_limit_nm: 620, die_geometry: "3 mm strand die", barrel_temperature_profile: "185 / 195 / 205 °C",
+    pump_curve_speed_levels_rpm: "300", pump_curve_pressure_levels_bar: "50, 70, 90",
+    melt_density_kg_m3: 900, reference_viscosity_pa_s: 820, die_outlet_pressure_bar: 0
+  }));
   const windowRuns = ensureRuns(db, experimentId, step.id, 6, "operating_window");
   [[150, 12, 205, 42, 188], [150, 24, 280, 53, 193], [250, 20, 310, 55, 198], [250, 34, 390, 67, 203], [350, 28, 415, 70, 207], [350, 40, 500, 82, 213]].forEach((row, index) => {
     fillRun(db, fields, windowRuns[index], {
@@ -172,15 +183,15 @@ function seedStepThree(db: Db, experimentId: number, ownerId: number | null) {
     }, ownerId);
   });
   const pumpRuns = ensureRuns(db, experimentId, step.id, 3, "pump_characteristic");
-  [20, 30, 40].forEach((throughput, index) => fillRun(db, fields, pumpRuns[index], {
-    screw_speed_rpm: 300, throughput_kg_h: throughput, motor_torque_nm: 355 + index * 55,
-    motor_torque_limit_nm: 620, melt_pressure_bar: 56 + index * 13, target_back_pressure_bar: 85,
-    melt_temp_c: 202 + index * 3, operating_point_stable: true
+  [[40, 470, 50, 202], [30, 410, 70, 205], [20, 355, 90, 208]].forEach((row, index) => fillRun(db, fields, pumpRuns[index], {
+    screw_speed_rpm: 300, throughput_kg_h: row[0], motor_torque_nm: row[1], motor_torque_limit_nm: 620,
+    melt_pressure_bar: row[2], target_back_pressure_bar: row[2], melt_temp_c: row[3], operating_point_stable: true
   }, ownerId));
   recomputeDerivedAndSummary(db, experimentId, step.id, 3);
   putOutputs(db, experimentId, step.id, 3, {
     operating_window_min_screw_rpm: 150, operating_window_max_screw_rpm: 350, operating_window_max_throughput_kg_h: 40
   });
+  recomputeDerivedAndSummary(db, experimentId, step.id, 3);
   updateQualStepStatus(db, step.id, "DONE");
 }
 
@@ -188,10 +199,13 @@ function seedStepFour(db: Db, experimentId: number, ownerId: number | null) {
   const step = getQualStep(db, experimentId, 4)!;
   const fields = listQualFields(db, step.id);
   const runs = ensureRuns(db, experimentId, step.id, 9, "default");
+  upsertQualStepSettings(db, experimentId, 4, JSON.stringify({
+    thermal_speed_levels_rpm: "200, 250, 300", thermal_throughput_levels_kg_h: "20, 30, 40", thermal_temperature_levels_c: "190, 195, 200"
+  }));
   [[200, 20, 190, 310, 80, 198], [200, 30, 190, 365, 80, 204], [200, 40, 190, 425, 80, 211], [250, 25, 195, 385, 82, 207], [250, 35, 195, 445, 82, 214], [250, 45, 195, 510, 82, 222], [300, 30, 200, 470, 84, 218], [300, 40, 200, 535, 84, 225], [300, 50, 200, 605, 84, 235]].forEach((row, index) => {
     fillRun(db, fields, runs[index], {
       screw_speed_rpm: row[0], throughput_kg_h: row[1], barrel_set_temp_c: row[2], motor_torque_nm: row[3],
-      no_load_torque_nm: row[4], melt_temp_c: row[5], thermal_stable: true
+      no_load_torque_nm: row[4], melt_temp_c: row[5], heater_power_kw: 2.8, thermal_point_stable: true
     }, ownerId);
   });
   recomputeDerivedAndSummary(db, experimentId, step.id, 4);
@@ -206,7 +220,7 @@ function seedStepFive(db: Db, experimentId: number, ownerId: number | null) {
   [[180, 16, 12.8, 120], [200, 20, 16, 96], [225, 25, 20, 82], [250, 30, 24, 72], [275, 35, 28, 62], [300, 40, 32, 54]].forEach((row, index) => {
     fillRun(db, fields, runs[index], {
       screw_speed_rpm: row[0], planned_throughput_kg_h: row[1], feeder_speed_rpm: row[2], throughput_kg_h: row[1],
-      tracer_pulse_mass_g: 1, tracer_sampling_interval_s: 10, sampling_complete: true
+      steady_state_confirmed: true
     }, ownerId);
     const peak = row[3];
     replaceQualRunSeries(db, {
@@ -217,7 +231,8 @@ function seedStepFive(db: Db, experimentId: number, ownerId: number | null) {
     updateExtrusionRtdMetricsFromSeries(db, step.id, runs[index].id);
   });
   recomputeDerivedAndSummary(db, experimentId, step.id, 5);
-  putOutputs(db, experimentId, step.id, 5, { rtd_mean_residence_time_s: 72, rtd_degree_of_fill_pct: 75, rtd_width_s: 44 });
+  putOutputs(db, experimentId, step.id, 5, { rtd_mean_residence_time_s: 74.8, rtd_degree_of_fill_pct: 39, rtd_width_s: 64.2 });
+  recomputeDerivedAndSummary(db, experimentId, step.id, 5);
   updateQualStepStatus(db, step.id, "DONE");
 }
 
@@ -233,6 +248,9 @@ function seedDisabledOptionalStudies(db: Db, experimentId: number, ownerId: numb
   let step = getQualStep(db, experimentId, 6)!;
   let fields = listQualFields(db, step.id);
   let runs = ensureRuns(db, experimentId, step.id, 3, "side_feeding");
+  upsertQualStepSettings(db, experimentId, 6, JSON.stringify({
+    side_feeding_main_screw_speed_rpm: 250, side_feeding_matrix_throughput_kg_h: 30, side_feeding_speed_levels_rpm: "18, 27, 36"
+  }));
   [[250, 30, 18, 4.8, 26], [250, 30, 27, 7.5, 38], [300, 36, 36, 10.8, 51]].forEach((row, index) => {
     fillRun(db, fields, runs[index], {
       main_screw_speed_rpm: row[0], matrix_throughput_kg_h: row[1], side_feeder_speed_rpm: row[2],
@@ -243,6 +261,7 @@ function seedDisabledOptionalStudies(db: Db, experimentId: number, ownerId: numb
   putOutputs(db, experimentId, step.id, 6, {
     side_feeder_stable_speed_min_rpm: 18, side_feeder_stable_speed_max_rpm: 36, filler_mass_fraction_max_pct: 23.1
   });
+  recomputeDerivedAndSummary(db, experimentId, step.id, 6);
   updateQualStepStatus(db, step.id, "DONE");
   setOptionalQualificationStudyEnabled(db, experimentId, 6, false);
 
@@ -250,6 +269,9 @@ function seedDisabledOptionalStudies(db: Db, experimentId: number, ownerId: numb
   step = getQualStep(db, experimentId, 7)!;
   fields = listQualFields(db, step.id);
   runs = ensureRuns(db, experimentId, step.id, 3, "liquid_dosing");
+  upsertQualStepSettings(db, experimentId, 7, JSON.stringify({
+    liquid_dosing_screw_speed_rpm: 250, liquid_dosing_polymer_throughput_kg_h: 30, liquid_dosing_levels_kg_h: "0.6, 1.2, 2"
+  }));
   [[250, 30, 0.6, 92, 68], [250, 30, 1.2, 96, 69], [300, 36, 2.0, 104, 73]].forEach((row, index) => {
     fillRun(db, fields, runs[index], {
       screw_speed_rpm: row[0], polymer_throughput_kg_h: row[1], liquid_throughput_kg_h: row[2],
@@ -260,6 +282,7 @@ function seedDisabledOptionalStudies(db: Db, experimentId: number, ownerId: numb
   putOutputs(db, experimentId, step.id, 7, {
     liquid_mass_fraction_min_pct: 1.96, liquid_mass_fraction_max_pct: 5.26, injection_pressure_delta_min_bar: 24
   });
+  recomputeDerivedAndSummary(db, experimentId, step.id, 7);
   updateQualStepStatus(db, step.id, "DONE");
   setOptionalQualificationStudyEnabled(db, experimentId, 7, false);
 
@@ -267,6 +290,9 @@ function seedDisabledOptionalStudies(db: Db, experimentId: number, ownerId: numb
   step = getQualStep(db, experimentId, 8)!;
   fields = listQualFields(db, step.id);
   runs = ensureRuns(db, experimentId, step.id, 3, "devolatilization");
+  upsertQualStepSettings(db, experimentId, 8, JSON.stringify({
+    devol_screw_speed_rpm: 300, devol_throughput_kg_h: 36, devol_vacuum_levels_mbar: "80, 65, 50"
+  }));
   [[250, 30, 80, 0.58, 0.14, 2.1], [300, 36, 65, 0.58, 0.1, 2.8], [300, 42, 50, 0.58, 0.08, 3.2]].forEach((row, index) => {
     fillRun(db, fields, runs[index], {
       screw_speed_rpm: row[0], throughput_kg_h: row[1], vacuum_pressure_mbar: row[2], initial_volatiles_pct: row[3],
@@ -275,6 +301,7 @@ function seedDisabledOptionalStudies(db: Db, experimentId: number, ownerId: numb
   });
   recomputeDerivedAndSummary(db, experimentId, step.id, 8);
   putOutputs(db, experimentId, step.id, 8, { residual_volatiles_min_pct: 0.08, devolatilization_efficiency_max_pct: 86.2 });
+  recomputeDerivedAndSummary(db, experimentId, step.id, 8);
   updateQualStepStatus(db, step.id, "DONE");
   setOptionalQualificationStudyEnabled(db, experimentId, 8, false);
 
@@ -282,6 +309,9 @@ function seedDisabledOptionalStudies(db: Db, experimentId: number, ownerId: numb
   step = getQualStep(db, experimentId, 9)!;
   fields = listQualFields(db, step.id);
   runs = ensureRuns(db, experimentId, step.id, 3, "reactive_extrusion");
+  upsertQualStepSettings(db, experimentId, 9, JSON.stringify({
+    reaction_temp_levels_c: "205, 215, 225", reaction_residence_time_levels_s: "56, 64, 72"
+  }));
   [[205, 72, 0.006, 74, 6.5], [215, 64, 0.009, 84, 8.1], [225, 56, 0.012, 91, 10.4]].forEach((row, index) => {
     fillRun(db, fields, runs[index], {
       reaction_temp_c: row[0], mean_residence_time_s: row[1], reaction_rate_constant_s_inv: row[2], conversion_pct: row[3],
@@ -290,6 +320,7 @@ function seedDisabledOptionalStudies(db: Db, experimentId: number, ownerId: numb
   });
   recomputeDerivedAndSummary(db, experimentId, step.id, 9);
   putOutputs(db, experimentId, step.id, 9, { conversion_max_pct: 91, product_mfr_min_g_10min: 6.5, product_mfr_max_g_10min: 10.4 });
+  recomputeDerivedAndSummary(db, experimentId, step.id, 9);
   updateQualStepStatus(db, step.id, "DONE");
   setOptionalQualificationStudyEnabled(db, experimentId, 9, false);
 }
@@ -303,9 +334,11 @@ function seedStepTen(db: Db, experimentId: number, ownerId: number | null) {
     scale_up_source_screw_diameter_mm: 27,
     scale_up_production_screw_diameter_mm: 50,
     scale_up_source_throughput_kg_h: 30,
-    scale_up_source_sme_kwh_kg: 0.46
+    scale_up_source_sme_kwh_kg: 0.27,
+    scale_up_production_screw_speed_levels_rpm: "65, 75, 85",
+    scale_up_production_throughput_multipliers: "0.9, 1, 1.1"
   }));
-  [[65, 180, 690, 120, 211, 66], [75, 216, 760, 120, 214, 74], [85, 250, 835, 120, 218, 83]].forEach((row, index) => {
+  [[65, 171, 6900, 120, 211, 66], [75, 191, 6685, 120, 214, 74], [85, 210, 6470, 120, 218, 83]].forEach((row, index) => {
     fillRun(db, fields, runs[index], {
       production_screw_speed_rpm: row[0], production_throughput_kg_h: row[1], production_torque_nm: row[2],
       production_no_load_torque_nm: row[3], production_melt_temp_c: row[4], production_melt_pressure_bar: row[5],
@@ -316,6 +349,7 @@ function seedStepTen(db: Db, experimentId: number, ownerId: number | null) {
   putOutputs(db, experimentId, step.id, 10, {
     scaled_throughput_target_kg_h: 190.5, production_screw_speed_min_rpm: 65, production_screw_speed_max_rpm: 85
   });
+  recomputeDerivedAndSummary(db, experimentId, step.id, 10);
   updateQualStepStatus(db, step.id, "DONE");
 }
 

@@ -111,6 +111,73 @@ function formatSummaryNumber(value: number): string {
   return String(rounded);
 }
 
+type QualificationCardSummaryItem = { label: string; value: string };
+
+function formatQualificationCardValue(value: number, unit: string | null) {
+  const number = formatSummaryNumber(value);
+  return unit ? `${number} ${unit}` : number;
+}
+
+/**
+ * A stage card is a handoff summary, not a dump of its derived run fields.
+ * Extrusion instructions explicitly define their transferable results in the
+ * catalogue, so render those confirmed values first and preserve their human
+ * labels/units.  The energy map has no manually-confirmed output definition;
+ * its two calculated ranges are its handoff.
+ */
+function getQualificationCardSummaryItems(
+  db: Db,
+  experimentId: number,
+  step: { id: number; step_number: number },
+  processTypeCode: string,
+  summaryData: Record<string, unknown> | null
+): QualificationCardSummaryItem[] {
+  if (processTypeCode === "extrusion_v1") {
+    const outputsByCode = new Map(listQualStepOutputs(db, step.id).map((output) => [output.output_code, output]));
+    const confirmedOutputs = getQualificationOutputDefinitionsForExperiment(db, experimentId, step.step_number)
+      .flatMap((definition) => {
+        const value = outputsByCode.get(definition.code)?.value_real;
+        return value != null && Number.isFinite(value)
+          ? [{ label: definition.label, value: formatQualificationCardValue(value, definition.unit) }]
+          : [];
+      });
+    if (confirmedOutputs.length) return confirmedOutputs;
+
+    if (step.step_number === 4 && summaryData) {
+      const range = (label: string, minKey: string, maxKey: string, unit: string) => {
+        const min = summaryData[minKey];
+        const max = summaryData[maxKey];
+        if (typeof min !== "number" || typeof max !== "number") return null;
+        const value = min === max
+          ? formatQualificationCardValue(min, unit)
+          : `${formatSummaryNumber(min)}–${formatSummaryNumber(max)} ${unit}`;
+        return { label, value };
+      };
+      return [
+        range("Specific mechanical energy", "sme_kwh_kg_min", "sme_kwh_kg_max", "kWh/kg"),
+        range("Dissipative temperature rise", "dissipative_temp_rise_c_min", "dissipative_temp_rise_c_max", "°C")
+      ].filter((item): item is QualificationCardSummaryItem => item !== null);
+    }
+  }
+
+  if (!summaryData) return [];
+  if (step.step_number === 4) {
+    const centerTemp = summaryData.window_center_temp;
+    const centerPressure = summaryData.window_center_pressure;
+    return [
+      { label: "center temp", value: typeof centerTemp === "number" ? `${formatSummaryNumber(centerTemp)} °C` : "-" },
+      { label: "center pressure", value: typeof centerPressure === "number" ? `${formatSummaryNumber(centerPressure)} bar` : "-" }
+    ];
+  }
+  return Object.entries(summaryData)
+    .filter(([key]) => !["experiment_id", "step_number"].includes(key))
+    .slice(0, 2)
+    .map(([key, value]) => ({
+      label: key.replace(/_/g, " "),
+      value: typeof value === "number" ? formatSummaryNumber(value) : String(value ?? "-")
+    }));
+}
+
 type QualificationBriefItem = {
   stepNumber: number;
   stepName: string;
@@ -304,31 +371,13 @@ export function createExperimentsRouter(db: Db) {
             : status === "in_progress"
               ? "In progress"
               : "Not started";
-      const summaryItems: Array<{ label: string; value: string }> = [];
-      if (summaryData) {
-        if (stepNumber === 4) {
-          const centerTemp = summaryData.window_center_temp;
-          const centerPressure = summaryData.window_center_pressure;
-          summaryItems.push({
-            label: "center temp",
-            value: typeof centerTemp === "number" ? `${formatSummaryNumber(centerTemp)} °C` : "-"
-          });
-          summaryItems.push({
-            label: "center pressure",
-            value: typeof centerPressure === "number" ? `${formatSummaryNumber(centerPressure)} bar` : "-"
-          });
-        } else {
-          Object.entries(summaryData)
-            .filter(([key]) => !["experiment_id", "step_number"].includes(key))
-            .slice(0, 2)
-            .forEach(([key, value]) => {
-              summaryItems.push({
-                label: key.replace(/_/g, " "),
-                value: typeof value === "number" ? formatSummaryNumber(value) : String(value ?? "-")
-              });
-            });
-        }
-      }
+      const summaryItems = getQualificationCardSummaryItems(
+        db,
+        experimentId,
+        step,
+        processTypeCode,
+        summaryData
+      );
       return {
         stepId: step.id,
         stepNumber,
