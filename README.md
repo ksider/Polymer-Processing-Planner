@@ -528,8 +528,28 @@ The detailed implementation plans are intentionally kept as local working
 documents and are excluded from version control; this README is the public
 roadmap.
 
-Reference book (Amazon search):
+References:
 - Robust Process Development and Scientific Molding (Suhas Kulkarni): https://a.co/d/aDv52KL
+
+- Rheology of Filled Polymer Systems: Fundamentals, Characterization, and Processing (1999). Polymer Processing and Compounding Mechanics
+- Malkin, A. Y., Isayev, A. I. (2022). Rheology: Concepts, Methods, and Applications. 4th Edition, Elsevier
+- Shaw, M. T. (2012). Introduction to Polymer Rheology. John Wiley & Sons
+- Schramm, G. (2000). A Practical Approach to Rheology and Rheometry. Gebrueder HAAKE GmbH
+- Mezger, T. (2020). The Rheology Handbook: For Users of Rotational and Oscillatory Rheometers. 5th Edition, Vincentz Network
+- Kumagai, H., Kurihara, H., Kobayashi, T. (1990). Pumping Characteristic of a Twin-screw Extruder. Agric. Biol. Chem., 54 (2), 407–412
+- Wypych, G. (2022). Handbook of Rheological Additives. ChemTec Publishing
+
+- Shah, V. (2007). Handbook of Plastics Testing and Failure Analysis. 3rd Edition, Wiley-Interscience
+- Menczel, J. D., Prime, R. B. (2009). Thermal Analysis of Polymers: Fundamentals and Applications. John Wiley & Sons
+- Wagner, M. (2017). Thermal Analysis in Practice: Fundamental Aspects. Carl Hanser Verlag
+- Lobo, H., Bonilla, J. V. (2003). Handbook of Plastics Analysis. Marcel Dekker
+- Brown, R. (1999 / 2002). Handbook of Polymer Testing: Physical Methods / Short-Term Mechanical Tests. Marcel Dekker / iSmithers Rapra
+
+- ISO 11443:2021 Plastics — Determination of the fluidity of plastics using capillary and slit-die rheometers
+- ISO 1133-1:2022 / ISO 1133-2:2011 Plastics — Determination of the melt mass-flow rate (MFR) and melt volume-flow rate (MVR) of thermoplastics
+- ISO 11357 (Parts 1–7) Plastics — Differential scanning calorimetry (DSC)
+- ISO 11358 (Parts 1–3) Plastics — Thermogravimetry (TG) of polymers
+
 
 ## Reports
 
