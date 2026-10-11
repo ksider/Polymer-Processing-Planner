@@ -170,6 +170,37 @@ the deployment means pulling the new images and recreating both services; the
 named volumes `planner_data` and `planner_uploads` preserve the database and
 uploads.
 
+### Extrusion demonstration data (Portainer)
+
+The image contains an idempotent extrusion demo seed. It creates or updates
+only the experiment carrying the internal marker `demo-seed:extrusion-v1`; it
+does not delete or change ordinary user experiments. It is intended for a
+demo/staging database, so take a volume backup before using it on a shared
+instance.
+
+After updating the stack to an image that contains the current application
+build, open **Containers → planner → Console** in Portainer and run:
+
+```sh
+node dist/tools/seed_extrusion_demo.js --upsert
+```
+
+Do not use `npm run seed:extrusion-demo` in the production container: `tsx` is
+a development dependency and is intentionally omitted from the runtime image.
+The compiled `node dist/...` command above is the production command.
+
+The seed fills the full extrusion qualification catalogue:
+
+- core steps 1–5, including capillary/thermal curves, feeder calibration,
+  operating window, pump-curve fit, energy map and RTD samples;
+- conditional steps 6–9 with illustrative completed runs and their confirmed
+  handoff results, while leaving those studies disabled in the workspace;
+- scale-up step 10, enabled with a D³ throughput target and SME-parity runs.
+
+The experiment cards show the confirmed transferable result fields defined by
+each study instruction. Re-running `--upsert` refreshes this one demo
+experiment deterministically and is safe after an application redeploy.
+
 After the first login, configure a provider in **Admin → AI providers**:
 
 | Provider | Profile type | Base URL | API key |
