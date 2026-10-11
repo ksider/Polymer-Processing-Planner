@@ -1,0 +1,121 @@
+<%
+  const activeFields = fields.filter((field) => field.is_enabled === 1);
+  const fieldByCode = new Map(activeFields.map((field) => [field.code, field]));
+  const outputByCode = new Map(stepOutputs.map((output) => [output.output_code, output]));
+  const valuesFor = (run, field) => runValueMap[String(run.id)]?.[String(field.id)];
+  const inputClass = 'mt-1.5 block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs placeholder:text-body focus:border-brand focus:ring-brand';
+  const setupByStep = {
+    6: {
+      title: 'Side-feeder sweep',
+      description: 'Hold the main extruder condition fixed and sweep side-feeder speed. Measure the actual filler rate after the feeder reaches steady state.',
+      fields: [
+        { setting: 'side_feeding_main_screw_speed_rpm', request: 'main_screw_speed_rpm', label: 'Main screw speed', unit: 'rpm', fallback: '' },
+        { setting: 'side_feeding_matrix_throughput_kg_h', request: 'matrix_throughput_kg_h', label: 'Matrix throughput', unit: 'kg/h', fallback: '' },
+        { setting: 'side_feeding_speed_levels_rpm', request: 'side_feeder_speed_levels_rpm', label: 'Side-feeder speeds', unit: 'rpm', fallback: '5, 10, 15' }
+      ]
+    },
+    7: {
+      title: 'Liquid-dose sweep',
+      description: 'Hold polymer feed and screw speed fixed. Generate one run per liquid dosing rate, then record the pressure margin and backflow observation.',
+      fields: [
+        { setting: 'liquid_dosing_screw_speed_rpm', request: 'screw_speed_rpm', label: 'Screw speed', unit: 'rpm', fallback: '' },
+        { setting: 'liquid_dosing_polymer_throughput_kg_h', request: 'polymer_throughput_kg_h', label: 'Polymer throughput', unit: 'kg/h', fallback: '' },
+        { setting: 'liquid_dosing_levels_kg_h', request: 'liquid_throughput_levels_kg_h', label: 'Liquid dosing rates', unit: 'kg/h', fallback: '0.3, 0.6, 0.9' }
+      ]
+    },
+    8: {
+      title: 'Vacuum sweep',
+      description: 'Hold screw speed and throughput fixed. Sweep vacuum pressure; lower mbar means stronger vacuum. Measure incoming and residual volatiles at each stable point.',
+      fields: [
+        { setting: 'devol_screw_speed_rpm', request: 'screw_speed_rpm', label: 'Screw speed', unit: 'rpm', fallback: '' },
+        { setting: 'devol_throughput_kg_h', request: 'throughput_kg_h', label: 'Throughput', unit: 'kg/h', fallback: '' },
+        { setting: 'devol_vacuum_levels_mbar', request: 'vacuum_pressure_levels_mbar', label: 'Vacuum-pressure levels', unit: 'mbar', fallback: '50, 100, 200' }
+      ]
+    },
+    9: {
+      title: 'Reaction condition matrix',
+      description: 'Generate the temperature × mean-residence-time matrix. Use the RTD study to choose residence-time levels that the line can actually reproduce.',
+      fields: [
+        { setting: 'reaction_temp_levels_c', request: 'reaction_temp_levels_c', label: 'Reaction-temperature levels', unit: '°C', fallback: '180, 200, 220' },
+        { setting: 'reaction_residence_time_levels_s', request: 'mean_residence_time_levels_s', label: 'Mean-residence-time levels', unit: 's', fallback: '90, 150' }
+      ]
+    },
+    10: {
+      title: 'Scale-up verification matrix',
+      description: 'Calculate the D³ throughput target from the source and production screw diameters, then generate a verification sweep around it. Use only when the formulation and screw geometry are comparable.',
+      fields: [
+        { setting: 'scale_up_source_screw_diameter_mm', request: 'source_screw_diameter_mm', label: 'Source screw diameter', unit: 'mm', fallback: '' },
+        { setting: 'scale_up_production_screw_diameter_mm', request: 'production_screw_diameter_mm', label: 'Production screw diameter', unit: 'mm', fallback: '' },
+        { setting: 'scale_up_source_throughput_kg_h', request: 'source_throughput_kg_h', label: 'Source throughput', unit: 'kg/h', fallback: '' },
+        { setting: 'scale_up_source_sme_kwh_kg', request: 'source_sme_kwh_kg', label: 'Source SME target', unit: 'kWh/kg', fallback: '' },
+        { setting: 'scale_up_production_screw_speed_levels_rpm', request: 'production_screw_speed_levels_rpm', label: 'Production screw-speed levels', unit: 'rpm', fallback: '100, 150, 200' },
+        { setting: 'scale_up_production_throughput_multipliers', request: 'production_throughput_multipliers', label: 'Throughput multipliers', unit: '× D³ target', fallback: '0.85, 1, 1.15' }
+      ]
+    }
+  };
+  const setup = setupByStep[step.step_number];
+%>
+
+<section class="mb-6 rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs sm:p-5">
+  <div class="border-b border-default pb-4">
+    <h2 class="text-base font-semibold text-heading"><%= setup.title %></h2>
+    <p class="mt-1 max-w-3xl text-sm text-body"><%= setup.description %></p>
+  </div>
+  <form id="extrusionOptionalSetupForm" class="mt-4" action="/experiments/<%= step.experiment_id %>/qualification/<%= step.step_number %>/settings" method="post">
+    <fieldset class="max-w-4xl rounded-base border border-default-medium bg-neutral-secondary p-4">
+      <legend class="px-1 text-sm font-semibold text-heading">Run generation</legend>
+      <div class="grid gap-4 md:grid-cols-3 md:items-end">
+        <% setup.fields.forEach((item) => { %>
+          <label class="text-sm font-medium text-heading"><%= item.label %> <span class="font-normal text-body">(<%= item.unit %>)</span>
+            <input class="<%= inputClass %>" name="<%= item.setting %>" data-optional-request="<%= item.request %>" value="<%= stepSettings?.[item.setting] ?? item.fallback %>" placeholder="<%= item.fallback || 'Required' %>">
+          </label>
+        <% }) %>
+      </div>
+      <div class="mt-4 flex flex-wrap items-center gap-3 border-t border-default pt-4">
+        <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2.5 text-sm font-medium text-white shadow-xs hover:bg-brand-strong focus:outline-none focus:ring-4 focus:ring-brand" type="button" data-generate-optional-matrix>Generate runs</button>
+        <p class="text-xs text-body">Existing rows are retained; generation updates the first rows with the selected conditions.</p>
+      </div>
+      <div class="mt-3 hidden rounded-base border px-3 py-2 text-sm" data-optional-matrix-message role="alert"></div>
+    </fieldset>
+  </form>
+</section>
+
+<section class="mb-6 overflow-hidden rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs sm:p-5">
+  <div class="mb-4 flex flex-wrap items-end justify-between gap-3 border-b border-default pb-4">
+    <div><h2 class="text-base font-semibold text-heading">Study runs</h2><p class="mt-1 text-sm text-body">Enter actual measurements only after each condition has stabilized. Derived values are calculated from the row.</p></div>
+    <span class="rounded-full bg-neutral-secondary px-2.5 py-1 text-xs font-medium text-body"><%= runs.length %> run<%= runs.length === 1 ? '' : 's' %></span>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="<%= inputTableClass %>" data-run-table>
+      <thead><tr><th>Run</th><th>Date</th><th>Responsible</th><% activeFields.forEach((field) => { %><th><%= field.label %><% if (field.unit) { %> <span class="normal-case text-body">(<%= field.unit %>)</span><% } %></th><% }); %><th>Done</th><th>Exclude</th><th></th></tr></thead>
+      <tbody>
+        <% if (!runs.length) { %><tr><td class="py-8 text-center text-sm text-body" colspan="<%= activeFields.length + 6 %>">Set the study conditions, then generate runs.</td></tr><% } %>
+        <% runs.forEach((run) => { %><tr data-run-row data-run-id="<%= run.id %>">
+          <td class="whitespace-nowrap font-medium text-heading"><%= run.run_code %></td>
+          <td><input class="min-w-32 rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" type="date" data-run-performed value="<%= run.performed_at || '' %>"></td>
+          <td><select class="min-w-36 rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" data-run-responsible><option value="">Unassigned</option><% assignableUsers.forEach((user) => { %><option value="<%= user.id %>" <%= Number(run.responsible_user_id) === Number(user.id) ? 'selected' : '' %>><%= user.name || user.email %></option><% }); %></select></td>
+          <% activeFields.forEach((field) => { const value = valuesFor(run, field); %><td>
+            <% if (field.is_derived) { %><span class="whitespace-nowrap text-sm text-body" data-derived-code="<%= field.code %>"><%= formatNumber(value?.value_real) %></span>
+            <% } else if (field.field_type === 'boolean') { %><input class="size-4 rounded border-default-medium text-brand focus:ring-brand" type="checkbox" data-field-id="<%= field.id %>" data-field-type="boolean" <%= value?.value_real === 1 ? 'checked' : '' %>>
+            <% } else { %><input class="min-w-24 rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" type="<%= field.field_type === 'number' ? 'number' : 'text' %>" step="any" data-field-id="<%= field.id %>" data-field-type="<%= field.field_type %>" value="<%= field.field_type === 'number' ? (value?.value_real ?? '') : (value?.value_text ?? '') %>"><% } %>
+          </td><% }); %>
+          <td><input class="size-4 rounded border-default-medium text-brand focus:ring-brand" type="checkbox" data-flag="done" <%= run.done === 1 ? 'checked' : '' %>></td>
+          <td><input class="size-4 rounded border-default-medium text-brand focus:ring-brand" type="checkbox" data-flag="exclude" <%= run.exclude_from_analysis === 1 ? 'checked' : '' %>></td>
+          <td><button class="inline-flex size-8 items-center justify-center rounded-base text-danger hover:bg-danger-soft" type="button" data-run-delete title="Delete run"><span class="material-symbols-rounded text-[18px]" aria-hidden="true">delete</span></button></td>
+        </tr><% }); %>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="mb-6 rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs sm:p-5">
+  <div class="border-b border-default pb-4"><h2 class="text-base font-semibold text-heading">Transferable result</h2><p class="mt-1 text-sm text-body">Confirm the accepted limits below. DOE will use these values as a documented constraint or factor range, not as an untraceable default.</p></div>
+  <div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <% outputDefinitions.forEach((definition) => { const output = outputByCode.get(definition.code); %>
+      <label class="text-sm font-medium text-heading"><%= definition.label %><% if (definition.unit) { %> <span class="font-normal text-body">(<%= definition.unit %>)</span><% } %>
+        <input class="<%= inputClass %>" type="number" step="any" data-step-output="<%= definition.code %>" value="<%= output?.value_real ?? '' %>">
+        <span class="mt-1 block text-xs font-normal text-body"><%= definition.description %></span>
+      </label>
+    <% }) %>
+  </div>
+</section>

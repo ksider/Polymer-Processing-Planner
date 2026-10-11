@@ -10,7 +10,13 @@ import {
   buildReportWorkspaceOutline,
   buildReportWorkspaceOutlineMarkdown
 } from "../services/report_service.js";
-import { ensureQualificationDefaults, getQualificationStepsForExperiment } from "../services/qualification_service.js";
+import {
+  ensureQualificationDefaults,
+  getOptionalQualificationStudies,
+  getQualificationOutputDefinitionsForExperiment,
+  getQualificationStepsForExperiment,
+  setOptionalQualificationStudyEnabled
+} from "../services/qualification_service.js";
 import { listRecipes, getRecipeComponents } from "../repos/recipes_repo.js";
 import {
   getExperiment,
@@ -38,8 +44,7 @@ import {
   listDoeStudies,
   updateDoeStudyName
 } from "../repos/doe_repo.js";
-import { listQualSummaries } from "../repos/qual_repo.js";
-import { listQualSteps } from "../repos/qual_repo.js";
+import { listQualStepOutputs, listQualSummaries, listQualSteps } from "../repos/qual_repo.js";
 import {
   createReportConfig,
   getReportConfig,
@@ -104,6 +109,40 @@ function formatSummaryNumber(value: number): string {
   }
   const rounded = Math.round(value * 1000) / 1000;
   return String(rounded);
+}
+
+type QualificationBriefItem = {
+  stepNumber: number;
+  stepName: string;
+  outputCode: string;
+  label: string;
+  unit: string | null;
+  value: number;
+  description: string;
+};
+
+function getQualificationBriefItems(db: Db, experimentId: number): QualificationBriefItem[] {
+  return listQualSteps(db, experimentId)
+    .filter((step) => step.is_active === 1)
+    .flatMap((step) => {
+      const definitionByCode = new Map(
+        getQualificationOutputDefinitionsForExperiment(db, experimentId, step.step_number)
+          .map((definition) => [definition.code, definition])
+      );
+      return listQualStepOutputs(db, step.id).flatMap((output) => {
+        const definition = definitionByCode.get(output.output_code);
+        if (!definition || output.value_real == null || !Number.isFinite(output.value_real)) return [];
+        return [{
+          stepNumber: step.step_number,
+          stepName: step.title,
+          outputCode: output.output_code,
+          label: definition.label,
+          unit: definition.unit,
+          value: output.value_real,
+          description: definition.description
+        }];
+      });
+    });
 }
 
 export function createExperimentsRouter(db: Db) {
@@ -236,7 +275,7 @@ export function createExperimentsRouter(db: Db) {
     const definitionByNumber = new Map(
       getQualificationStepsForExperiment(db, experimentId).map((stepDef) => [stepDef.step_number, stepDef])
     );
-    const qualificationCards = qualSteps.map((step) => {
+    const qualificationCards = qualSteps.filter((step) => step.is_active === 1).map((step) => {
       const stepNumber = step.step_number;
       const stepDef = definitionByNumber.get(stepNumber);
       const summaryJson = summaryByStep.get(stepNumber) || null;
@@ -303,6 +342,10 @@ export function createExperimentsRouter(db: Db) {
         summaryItems
       };
     });
+    const optionalQualificationStudies = getOptionalQualificationStudies(db, experimentId).map((study) => {
+      const step = qualSteps.find((item) => item.step_number === study.stepNumber);
+      return { ...study, enabled: step?.is_active === 1 };
+    });
     const summaryCount = qualSummaries.length;
     const autoStatus = summaryCount > 0 ? "in_progress" : "not_started";
     const autoStatusLabel = autoStatus === "in_progress" ? "In progress" : "Not started";
@@ -351,6 +394,7 @@ export function createExperimentsRouter(db: Db) {
       processTypeCode,
       qualSummaries,
       qualificationCards,
+      optionalQualificationStudies,
       status,
       statusLabel,
       autoStatus,
@@ -373,6 +417,18 @@ export function createExperimentsRouter(db: Db) {
       ownerName,
       workspace
     });
+  });
+
+  router.post("/experiments/:id/qualification/:step/applicability", (req, res) => {
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
+    try {
+      setOptionalQualificationStudyEnabled(db, experimentId, stepNumber, Boolean(req.body?.enabled));
+    } catch (error) {
+      return res.status(400).send(error instanceof Error ? error.message : "Unable to update study applicability");
+    }
+    return res.redirect(`/experiments/${experimentId}#qualification`);
   });
 
   router.get("/experiments/:id/doe-studies.json", (req, res) => {
@@ -407,6 +463,12 @@ export function createExperimentsRouter(db: Db) {
       replicate_count: replicateCount,
       recipe_as_block: recipeAsBlock
     });
+    // Snapshot only confirmed, active qualification outputs. The DOE engine
+    // remains generic; this is provenance for any constraints imported below.
+    upsertDesignMetadata(db, experimentId, doeId, JSON.stringify({
+      qualification_brief: getQualificationBriefItems(db, experimentId),
+      qualification_brief_created_at: new Date().toISOString()
+    }));
     res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=design`);
   });
 
@@ -699,6 +761,12 @@ export function createExperimentsRouter(db: Db) {
     const inputParams = listParamDefinitionsByKind(db, experimentId, "INPUT");
     const configs = listParamConfigs(db, experimentId, doeId);
     const designMeta = parseDesignMetadata(getDesignMetadata(db, experimentId, doeId));
+    const qualificationBrief = Array.isArray(designMeta.qualification_brief)
+      ? designMeta.qualification_brief as QualificationBriefItem[]
+      : getQualificationBriefItems(db, experimentId);
+    const qualificationImports = Array.isArray(designMeta.qualification_imports)
+      ? designMeta.qualification_imports as Array<{ stepNumber: number; outputCode: string; paramDefId: number }>
+      : [];
     const nonRandomizedParamId =
       typeof designMeta.non_randomized_param_id === "number"
         ? designMeta.non_randomized_param_id
@@ -900,6 +968,8 @@ export function createExperimentsRouter(db: Db) {
       runPreview,
       errorMessage,
       nonRandomizedParamId,
+      qualificationBrief,
+      qualificationImports,
       qualSummaries,
       canAssignEntities,
       assignableUsers,
@@ -928,6 +998,58 @@ export function createExperimentsRouter(db: Db) {
         : null
     });
     res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=design`);
+  });
+
+  router.post("/experiments/:id/doe/:doeId/qualification-brief/fixed", (req, res) => {
+    const experimentId = Number(req.params.id);
+    const doeId = Number(req.params.doeId);
+    if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
+    const doe = getDoeStudy(db, doeId);
+    if (!doe || doe.experiment_id !== experimentId) return res.status(404).send("DOE not found");
+    const stepNumber = Number(req.body.step_number);
+    const outputCode = String(req.body.output_code || "").trim();
+    const designMeta = parseDesignMetadata(getDesignMetadata(db, experimentId, doeId));
+    const brief = (Array.isArray(designMeta.qualification_brief)
+      ? designMeta.qualification_brief
+      : getQualificationBriefItems(db, experimentId)) as QualificationBriefItem[];
+    const item = brief.find((entry) => entry.stepNumber === stepNumber && entry.outputCode === outputCode);
+    if (!item || !Number.isFinite(item.value)) {
+      return res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=design&error=${encodeURIComponent("Confirmed qualification output not found")}`);
+    }
+    const code = `qualification_step_${item.stepNumber}_${item.outputCode}`.replace(/[^a-z0-9_]/gi, "_").toLowerCase();
+    let param = listParamDefinitionsByKind(db, experimentId, "INPUT").find((candidate) => candidate.code === code);
+    if (!param) {
+      createCustomParam(db, experimentId, {
+        code,
+        label: `${item.label} (Step ${item.stepNumber})`,
+        unit: item.unit,
+        field_kind: "INPUT",
+        field_type: "number",
+        group_label: "Qualification conditions",
+        allowed_values_json: null
+      });
+      param = listParamDefinitionsByKind(db, experimentId, "INPUT").find((candidate) => candidate.code === code);
+    }
+    if (!param) return res.status(500).send("Unable to create qualification condition");
+    upsertParamConfig(db, {
+      experiment_id: experimentId,
+      doe_id: doeId,
+      param_def_id: param.id,
+      active: 1,
+      mode: "FIXED",
+      fixed_value_real: item.value,
+      range_min_real: null,
+      range_max_real: null,
+      list_json: null,
+      level_count: null
+    });
+    const imports = Array.isArray(designMeta.qualification_imports) ? designMeta.qualification_imports : [];
+    const nextImports = [
+      ...imports.filter((entry: any) => !(Number(entry?.stepNumber) === item.stepNumber && String(entry?.outputCode) === item.outputCode)),
+      { stepNumber: item.stepNumber, outputCode: item.outputCode, paramDefId: param.id, mode: "FIXED", value: item.value }
+    ];
+    upsertDesignMetadata(db, experimentId, doeId, JSON.stringify({ ...designMeta, qualification_brief: brief, qualification_imports: nextImports }));
+    return res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=design`);
   });
 
   router.post("/experiments/:id/archive", (req, res) => {

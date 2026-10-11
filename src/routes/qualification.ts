@@ -6,6 +6,7 @@ import {
   getQualificationSeriesDefinitionsForExperiment,
   getQualificationOutputDefinitionsForExperiment,
   recomputeDerivedAndSummary,
+  updateExtrusionRtdMetricsFromSeries,
   saveQualRunValue,
   addCavityFields,
   getNextCavityIndex
@@ -50,6 +51,7 @@ import { getEntityAssignment } from "../repos/entity_assignments_repo.js";
 import { canAssignEntityResponsibility } from "../services/entity_assignment_service.js";
 import { insertAudit } from "../repos/audit_repo.js";
 import { buildExperimentWorkspace } from "../services/experiment_workspace_service.js";
+import { getQualificationStudyGuide } from "../services/qualification_guides.js";
 
 function hasRole(req: express.Request, roles: string[]) {
   return roles.includes(req.user?.role ?? "");
@@ -112,6 +114,7 @@ export function createQualificationRouter(db: Db) {
     if (!workspace) return res.status(404).send("Experiment not found");
     const step = getQualStep(db, experimentId, stepNumber);
     if (!step) return res.status(404).send("Step not found");
+    if (step.is_active !== 1) return res.status(404).send("This optional qualification study is not enabled for the experiment");
     const fields = listQualFields(db, step.id);
     let runs = listQualRuns(db, step.id);
     if (step.is_blocked !== 1 && (stepNumber === 2 || (stepNumber === 3 && processTypeCode !== "extrusion_v1")) && runs.length === 0) {
@@ -180,12 +183,55 @@ export function createQualificationRouter(db: Db) {
     const feederThroughputLevels = Number.isFinite(feederMin) && Number.isFinite(feederMax) && (feederMax as number) >= (feederMin as number)
       ? [feederMin as number, ((feederMin as number) + (feederMax as number)) / 2, feederMax as number]
       : [];
-    const rheologyStep = processTypeCode === "extrusion_v1" && stepNumber === 3
+    const rheologyStep = processTypeCode === "extrusion_v1" && (stepNumber === 3 || stepNumber === 4)
       ? getQualStep(db, experimentId, 1)
       : null;
     const rheologyReferenceViscosity = rheologyStep
       ? listQualStepOutputs(db, rheologyStep.id).find((output) => output.output_code === "rheology_reference_viscosity_pa_s")?.value_real ?? null
       : null;
+    const thermalSuggestions = (() => {
+      if (processTypeCode !== "extrusion_v1" || stepNumber !== 4) return { speeds: [] as number[], throughputs: [] as number[], temperatures: [] as number[] };
+      const stepThreeSummary = listQualSummaries(db, experimentId).find((row) => row.step_number === 3);
+      let stepThreeData: Record<string, unknown> = {};
+      try { stepThreeData = JSON.parse(stepThreeSummary?.summary_json || "{}") as Record<string, unknown>; } catch {}
+      const values = (key: string) => Array.isArray(stepThreeData[key]) ? stepThreeData[key] : [];
+      const speeds = [...new Set(values("accepted_operating_points").map((point: any) => Number(point?.screw_speed_rpm)).filter(Number.isFinite))].sort((a, b) => a - b);
+      const throughputs = [...new Set(values("accepted_operating_points").map((point: any) => Number(point?.throughput_kg_h)).filter(Number.isFinite))].sort((a, b) => a - b);
+      const stepOne = getQualStep(db, experimentId, 1);
+      const stepOneOutputs = stepOne ? listQualStepOutputs(db, stepOne.id) : [];
+      const min = Number(stepOneOutputs.find((output) => output.output_code === "processing_temp_min_c")?.value_real);
+      const max = Number(stepOneOutputs.find((output) => output.output_code === "processing_temp_max_c")?.value_real);
+      const temperatures = Number.isFinite(min) && Number.isFinite(max) && max > min ? [min, (min + max) / 2, max] : [];
+      return { speeds, throughputs, temperatures };
+    })();
+    const rtdAcceptedPointCount = (() => {
+      if (processTypeCode !== "extrusion_v1" || stepNumber !== 5) return 0;
+      const stepThreeSummary = listQualSummaries(db, experimentId).find((row) => row.step_number === 3);
+      try {
+        const parsed = JSON.parse(stepThreeSummary?.summary_json || "{}") as Record<string, unknown>;
+        return Array.isArray(parsed.accepted_operating_points) ? parsed.accepted_operating_points.length : 0;
+      } catch {
+        return 0;
+      }
+    })();
+    const rtdFeederCalibration = (() => {
+      if (processTypeCode !== "extrusion_v1" || stepNumber !== 5) return null as null | { slope: number; intercept: number; rSquared: number | null; speeds: number[]; minThroughput: number; maxThroughput: number };
+      const feederSummary = listQualSummaries(db, experimentId).find((row) => row.step_number === 2);
+      try {
+        const parsed = JSON.parse(feederSummary?.summary_json || "{}") as Record<string, unknown>;
+        const slope = Number(parsed.feeder_calibration_slope_kg_h_per_rpm);
+        const intercept = Number(parsed.feeder_calibration_intercept_kg_h);
+        const rSquared = Number(parsed.feeder_calibration_r_squared);
+        const points = Array.isArray(parsed.feeder_calibration_points) ? parsed.feeder_calibration_points : [];
+        const speeds = [...new Set(points.map((point: any) => Number(point?.speed)).filter(Number.isFinite))].sort((a, b) => a - b);
+        const throughputs = points.map((point: any) => Number(point?.throughput)).filter(Number.isFinite);
+        return Number.isFinite(slope) && Number.isFinite(intercept) && speeds.length >= 2 && throughputs.length >= 2
+          ? { slope, intercept, rSquared: Number.isFinite(rSquared) ? rSquared : null, speeds, minThroughput: Math.min(...throughputs), maxThroughput: Math.max(...throughputs) }
+          : null;
+      } catch {
+        return null;
+      }
+    })();
     // The original IM panels are retained for their six established studies.
     // Every other catalogue stage uses the shared table/detail shell, so a new
     // code-owned stage never needs a new micro-application or a six-step fork.
@@ -202,12 +248,22 @@ export function createQualificationRouter(db: Db) {
         summaryJson: summaryRow?.summary_json ?? null,
         stepSummary,
         processTypeCode,
+        studyGuide: getQualificationStudyGuide(processTypeCode, stepNumber),
         seriesDefinitions,
         runSeries,
         outputDefinitions,
         stepOutputs,
         feederThroughputLevels,
         rheologyReferenceViscosity,
+        thermalSuggestedSpeeds: thermalSuggestions.speeds,
+        thermalSuggestedThroughputs: thermalSuggestions.throughputs,
+        thermalSuggestedTemperatures: thermalSuggestions.temperatures,
+        rtdAcceptedPointCount,
+        rtdFeederSpeedLevels: rtdFeederCalibration?.speeds ?? [],
+        rtdCalibrationLabel: rtdFeederCalibration
+          ? `Q = ${rtdFeederCalibration.slope.toFixed(3)} · F ${rtdFeederCalibration.intercept >= 0 ? '+' : '−'} ${Math.abs(rtdFeederCalibration.intercept).toFixed(3)} kg/h${rtdFeederCalibration.rSquared != null ? `, R² ${rtdFeederCalibration.rSquared.toFixed(3)}` : ''}`
+          : null,
+        rtdCalibrationRange: rtdFeederCalibration ? `${rtdFeederCalibration.minThroughput.toFixed(2)}–${rtdFeederCalibration.maxThroughput.toFixed(2)} kg/h` : null,
         canAssignEntities,
         assignableUsers,
         stepAssigneeId,
@@ -451,6 +507,13 @@ export function createQualificationRouter(db: Db) {
     if (points.some((point: { x: number; y: number }) => !Number.isFinite(point.x) || !Number.isFinite(point.y))) {
       return res.status(400).json({ error: "Every series point must contain finite x and y values" });
     }
+    if (step.step_number === 5 && seriesCode === "tracer_concentration_response") {
+      const invalidPoint = points.some((point: { x: number; y: number }) => point.x < 0 || point.y < 0);
+      const outOfOrder = points.some((point: { x: number }, index: number) => index > 0 && point.x <= points[index - 1].x);
+      if (invalidPoint || outOfOrder) {
+        return res.status(400).json({ error: "RTD samples must have non-negative values and strictly increasing time" });
+      }
+    }
     const sourceName = String(req.body?.source_name || "").trim().slice(0, 255) || null;
     replaceQualRunSeries(db, {
       experimentId: run.experiment_id,
@@ -461,8 +524,11 @@ export function createQualificationRouter(db: Db) {
       sourceName,
       points
     });
+    const rtdMetrics = step.step_number === 5 && seriesCode === "tracer_concentration_response"
+      ? updateExtrusionRtdMetricsFromSeries(db, step.id, runId)
+      : null;
     recomputeDerivedAndSummary(db, run.experiment_id, step.id, step.step_number);
-    return res.json({ ok: true, point_count: points.length });
+    return res.json({ ok: true, point_count: points.length, rtd_metrics: rtdMetrics });
   });
 
   router.delete("/qual-runs/:id/series/:seriesCode", ensureQualRunAccess, (req, res) => {
@@ -483,6 +549,9 @@ export function createQualificationRouter(db: Db) {
     ).some((item) => item.code === seriesCode);
     if (!isDeclared) return res.status(404).json({ error: "Series is not declared for this stage" });
     deleteQualRunSeries(db, runId, seriesCode);
+    if (step.step_number === 5 && seriesCode === "tracer_concentration_response") {
+      updateExtrusionRtdMetricsFromSeries(db, step.id, runId);
+    }
     recomputeDerivedAndSummary(db, run.experiment_id, step.id, step.step_number);
     return res.json({ ok: true });
   });
@@ -659,6 +728,176 @@ export function createQualificationRouter(db: Db) {
       saveQualRunValue(db, runs[index].id, rpm.id, "number", cell.speed);
       saveQualRunValue(db, runs[index].id, targetPressure.id, "number", cell.pressure);
     });
+    recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
+    return res.json({ ok: true, run_count: cells.length });
+  });
+
+  router.post("/experiments/:id/qualification/:step/thermal-matrix", (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer"])) return res.status(403).json({ error: "Forbidden" });
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    const step = getQualStep(db, experimentId, stepNumber);
+    if (!step || stepNumber !== 4) return res.status(404).json({ error: "Step not found" });
+    if (rejectBlockedStep(res, step)) return;
+    const parseLevels = (value: unknown) => [...new Set(String(value || "").split(/[;,\s]+/).map(Number).filter((item) => Number.isFinite(item) && item > 0))].sort((a, b) => a - b);
+    const speeds = parseLevels(req.body?.screw_speed_levels_rpm);
+    const throughputs = parseLevels(req.body?.throughput_levels_kg_h);
+    const temperatures = parseLevels(req.body?.barrel_temperature_levels_c);
+    if (!speeds.length || !throughputs.length || !temperatures.length) {
+      return res.status(400).json({ error: "Enter screw-speed, throughput and barrel-temperature levels" });
+    }
+    const cells = speeds.flatMap((speed) => throughputs.flatMap((throughput) => temperatures.map((temperature) => ({ speed, throughput, temperature }))));
+    let runs = listQualRuns(db, step.id).filter((run) => run.run_group === "default");
+    while (runs.length < cells.length) {
+      createQualRuns(db, experimentId, step.id, 1);
+      runs = listQualRuns(db, step.id).filter((run) => run.run_group === "default");
+    }
+    const fields = new Map(listQualFields(db, step.id).map((field) => [field.code, field]));
+    const rpm = fields.get("screw_speed_rpm");
+    const throughput = fields.get("throughput_kg_h");
+    const barrelTemp = fields.get("barrel_set_temp_c");
+    if (!rpm || !throughput || !barrelTemp) return res.status(400).json({ error: "Thermal-matrix fields unavailable" });
+    cells.forEach((cell, index) => {
+      saveQualRunValue(db, runs[index].id, rpm.id, "number", cell.speed);
+      saveQualRunValue(db, runs[index].id, throughput.id, "number", cell.throughput);
+      saveQualRunValue(db, runs[index].id, barrelTemp.id, "number", cell.temperature);
+    });
+    recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
+    return res.json({ ok: true, run_count: cells.length });
+  });
+
+  router.post("/experiments/:id/qualification/:step/rtd-matrix", (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer"])) return res.status(403).json({ error: "Forbidden" });
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    const step = getQualStep(db, experimentId, stepNumber);
+    if (!step || stepNumber !== 5) return res.status(404).json({ error: "Step not found" });
+    if (rejectBlockedStep(res, step)) return;
+    const parseLevels = (value: unknown) => [...new Set(String(value || "").split(/[;,\s]+/).map(Number).filter((item) => Number.isFinite(item) && item > 0))].sort((a, b) => a - b);
+    const screwSpeeds = parseLevels(req.body?.screw_speed_levels_rpm);
+    const throughputs = parseLevels(req.body?.throughput_levels_kg_h);
+    if (!screwSpeeds.length || !throughputs.length) return res.status(400).json({ error: "Enter screw-speed and planned-throughput levels" });
+    const feederStep = getQualStep(db, experimentId, 2);
+    if (!feederStep) return res.status(400).json({ error: "Feeder calibration step is unavailable" });
+    recomputeDerivedAndSummary(db, experimentId, feederStep.id, 2);
+    const feederSummary = listQualSummaries(db, experimentId).find((row) => row.step_number === 2);
+    let slope = NaN;
+    let intercept = NaN;
+    let calibrationRange: { min: number; max: number } | null = null;
+    try {
+      const parsed = JSON.parse(feederSummary?.summary_json || "{}") as Record<string, unknown>;
+      slope = Number(parsed.feeder_calibration_slope_kg_h_per_rpm);
+      intercept = Number(parsed.feeder_calibration_intercept_kg_h);
+      const calibrationPoints = (Array.isArray(parsed.feeder_calibration_points) ? parsed.feeder_calibration_points : [])
+        .map((point: any) => Number(point?.throughput))
+        .filter(Number.isFinite);
+      if (calibrationPoints.length) calibrationRange = { min: Math.min(...calibrationPoints), max: Math.max(...calibrationPoints) };
+    } catch {}
+    if (!Number.isFinite(slope) || !Number.isFinite(intercept) || !calibrationRange) return res.status(400).json({ error: "Complete at least two stable feeder-speed calibration points in Step 2 first" });
+    const operatingSummary = listQualSummaries(db, experimentId).find((row) => row.step_number === 3);
+    let operatingPoints: Array<{ screwSpeed: number; throughput: number }> = [];
+    try {
+      const parsed = JSON.parse(operatingSummary?.summary_json || "{}") as Record<string, unknown>;
+      operatingPoints = (Array.isArray(parsed.accepted_operating_points) ? parsed.accepted_operating_points : [])
+        .map((point: any) => ({ screwSpeed: Number(point?.screw_speed_rpm), throughput: Number(point?.throughput_kg_h) }))
+        .filter((point) => Number.isFinite(point.screwSpeed) && Number.isFinite(point.throughput));
+    } catch {}
+    if (!operatingPoints.length) return res.status(400).json({ error: "Confirm accepted operating points in Step 3 before generating RTD runs" });
+    const invalidCalibrationQ = throughputs.find((throughput) => throughput < calibrationRange!.min || throughput > calibrationRange!.max);
+    if (invalidCalibrationQ != null) return res.status(400).json({ error: `Planned throughput ${invalidCalibrationQ} kg/h is outside the stable Step 2 calibration range ${calibrationRange.min.toFixed(2)}–${calibrationRange.max.toFixed(2)} kg/h` });
+    for (const screwSpeed of screwSpeeds) {
+      const atSpeed = operatingPoints.filter((point) => Math.abs(point.screwSpeed - screwSpeed) < 1e-6);
+      if (!atSpeed.length) return res.status(400).json({ error: `Screw speed ${screwSpeed} rpm is not an accepted Step 3 operating point` });
+      const minQ = Math.min(...atSpeed.map((point) => point.throughput));
+      const maxQ = Math.max(...atSpeed.map((point) => point.throughput));
+      const invalidQ = throughputs.find((throughput) => throughput < minQ || throughput > maxQ);
+      if (invalidQ != null) return res.status(400).json({ error: `At ${screwSpeed} rpm, planned throughput ${invalidQ} kg/h is outside the Step 3 operating window ${minQ.toFixed(2)}–${maxQ.toFixed(2)} kg/h` });
+    }
+    const cells = screwSpeeds.flatMap((screwSpeed) => throughputs.map((throughput) => ({ screwSpeed, throughput })));
+    let runs = listQualRuns(db, step.id).filter((run) => run.run_group === "default");
+    while (runs.length < cells.length) {
+      createQualRuns(db, experimentId, step.id, 1);
+      runs = listQualRuns(db, step.id).filter((run) => run.run_group === "default");
+    }
+    const fields = new Map(listQualFields(db, step.id).map((field) => [field.code, field]));
+    const rpm = fields.get("screw_speed_rpm");
+    const plannedThroughput = fields.get("planned_throughput_kg_h");
+    const feederSpeed = fields.get("feeder_speed_rpm");
+    if (!rpm || !plannedThroughput || !feederSpeed) return res.status(400).json({ error: "RTD matrix fields unavailable" });
+    cells.forEach((cell, index) => {
+      saveQualRunValue(db, runs[index].id, rpm.id, "number", cell.screwSpeed);
+      saveQualRunValue(db, runs[index].id, plannedThroughput.id, "number", cell.throughput);
+      saveQualRunValue(db, runs[index].id, feederSpeed.id, "number", Math.round(((cell.throughput - intercept) / slope) * 100) / 100);
+    });
+    recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
+    return res.json({ ok: true, run_count: cells.length, feeder_calibration: { slope, intercept } });
+  });
+
+  router.post("/experiments/:id/qualification/:step/optional-matrix", (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer"])) return res.status(403).json({ error: "Forbidden" });
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    const step = getQualStep(db, experimentId, stepNumber);
+    if (!step || ![6, 7, 8, 9, 10].includes(stepNumber)) return res.status(404).json({ error: "Optional study not found" });
+    if (step.is_active !== 1) return res.status(409).json({ error: "Enable this optional study before generating runs" });
+    if (rejectBlockedStep(res, step)) return;
+    const number = (value: unknown) => {
+      const parsed = Number(String(value ?? "").trim().replace(",", "."));
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    };
+    const levels = (value: unknown) => [...new Set(String(value || "").split(/[;,\s]+/).map((item) => Number(item.replace(",", "."))).filter((item) => Number.isFinite(item) && item > 0))].sort((a, b) => a - b);
+    const fields = new Map(listQualFields(db, step.id).map((field) => [field.code, field]));
+    const write = (runId: number, values: Record<string, number>) => {
+      Object.entries(values).forEach(([code, value]) => {
+        const field = fields.get(code);
+        if (field) saveQualRunValue(db, runId, field.id, "number", value);
+      });
+    };
+    let cells: Array<Record<string, number>> = [];
+    if (stepNumber === 6) {
+      const screw = number(req.body?.main_screw_speed_rpm);
+      const matrix = number(req.body?.matrix_throughput_kg_h);
+      const sideSpeeds = levels(req.body?.side_feeder_speed_levels_rpm);
+      if (!screw || !matrix || !sideSpeeds.length) return res.status(400).json({ error: "Enter main screw speed, matrix throughput and at least one side-feeder speed" });
+      cells = sideSpeeds.map((side) => ({ main_screw_speed_rpm: screw, matrix_throughput_kg_h: matrix, side_feeder_speed_rpm: side }));
+    } else if (stepNumber === 7) {
+      const screw = number(req.body?.screw_speed_rpm);
+      const polymer = number(req.body?.polymer_throughput_kg_h);
+      const liquidRates = levels(req.body?.liquid_throughput_levels_kg_h);
+      if (!screw || !polymer || !liquidRates.length) return res.status(400).json({ error: "Enter screw speed, polymer throughput and at least one liquid dosing rate" });
+      cells = liquidRates.map((liquid) => ({ screw_speed_rpm: screw, polymer_throughput_kg_h: polymer, liquid_throughput_kg_h: liquid }));
+    } else if (stepNumber === 8) {
+      const screw = number(req.body?.screw_speed_rpm);
+      const throughput = number(req.body?.throughput_kg_h);
+      const vacuumLevels = levels(req.body?.vacuum_pressure_levels_mbar);
+      if (!screw || !throughput || !vacuumLevels.length) return res.status(400).json({ error: "Enter screw speed, throughput and at least one vacuum-pressure level" });
+      cells = vacuumLevels.map((vacuum) => ({ screw_speed_rpm: screw, throughput_kg_h: throughput, vacuum_pressure_mbar: vacuum }));
+    } else if (stepNumber === 9) {
+      const temperatures = levels(req.body?.reaction_temp_levels_c);
+      const residenceTimes = levels(req.body?.mean_residence_time_levels_s);
+      if (!temperatures.length || !residenceTimes.length) return res.status(400).json({ error: "Enter reaction-temperature and residence-time levels" });
+      cells = temperatures.flatMap((temperature) => residenceTimes.map((residenceTime) => ({ reaction_temp_c: temperature, mean_residence_time_s: residenceTime })));
+    } else {
+      const speeds = levels(req.body?.production_screw_speed_levels_rpm);
+      const multipliers = levels(req.body?.production_throughput_multipliers);
+      const sourceDiameter = number(req.body?.source_screw_diameter_mm);
+      const productionDiameter = number(req.body?.production_screw_diameter_mm);
+      const sourceThroughput = number(req.body?.source_throughput_kg_h);
+      if (!speeds.length || !multipliers.length || !sourceDiameter || !productionDiameter || !sourceThroughput) {
+        return res.status(400).json({ error: "Enter both screw diameters, source throughput, production screw speeds and throughput multipliers" });
+      }
+      const scaledTarget = sourceThroughput * Math.pow(productionDiameter / sourceDiameter, 3);
+      cells = speeds.flatMap((speed) => multipliers.map((multiplier) => ({
+        production_screw_speed_rpm: speed,
+        production_throughput_kg_h: Math.round(scaledTarget * multiplier * 100) / 100
+      })));
+    }
+    let runs = listQualRuns(db, step.id).filter((run) => run.run_group === "default");
+    while (runs.length < cells.length) {
+      createQualRuns(db, experimentId, step.id, 1);
+      runs = listQualRuns(db, step.id).filter((run) => run.run_group === "default");
+    }
+    cells.forEach((cell, index) => write(runs[index].id, cell));
     recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
     return res.json({ ok: true, run_count: cells.length });
   });
@@ -1312,6 +1551,33 @@ export function createQualificationRouter(db: Db) {
       die_outlet_pressure_bar: parseSettingValue(req.body.die_outlet_pressure_bar),
       barrel_temperature_profile: req.body.barrel_temperature_profile ? String(req.body.barrel_temperature_profile).trim() : null,
       die_geometry: req.body.die_geometry ? String(req.body.die_geometry).trim() : null,
+      rtd_screw_configuration: req.body.rtd_screw_configuration ? String(req.body.rtd_screw_configuration).trim() : null,
+      rtd_barrel_temperature_profile: req.body.rtd_barrel_temperature_profile ? String(req.body.rtd_barrel_temperature_profile).trim() : null,
+      rtd_free_volume_l: parseSettingValue(req.body.rtd_free_volume_l),
+      rtd_melt_density_kg_l: parseSettingValue(req.body.rtd_melt_density_kg_l),
+      rtd_tracer_type: req.body.rtd_tracer_type ? String(req.body.rtd_tracer_type).trim() : null,
+      rtd_tracer_pulse_mass_g: parseSettingValue(req.body.rtd_tracer_pulse_mass_g),
+      rtd_sampling_interval_s: parseSettingValue(req.body.rtd_sampling_interval_s),
+      rtd_measurement_method: req.body.rtd_measurement_method ? String(req.body.rtd_measurement_method) : null,
+      rtd_screw_speed_levels_rpm: req.body.rtd_screw_speed_levels_rpm ? String(req.body.rtd_screw_speed_levels_rpm).trim() : null,
+      rtd_throughput_levels_kg_h: req.body.rtd_throughput_levels_kg_h ? String(req.body.rtd_throughput_levels_kg_h).trim() : null,
+      side_feeding_main_screw_speed_rpm: parseSettingValue(req.body.side_feeding_main_screw_speed_rpm),
+      side_feeding_matrix_throughput_kg_h: parseSettingValue(req.body.side_feeding_matrix_throughput_kg_h),
+      side_feeding_speed_levels_rpm: req.body.side_feeding_speed_levels_rpm ? String(req.body.side_feeding_speed_levels_rpm).trim() : null,
+      liquid_dosing_screw_speed_rpm: parseSettingValue(req.body.liquid_dosing_screw_speed_rpm),
+      liquid_dosing_polymer_throughput_kg_h: parseSettingValue(req.body.liquid_dosing_polymer_throughput_kg_h),
+      liquid_dosing_levels_kg_h: req.body.liquid_dosing_levels_kg_h ? String(req.body.liquid_dosing_levels_kg_h).trim() : null,
+      devol_screw_speed_rpm: parseSettingValue(req.body.devol_screw_speed_rpm),
+      devol_throughput_kg_h: parseSettingValue(req.body.devol_throughput_kg_h),
+      devol_vacuum_levels_mbar: req.body.devol_vacuum_levels_mbar ? String(req.body.devol_vacuum_levels_mbar).trim() : null,
+      reaction_temp_levels_c: req.body.reaction_temp_levels_c ? String(req.body.reaction_temp_levels_c).trim() : null,
+      reaction_residence_time_levels_s: req.body.reaction_residence_time_levels_s ? String(req.body.reaction_residence_time_levels_s).trim() : null,
+      scale_up_source_screw_diameter_mm: parseSettingValue(req.body.scale_up_source_screw_diameter_mm),
+      scale_up_production_screw_diameter_mm: parseSettingValue(req.body.scale_up_production_screw_diameter_mm),
+      scale_up_source_throughput_kg_h: parseSettingValue(req.body.scale_up_source_throughput_kg_h),
+      scale_up_source_sme_kwh_kg: parseSettingValue(req.body.scale_up_source_sme_kwh_kg),
+      scale_up_production_screw_speed_levels_rpm: req.body.scale_up_production_screw_speed_levels_rpm ? String(req.body.scale_up_production_screw_speed_levels_rpm).trim() : null,
+      scale_up_production_throughput_multipliers: req.body.scale_up_production_throughput_multipliers ? String(req.body.scale_up_production_throughput_multipliers).trim() : null,
       custom_fields: customFields
     };
     upsertQualStepSettings(db, experimentId, stepNumber, JSON.stringify(settings));

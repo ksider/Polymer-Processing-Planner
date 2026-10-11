@@ -20,7 +20,7 @@ export function buildExperimentWorkspace(db: Db, experimentId: number) {
   if (!experiment) return null;
 
   const completedSteps = new Set(listQualSummaries(db, experimentId).map((row) => row.step_number));
-  const qualificationCards = listQualSteps(db, experimentId).map((step) => {
+  const qualificationCards = listQualSteps(db, experimentId).filter((step) => step.is_active === 1).map((step) => {
     const rawStatus = step.status || "DRAFT";
     const status: WorkspaceStageStatus =
       step.is_blocked === 1 || rawStatus === "BLOCKED"

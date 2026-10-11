@@ -723,6 +723,7 @@ function initDb(db: Db) {
       display_order INTEGER,
       title TEXT,
       status TEXT NOT NULL DEFAULT 'DRAFT',
+      is_active INTEGER NOT NULL DEFAULT 1,
       is_blocked INTEGER NOT NULL DEFAULT 0,
       blocked_reason TEXT,
       blocked_by_user_id INTEGER,
@@ -1577,6 +1578,9 @@ function initDb(db: Db) {
   }
   if (!hasColumn(db, "qual_steps", "title")) {
     db.exec("ALTER TABLE qual_steps ADD COLUMN title TEXT");
+  }
+  if (!hasColumn(db, "qual_steps", "is_active")) {
+    db.exec("ALTER TABLE qual_steps ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1");
   }
   if (!hasColumn(db, "qual_steps", "is_blocked")) {
     db.exec("ALTER TABLE qual_steps ADD COLUMN is_blocked INTEGER NOT NULL DEFAULT 0");

@@ -888,7 +888,7 @@ export function searchEntityAttachments(db: Db, userId: number, query: string, l
   };
   for (const experiment of experiments) {
     push(buildEntityAttachment(db, "experiment", experiment.id), [experiment.name, experiment.design_type, String(experiment.id)]);
-    for (const step of listQualSteps(db, experiment.id)) {
+    for (const step of listQualSteps(db, experiment.id).filter((step) => step.is_active === 1)) {
       push(buildEntityAttachment(db, "qualification_step", step.id), [
         `qualification step ${step.step_number}`,
         `step ${step.step_number}`,

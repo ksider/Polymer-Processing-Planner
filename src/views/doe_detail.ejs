@@ -84,6 +84,40 @@
       </div>
     </div>
 
+    <section class="mb-6 rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs sm:p-5">
+      <div class="flex flex-wrap items-start justify-between gap-3 border-b border-default pb-4">
+        <div>
+          <h2 class="text-base font-semibold text-heading">Qualification handoff</h2>
+          <p class="mt-1 max-w-3xl text-sm text-body">Confirmed active-stage outputs are snapshotted when this DOE is created. Import a value only when it is a fixed condition; factor ranges and measured responses remain explicit DOE choices.</p>
+        </div>
+        <span class="rounded-full bg-neutral-secondary px-2.5 py-1 text-xs font-medium text-body"><%= qualificationBrief.length %> confirmed value<%= qualificationBrief.length === 1 ? '' : 's' %></span>
+      </div>
+      <% if (!qualificationBrief.length) { %>
+        <p class="mt-4 text-sm text-body">No confirmed qualification outputs are available yet. Save an accepted result on an active qualification stage, then create a new DOE to snapshot it.</p>
+      <% } else { %>
+        <div class="mt-4 overflow-x-auto"><table class="<%= factorTableClass %>">
+          <thead><tr><th>Source</th><th>Confirmed result</th><th>Use in this DOE</th></tr></thead>
+          <tbody>
+            <% qualificationBrief.forEach((item) => { const imported = qualificationImports.find((entry) => Number(entry.stepNumber) === Number(item.stepNumber) && entry.outputCode === item.outputCode); %>
+              <tr>
+                <td><span class="font-medium text-heading">Step <%= item.stepNumber %></span><span class="block text-xs text-body"><%= item.stepName %></span></td>
+                <td><span class="font-medium text-heading"><%= item.label %></span><span class="block text-xs text-body"><%= formatNumber(item.value) %><%= item.unit ? ` ${item.unit}` : '' %> · <%= item.description %></span></td>
+                <td>
+                  <% if (imported) { %>
+                    <span class="inline-flex rounded-full bg-success-soft px-2.5 py-1 text-xs font-medium text-success">Fixed condition imported</span>
+                  <% } else if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
+                    <form action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/qualification-brief/fixed" method="post"><input type="hidden" name="step_number" value="<%= item.stepNumber %>"><input type="hidden" name="output_code" value="<%= item.outputCode %>"><button class="inline-flex items-center justify-center rounded-base border border-default-medium bg-neutral-secondary px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-tertiary focus:outline-none focus:ring-4 focus:ring-brand-soft" type="submit">Use as fixed condition</button></form>
+                  <% } else { %>
+                    <span class="text-xs text-body">Not imported</span>
+                  <% } %>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table></div>
+      <% } %>
+    </section>
+
     <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
         <div>

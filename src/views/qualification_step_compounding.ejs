@@ -175,12 +175,22 @@
   <% const isExtrusionStepOne = processTypeCode === 'extrusion_v1' && step.step_number === 1; %>
   <% const isExtrusionStepTwo = processTypeCode === 'extrusion_v1' && step.step_number === 2; %>
   <% const isExtrusionStepThree = processTypeCode === 'extrusion_v1' && step.step_number === 3; %>
+  <% const isExtrusionStepFour = processTypeCode === 'extrusion_v1' && step.step_number === 4; %>
+  <% const isExtrusionStepFive = processTypeCode === 'extrusion_v1' && step.step_number === 5; %>
+  <% const isExtrusionOptionalStudy = processTypeCode === 'extrusion_v1' && [6, 7, 8, 9, 10].includes(step.step_number); %>
+  <% if (studyGuide) { %><%- include('partials/qualification_study_guide', { studyGuide }) %><% } %>
   <% if (isExtrusionStepOne) { %>
     <%- include('partials/extrusion_step1_program', { fields, runs, runValueMap, seriesDefinitions, runSeries, outputDefinitions, stepOutputs, assignableUsers, inputTableClass, formatNumber, step }) %>
   <% } else if (isExtrusionStepTwo) { %>
     <%- include('partials/extrusion_step2_program', { fields, runs, runValueMap, seriesDefinitions, runSeries, outputDefinitions, stepOutputs, assignableUsers, inputTableClass, formatNumber, step, stepSettings }) %>
   <% } else if (isExtrusionStepThree) { %>
     <%- include('partials/extrusion_step3_program', { fields, runs, runValueMap, outputDefinitions, stepOutputs, assignableUsers, inputTableClass, formatNumber, step, stepSettings, feederThroughputLevels, rheologyReferenceViscosity, stepSummary }) %>
+  <% } else if (isExtrusionStepFour) { %>
+    <%- include('partials/extrusion_step4_program', { fields, runs, runValueMap, outputDefinitions, stepOutputs, assignableUsers, inputTableClass, formatNumber, step, stepSettings, rheologyReferenceViscosity, stepSummary, thermalSuggestedSpeeds, thermalSuggestedThroughputs, thermalSuggestedTemperatures }) %>
+  <% } else if (isExtrusionStepFive) { %>
+    <%- include('partials/extrusion_step5_program', { fields, runs, runValueMap, seriesDefinitions, runSeries, outputDefinitions, stepOutputs, assignableUsers, inputTableClass, formatNumber, step, stepSettings, stepSummary, rtdAcceptedPointCount }) %>
+  <% } else if (isExtrusionOptionalStudy) { %>
+    <%- include('partials/extrusion_optional_study_program', { fields, runs, runValueMap, outputDefinitions, stepOutputs, assignableUsers, inputTableClass, formatNumber, step, stepSettings }) %>
   <% } else { %>
   <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
     <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
@@ -532,7 +542,7 @@
     const experimentId = <%= experimentId %>;
     const stepNumber = <%= step.step_number %>;
     const processTypeCode = <%- jsonForScript(processTypeCode) %>;
-    const table = document.querySelector('[data-extrusion-step-one], [data-extrusion-step-two], [data-extrusion-step-three]') || document.getElementById('compoundingRunsTable');
+    const table = document.querySelector('[data-extrusion-step-one], [data-extrusion-step-two], [data-extrusion-step-three], [data-extrusion-step-four]') || document.getElementById('compoundingRunsTable');
     const runTables = Array.from(document.querySelectorAll('[data-run-table]'));
     if (!runTables.length && table) runTables.push(table);
     const fieldIdByCode = <%- jsonForScript(Object.fromEntries(fields.map((field) => [field.code, field.id]))) %>;
@@ -606,7 +616,7 @@
       const valid = summary.pump_characteristic_fit_valid === true;
       root.classList.toggle('border-success-medium', valid); root.classList.toggle('bg-success-soft', valid);
       root.classList.toggle('border-warning-medium', !valid); root.classList.toggle('bg-warning-soft', !valid);
-      root.querySelector('[data-pump-fit-title]').textContent = valid ? 'Fitted equation' : 'Awaiting valid operating-point data';
+      root.querySelector('[data-pump-fit-title]').textContent = valid ? 'Fitted equation' : 'Awaiting valid pump-curve data';
       root.querySelector('[data-pump-fit-details]').hidden = !valid;
       root.querySelector('[data-pump-fit-empty]').hidden = valid;
       if (!valid) return;
@@ -1128,6 +1138,107 @@
         renderMeasurementSeriesCard(card);
       });
     };
+    const rtdSamplesDialog = document.getElementById('rtdSamplesDialog');
+    const rtdSamplesBody = rtdSamplesDialog?.querySelector('[data-rtd-samples-body]');
+    const rtdSamplesStatus = rtdSamplesDialog?.querySelector('[data-rtd-samples-status]');
+    let activeRtdSamplesRun = null;
+    const setRtdSamplesStatus = (message, type = 'neutral') => {
+      if (!rtdSamplesStatus) return;
+      rtdSamplesStatus.textContent = message;
+      rtdSamplesStatus.className = `text-xs ${type === 'error' ? 'text-danger' : type === 'success' ? 'text-success' : 'text-body'}`;
+    };
+    const numberRtdSampleRows = () => rtdSamplesBody?.querySelectorAll('tr').forEach((sampleRow, index) => {
+      const label = sampleRow.querySelector('[data-rtd-sample-number]');
+      if (label) label.textContent = String(index + 1);
+    });
+    const appendRtdSampleRow = (time = '', signal = '') => {
+      if (!rtdSamplesBody) return;
+      const row = document.createElement('tr');
+      row.className = 'border-b border-default last:border-0';
+      row.innerHTML = `<td class="px-2 py-2 text-body" data-rtd-sample-number></td><td class="px-2 py-2"><input class="block w-full" type="number" min="0" step="any" data-rtd-sample-time value="${time}"></td><td class="px-2 py-2"><input class="block w-full" type="number" min="0" step="any" data-rtd-sample-signal value="${signal}"></td><td class="px-2 py-2 text-right"><button class="inline-flex size-8 items-center justify-center rounded-base text-danger hover:bg-danger-soft" type="button" data-delete-rtd-sample aria-label="Remove sample"><span class="material-symbols-rounded text-[18px]">delete</span></button></td>`;
+      rtdSamplesBody.appendChild(row);
+      numberRtdSampleRows();
+    };
+    const openRtdSamples = (runId, runCode) => {
+      if (!rtdSamplesDialog || !rtdSamplesBody) return;
+      activeRtdSamplesRun = Number(runId);
+      rtdSamplesDialog.querySelector('[data-rtd-samples-run]').textContent = runCode || 'RTD run';
+      rtdSamplesBody.replaceChildren();
+      const current = seriesFor(activeRtdSamplesRun, 'tracer_concentration_response');
+      if (current?.points?.length) {
+        current.points.forEach((point) => appendRtdSampleRow(point.x_value, point.y_value));
+        setRtdSamplesStatus(`${current.points.length} saved samples. Edit or add measurements, then save.`);
+      } else {
+        appendRtdSampleRow(0, 0);
+        for (let index = 0; index < 5; index += 1) appendRtdSampleRow();
+        setRtdSamplesStatus('Enter at least 5 samples in increasing time order.');
+      }
+      rtdSamplesDialog.showModal();
+    };
+    document.querySelectorAll('[data-open-rtd-samples]').forEach((button) => {
+      button.addEventListener('click', () => openRtdSamples(button.dataset.runId, button.dataset.runCode));
+    });
+    document.querySelectorAll('[data-close-rtd-samples]').forEach((button) => {
+      button.addEventListener('click', () => rtdSamplesDialog?.close());
+    });
+    const setRtdProtocolVisible = (visible) => {
+      const protocol = rtdSamplesDialog.querySelector('[data-rtd-protocol-panel]');
+      const layout = rtdSamplesDialog.querySelector('[data-rtd-samples-layout]');
+      const showButton = rtdSamplesDialog.querySelector('[data-show-rtd-protocol]');
+      protocol?.classList.toggle('hidden', !visible);
+      layout?.classList.toggle('lg:grid-cols-1', !visible);
+      layout?.classList.toggle('lg:grid-cols-[minmax(0,1fr)_19rem]', visible);
+      showButton?.classList.toggle('hidden', visible);
+      showButton?.classList.toggle('inline-flex', !visible);
+    };
+    rtdSamplesDialog?.querySelector('[data-hide-rtd-protocol]')?.addEventListener('click', () => setRtdProtocolVisible(false));
+    rtdSamplesDialog?.querySelector('[data-show-rtd-protocol]')?.addEventListener('click', () => setRtdProtocolVisible(true));
+    rtdSamplesDialog?.querySelector('[data-add-rtd-sample]')?.addEventListener('click', () => appendRtdSampleRow());
+    rtdSamplesBody?.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-delete-rtd-sample]');
+      if (!button) return;
+      button.closest('tr')?.remove();
+      numberRtdSampleRows();
+    });
+    rtdSamplesDialog?.querySelector('[data-save-rtd-samples]')?.addEventListener('click', async (event) => {
+      if (!activeRtdSamplesRun || !rtdSamplesBody) return;
+      const points = [];
+      for (const row of rtdSamplesBody.querySelectorAll('tr')) {
+        const timeRaw = row.querySelector('[data-rtd-sample-time]')?.value?.trim();
+        const signalRaw = row.querySelector('[data-rtd-sample-signal]')?.value?.trim();
+        if (!timeRaw && !signalRaw) continue;
+        const time = parseNumber(timeRaw);
+        const signal = parseNumber(signalRaw);
+        if (!Number.isFinite(time) || !Number.isFinite(signal) || time < 0 || signal < 0) {
+          setRtdSamplesStatus('Every non-empty sample needs non-negative time and tracer signal.', 'error');
+          return;
+        }
+        points.push({ x: time, y: signal });
+      }
+      if (points.length < 5) {
+        setRtdSamplesStatus('At least 5 outlet samples are required.', 'error');
+        return;
+      }
+      if (points.some((point, index) => index > 0 && point.x <= points[index - 1].x)) {
+        setRtdSamplesStatus('Arrange samples in strictly increasing time order.', 'error');
+        return;
+      }
+      const saveButton = event.currentTarget;
+      saveButton.setAttribute('disabled', 'disabled');
+      setRtdSamplesStatus('Saving samples and calculating RTD…');
+      try {
+        await requestSeriesJson(`/qual-runs/${activeRtdSamplesRun}/series/tracer_concentration_response`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source_name: 'Manual outlet samples', points })
+        });
+        setRtdSamplesStatus('RTD calculated. Updating run results…', 'success');
+        window.setTimeout(() => window.location.reload(), 300);
+      } catch (error) {
+        saveButton.removeAttribute('disabled');
+        setRtdSamplesStatus(error instanceof Error ? error.message : 'Unable to save RTD samples.', 'error');
+      }
+    });
     const renderExtrusionFeederCharts = () => {
       if (processTypeCode !== 'extrusion_v1' || stepNumber !== 2 || !window.echarts) return;
       const stabilityContainer = document.getElementById('extrusionFeederStabilityChart');
@@ -1136,32 +1247,30 @@
         const showLoading = maximumCapacity != null && maximumCapacity > 0;
         const rows = getActiveRows();
         const points = rows.map((row) => {
-          const target = numFromRow(row, 'target_throughput_kg_h');
+          const feederSpeed = numFromRow(row, 'feeder_speed_rpm');
           const mean = numFromRow(row, 'mean_throughput_kg_h');
           const sd = numFromRow(row, 'throughput_sd_kg_h');
           const cv = mean && sd != null ? (sd / mean) * 100 : null;
-          const error = target && mean != null ? Math.abs(mean - target) / target * 100 : null;
-          const loading = showLoading && target != null ? target / maximumCapacity * 100 : target;
-          return { target, loading, cv, error, run: row.querySelector('strong')?.textContent?.trim() || 'run' };
-        }).filter((point) => Number.isFinite(point.loading) && (Number.isFinite(point.cv) || Number.isFinite(point.error)));
+          const loading = showLoading && mean != null ? mean / maximumCapacity * 100 : mean;
+          return { feederSpeed, mean, loading, cv, run: row.querySelector('strong')?.textContent?.trim() || 'run' };
+        }).filter((point) => Number.isFinite(point.feederSpeed) && Number.isFinite(point.mean));
         const chart = echarts.getInstanceByDom(stabilityContainer) || echarts.init(stabilityContainer);
         if (!points.length) {
           chart.clear();
-          chart.setOption({ title: { text: 'Enter throughput, mean and standard deviation to map feeder stability', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } } });
+          chart.setOption({ title: { text: 'Enter feeder speed, mean throughput and standard deviation to calibrate the feeder', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } } });
         } else {
-          const stable = points.filter((point) => point.cv != null && point.cv <= 1.5).map((point) => [point.loading, point.cv]);
-          const unstable = points.filter((point) => point.cv == null || point.cv > 1.5).map((point) => [point.loading, point.cv]);
+          const stable = points.filter((point) => point.cv != null && point.cv <= 1.5).map((point) => [point.feederSpeed, point.mean]);
+          const unstable = points.filter((point) => point.cv == null || point.cv > 1.5).map((point) => [point.feederSpeed, point.mean]);
           chart.setOption({
             tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
             legend: { top: 4 },
             grid: { left: 64, right: 24, top: 42, bottom: 54 },
-            xAxis: { type: 'value', name: showLoading ? 'Feeder loading (%)' : 'Target throughput (kg/h)', nameLocation: 'middle', nameGap: 34, scale: true, max: showLoading ? 100 : null },
-            yAxis: { type: 'value', name: 'CV / dosing error (%)', nameLocation: 'middle', nameGap: 44, min: 0, scale: true },
+            xAxis: { type: 'value', name: 'Feeder speed (rpm)', nameLocation: 'middle', nameGap: 34, scale: true },
+            yAxis: { type: 'value', name: 'Measured throughput (kg/h)', nameLocation: 'middle', nameGap: 44, min: 0, scale: true },
             series: [
               { name: 'CV ≤ 1.5%', type: 'scatter', symbolSize: 9, itemStyle: { color: '#059669' }, data: stable },
               { name: 'CV > 1.5%', type: 'scatter', symbolSize: 9, itemStyle: { color: '#dc2626' }, data: unstable },
-              { name: 'Dosing error', type: 'line', symbol: 'circle', symbolSize: 7, itemStyle: { color: '#2563eb' }, lineStyle: { color: '#2563eb' }, data: points.filter((point) => point.error != null).map((point) => [point.loading, point.error]).sort((a, b) => a[0] - b[0]) },
-              { name: 'CV acceptance', type: 'line', symbol: 'none', lineStyle: { type: 'dashed', color: '#9ca3af' }, data: points.map((point) => [point.loading, 1.5]).sort((a, b) => a[0] - b[0]) }
+              { name: 'Calibration points', type: 'line', symbol: 'circle', symbolSize: 7, itemStyle: { color: '#2563eb' }, lineStyle: { color: '#2563eb' }, data: points.map((point) => [point.feederSpeed, point.mean]).sort((a, b) => a[0] - b[0]) }
             ]
           }, { notMerge: true });
         }
@@ -1210,6 +1319,145 @@
         ]
       }, { notMerge: true });
     };
+    const extrusionThermalValues = (row) => {
+      const rpm = numFromRow(row, 'screw_speed_rpm');
+      const throughput = numFromRow(row, 'throughput_kg_h');
+      const torque = numFromRow(row, 'motor_torque_nm');
+      const noLoadTorque = numFromRow(row, 'no_load_torque_nm');
+      const barrelTemperature = numFromRow(row, 'barrel_set_temp_c');
+      const meltTemperature = numFromRow(row, 'melt_temp_c');
+      return {
+        rpm, throughput, barrelTemperature, meltTemperature,
+        specific: rpm != null && rpm > 0 && throughput != null ? throughput / rpm : null,
+        mechanicalPower: rpm != null && torque != null ? (2 * Math.PI * rpm * torque) / 60000 : null,
+        sme: rpm != null && throughput != null && throughput > 0 && torque != null && noLoadTorque != null ? (rpm * (torque - noLoadTorque)) / (9549 * throughput) : null,
+        dissipativeRise: meltTemperature != null && barrelTemperature != null ? meltTemperature - barrelTemperature : null
+      };
+    };
+    const updateExtrusionThermalDerived = () => {
+      if (processTypeCode !== 'extrusion_v1' || stepNumber !== 4) return;
+      getActiveRows().forEach((row) => {
+        const values = extrusionThermalValues(row);
+        [['mechanical_power_kw', values.mechanicalPower, 3], ['sme_kwh_kg', values.sme, 4], ['dissipative_temp_rise_c', values.dissipativeRise, 1]].forEach(([code, value, digits]) => {
+          const cell = row.querySelector(`[data-derived-code="${code}"]`);
+          if (cell) cell.textContent = value == null ? '-' : fmtLive(value, digits);
+        });
+      });
+    };
+    const renderExtrusionThermalCharts = () => {
+      if (processTypeCode !== 'extrusion_v1' || stepNumber !== 4 || !window.echarts) return;
+      const points = getActiveRows().map((row) => ({ ...extrusionThermalValues(row), run: row.querySelector('strong')?.textContent?.trim() || 'Run' }));
+      const colors = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#dc2626'];
+      const buildSeries = (valueKey, xKey, name, yAxisName) => {
+        const groups = new Map();
+        points.forEach((point) => {
+          if (!Number.isFinite(point[xKey]) || !Number.isFinite(point[valueKey])) return;
+          const key = Number.isFinite(point.barrelTemperature) ? `${point.barrelTemperature} °C` : 'No T set';
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push({ value: [point[xKey], point[valueKey]], name: point.run });
+        });
+        return Array.from(groups.entries()).map(([key, values], index) => ({ name: key, type: 'scatter', symbolSize: 9, itemStyle: { color: colors[index % colors.length] }, data: values }));
+      };
+      const configure = (id, series, xAxisName, yAxisName, empty) => {
+        const container = document.getElementById(id); if (!container) return;
+        const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+        if (!series.length) { chart.clear(); chart.setOption({ title: { text: empty, left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } } }); return; }
+        chart.setOption({ tooltip: { trigger: 'item', formatter: (item) => `${item.seriesName}<br>${item.data.name}: ${item.value[0].toFixed(3)} → ${item.value[1].toFixed(3)}` }, legend: { top: 2 }, grid: { left: 64, right: 24, top: 38, bottom: 52 }, xAxis: { type: 'value', name: xAxisName, nameLocation: 'middle', nameGap: 32, scale: true }, yAxis: { type: 'value', name: yAxisName, nameLocation: 'middle', nameGap: 46, scale: true }, series }, { notMerge: true });
+      };
+      configure('extrusionThermalSmeChart', buildSeries('sme', 'specific', 'SME', 'SME (kWh/kg)'), 'Specific throughput Q/N (kg/h/rpm)', 'SME (kWh/kg)', 'Enter stable torque, no-load torque and throughput to plot SME.');
+      configure('extrusionThermalTemperatureChart', buildSeries('meltTemperature', 'rpm', 'Melt temperature', 'Melt temperature (°C)'), 'Screw speed (rpm)', 'Melt temperature (°C)', 'Enter stable melt temperature and screw speed to plot the response.');
+    };
+    const renderExtrusionRtdCharts = () => {
+      if (processTypeCode !== 'extrusion_v1' || stepNumber !== 5 || !window.echarts) return;
+      const curveContainer = document.getElementById('extrusionRtdCurvesChart');
+      const summaryContainer = document.getElementById('extrusionRtdSummaryChart');
+      const runLabelById = new Map(Array.from(document.querySelectorAll('[data-extrusion-step-five] tr[data-run-row]')).map((row) => [
+        Number(row.dataset.runId), row.querySelector('strong')?.textContent?.trim() || 'RTD run'
+      ]));
+      const normalise = (points) => {
+        const sorted = points
+          .map((point) => [Number(point.x_value), Number(point.y_value)])
+          .filter(([time, concentration]) => Number.isFinite(time) && Number.isFinite(concentration))
+          .sort((a, b) => a[0] - b[0]);
+        if (sorted.length < 2) return [];
+        let area = 0;
+        for (let index = 1; index < sorted.length; index += 1) {
+          const [previousTime, previousConcentration] = sorted[index - 1];
+          const [time, concentration] = sorted[index];
+          area += Math.max(0, time - previousTime) * Math.max(0, (previousConcentration + concentration) / 2);
+        }
+        return area > 0 ? sorted.map(([time, concentration]) => [time, concentration / area]) : [];
+      };
+      if (curveContainer) {
+        const chart = echarts.getInstanceByDom(curveContainer) || echarts.init(curveContainer);
+        const colors = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#dc2626', '#0891b2', '#be185d', '#4d7c0f', '#9333ea'];
+        const curves = qualificationRunSeries
+          .filter((series) => series.series_code === 'tracer_concentration_response')
+          .map((series, index) => ({
+            name: runLabelById.get(Number(series.run_id)) || `RTD run ${series.run_id}`,
+            type: 'line',
+            showSymbol: false,
+            smooth: true,
+            lineStyle: { width: 2 },
+            itemStyle: { color: colors[index % colors.length] },
+            data: normalise(series.points || [])
+          }))
+          .filter((series) => series.data.length);
+        if (!curves.length) {
+          chart.clear();
+          chart.setOption({ title: { text: 'Import tracer-response points for one or more runs to compare RTD curves.', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } } });
+        } else {
+          chart.setOption({
+            tooltip: { trigger: 'axis', axisPointer: { type: 'cross' }, valueFormatter: (value) => Number(value).toPrecision(4) },
+            legend: { type: 'scroll', top: 0 },
+            grid: { left: 68, right: 20, top: 42, bottom: 56 },
+            xAxis: { type: 'value', name: 'Time t (s)', nameLocation: 'middle', nameGap: 34, scale: true },
+            yAxis: { type: 'value', name: 'Normalised C(t) (s⁻¹)', nameLocation: 'middle', nameGap: 50, scale: true },
+            series: curves
+          }, { notMerge: true });
+        }
+      }
+      if (summaryContainer) {
+        const chart = echarts.getInstanceByDom(summaryContainer) || echarts.init(summaryContainer);
+        const cellNumber = (row, code) => {
+          const id = fieldIdByCode?.[code];
+          const element = id
+            ? (row.querySelector(`[data-field-id="${id}"]`) || row.querySelector(`[data-field-display-code="${code}"]`))
+            : row.querySelector(`[data-derived-code="${code}"]`);
+          return element ? parseNumber('value' in element ? element.value : element.textContent) : null;
+        };
+        const points = Array.from(document.querySelectorAll('[data-extrusion-step-five] tr[data-run-row]')).map((row) => {
+          const screwSpeed = cellNumber(row, 'screw_speed_rpm');
+          const throughput = cellNumber(row, 'throughput_kg_h');
+          const residenceTime = cellNumber(row, 'mean_residence_time_s');
+          const fill = cellNumber(row, 'degree_of_fill_pct');
+          return {
+            specificThroughput: screwSpeed && throughput != null ? throughput / screwSpeed : null,
+            residenceTime, fill,
+            run: row.querySelector('strong')?.textContent?.trim() || 'RTD run'
+          };
+        }).filter((point) => Number.isFinite(point.specificThroughput) && (Number.isFinite(point.residenceTime) || Number.isFinite(point.fill)));
+        if (!points.length) {
+          chart.clear();
+          chart.setOption({ title: { text: 'Enter measured Q, mean residence time and fill to plot the RTD summary.', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } } });
+        } else {
+          chart.setOption({
+            tooltip: { trigger: 'item', formatter: (item) => `${item.data.run}<br>Q/N: ${Number(item.value[0]).toFixed(3)} kg/h/rpm<br>${item.seriesName}: ${Number(item.value[1]).toFixed(item.seriesName === 'Mean residence time' ? 1 : 1)}${item.seriesName === 'Mean residence time' ? ' s' : ' %'}` },
+            legend: { top: 0 },
+            grid: { left: 68, right: 68, top: 42, bottom: 56 },
+            xAxis: { type: 'value', name: 'Specific throughput Q/N (kg/h/rpm)', nameLocation: 'middle', nameGap: 34, scale: true },
+            yAxis: [
+              { type: 'value', name: 'Mean residence time t̄ (s)', nameLocation: 'middle', nameGap: 48, scale: true },
+              { type: 'value', name: 'Degree of fill εf (%)', nameLocation: 'middle', nameGap: 48, scale: true }
+            ],
+            series: [
+              { name: 'Mean residence time', type: 'scatter', symbolSize: 10, itemStyle: { color: '#2563eb' }, data: points.filter((point) => Number.isFinite(point.residenceTime)).map((point) => ({ value: [point.specificThroughput, point.residenceTime], run: point.run })) },
+              { name: 'Degree of fill', type: 'scatter', yAxisIndex: 1, symbolSize: 10, itemStyle: { color: '#059669' }, data: points.filter((point) => Number.isFinite(point.fill)).map((point) => ({ value: [point.specificThroughput, point.fill], run: point.run })) }
+            ]
+          }, { notMerge: true });
+        }
+      }
+    };
     const safeRecomputeCharts = () => {
       try { updateStep2DerivedCells(); } catch {}
       try { recomputeStep1Chart(); } catch {}
@@ -1217,6 +1465,9 @@
       try { renderExtrusionFeederCharts(); } catch {}
       try { renderExtrusionOperatingWindow(); } catch {}
       try { renderExtrusionPumpResponse(); } catch {}
+      try { updateExtrusionThermalDerived(); } catch {}
+      try { renderExtrusionThermalCharts(); } catch {}
+      try { renderExtrusionRtdCharts(); } catch {}
       try { recomputeStep1Recommendations(); } catch {}
       try { recomputeStep2Recommendations(); } catch {}
       try { recomputeStep3Recommendations(); } catch {}
@@ -1442,9 +1693,26 @@
       if (!runId) return;
       if (!confirm('Delete this run?')) return;
       try {
+        button.setAttribute('disabled', 'disabled');
         await post(`/experiments/${experimentId}/qualification/${stepNumber}/runs/${runId}/delete`, new FormData());
-        location.reload();
-      } catch {}
+        const body = row.parentElement;
+        const columnCount = row.children.length;
+        row.remove();
+        if (body && !body.querySelector('tr[data-run-row]')) {
+          const empty = document.createElement('tr');
+          const cell = document.createElement('td');
+          cell.colSpan = columnCount;
+          cell.className = 'py-6 text-center text-sm text-body';
+          cell.textContent = 'No runs yet.';
+          empty.appendChild(cell);
+          body.appendChild(empty);
+        }
+        safeRecomputeCharts();
+        window.IMPlanner?.notify?.({ type: 'success', message: 'Run deleted' });
+      } catch (error) {
+        button.removeAttribute('disabled');
+        window.IMPlanner?.notify?.({ type: 'error', message: error?.message || 'Unable to delete run' });
+      }
     });
     };
 
@@ -1608,8 +1876,26 @@
     if (window.IMPlanner?.setupAutosaveForm && pumpingSetupForm) window.IMPlanner.setupAutosaveForm(pumpingSetupForm, { debounceMs: 250, onSuccess: async (response) => { safeRecomputeCharts(); try { updatePumpCharacteristicResult(await response.json()); } catch {} } });
     const pumpCharacteristicSettingsForm = document.getElementById('pumpCharacteristicSettingsForm');
     if (window.IMPlanner?.setupAutosaveForm && pumpCharacteristicSettingsForm) window.IMPlanner.setupAutosaveForm(pumpCharacteristicSettingsForm, { debounceMs: 250, onSuccess: async (response) => { try { updatePumpCharacteristicResult(await response.json()); } catch {} } });
+    const thermalSetupForm = document.getElementById('extrusionThermalSetupForm');
+    if (window.IMPlanner?.setupAutosaveForm && thermalSetupForm) window.IMPlanner.setupAutosaveForm(thermalSetupForm, { debounceMs: 250 });
+    const rtdSetupForm = document.getElementById('extrusionRtdSetupForm');
+    if (window.IMPlanner?.setupAutosaveForm && rtdSetupForm) window.IMPlanner.setupAutosaveForm(rtdSetupForm, { debounceMs: 250 });
+    const rtdMatrixForm = document.getElementById('extrusionRtdMatrixForm');
+    if (window.IMPlanner?.setupAutosaveForm && rtdMatrixForm) window.IMPlanner.setupAutosaveForm(rtdMatrixForm, { debounceMs: 250 });
+    const optionalStudySetupForm = document.getElementById('extrusionOptionalSetupForm');
+    if (window.IMPlanner?.setupAutosaveForm && optionalStudySetupForm) window.IMPlanner.setupAutosaveForm(optionalStudySetupForm, { debounceMs: 250 });
     document.querySelector('[data-generate-pumping-matrix]')?.addEventListener('click', async () => { const form=new FormData(); form.append('screw_speed_levels_rpm', pumpingSetupForm?.querySelector('[name="screw_speed_levels_rpm"]')?.value || ''); form.append('throughput_levels_kg_h', pumpingSetupForm?.querySelector('[name="throughput_levels_kg_h"]')?.value || ''); try { await post(`/experiments/${experimentId}/qualification/${stepNumber}/matrix`,form); location.reload(); } catch (error) { window.IMPlanner?.notify?.({ type: 'error', message: error?.message || 'Matrix generation failed' }); } });
     document.querySelector('[data-generate-pump-curve]')?.addEventListener('click', async () => { const form = new FormData(); form.append('screw_speed_levels_rpm', pumpCharacteristicSettingsForm?.querySelector('[name="pump_curve_speed_levels_rpm"]')?.value || ''); form.append('back_pressure_levels_bar', pumpCharacteristicSettingsForm?.querySelector('[name="pump_curve_pressure_levels_bar"]')?.value || ''); try { await post(`/experiments/${experimentId}/qualification/${stepNumber}/pump-curve-matrix`, form); location.reload(); } catch (error) { window.IMPlanner?.notify?.({ type: 'error', message: error?.message || 'Pump-curve generation failed' }); } });
+    document.querySelector('[data-generate-thermal-matrix]')?.addEventListener('click', async () => { const form = new FormData(); form.append('screw_speed_levels_rpm', thermalSetupForm?.querySelector('[name="thermal_speed_levels_rpm"]')?.value || ''); form.append('throughput_levels_kg_h', thermalSetupForm?.querySelector('[name="thermal_throughput_levels_kg_h"]')?.value || ''); form.append('barrel_temperature_levels_c', thermalSetupForm?.querySelector('[name="thermal_temperature_levels_c"]')?.value || ''); try { await post(`/experiments/${experimentId}/qualification/${stepNumber}/thermal-matrix`, form); location.reload(); } catch (error) { window.IMPlanner?.notify?.({ type: 'error', message: error?.message || 'Thermal-matrix generation failed' }); } });
+    document.querySelector('[data-generate-rtd-matrix]')?.addEventListener('click', async () => { const form = new FormData(); const messageBox = document.querySelector('[data-rtd-matrix-message]'); const showMessage = (type, message) => { if (!messageBox) return; messageBox.textContent = message; messageBox.className = `mt-4 rounded-base border px-3 py-2 text-sm ${type === 'error' ? 'border-danger-medium bg-danger-soft text-danger' : 'border-success-medium bg-success-soft text-success'}`; }; form.append('screw_speed_levels_rpm', rtdMatrixForm?.querySelector('[name="rtd_screw_speed_levels_rpm"]')?.value || ''); form.append('throughput_levels_kg_h', rtdMatrixForm?.querySelector('[name="rtd_throughput_levels_kg_h"]')?.value || ''); try { const result = await post(`/experiments/${experimentId}/qualification/${stepNumber}/rtd-matrix`, form); showMessage('success', `Generated ${result?.run_count || 0} RTD runs. Updating table…`); window.setTimeout(() => location.reload(), 350); } catch (error) { let message = error?.message || 'RTD-matrix generation failed'; try { const parsed = JSON.parse(message); message = parsed.error || message; } catch {} showMessage('error', message); } });
+    document.querySelector('[data-generate-optional-matrix]')?.addEventListener('click', async () => {
+      const form = new FormData();
+      const messageBox = document.querySelector('[data-optional-matrix-message]');
+      const showMessage = (type, message) => { if (!messageBox) return; messageBox.textContent = message; messageBox.className = `mt-3 rounded-base border px-3 py-2 text-sm ${type === 'error' ? 'border-danger-medium bg-danger-soft text-danger' : 'border-success-medium bg-success-soft text-success'}`; };
+      optionalStudySetupForm?.querySelectorAll('[data-optional-request]').forEach((input) => form.append(input.getAttribute('data-optional-request'), input.value));
+      try { const result = await post(`/experiments/${experimentId}/qualification/${stepNumber}/optional-matrix`, form); showMessage('success', `Generated ${result?.run_count || 0} runs. Updating table…`); window.setTimeout(() => location.reload(), 350); }
+      catch (error) { let message = error?.message || 'Run generation failed'; try { const parsed = JSON.parse(message); message = parsed.error || message; } catch {} showMessage('error', message); }
+    });
     document.getElementById('targetScrewRpmInput')?.addEventListener('input', syncStep3Settings);
     setupExtrusionSeries();
     safeRecomputeCharts();
@@ -1640,6 +1926,14 @@
       });
       const operatingWindow = document.getElementById('extrusionOperatingWindowChart'); if (operatingWindow && window.echarts) echarts.getInstanceByDom(operatingWindow)?.resize();
       const pumpResponse = document.getElementById('extrusionPumpResponseChart'); if (pumpResponse && window.echarts) echarts.getInstanceByDom(pumpResponse)?.resize();
+      ['extrusionThermalSmeChart', 'extrusionThermalTemperatureChart'].forEach((id) => {
+        const container = document.getElementById(id);
+        if (container && window.echarts) echarts.getInstanceByDom(container)?.resize();
+      });
+      ['extrusionRtdCurvesChart', 'extrusionRtdSummaryChart'].forEach((id) => {
+        const container = document.getElementById(id);
+        if (container && window.echarts) echarts.getInstanceByDom(container)?.resize();
+      });
       document.querySelectorAll('[data-series-chart]').forEach((container) => {
         if (window.echarts) echarts.getInstanceByDom(container)?.resize();
       });

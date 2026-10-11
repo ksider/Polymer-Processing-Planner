@@ -1,0 +1,113 @@
+<%
+  const activeFields = fields.filter((field) => field.is_enabled === 1);
+  const setup = stepSettings || {};
+  const outputByCode = new Map(stepOutputs.map((output) => [output.output_code, output]));
+  const valuesFor = (run) => runValueMap[String(run.id)] || {};
+  const tableCodes = [
+    'screw_speed_rpm', 'feeder_speed_rpm', 'throughput_kg_h',
+    'steady_state_confirmed', 'mean_residence_time_s', 'rtd_width_s',
+    'specific_throughput_kg_h_rpm', 'theoretical_residence_time_s', 'degree_of_fill_pct'
+  ];
+  const fieldByCode = new Map(activeFields.map((field) => [field.code, field]));
+  const tableFields = tableCodes.map((code) => fieldByCode.get(code)).filter(Boolean);
+  const rtdSeriesDefinition = (seriesDefinitions || []).find((definition) => definition.code === 'tracer_concentration_response');
+  const compactLabelByCode = {
+    screw_speed_rpm: 'N', feeder_speed_rpm: 'F calculated',
+    throughput_kg_h: 'Q actual', steady_state_confirmed: 'Stable',
+    mean_residence_time_s: 't̄', rtd_width_s: 'w RTD', specific_throughput_kg_h_rpm: 'Q/N',
+    theoretical_residence_time_s: 't̄ theo', degree_of_fill_pct: 'Fill'
+  };
+%>
+<section class="mb-6 rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs">
+  <div class="mb-5 border-b border-default pb-4">
+    <h2 class="text-lg font-semibold tracking-tight text-heading">RTD &amp; self-wiping programme</h2>
+    <p class="mt-1 max-w-4xl text-sm text-body">One short, pre-weighed tracer addition maps residence time only within the accepted operating window. Screw speed and planned throughput are selected; feeder speed is calculated from Step 2 and actual throughput is verified after steady state.</p>
+  </div>
+
+  <form id="extrusionRtdSetupForm" action="/experiments/<%= step.experiment_id %>/qualification/5/settings" method="post">
+    <fieldset class="max-w-6xl rounded-base border border-default-medium bg-neutral-secondary p-4">
+      <legend class="px-1 text-sm font-semibold text-heading">Fixed test conditions</legend>
+      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <label class="text-sm font-medium text-heading">Screw configuration<input class="mt-2 block w-full" name="rtd_screw_configuration" value="<%= setup.rtd_screw_configuration ?? '' %>" placeholder="e.g. conveying + kneading layout"></label>
+        <label class="text-sm font-medium text-heading">Barrel-temperature profile<input class="mt-2 block w-full" name="rtd_barrel_temperature_profile" value="<%= setup.rtd_barrel_temperature_profile ?? '' %>" placeholder="e.g. 180 / 200 / 210 °C"></label>
+        <label class="text-sm font-medium text-heading">Free extruder volume <span class="font-normal text-body">(L)</span><input class="mt-2 block w-full" type="number" min="0" step="any" name="rtd_free_volume_l" value="<%= setup.rtd_free_volume_l ?? '' %>"></label>
+        <label class="text-sm font-medium text-heading">Melt density <span class="font-normal text-body">(kg/L)</span><input class="mt-2 block w-full" type="number" min="0" step="any" name="rtd_melt_density_kg_l" value="<%= setup.rtd_melt_density_kg_l ?? '' %>"></label>
+        <label class="text-sm font-medium text-heading">Tracer type<input class="mt-2 block w-full" name="rtd_tracer_type" value="<%= setup.rtd_tracer_type ?? '' %>" placeholder="e.g. fluorescent masterbatch"></label>
+        <label class="text-sm font-medium text-heading">Tracer addition mass <span class="font-normal text-body">(g)</span><input class="mt-2 block w-full" type="number" min="0" step="any" name="rtd_tracer_pulse_mass_g" value="<%= setup.rtd_tracer_pulse_mass_g ?? '' %>"><span class="mt-1 block text-xs font-normal text-body">One short, pre-weighed portion added once at the feed zone.</span></label>
+        <label class="text-sm font-medium text-heading">Sampling interval <span class="font-normal text-body">(s)</span><input class="mt-2 block w-full" type="number" min="1" step="any" name="rtd_sampling_interval_s" value="<%= setup.rtd_sampling_interval_s ?? '' %>"></label>
+        <label class="text-sm font-medium text-heading">Concentration measurement<select class="mt-2 block w-full" name="rtd_measurement_method"><option value="" <%= !setup.rtd_measurement_method ? 'selected' : '' %>>Choose method</option><option value="image_intensity" <%= setup.rtd_measurement_method === 'image_intensity' ? 'selected' : '' %>>Calibrated image intensity</option><option value="fluorescence" <%= setup.rtd_measurement_method === 'fluorescence' ? 'selected' : '' %>>Fluorescence / UV intensity</option><option value="colorimetry" <%= setup.rtd_measurement_method === 'colorimetry' ? 'selected' : '' %>>Colorimetry</option><option value="manual_scale" <%= setup.rtd_measurement_method === 'manual_scale' ? 'selected' : '' %>>Manual visual scale</option></select></label>
+      </div>
+      <p class="mt-3 text-xs text-body">The tracer mass and measurement method stay constant for the whole series. The concentration response C(t) is normalised before calculating RTD, so it is not an experimental factor.</p>
+    </fieldset>
+  </form>
+
+  <div class="mt-5 grid max-w-5xl gap-4 sm:grid-cols-3">
+    <div class="rounded-base border border-default bg-neutral-secondary px-4 py-3"><p class="text-xs font-medium uppercase tracking-wide text-body">Varied conditions</p><p class="mt-1 text-sm font-semibold text-heading">Screw speed N · planned Q</p><p class="mt-1 text-xs text-body">Feeder speed is calculated from Step 2.</p></div>
+    <div class="rounded-base border border-default bg-neutral-secondary px-4 py-3"><p class="text-xs font-medium uppercase tracking-wide text-body">Measurement</p><p class="mt-1 text-sm font-semibold text-heading">Tracer response C(t)</p><p class="mt-1 text-xs text-body">Manual outlet samples after one tracer addition.</p></div>
+    <div class="rounded-base border border-default bg-neutral-secondary px-4 py-3"><p class="text-xs font-medium uppercase tracking-wide text-body">Calculated outputs</p><p class="mt-1 text-sm font-semibold text-heading">t̄ · w RTD · fill</p><p class="mt-1 text-xs text-body">Passed to mixing and kinetics work.</p></div>
+  </div>
+</section>
+
+<section class="mb-6 rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs">
+  <div class="flex flex-wrap items-end justify-between gap-4 border-b border-default pb-4">
+    <div><h2 class="text-lg font-semibold tracking-tight text-heading">Run matrix</h2><p class="mt-1 max-w-3xl text-sm text-body">Create the N × planned-Q matrix. The generator resolves each required feeder speed from Step 2; use only values covered by the operating window confirmed in Step 3.</p></div>
+    <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2.5 text-sm font-medium text-white shadow-xs hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50" type="button" data-generate-rtd-matrix <%= rtdCalibrationLabel ? '' : 'disabled' %>>Generate RTD runs</button>
+  </div>
+  <form id="extrusionRtdMatrixForm" class="mt-5 grid max-w-3xl gap-4 md:grid-cols-[15rem_15rem_auto] md:items-end" action="/experiments/<%= step.experiment_id %>/qualification/5/settings" method="post">
+    <label class="text-sm font-medium text-heading">Screw-speed levels <span class="font-normal text-body">(rpm)</span><input class="mt-2 block w-full" name="rtd_screw_speed_levels_rpm" value="<%= setup.rtd_screw_speed_levels_rpm ?? '' %>" placeholder="e.g. 100, 200, 300"></label>
+    <label class="text-sm font-medium text-heading">Planned-throughput levels <span class="font-normal text-body">(kg/h)</span><input class="mt-2 block w-full" name="rtd_throughput_levels_kg_h" value="<%= setup.rtd_throughput_levels_kg_h ?? '' %>" placeholder="<%= rtdCalibrationRange ? `Allowed ${rtdCalibrationRange}` : 'Complete Step 2 calibration first' %>"></label>
+    <p class="pb-2 text-xs text-body">Step 2 calibration: <%= rtdCalibrationLabel || 'not available' %><% if (rtdCalibrationRange) { %><br>Stable planned-Q range: <%= rtdCalibrationRange %>. Step 3 limits are checked when generating.<% } %></p>
+  </form>
+  <div class="mt-4 hidden rounded-base border px-3 py-2 text-sm" data-rtd-matrix-message role="alert"></div>
+  <% if (!rtdCalibrationLabel) { %><p class="mt-4 rounded-base border border-warning-medium bg-warning-soft px-3 py-2 text-sm text-heading">Enter at least two stable feeder-speed calibration points with measured throughput in Step 2 before generating RTD runs.</p><% } %>
+  <div class="mt-5"><%- include('extrusion_step3_runs_table', { runs, title: 'RTD tracer-addition runs', description: 'For each condition, stabilise the line, record actual Q, add one known pre-weighed tracer portion at the feed zone, then enter the outlet samples in time order. The system calculates t̄ and RTD width from those samples.', emptyMessage: 'Generate RTD runs from screw-speed and planned-throughput levels.', tableDataAttribute: 'data-extrusion-step-five', activeFields, tableFields, valuesFor, compactLabelByCode, assignableUsers, inputTableClass, formatNumber, measurementSeriesCode: 'tracer_concentration_response', readonlyFieldCodes: ['mean_residence_time_s', 'rtd_width_s'] }) %></div>
+</section>
+
+<dialog class="m-auto w-[min(96vw,74rem)] rounded-xl border border-default-medium bg-neutral-primary p-0 text-heading shadow-2xl backdrop:bg-gray-950/40" id="rtdSamplesDialog">
+  <div class="border-b border-default px-5 py-4">
+    <div class="flex items-start justify-between gap-4"><div><h2 class="text-lg font-semibold tracking-tight">Outlet tracer samples — <span data-rtd-samples-run>RTD run</span></h2><p class="mt-1 text-sm text-body">Record the outlet response after one short, pre-weighed tracer addition at the feed zone. Saved samples calculate \(\bar t\) and RTD width for this run.</p></div><div class="flex shrink-0 items-center gap-2"><button class="hidden size-8 items-center justify-center rounded-base border border-default-medium bg-neutral-primary text-body shadow-xs hover:bg-neutral-secondary" type="button" data-show-rtd-protocol aria-label="Show sampling protocol" title="Show sampling protocol"><span class="material-symbols-rounded text-[18px]">menu_open</span></button><button class="inline-flex size-8 items-center justify-center rounded-base text-body hover:bg-neutral-secondary" type="button" data-close-rtd-samples aria-label="Close"><span class="material-symbols-rounded">close</span></button></div></div>
+  </div>
+  <div class="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_19rem]" data-rtd-samples-layout>
+    <div class="min-w-0" data-rtd-samples-workspace>
+      <div class="mx-auto max-w-3xl">
+        <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="border-b border-default text-left text-body"><th class="px-2 py-2 font-medium">Sample</th><th class="px-2 py-2 font-medium">Time after tracer addition, s</th><th class="px-2 py-2 font-medium">Relative tracer signal</th><th class="w-10"></th></tr></thead><tbody data-rtd-samples-body></tbody></table></div>
+        <div class="mt-3 flex flex-wrap items-center justify-between gap-3"><button class="inline-flex items-center justify-center rounded-base border border-default-medium bg-neutral-primary px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-secondary" type="button" data-add-rtd-sample><span class="material-symbols-rounded me-1 text-[18px]">add</span>Add sample</button><span class="text-xs text-body" data-rtd-samples-status>Enter at least 5 samples in increasing time order.</span></div>
+      </div>
+    </div>
+    <aside class="relative self-start rounded-lg border border-info-medium bg-info-soft p-4 pe-10 text-sm text-heading" data-rtd-protocol-panel>
+      <button class="absolute end-2 top-2 inline-flex size-7 items-center justify-center rounded-base text-info hover:bg-white/60" type="button" data-hide-rtd-protocol aria-label="Hide sampling protocol" title="Hide sampling protocol"><span class="material-symbols-rounded text-[18px]">close</span></button>
+      <div class="flex items-center gap-2"><span class="material-symbols-rounded text-info">science</span><h3 class="font-semibold">Sampling protocol</h3></div>
+      <ol class="mt-3 space-y-3 text-sm leading-5">
+        <li><span class="font-semibold">1.</span> Stabilise screw speed, feeder and actual throughput before adding the tracer.</li>
+        <li><span class="font-semibold">2.</span> Add one short, pre-weighed portion of tracer once at the feed zone; start the timer at the same moment.</li>
+        <li><span class="font-semibold">3.</span> Collect equal outlet pieces at the configured interval; 10 s is suitable for the demo runs.</li>
+        <li><span class="font-semibold">4.</span> Record the relative tracer response using the same colour, fluorescence or image method for every sample.</li>
+        <li><span class="font-semibold">5.</span> Continue until the signal has returned to baseline for 2–3 samples.</li>
+      </ol>
+      <p class="mt-4 border-t border-info-medium pt-3 text-xs leading-5 text-body">Absolute concentration is not required. The signal must be proportional to tracer content and measured consistently within this run.</p>
+    </aside>
+  </div>
+  <div class="flex justify-end gap-2 border-t border-default px-5 py-4"><button class="inline-flex items-center justify-center rounded-base border border-default-medium bg-neutral-primary px-3 py-2.5 text-sm font-medium text-heading shadow-xs hover:bg-neutral-secondary" type="button" data-close-rtd-samples>Cancel</button><button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2.5 text-sm font-medium text-white shadow-xs hover:bg-brand-strong" type="button" data-save-rtd-samples>Save samples and calculate RTD</button></div>
+</dialog>
+
+<section class="mb-6 grid gap-6 xl:grid-cols-2" aria-label="RTD analysis charts">
+  <article class="rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs">
+    <div class="border-b border-default pb-4">
+      <h2 class="text-lg font-semibold tracking-tight text-heading">Normalised RTD curves</h2>
+      <p class="mt-1 text-sm text-body">Normalised tracer response C(t) versus time. Each curve is divided by its own area, so its shape and spread can be compared across operating conditions.</p>
+    </div>
+    <div class="mt-4 h-80 w-full" id="extrusionRtdCurvesChart"></div>
+  </article>
+  <article class="rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs">
+    <div class="border-b border-default pb-4">
+      <h2 class="text-lg font-semibold tracking-tight text-heading">Residence time and fill vs Q/N</h2>
+      <p class="mt-1 text-sm text-body">Mean residence time \(\bar t\) and degree of fill \(\varepsilon_f\) against measured specific throughput Q/N.</p>
+    </div>
+    <div class="mt-4 h-80 w-full" id="extrusionRtdSummaryChart"></div>
+  </article>
+</section>
+
+<section class="mb-6 rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs">
+  <div class="border-b border-default pb-4"><h2 class="text-lg font-semibold tracking-tight text-heading">Stage outputs</h2><p class="mt-1 text-sm text-body">Choose a representative, validated RTD point after reviewing the run matrix. These values become inputs for downstream mixing or reactive-extrusion work.</p></div>
+  <div class="mt-5 grid max-w-4xl gap-4 sm:grid-cols-3"><% outputDefinitions.forEach((definition) => { const output = outputByCode.get(definition.code); %><label class="text-sm font-medium text-heading"><%= definition.label %><span class="block text-xs font-normal text-body"><%= definition.description %></span><div class="relative mt-2"><input class="block w-full pe-12" type="number" step="any" data-step-output="<%= definition.code %>" value="<%= output?.value_real ?? '' %>"><span class="pointer-events-none absolute inset-y-0 end-0 flex items-center pe-3 text-sm text-body"><%= definition.unit || '' %></span></div></label><% }) %></div>
+</section>

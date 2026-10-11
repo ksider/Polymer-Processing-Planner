@@ -1,0 +1,38 @@
+<%
+  const activeFields = fields.filter((field) => field.is_enabled === 1);
+  const setup = stepSettings || {};
+  const outputByCode = new Map(stepOutputs.map((output) => [output.output_code, output]));
+  const suggestedSpeedText = (thermalSuggestedSpeeds || []).join(', ');
+  const suggestedThroughputText = (thermalSuggestedThroughputs || []).join(', ');
+  const suggestedTemperatureText = (thermalSuggestedTemperatures || []).join(', ');
+  const compactLabelByCode = {
+    screw_speed_rpm: 'N', throughput_kg_h: 'Q', barrel_set_temp_c: 'T set', motor_torque_nm: 'Torque',
+    no_load_torque_nm: 'M₀', melt_temp_c: 'T melt', heater_power_kw: 'Heater', thermal_point_stable: 'Stable',
+    mechanical_power_kw: 'P mech', sme_kwh_kg: 'SME', dissipative_temp_rise_c: 'ΔT diss'
+  };
+%>
+<section class="mb-6 rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs">
+  <div class="mb-5 border-b border-default pb-4"><h2 class="text-lg font-semibold tracking-tight text-heading">Thermal &amp; dissipative energy matrix</h2><p class="mt-1 max-w-3xl text-sm text-body">One DOE series provides both SME and viscous-heating results. Choose only operating conditions validated in Step 3; melt viscosity is transferred from Step 1 as the material baseline.</p></div>
+  <form id="extrusionThermalSetupForm" action="/experiments/<%= step.experiment_id %>/qualification/4/settings" method="post">
+    <fieldset class="max-w-5xl rounded-base border border-default-medium bg-neutral-secondary p-4">
+      <legend class="px-1 text-sm font-semibold text-heading">Full-factorial generator</legend>
+      <div class="grid gap-4 lg:grid-cols-[13rem_13rem_13rem_auto] lg:items-end">
+        <label class="text-sm font-medium text-heading">Screw-speed levels <span class="font-normal text-body">(rpm)</span><input class="mt-2 block w-full" name="thermal_speed_levels_rpm" value="<%= setup.thermal_speed_levels_rpm ?? suggestedSpeedText %>" placeholder="e.g. 100, 200, 300"></label>
+        <label class="text-sm font-medium text-heading">Throughput levels <span class="font-normal text-body">(kg/h)</span><input class="mt-2 block w-full" name="thermal_throughput_levels_kg_h" value="<%= setup.thermal_throughput_levels_kg_h ?? suggestedThroughputText %>" placeholder="e.g. 12, 30, 48"></label>
+        <label class="text-sm font-medium text-heading">Barrel-temperature levels <span class="font-normal text-body">(°C)</span><input class="mt-2 block w-full" name="thermal_temperature_levels_c" value="<%= setup.thermal_temperature_levels_c ?? suggestedTemperatureText %>" placeholder="Set process range"></label>
+        <button class="inline-flex justify-center rounded-base bg-brand px-3 py-2.5 text-sm font-medium text-white shadow-xs hover:bg-brand-strong" type="button" data-generate-thermal-matrix>Generate matrix</button>
+      </div>
+      <p class="mt-3 text-xs text-body">Every combination creates one run. The speed and throughput suggestions come from the accepted operating window; temperature is bounded by the processing range established in Step 1.</p>
+    </fieldset>
+  </form>
+  <div class="mt-4 grid max-w-4xl gap-4 sm:grid-cols-3">
+    <div class="rounded-base border border-default bg-neutral-secondary px-4 py-3"><p class="text-xs font-medium uppercase tracking-wide text-body">Step 1 reference viscosity</p><p class="mt-1 text-sm font-semibold text-heading"><%= rheologyReferenceViscosity ?? 'Not confirmed' %><% if (rheologyReferenceViscosity != null) { %> Pa·s<% } %></p></div>
+    <div class="rounded-base border border-default bg-neutral-secondary px-4 py-3"><p class="text-xs font-medium uppercase tracking-wide text-body">SME range</p><p class="mt-1 text-sm font-semibold text-heading"><%= stepSummary.sme_kwh_kg_min != null ? `${formatNumber(stepSummary.sme_kwh_kg_min, 3)}–${formatNumber(stepSummary.sme_kwh_kg_max, 3)} kWh/kg` : 'Awaiting runs' %></p></div>
+    <div class="rounded-base border border-default bg-neutral-secondary px-4 py-3"><p class="text-xs font-medium uppercase tracking-wide text-body">Dissipative rise</p><p class="mt-1 text-sm font-semibold text-heading"><%= stepSummary.dissipative_temp_rise_c_min != null ? `${formatNumber(stepSummary.dissipative_temp_rise_c_min, 1)}–${formatNumber(stepSummary.dissipative_temp_rise_c_max, 1)} °C` : 'Awaiting runs' %></p></div>
+  </div>
+</section>
+<%- include('extrusion_step3_runs_table', { runs, title: 'Thermal energy runs', description: 'Enter torque, no-load torque, melt temperature and heater power after 8–10 minutes of steady state. SME, mechanical power and dissipative temperature rise are calculated automatically.', emptyMessage: 'Generate the thermal matrix to add runs.', tableDataAttribute: 'data-extrusion-step-four', activeFields, tableFields: activeFields, valuesFor: (run) => runValueMap[String(run.id)] || {}, compactLabelByCode, assignableUsers, inputTableClass, formatNumber }) %>
+<section class="mb-6 grid gap-6 xl:grid-cols-2">
+  <article class="rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs"><h2 class="text-lg font-semibold text-heading">SME vs specific throughput</h2><p class="mt-1 text-sm text-body">Colour indicates barrel set temperature.</p><div class="mt-4 h-72" id="extrusionThermalSmeChart"></div></article>
+  <article class="rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs"><h2 class="text-lg font-semibold text-heading">Melt temperature vs screw speed</h2><p class="mt-1 text-sm text-body">Colour indicates barrel set temperature.</p><div class="mt-4 h-72" id="extrusionThermalTemperatureChart"></div></article>
+</section>

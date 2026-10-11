@@ -337,6 +337,7 @@ export function listMyCalendarEvents(db: Db, userId: number): CalendarEvent[] {
     `
     LEFT JOIN entity_assignments ea ON ea.entity_type = 'qualification_step' AND ea.entity_id = qs.id AND ea.status = 'active'
     WHERE e.archived_at IS NULL
+      AND qs.is_active = 1
       AND qr.due_at IS NOT NULL
       AND (e.owner_user_id = ? OR ea.assignee_user_id = ?)
     `,

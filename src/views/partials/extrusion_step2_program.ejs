@@ -2,12 +2,11 @@
   const fieldByCode = new Map(fields.filter((field) => field.is_enabled === 1).map((field) => [field.code, field]));
   const valueFor = (run, field) => (runValueMap[String(run.id)] || {})[String(field.id)];
   const fieldsInOrder = [
-    'target_throughput_kg_h',
+    'feeder_speed_rpm',
     'mean_throughput_kg_h',
     'throughput_sd_kg_h',
     'sampling_window_min',
-    'feed_cv_pct',
-    'feed_error_pct'
+    'feed_cv_pct'
   ].map((code) => fieldByCode.get(code)).filter(Boolean);
   const outputByCode = new Map(stepOutputs.map((output) => [output.output_code, output]));
   const feederSettings = stepSettings || {};
@@ -30,7 +29,7 @@
   <div class="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 p-5">
     <div>
       <h2 class="text-lg font-semibold tracking-tight text-gray-900">Feeder stability sweep</h2>
-      <p class="mt-1 max-w-3xl text-sm text-gray-500">Measure a series of feed-rate setpoints. Each row is one stable sampling window recorded from the gravimetric check.</p>
+      <p class="mt-1 max-w-3xl text-sm text-gray-500">Measure a series of feeder-speed setpoints. Each row calibrates feeder speed against the actual mass flow measured over one stable sampling window.</p>
     </div>
     <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-add-group-run="default" <%= step.is_blocked === 1 ? 'disabled' : '' %>>Add setpoint</button>
   </div>

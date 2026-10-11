@@ -8,6 +8,7 @@ export type QualStep = {
   display_order: number;
   title: string;
   status: "DRAFT" | "RUNNING" | "DONE" | "BLOCKED";
+  is_active: number;
   is_blocked: number;
   blocked_reason: string | null;
   blocked_by_user_id: number | null;
@@ -96,6 +97,7 @@ export type QualStepOutput = {
 const qualStepSelect = `
   SELECT qs.id, qs.experiment_id, qs.step_number, qs.stage_code,
          qs.display_order, qs.title, qs.status, qs.is_blocked,
+         qs.is_active,
          qs.blocked_reason, qs.blocked_by_user_id, qs.blocked_at,
          qs.status_before_block,
          COALESCE(NULLIF(u.name, ''), u.email) AS blocked_by_label
@@ -176,6 +178,10 @@ export function updateQualStepStatus(db: Db, stepId: number, status: QualStep["s
   db.prepare("UPDATE qual_steps SET status = ? WHERE id = ?").run(status, stepId);
 }
 
+export function setQualStepActive(db: Db, stepId: number, active: boolean) {
+  db.prepare("UPDATE qual_steps SET is_active = ? WHERE id = ?").run(active ? 1 : 0, stepId);
+}
+
 export function setQualStepBlocked(
   db: Db,
   stepId: number,
@@ -245,6 +251,7 @@ export function createQualRuns(
   const groupPrefix: Record<string, string> = {
     rheology: "RH",
     thermal_hold: "TH",
+    pump_characteristic: "PC",
     dsc: "DSC",
     tga: "TGA",
     moisture: "M"

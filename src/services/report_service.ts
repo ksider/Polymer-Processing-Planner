@@ -346,7 +346,9 @@ export function buildReportWorkspaceSources(db: Db, report: ReportData): ReportW
     components: recipe.components
   }));
 
-  const qualificationItems: ReportWorkspaceSource[] = listQualSteps(db, report.experiment.id).flatMap((step) => {
+  const qualificationItems: ReportWorkspaceSource[] = listQualSteps(db, report.experiment.id)
+    .filter((step) => step.is_active === 1)
+    .flatMap((step) => {
     const fields = listQualFields(db, step.id).filter((field) => field.is_enabled === 1);
     const summary = listQualSummaries(db, report.experiment.id).find((item) => item.step_number === step.step_number);
     const children: ReportWorkspaceSource[] = [];

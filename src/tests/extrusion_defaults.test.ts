@@ -10,14 +10,19 @@ import {
   listQualRunValues,
   listQualSteps,
   listQualRunSeries,
-  replaceQualRunSeries
+  replaceQualRunSeries,
+  upsertQualStepSettings,
+  createQualRuns
 } from "../repos/qual_repo.js";
 import { createExperimentWithDefaults } from "../services/experiments_service.js";
 import {
   ensureQualificationDefaults,
   getQualificationOutputDefinitionsForExperiment,
   getQualificationStepsForExperiment,
+  getOptionalQualificationStudies,
   recomputeDerivedAndSummary,
+  setOptionalQualificationStudyEnabled,
+  updateExtrusionRtdMetricsFromSeries,
   saveQualRunValue
 } from "../services/qualification_service.js";
 import { ensureSeedParams } from "../services/seed.js";
@@ -93,6 +98,72 @@ test("extrusion_v1 seeds the core qualification catalogue and deterministic SME 
     assert.ok(Math.abs((valueOf("sme_kwh_kg") ?? 0) - (300 * 500) / (9549 * 30)) < 0.0000001);
     assert.equal(valueOf("dissipative_temp_rise_c"), 15);
 
+    const stepTwo = listQualSteps(db, experimentId).find((stage) => stage.step_number === 2)!;
+    const feederFields = new Map(listQualFields(db, stepTwo.id).map((field) => [field.code, field]));
+    const feederRuns = listQualRuns(db, stepTwo.id);
+    const putFeeder = (runIndex: number, code: string, value: number) => {
+      const field = feederFields.get(code);
+      assert.ok(field, `Feeder field ${code} is present`);
+      saveQualRunValue(db, feederRuns[runIndex].id, field!.id, "number", value);
+    };
+    putFeeder(0, "feeder_speed_rpm", 10);
+    putFeeder(0, "mean_throughput_kg_h", 15);
+    putFeeder(0, "throughput_sd_kg_h", 0.1);
+    putFeeder(1, "feeder_speed_rpm", 20);
+    putFeeder(1, "mean_throughput_kg_h", 30);
+    putFeeder(1, "throughput_sd_kg_h", 0.2);
+    recomputeDerivedAndSummary(db, experimentId, stepTwo.id, 2);
+
+    const stepFive = listQualSteps(db, experimentId).find((stage) => stage.step_number === 5);
+    assert.ok(stepFive, "RTD stage is present");
+    const rtdRun = listQualRuns(db, stepFive!.id)[0];
+    const rtdFields = new Map(listQualFields(db, stepFive!.id).map((field) => [field.code, field]));
+    const putRtd = (code: string, value: number) => {
+      const field = rtdFields.get(code);
+      assert.ok(field, `RTD field ${code} is present`);
+      saveQualRunValue(db, rtdRun!.id, field!.id, "number", value);
+    };
+    putRtd("screw_speed_rpm", 200);
+    putRtd("planned_throughput_kg_h", 30);
+    putRtd("feeder_speed_rpm", 20);
+    putRtd("throughput_kg_h", 30);
+    putRtd("mean_residence_time_s", 120);
+    upsertQualStepSettings(db, experimentId, 5, JSON.stringify({ rtd_free_volume_l: 2, rtd_melt_density_kg_l: 0.8 }));
+    recomputeDerivedAndSummary(db, experimentId, stepFive!.id, 5);
+    const rtdValues = new Map(listQualRunValues(db, rtdRun!.id).map((value) => [value.field_id, value]));
+    const rtdValueOf = (code: string) => rtdValues.get(rtdFields.get(code)!.id)?.value_real;
+    assert.equal(rtdValueOf("feeder_speed_rpm"), 20);
+    assert.equal(rtdValueOf("theoretical_residence_time_s"), 192);
+    assert.equal(rtdValueOf("degree_of_fill_pct"), 62.5);
+    replaceQualRunSeries(db, {
+      experimentId,
+      stepId: stepFive!.id,
+      runId: rtdRun!.id,
+      seriesCode: "tracer_concentration_response",
+      contractVersion: 1,
+      sourceName: "manual-outlet-samples",
+      points: [
+        { x: 0, y: 0 },
+        { x: 60, y: 1 },
+        { x: 120, y: 2 },
+        { x: 180, y: 1 },
+        { x: 240, y: 0 }
+      ]
+    });
+    const rtdMetrics = updateExtrusionRtdMetricsFromSeries(db, stepFive!.id, rtdRun!.id);
+    assert.equal(rtdMetrics?.pointCount, 5);
+    assert.equal(rtdMetrics?.meanResidenceTime, 120);
+    assert.equal(rtdMetrics?.rtdWidth, 144);
+    recomputeDerivedAndSummary(db, experimentId, stepFive!.id, 5);
+    const rtdSeriesValues = new Map(listQualRunValues(db, rtdRun!.id).map((value) => [value.field_id, value]));
+    assert.equal(rtdSeriesValues.get(rtdFields.get("mean_residence_time_s")!.id)?.value_real, 120);
+    assert.equal(rtdSeriesValues.get(rtdFields.get("rtd_width_s")!.id)?.value_real, 144);
+    assert.equal(rtdSeriesValues.get(rtdFields.get("degree_of_fill_pct")!.id)?.value_real, 62.5);
+    assert.deepEqual(
+      getQualificationOutputDefinitionsForExperiment(db, experimentId, 5).map((item) => item.code),
+      ["rtd_mean_residence_time_s", "rtd_degree_of_fill_pct", "rtd_width_s"]
+    );
+
     const step = listQualSteps(db, experimentId).find((item) => item.step_number === 1)!;
     const stepOneRuns = listQualRuns(db, step.id);
     assert.deepEqual(
@@ -141,6 +212,50 @@ test("extrusion_v1 seeds the core qualification catalogue and deterministic SME 
     const stableField = listQualFields(db, step.id).find((field) => field.code === "point_stable")!;
     const stableValue = listQualRunValues(db, seriesRun.id).find((value) => value.field_id === stableField.id);
     assert.equal(stableValue?.value_real, 1);
+
+    assert.deepEqual(getOptionalQualificationStudies(db, experimentId).map((study) => study.stepNumber), [6, 7, 8, 9, 10]);
+    const sideFeeding = setOptionalQualificationStudyEnabled(db, experimentId, 6, true);
+    assert.equal(sideFeeding?.is_active, 1);
+    assert.equal(listQualSteps(db, experimentId).length, 6);
+    assert.ok(listQualFields(db, sideFeeding!.id).some((field) => field.code === "filler_mass_fraction_pct"));
+    const sideFeedingRunCount = listQualRuns(db, sideFeeding!.id).length;
+    assert.equal(sideFeedingRunCount, 0, "optional studies wait for their explicit generator");
+
+    const disabledSideFeeding = setOptionalQualificationStudyEnabled(db, experimentId, 6, false);
+    assert.equal(disabledSideFeeding?.is_active, 0);
+    assert.equal(listQualRuns(db, disabledSideFeeding!.id).length, sideFeedingRunCount, "disabling retains evidence");
+    assert.deepEqual(
+      getQualificationOutputDefinitionsForExperiment(db, experimentId, 6).map((item) => item.code),
+      ["side_feeder_stable_speed_min_rpm", "side_feeder_stable_speed_max_rpm", "filler_mass_fraction_max_pct"]
+    );
+    [7, 8, 9].forEach((stepNumber) => {
+      const optionalStep = setOptionalQualificationStudyEnabled(db, experimentId, stepNumber, true);
+      assert.equal(optionalStep?.is_active, 1);
+      assert.equal(listQualRuns(db, optionalStep!.id).length, 0);
+      assert.ok(getQualificationOutputDefinitionsForExperiment(db, experimentId, stepNumber).length > 0);
+    });
+    const scaleUp = setOptionalQualificationStudyEnabled(db, experimentId, 10, true)!;
+    assert.equal(listQualRuns(db, scaleUp.id).length, 0);
+    assert.ok(getQualificationOutputDefinitionsForExperiment(db, experimentId, 10).length > 0);
+    createQualRuns(db, experimentId, scaleUp.id, 1);
+    upsertQualStepSettings(db, experimentId, 10, JSON.stringify({
+      scale_up_source_screw_diameter_mm: 25,
+      scale_up_production_screw_diameter_mm: 50,
+      scale_up_source_throughput_kg_h: 10,
+      scale_up_source_sme_kwh_kg: 0.5
+    }));
+    const scaleUpRun = listQualRuns(db, scaleUp.id)[0]!;
+    const scaleUpFields = new Map(listQualFields(db, scaleUp.id).map((field) => [field.code, field]));
+    const putScaleUp = (code: string, value: number) => saveQualRunValue(db, scaleUpRun.id, scaleUpFields.get(code)!.id, "number", value);
+    putScaleUp("production_screw_speed_rpm", 150);
+    putScaleUp("production_throughput_kg_h", 80);
+    putScaleUp("production_torque_nm", 350);
+    putScaleUp("production_no_load_torque_nm", 95);
+    recomputeDerivedAndSummary(db, experimentId, scaleUp.id, 10);
+    const scaleUpValues = new Map(listQualRunValues(db, scaleUpRun.id).map((value) => [value.field_id, value.value_real]));
+    assert.equal(scaleUpValues.get(scaleUpFields.get("scaled_throughput_target_kg_h")!.id), 80);
+    assert.ok(Math.abs((scaleUpValues.get(scaleUpFields.get("tip_speed_m_s")!.id) ?? 0) - (Math.PI * 0.05 * 150 / 60)) < 0.000001);
+    assert.ok(Math.abs((scaleUpValues.get(scaleUpFields.get("production_sme_kwh_kg")!.id) ?? 0) - (150 * 255) / (9549 * 80)) < 0.0000001);
   } finally {
     db.close();
   }
