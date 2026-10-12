@@ -988,34 +988,46 @@ function initDb(db: Db) {
     db.exec("ALTER TABLE processes ADD COLUMN show_on_home INTEGER NOT NULL DEFAULT 1");
     db.exec("UPDATE processes SET show_on_home = 1 WHERE show_on_home IS NULL");
   }
-  db.exec(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_processes_route_code_unique
-      ON processes(route_code)
-      WHERE route_code IS NOT NULL AND route_code <> '';
-  `);
-  db.exec(`
-    UPDATE processes
-    SET route_code = (
-      SELECT lower(code) FROM process_types WHERE process_types.id = processes.process_type_id
-    )
-    WHERE route_code IS NULL OR trim(route_code) = '';
-  `);
-  const duplicateRouteCodes = db.prepare(`
-    SELECT route_code
-    FROM processes
-    WHERE route_code IS NOT NULL AND trim(route_code) <> ''
-    GROUP BY route_code
-    HAVING COUNT(*) > 1
-  `).all() as Array<{ route_code: string }>;
-  const fixDuplicateRouteStmt = db.prepare("UPDATE processes SET route_code = ? WHERE id = ?");
-  duplicateRouteCodes.forEach((dup) => {
-    const rows = db
-      .prepare("SELECT id FROM processes WHERE route_code = ? ORDER BY id")
-      .all(dup.route_code) as Array<{ id: number }>;
-    rows.slice(1).forEach((row) => {
-      fixDuplicateRouteStmt.run(`${dup.route_code}-${row.id}`, row.id);
-    });
+  // Existing databases can contain processes created before route_code existed.
+  // Do not create the unique index (or bulk-fill the column) before assigning
+  // distinct codes: a previously assigned route such as "injection" would make
+  // a later legacy process of the same type fail startup.
+  const processRouteRows = db.prepare(`
+    SELECT p.id, p.route_code, pt.code AS process_type_code
+    FROM processes p
+    JOIN process_types pt ON pt.id = p.process_type_id
+    ORDER BY p.id
+  `).all() as Array<{ id: number; route_code: string | null; process_type_code: string | null }>;
+  const normalizeStoredRouteCode = (value: string | null): string | null => {
+    const normalized = String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "");
+    return normalized || null;
+  };
+  const assignedRouteCodes = new Set<string>();
+  const updateProcessRouteCode = db.prepare("UPDATE processes SET route_code = ? WHERE id = ?");
+  const repairProcessRouteCodes = db.transaction(() => {
+    // Removing the old index inside this transaction also repairs databases
+    // whose previous partial index is already present.
+    db.exec("DROP INDEX IF EXISTS idx_processes_route_code_unique");
+    for (const row of processRouteRows) {
+      const baseCode = normalizeStoredRouteCode(row.route_code)
+        ?? normalizeStoredRouteCode(row.process_type_code)
+        ?? `process-${row.id}`;
+      let routeCode = baseCode;
+      let collisionNumber = 2;
+      while (assignedRouteCodes.has(routeCode)) {
+        routeCode = `${baseCode}-${row.id}${collisionNumber === 2 ? "" : `-${collisionNumber}`}`;
+        collisionNumber += 1;
+      }
+      assignedRouteCodes.add(routeCode);
+      if (row.route_code !== routeCode) updateProcessRouteCode.run(routeCode, row.id);
+    }
+    db.exec(`
+      CREATE UNIQUE INDEX idx_processes_route_code_unique
+        ON processes(route_code)
+        WHERE route_code IS NOT NULL AND route_code <> '';
+    `);
   });
+  repairProcessRouteCodes();
 
   const adminRow = db
     .prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1")
