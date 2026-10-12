@@ -1,112 +1,28 @@
-<%- include('partials/head', { title: 'Polymer Processing Planner | New Experiment' }) %>
-<%- include('partials/nav') %>
-<div class="container">
-  <div class="card">
-    <div class="card-header">
-      <a class="back-link" href="<%= processPath(defaultProcessId) %>" aria-label="Back to process">
-        <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
-      </a>
-      <h1 class="card-title">Create Experiment</h1>
-    </div>
-    <form class="pure-form pure-form-stacked" action="/experiments" method="post">
-      <div class="form-grid">
-        <div>
-          <label for="name">Name</label>
-          <input type="text" id="name" name="name" required>
-        </div>
-        <div>
-          <label for="process_id">Process</label>
-          <select id="process_id" name="process_id" required>
-            <option value="">Select process...</option>
-            <% (processes || []).forEach((process) => { %>
-              <option value="<%= process.id %>" <%= Number(defaultProcessId || 0) === process.id ? 'selected' : '' %>>
-                <%- formatInline(process.name) %> (<%- formatInline(process.process_type_name || 'Unknown') %>)
-              </option>
-            <% }); %>
-          </select>
-          <div class="small-note">Process Type + Process define the outer context for this experiment.</div>
-        </div>
-        <div>
-          <label for="machine_id">Machine</label>
-          <select id="machine_id" name="machine_id">
-            <option value="">Select machine...</option>
-            <% (machines || []).forEach((machine) => { %>
-              <option value="<%= machine.id %>"><%- formatInline(machine.name) %></option>
-            <% }); %>
-          </select>
-          <div class="small-note">Manage machines in Machine Library.</div>
-        </div>
-        <div>
-          <label for="notes">Description</label>
-          <textarea id="notes" name="notes"></textarea>
-        </div>
-      </div>
+<%- include('partials/head', { title: 'Polymer Processing Planner | New Experiment', uiKit: true }) %>
+<%- include('partials/experiment_workspace_nav') %>
+<main class="min-h-[calc(100vh-4rem)] bg-gray-50"><div class="w-full px-4 py-4 sm:px-6 lg:px-8">
+  <form id="experimentCreateForm" action="/experiments" method="post" class="space-y-4">
+    <section class="rounded-xl border border-gray-200 bg-white shadow-sm"><div class="flex items-center gap-3 border-b border-gray-200 px-5 py-4"><a class="inline-flex size-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900" href="<%= processPath(defaultProcessId) %>" aria-label="Back to process"><span class="material-symbols-rounded" aria-hidden="true">arrow_back</span></a><div><h1 class="text-lg font-semibold text-gray-900">Create experiment</h1><p class="mt-0.5 text-sm text-gray-500">Set the process context and attach formulations from the shared recipe repository.</p></div></div>
+      <div class="grid gap-5 p-5 md:grid-cols-2"><div><label class="mb-2 block text-sm font-medium text-gray-900" for="name">Name</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="text" id="name" name="name" required></div><div><label class="mb-2 block text-sm font-medium text-gray-900" for="process_id">Process</label><select class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="process_id" name="process_id" required><option value="">Select process…</option><% (processes || []).forEach((process) => { %><option value="<%= process.id %>" <%= Number(defaultProcessId || 0) === process.id ? 'selected' : '' %>><%- formatInline(process.name) %> (<%- formatInline(process.process_type_name || 'Unknown') %>)</option><% }); %></select><p class="mt-2 text-sm text-gray-500">Process and process type set the outer context for this experiment.</p></div><div><label class="mb-2 block text-sm font-medium text-gray-900" for="machine_id">Equipment</label><select class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="machine_id" name="machine_id"><option value="">No equipment selected</option><% (machines || []).forEach((machine) => { %><option value="<%= machine.id %>"><%- formatInline(machine.name) %></option><% }); %></select></div><div><label class="mb-2 block text-sm font-medium text-gray-900" for="notes">Description</label><textarea class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="notes" name="notes" rows="3"></textarea></div></div>
+    </section>
 
-      <div class="card" style="margin-top: 1rem;">
-        <div class="recipes-header">
-          <div>
-            <h3 class="card-title">Recipes for this experiment</h3>
-          </div>
-          <div class="recipes-actions">
-            <input type="search" class="recipe-search" placeholder="Search recipes..." data-recipe-search>
-          </div>
-        </div>
-        <% if (recipes.length === 0) { %>
-          <p class="small-note">No recipes yet. Import on the Recipes page.</p>
-        <% } else { %>
-          <div class="recipe-select-grid">
-            <% recipes.forEach((recipe) => { %>
-              <% const dataText = [recipe.name, recipe.description || '', ...(recipe.components || []).map((c) => `${c.component_name} ${c.phr}`)].join(' ').toLowerCase(); %>
-              <label class="recipe-select-card" data-recipe-text="<%= dataText %>">
-                <input type="checkbox" name="recipe_ids" value="<%= recipe.id %>">
-                <div class="recipe-select-header">
-                  <div class="recipe-select-title"><%- formatInline(recipe.name) %></div>
-                  <% if (recipe.description) { %>
-                    <div class="recipe-select-desc"><%- formatInline(recipe.description) %></div>
-                  <% } %>
-                </div>
-                <div class="recipe-components">
-                  <% const comps = recipe.components || []; %>
-                  <% comps.slice(0, 6).forEach((component) => { %>
-                    <div class="recipe-comp-line">
-                      <span class="recipe-comp-name"><%- formatInline(component.component_name) %></span>
-                      <span class="recipe-comp-qty"><%= formatNumber(component.phr) %></span>
-                    </div>
-                  <% }); %>
-                  <% if (comps.length > 6) { %>
-                    <div class="recipe-comp-more">+<%= comps.length - 6 %> more</div>
-                  <% } %>
-                </div>
-              </label>
-            <% }); %>
-          </div>
-        <% } %>
-      </div>
+    <section class="rounded-xl border border-gray-200 bg-white shadow-sm"><div class="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 class="text-base font-semibold text-gray-900">Recipes</h2><p class="mt-0.5 text-sm text-gray-500"><span data-selected-recipe-count>0</span> selected from your accessible repository.</p></div><div class="flex flex-wrap gap-2"><button class="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-100" type="button" data-modal-target="recipePickerModal" data-modal-toggle="recipePickerModal"><span class="material-symbols-rounded text-[19px]" aria-hidden="true">playlist_add</span>Choose recipes</button><button class="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-100" type="button" data-modal-target="recipeQuickCreateModal" data-modal-toggle="recipeQuickCreateModal"><span class="material-symbols-rounded text-[19px]" aria-hidden="true">add</span>New recipe</button></div></div></section>
+    <div class="flex justify-end"><button class="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300" type="submit"><span class="material-symbols-rounded text-[19px]" aria-hidden="true">science</span>Create experiment</button></div>
+  </form>
+</div></main>
 
-      <button class="pure-button pure-button-primary" type="submit">Create Experiment</button>
-    </form>
-  </div>
-</div>
-<%- include('partials/foot') %>
+<div id="recipePickerModal" tabindex="-1" aria-hidden="true" class="hidden fixed inset-0 z-50 h-[calc(100%-1rem)] max-h-full w-full items-center justify-center overflow-y-auto overflow-x-hidden p-4 md:inset-0"><div class="relative max-h-full w-full max-w-5xl"><div class="relative rounded-xl bg-white shadow"><div class="flex items-center justify-between border-b border-gray-200 px-5 py-4"><div><h2 class="text-lg font-semibold text-gray-900">Choose recipes</h2><p class="mt-0.5 text-sm text-gray-500">Only recipes available to you are shown.</p></div><button class="inline-flex size-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100" type="button" data-modal-hide="recipePickerModal" aria-label="Close"><span class="material-symbols-rounded" aria-hidden="true">close</span></button></div><div class="p-5"><div class="relative mb-4"><span class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3 text-gray-500"><span class="material-symbols-rounded text-[20px]" aria-hidden="true">search</span></span><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 py-2.5 ps-10 pe-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:ring-blue-500" type="search" placeholder="Search recipes or components" data-recipe-search></div><div class="grid max-h-[60vh] gap-3 overflow-y-auto sm:grid-cols-2 xl:grid-cols-3" id="experimentRecipeChoices"><% if (!recipes.length) { %><p class="col-span-full rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500" data-recipe-none>No recipes available to you yet.</p><% } %><% recipes.forEach((recipe) => { %><% const dataText = [recipe.name, recipe.description || '', ...(recipe.components || []).map((component) => `${component.component_name} ${component.phr}`)].join(' ').toLowerCase(); %><label class="group cursor-pointer rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:border-blue-300 has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50" data-recipe-choice data-recipe-text="<%= dataText %>"><input class="peer sr-only" type="checkbox" form="experimentCreateForm" name="recipe_ids" value="<%= recipe.id %>"><div class="flex items-start justify-between gap-3"><div class="min-w-0"><h3 class="truncate text-sm font-semibold text-gray-900"><%- formatInline(recipe.name) %></h3><p class="mt-1 text-xs text-gray-500"><%= (recipe.components || []).length %> components</p></div><span class="material-symbols-rounded text-gray-400 peer-checked:text-blue-700" aria-hidden="true">check_circle</span></div></label><% }); %></div><p class="hidden pt-4 text-sm text-gray-500" data-recipe-empty-search>No recipes match this search.</p></div><div class="flex justify-end border-t border-gray-200 px-5 py-4"><button class="rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300" type="button" data-modal-hide="recipePickerModal">Done</button></div></div></div></div>
+
+<div id="recipeQuickCreateModal" tabindex="-1" aria-hidden="true" class="hidden fixed inset-0 z-50 h-[calc(100%-1rem)] max-h-full w-full items-center justify-center overflow-y-auto overflow-x-hidden p-4 md:inset-0"><div class="relative max-h-full w-full max-w-xl"><div class="relative rounded-xl bg-white shadow"><div class="flex items-center justify-between border-b border-gray-200 px-5 py-4"><div><h2 class="text-lg font-semibold text-gray-900">New recipe</h2><p class="mt-0.5 text-sm text-gray-500">Saved in the shared repository as private to you, then selected for this experiment.</p></div><button class="inline-flex size-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100" type="button" data-modal-hide="recipeQuickCreateModal" aria-label="Close"><span class="material-symbols-rounded" aria-hidden="true">close</span></button></div><form id="recipeQuickCreateForm"><div class="space-y-5 p-5"><div><label class="mb-2 block text-sm font-medium text-gray-900" for="quickRecipeName">Recipe name</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="quickRecipeName" name="name" required maxlength="160"></div><div><div class="mb-2 flex items-center justify-between"><h3 class="text-sm font-semibold text-gray-900">Components</h3><button class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" type="button" id="quickRecipeAddComponent"><span class="material-symbols-rounded text-[18px]" aria-hidden="true">add</span>Add component</button></div><div class="overflow-x-auto rounded-lg border border-gray-200"><table class="w-full text-left text-sm text-gray-600"><thead class="bg-gray-50 text-xs uppercase text-gray-500"><tr><th class="px-3 py-3">Component</th><th class="w-36 px-3 py-3">PHR</th><th class="w-12 px-3 py-3"><span class="sr-only">Remove</span></th></tr></thead><tbody class="divide-y divide-gray-100" id="quickRecipeComponents"></tbody></table></div></div><p class="hidden rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" id="quickRecipeError"></p></div><div class="flex justify-end gap-3 border-t border-gray-200 px-5 py-4"><button class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50" type="button" data-modal-hide="recipeQuickCreateModal">Cancel</button><button class="rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300" type="submit">Add to experiment</button></div></form></div></div></div>
+<%- include('partials/foot', { uiKit: true }) %>
 
 <script nonce="<%= cspNonce %>">
-  document.querySelectorAll('.recipe-select-card').forEach((card) => {
-    const input = card.querySelector('input[type="checkbox"]');
-    if (!input) return;
-    card.classList.toggle('active', input.checked);
-    input.addEventListener('change', () => {
-      card.classList.toggle('active', input.checked);
-    });
-  });
-
-  const searchInput = document.querySelector('[data-recipe-search]');
-  if (searchInput) {
-    searchInput.addEventListener('input', (event) => {
-      const query = event.target.value.toLowerCase();
-      document.querySelectorAll('[data-recipe-text]').forEach((card) => {
-        const text = card.getAttribute('data-recipe-text') || '';
-        card.style.display = text.includes(query) ? '' : 'none';
-      });
-    });
-  }
+  const recipeSearch = document.querySelector('[data-recipe-search]'); const recipeChoiceList = document.getElementById('experimentRecipeChoices'); const recipeEmptySearch = document.querySelector('[data-recipe-empty-search]'); const selectedRecipeCount = document.querySelector('[data-selected-recipe-count]');
+  const updateSelectedRecipeCount = () => { if (selectedRecipeCount) selectedRecipeCount.textContent = String(document.querySelectorAll('#experimentRecipeChoices input[name="recipe_ids"]:checked').length); };
+  recipeChoiceList?.addEventListener('change', updateSelectedRecipeCount); updateSelectedRecipeCount();
+  recipeSearch?.addEventListener('input', (event) => { const query = String(event.target.value || '').trim().toLowerCase(); let visible = 0; document.querySelectorAll('[data-recipe-choice]').forEach((choice) => { const matches = !query || (choice.dataset.recipeText || '').includes(query); choice.classList.toggle('hidden', !matches); if (matches) visible += 1; }); recipeEmptySearch?.classList.toggle('hidden', visible !== 0); });
+  const quickForm = document.getElementById('recipeQuickCreateForm'); const quickBody = document.getElementById('quickRecipeComponents'); const quickError = document.getElementById('quickRecipeError');
+  function addQuickRecipeRow(name = '', phr = '') { const row = document.createElement('tr'); const nameCell = document.createElement('td'); const phrCell = document.createElement('td'); const actionCell = document.createElement('td'); const nameInput = document.createElement('input'); const phrInput = document.createElement('input'); const removeButton = document.createElement('button'); const icon = document.createElement('span'); nameInput.type = 'text'; nameInput.name = 'component_name'; nameInput.required = true; nameInput.value = name; nameInput.className = 'block w-full rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500'; phrInput.type = 'number'; phrInput.name = 'component_phr'; phrInput.step = 'any'; phrInput.required = true; phrInput.value = phr; phrInput.className = 'block w-full rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500'; removeButton.type = 'button'; removeButton.className = 'inline-flex size-8 items-center justify-center rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-700'; icon.className = 'material-symbols-rounded text-[19px]'; icon.textContent = 'close'; removeButton.append(icon); removeButton.addEventListener('click', () => { if (quickBody.children.length > 1) row.remove(); else { nameInput.value = ''; phrInput.value = ''; nameInput.focus(); } }); nameCell.className = 'px-3 py-2'; phrCell.className = 'px-3 py-2'; actionCell.className = 'px-2 py-2 text-center'; nameCell.append(nameInput); phrCell.append(phrInput); actionCell.append(removeButton); row.append(nameCell, phrCell, actionCell); quickBody.append(row); }
+  addQuickRecipeRow(); document.getElementById('quickRecipeAddComponent')?.addEventListener('click', () => addQuickRecipeRow());
+  quickForm?.addEventListener('submit', async (event) => { event.preventDefault(); quickError.classList.add('hidden'); const formData = new FormData(quickForm); formData.append('_csrf', document.querySelector('meta[name="csrf-token"]')?.content || ''); const response = await fetch('/recipes/quick-create', { method: 'POST', body: formData, headers: { Accept: 'application/json' } }); const payload = await response.json().catch(() => ({})); if (!response.ok || !payload.recipe) { quickError.textContent = payload.error || 'Could not create recipe.'; quickError.classList.remove('hidden'); return; } const recipe = payload.recipe; const label = document.createElement('label'); label.className = 'group cursor-pointer rounded-lg border border-blue-600 bg-blue-50 p-4 shadow-sm'; label.dataset.recipeChoice = ''; label.dataset.recipeText = [recipe.name, ...recipe.components.map((component) => `${component.component_name} ${component.phr}`)].join(' ').toLowerCase(); const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.name = 'recipe_ids'; checkbox.value = String(recipe.id); checkbox.checked = true; checkbox.setAttribute('form', 'experimentCreateForm'); checkbox.className = 'sr-only'; const title = document.createElement('h3'); title.className = 'truncate text-sm font-semibold text-gray-900'; title.textContent = recipe.name; const summary = document.createElement('p'); summary.className = 'mt-1 text-xs text-gray-500'; summary.textContent = `${recipe.components.length} components · Private`; label.append(checkbox, title, summary); recipeChoiceList?.prepend(label); document.querySelector('[data-recipe-none]')?.remove(); updateSelectedRecipeCount(); quickForm.reset(); quickBody.replaceChildren(); addQuickRecipeRow(); document.querySelector('[data-modal-hide="recipeQuickCreateModal"]')?.click(); });
 </script>

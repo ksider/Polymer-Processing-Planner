@@ -17,7 +17,7 @@ import {
   getQualificationStepsForExperiment,
   setOptionalQualificationStudyEnabled
 } from "../services/qualification_service.js";
-import { listRecipes, getRecipeComponents } from "../repos/recipes_repo.js";
+import { listRecipes, listRecipesForUser, getRecipeComponents } from "../repos/recipes_repo.js";
 import {
   getExperiment,
   getExperimentRecipes,
@@ -258,7 +258,7 @@ export function createExperimentsRouter(db: Db) {
     if (!hasCoreManageRole(req) && ownerProcesses.length === 0) {
       return res.status(403).send("Forbidden");
     }
-    const recipes = listRecipes(db).map((recipe) => ({
+    const recipes = listRecipesForUser(db, req.user).map((recipe) => ({
       ...recipe,
       components: getRecipeComponents(db, recipe.id)
     }));
@@ -808,7 +808,7 @@ export function createExperimentsRouter(db: Db) {
     const workspace = buildExperimentWorkspace(db, experimentId);
     if (!workspace) return res.status(404).send("Experiment not found");
 
-    const recipes = listRecipes(db);
+    const recipes = listRecipesForUser(db, req.user);
     const linkedRecipes = getExperimentRecipes(db, experimentId);
     const linkedRecipeOptions = recipes.filter((recipe) => linkedRecipes.includes(recipe.id));
     const processTypeCode = getProcessTypeCodeForExperiment(db, experimentId);

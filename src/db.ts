@@ -415,8 +415,11 @@ function initDb(db: Db) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       description TEXT,
+      owner_user_id INTEGER,
+      visibility TEXT NOT NULL DEFAULT 'TEAM',
       archived_at TEXT,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE SET NULL
     );
     CREATE TABLE IF NOT EXISTS recipe_components (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -424,6 +427,16 @@ function initDb(db: Db) {
       component_name TEXT NOT NULL,
       phr REAL NOT NULL,
       FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS recipe_user_access (
+      recipe_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      granted_by_user_id INTEGER,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (recipe_id, user_id),
+      FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (granted_by_user_id) REFERENCES users(id) ON DELETE SET NULL
     );
     CREATE TABLE IF NOT EXISTS machines (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -981,6 +994,27 @@ function initDb(db: Db) {
   if (!hasColumn(db, "recipes", "archived_at")) {
     db.exec("ALTER TABLE recipes ADD COLUMN archived_at TEXT");
   }
+  if (!hasColumn(db, "recipes", "owner_user_id")) {
+    db.exec("ALTER TABLE recipes ADD COLUMN owner_user_id INTEGER");
+  }
+  if (!hasColumn(db, "recipes", "visibility")) {
+    // Existing catalogue entries retain their previous organisation-wide access.
+    db.exec("ALTER TABLE recipes ADD COLUMN visibility TEXT NOT NULL DEFAULT 'TEAM'");
+  }
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS recipe_user_access (
+      recipe_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      granted_by_user_id INTEGER,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (recipe_id, user_id),
+      FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (granted_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_recipes_visibility_owner ON recipes(visibility, owner_user_id, id);
+    CREATE INDEX IF NOT EXISTS idx_recipe_user_access_user ON recipe_user_access(user_id, recipe_id);
+  `);
   if (!hasColumn(db, "processes", "route_code")) {
     db.exec("ALTER TABLE processes ADD COLUMN route_code TEXT");
   }
