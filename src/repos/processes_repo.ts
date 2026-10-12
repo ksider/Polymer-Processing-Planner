@@ -147,9 +147,17 @@ export function getProcessByRouteCode(db: Db, routeCode: string): ProcessRow | n
   return fallback ?? null;
 }
 
-export function updateProcessSettings(db: Db, processId: number, ownerUserId: number | null, routeCode: string | null): void {
+export function updateProcessSettings(
+  db: Db,
+  processId: number,
+  ownerUserId: number | null,
+  routeCode: string | null,
+  name?: string
+): void {
   const normalizedRouteCode = normalizeRouteCode(routeCode);
-  db.prepare("UPDATE processes SET owner_user_id = ?, route_code = ? WHERE id = ?").run(ownerUserId, normalizedRouteCode, processId);
+  const normalizedName = typeof name === "string" ? name.trim() : null;
+  db.prepare("UPDATE processes SET owner_user_id = ?, route_code = ?, name = COALESCE(?, name) WHERE id = ?")
+    .run(ownerUserId, normalizedRouteCode, normalizedName, processId);
 }
 
 export function updateProcessOwner(db: Db, processId: number, ownerUserId: number | null): void {

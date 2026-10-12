@@ -195,6 +195,14 @@ export function createAdminRouter(db: Db) {
       }
       return res.redirect("/admin?error=Process not found");
     }
+    const name = String(req.body?.name ?? process.name).trim();
+    if (!name || name.length > 160) {
+      const message = !name ? "Process name is required" : "Process name is too long";
+      if (wantsJson(req)) {
+        return res.status(400).json({ ok: false, message });
+      }
+      return res.redirect(`/admin?error=${encodeURIComponent(message)}`);
+    }
     const rawOwner = String(req.body?.owner_user_id ?? "").trim();
     const ownerUserId = rawOwner ? Number(rawOwner) : null;
     if (rawOwner && !Number.isFinite(ownerUserId)) {
@@ -206,7 +214,7 @@ export function createAdminRouter(db: Db) {
     const routeCode = normalizeRouteCode(String(req.body?.route_code ?? ""));
     const showOnHome = req.body?.show_on_home ? 1 : 0;
     try {
-      updateProcessSettings(db, processId, Number.isFinite(ownerUserId) ? ownerUserId : null, routeCode);
+      updateProcessSettings(db, processId, Number.isFinite(ownerUserId) ? ownerUserId : null, routeCode, name);
     } catch {
       if (wantsJson(req)) {
         return res.status(400).json({ ok: false, message: "Route code already in use" });
@@ -220,6 +228,7 @@ export function createAdminRouter(db: Db) {
       targetUserId: null,
       detailsJson: JSON.stringify({
         process_id: processId,
+        name,
         owner_user_id: Number.isFinite(ownerUserId) ? ownerUserId : null,
         route_code: routeCode,
         show_on_home: showOnHome

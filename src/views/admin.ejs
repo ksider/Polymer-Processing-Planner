@@ -312,7 +312,7 @@
           <% (processes || []).forEach((process) => { %>
             <tr class="bg-white hover:bg-gray-50">
               <td class="px-5 py-4">
-                <div class="font-medium text-gray-900"><%- formatInline(process.name) %></div>
+                <input class="block min-w-56 rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm font-medium text-gray-900 focus:border-blue-500 focus:ring-blue-500" type="text" name="name" value="<%= process.name %>" maxlength="160" required form="processSettingsForm-<%= process.id %>" data-autosave="processSettingsForm-<%= process.id %>" aria-label="Process name">
                 <div class="mt-1 text-xs text-gray-500"><%- formatInline(process.process_type_name || 'Process') %></div>
               </td>
               <td class="px-5 py-4">

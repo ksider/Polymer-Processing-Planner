@@ -146,6 +146,26 @@ test("process routing, route_code settings and process-owner access", async () =
     .expect(302)
     .expect("Location", "/extrusion");
 
+  const adminProcessSettingsCsrf = await getCsrfToken(adminAgent, "/admin");
+  await adminAgent
+    .post(`/admin/processes/${processRow.id}/settings`)
+    .set("X-Requested-With", "fetch")
+    .type("form")
+    .send({
+      name: "Renamed injection process",
+      route_code: "extrusion",
+      owner_user_id: String(processOwnerId),
+      show_on_home: "1",
+      _csrf: adminProcessSettingsCsrf
+    })
+    .expect(200)
+    .expect({ ok: true, message: "Process settings updated" });
+
+  const renamedProcess = db
+    .prepare("SELECT name FROM processes WHERE id = ?")
+    .get(processRow.id) as { name: string };
+  assert.equal(renamedProcess.name, "Renamed injection process");
+
   await adminAgent.get("/extrusion").expect(200);
   await adminAgent.get(`/extrusion/${experiment.id}`).expect(200);
 
