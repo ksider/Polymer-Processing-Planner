@@ -753,12 +753,13 @@ export function getQualificationStepsForExperiment(db: Db, experimentId: number)
   const existingStepNumbers = new Set(listQualSteps(db, experimentId).map((step) => step.step_number));
   return getStepDefinitionsForProcessType(processTypeCode)
     .filter((step) => !step.is_optional || existingStepNumbers.has(step.step_number))
-    .map(({ step_number, name }) => ({
-    step_number,
-    name,
-    stage_code: getCatalogueStageCode(processTypeCode, step_number),
-    display_order: step_number
-  }));
+    .map(({ step_number, name, is_optional }) => ({
+      step_number,
+      name,
+      is_optional: Boolean(is_optional),
+      stage_code: getCatalogueStageCode(processTypeCode, step_number),
+      display_order: step_number
+    }));
 }
 
 export function getOptionalQualificationStudies(db: Db, experimentId: number) {

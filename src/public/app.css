@@ -4093,6 +4093,29 @@ textarea {
   opacity: 0.6;
 }
 
+/* The report toolbar is a single-line flex row. Keep its native selects at
+   their intended control widths so an inherited flex rule cannot consume the
+   remaining header width. */
+.report-workspace .document-toolbar-slot .toolbar-select {
+  box-sizing: border-box;
+  flex: 0 0 auto !important;
+  width: 84px !important;
+  min-width: 84px;
+  max-width: 84px;
+}
+
+.report-workspace .document-toolbar-slot #fontFamilySelect {
+  width: 132px !important;
+  min-width: 132px;
+  max-width: 132px;
+}
+
+.report-workspace .document-toolbar-slot #textPresetSelect {
+  width: 96px !important;
+  min-width: 96px;
+  max-width: 96px;
+}
+
 .button-sm.icon-only {
   width: 34px;
   height: 34px;

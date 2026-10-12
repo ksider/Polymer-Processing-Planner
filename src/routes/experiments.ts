@@ -364,6 +364,7 @@ export function createExperimentsRouter(db: Db) {
         stepNumber,
         stageCode: step.stage_code,
         name: stepDef?.name || step.title || `Step ${stepNumber}`,
+        isOptional: Boolean(stepDef?.is_optional),
         status,
         statusLabel,
         blockedReason: step.blocked_reason,
@@ -376,8 +377,8 @@ export function createExperimentsRouter(db: Db) {
       const step = qualSteps.find((item) => item.step_number === study.stepNumber);
       return { ...study, enabled: step?.is_active === 1 };
     });
-    const coreQualificationCards = qualificationCards.filter((card) => card.stepNumber <= 5);
-    const enabledConditionalQualificationCards = qualificationCards.filter((card) => card.stepNumber > 5);
+    const coreQualificationCards = qualificationCards.filter((card) => !card.isOptional);
+    const enabledConditionalQualificationCards = qualificationCards.filter((card) => card.isOptional);
     const summaryCount = qualSummaries.length;
     const autoStatus = summaryCount > 0 ? "in_progress" : "not_started";
     const autoStatusLabel = autoStatus === "in_progress" ? "In progress" : "Not started";

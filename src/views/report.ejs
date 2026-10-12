@@ -1,18 +1,19 @@
-<%- include('partials/head', { title: `Polymer Processing Planner | Report ${report.experiment.id}` }) %>
-<%- include('partials/nav') %>
-<div class="container">
-  <div class="card">
+<%- include('partials/head', { title: `Polymer Processing Planner | Report ${report.experiment.id}`, uiKit: true }) %>
+<%- include('partials/experiment_workspace_nav') %>
+<main class="min-h-[calc(100vh-4rem)] bg-gray-50">
+  <div class="w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+  <section class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
     <% const reportSetupEditable = typeof canEditReportSetup !== 'undefined' && canEditReportSetup; %>
-    <div class="card-header">
-      <a class="back-link" href="<%= experimentPath(report.experiment.id) %>" aria-label="Back to experiment">
+    <div class="flex flex-wrap items-start gap-3 border-b border-gray-200 px-5 py-4">
+      <a class="inline-flex size-9 items-center justify-center rounded-lg text-gray-500 no-underline hover:bg-gray-100 hover:text-gray-900" href="<%= experimentPath(report.experiment.id) %>" aria-label="Back to experiment">
         <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
       </a>
       <div>
-        <h1 class="card-title">Report setup #<%= report.experiment.id %></h1>
-        <div class="small-note"><%- formatInline(report.experiment.name) %></div>
+        <h1 class="text-lg font-semibold text-gray-900">Report setup #<%= report.experiment.id %></h1>
+        <div class="mt-0.5 text-sm text-gray-500"><%- formatInline(report.experiment.name) %></div>
       </div>
       <% if (typeof reportConfig !== 'undefined' && reportConfig) { %>
-        <div class="section-actions">
+        <div class="ml-auto flex items-center gap-2">
           <% if (reportConfig.signed_at) { %>
             <span class="status-pill status-done">Signed</span>
           <% } else if (reportConfig.submitted_for_signature_at) { %>
@@ -23,23 +24,23 @@
     </div>
     <% if (reportSetupEditable) { %>
       <% const reportSetupManager = typeof canManageReportSetup !== 'undefined' && canManageReportSetup; %>
-      <form class="pure-form form-grid report-setup-form" action="/reports/<%= reportConfig.id %>/setup" method="post">
+      <form class="grid gap-5 p-5" action="/reports/<%= reportConfig.id %>/setup" method="post">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <fieldset class="report-setup-group form-wide">
-          <legend>Document</legend>
-          <div class="report-setup-fields report-setup-fields-document">
+        <fieldset class="min-w-0 rounded-lg border border-gray-200 p-4">
+          <legend class="px-1 text-sm font-semibold text-gray-900">Document</legend>
+          <div class="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(150px,.7fr)_minmax(190px,1fr)]">
             <div class="report-title-field">
-              <label for="reportSetupName">Report title</label>
-              <input id="reportSetupName" name="name" type="text" maxlength="160" required value="<%= reportConfig.name %>">
+              <label class="mb-2 block text-sm font-medium text-gray-900" for="reportSetupName">Report title</label>
+              <input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="reportSetupName" name="name" type="text" maxlength="160" required value="<%= reportConfig.name %>">
             </div>
             <div>
-              <label for="reportNumber">Report number</label>
-              <input id="reportNumber" name="report_number" type="text" maxlength="64" required <%= reportSetupManager ? '' : 'disabled' %> value="<%= reportConfig.report_number || `RPT-${String(reportConfig.created_at || '').slice(0, 10).replace(/-/g, '')}-${String(reportConfig.id).padStart(4, '0')}` %>">
+              <label class="mb-2 block text-sm font-medium text-gray-900" for="reportNumber">Report number</label>
+              <input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 disabled:cursor-not-allowed disabled:opacity-60" id="reportNumber" name="report_number" type="text" maxlength="64" required <%= reportSetupManager ? '' : 'disabled' %> value="<%= reportConfig.report_number || `RPT-${String(reportConfig.created_at || '').slice(0, 10).replace(/-/g, '')}-${String(reportConfig.id).padStart(4, '0')}` %>">
               <% if (!reportSetupManager) { %><input type="hidden" name="report_number" value="<%= reportConfig.report_number || `RPT-${reportConfig.id}` %>"><% } %>
             </div>
             <div>
-              <label for="reportType">Type and template</label>
-              <select id="reportType" name="report_type" <%= reportSetupManager ? '' : 'disabled' %>>
+              <label class="mb-2 block text-sm font-medium text-gray-900" for="reportType">Type and template</label>
+              <select class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 disabled:cursor-not-allowed disabled:opacity-60" id="reportType" name="report_type" <%= reportSetupManager ? '' : 'disabled' %>>
                 <option value="QUALIFICATION" <%= reportConfig.report_type === 'QUALIFICATION' ? 'selected' : '' %>>Qualification — standard template</option>
                 <option value="DOE" <%= reportConfig.report_type === 'DOE' ? 'selected' : '' %>>DOE — standard template</option>
                 <option value="COMBINED" <%= reportConfig.report_type === 'COMBINED' ? 'selected' : '' %>>Combined — standard template</option>
@@ -48,12 +49,12 @@
             </div>
           </div>
         </fieldset>
-        <fieldset class="report-setup-group form-wide">
-          <legend>Roles and approval</legend>
-          <div class="report-setup-fields">
+        <fieldset class="min-w-0 rounded-lg border border-gray-200 p-4">
+          <legend class="px-1 text-sm font-semibold text-gray-900">Roles and approval</legend>
+          <div class="grid gap-4 md:grid-cols-2">
             <div>
-              <label for="reportAuthor">Author — prepares the report</label>
-              <select id="reportAuthor" name="author_user_id" <%= reportSetupManager ? '' : 'disabled' %>>
+              <label class="mb-2 block text-sm font-medium text-gray-900" for="reportAuthor">Author — prepares the report</label>
+              <select class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 disabled:cursor-not-allowed disabled:opacity-60" id="reportAuthor" name="author_user_id" <%= reportSetupManager ? '' : 'disabled' %>>
                 <% if (!reportSetupManager && reportConfig.author_user_id) { %>
                   <option value="<%= reportConfig.author_user_id %>" selected><%= author?.name || author?.email || 'Assigned author' %></option>
                 <% } else { %>
@@ -66,8 +67,8 @@
               <% if (!reportSetupManager) { %><input type="hidden" name="author_user_id" value="<%= reportConfig.author_user_id || '' %>"><% } %>
             </div>
             <div>
-              <label for="reportResponsible">Responsible signer</label>
-              <select id="reportResponsible" name="responsible_user_id" <%= reportSetupManager ? '' : 'disabled' %>>
+              <label class="mb-2 block text-sm font-medium text-gray-900" for="reportResponsible">Responsible signer</label>
+              <select class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 disabled:cursor-not-allowed disabled:opacity-60" id="reportResponsible" name="responsible_user_id" <%= reportSetupManager ? '' : 'disabled' %>>
                 <% if (!reportSetupManager && reportConfig.responsible_user_id) { %>
                   <option value="<%= reportConfig.responsible_user_id %>" selected><%= responsible?.name || responsible?.email || 'Assigned signer' %></option>
                 <% } else { %>
@@ -81,117 +82,117 @@
             </div>
           </div>
         </fieldset>
-        <fieldset class="report-setup-group form-wide">
-          <legend>Dates</legend>
-          <div class="report-setup-fields">
+        <fieldset class="min-w-0 rounded-lg border border-gray-200 p-4">
+          <legend class="px-1 text-sm font-semibold text-gray-900">Dates</legend>
+          <div class="grid gap-4 md:grid-cols-2">
             <div>
-              <label for="reportDueAt">Author due date</label>
-              <input id="reportDueAt" name="due_at" type="date" <%= reportSetupManager ? '' : 'disabled' %> value="<%= reportConfig.due_at || '' %>">
+              <label class="mb-2 block text-sm font-medium text-gray-900" for="reportDueAt">Author due date</label>
+              <input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 disabled:cursor-not-allowed disabled:opacity-60" id="reportDueAt" name="due_at" type="date" <%= reportSetupManager ? '' : 'disabled' %> value="<%= reportConfig.due_at || '' %>">
               <% if (!reportSetupManager) { %><input type="hidden" name="due_at" value="<%= reportConfig.due_at || '' %>"><% } %>
             </div>
             <div>
-              <label for="signatureSlaDays">Signature SLA</label>
-              <div class="report-sla-field">
-                <input id="signatureSlaDays" name="signature_sla_days" type="number" min="0" max="30" required <%= reportSetupManager ? '' : 'disabled' %> value="<%= reportConfig.signature_sla_days %>">
+              <label class="mb-2 block text-sm font-medium text-gray-900" for="signatureSlaDays">Signature SLA</label>
+              <div class="flex items-center gap-3">
+                <input class="block w-20 rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 disabled:cursor-not-allowed disabled:opacity-60" id="signatureSlaDays" name="signature_sla_days" type="number" min="0" max="30" required <%= reportSetupManager ? '' : 'disabled' %> value="<%= reportConfig.signature_sla_days %>">
                 <% if (!reportSetupManager) { %><input type="hidden" name="signature_sla_days" value="<%= reportConfig.signature_sla_days %>"><% } %>
-                <span>calendar days after sending</span>
+                <span class="text-sm text-gray-500">calendar days after sending</span>
               </div>
             </div>
           </div>
         </fieldset>
-        <fieldset class="report-setup-group form-wide">
-          <legend>Report brief</legend>
-          <label for="reportSetupDescription">Description</label>
-          <textarea id="reportSetupDescription" name="description" rows="4" maxlength="4000" placeholder="Purpose, scope or notes for this report"><%= reportDescription %></textarea>
+        <fieldset class="min-w-0 rounded-lg border border-gray-200 p-4">
+          <legend class="px-1 text-sm font-semibold text-gray-900">Report brief</legend>
+          <label class="mb-2 block text-sm font-medium text-gray-900" for="reportSetupDescription">Description</label>
+          <textarea class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="reportSetupDescription" name="description" rows="4" maxlength="4000" placeholder="Purpose, scope or notes for this report"><%= reportDescription %></textarea>
         </fieldset>
-        <div class="section-actions form-wide">
-          <button class="pure-button pure-button-primary" type="submit">Save setup</button>
+        <div class="flex justify-end">
+          <button class="inline-flex items-center rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300" type="submit">Save setup</button>
         </div>
       </form>
     <% } else if (typeof reportConfig !== 'undefined' && reportConfig) { %>
-      <div class="report-meta">
-        <div>
-          <div class="small-note">Author</div>
-          <div><strong><%- formatInline(author?.name || author?.email || '-') %></strong></div>
+      <div class="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <div class="text-sm text-gray-500">Author</div>
+          <div class="mt-1 text-sm text-gray-900"><strong><%- formatInline(author?.name || author?.email || '-') %></strong></div>
         </div>
-        <div>
-          <div class="small-note">Responsible</div>
-          <div><strong><%- formatInline(responsible?.name || responsible?.email || '-') %></strong></div>
+        <div class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <div class="text-sm text-gray-500">Responsible</div>
+          <div class="mt-1 text-sm text-gray-900"><strong><%- formatInline(responsible?.name || responsible?.email || '-') %></strong></div>
         </div>
-        <div>
-          <div class="small-note">Due date</div>
-          <div><strong><%= reportConfig.due_at || '-' %></strong></div>
+        <div class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <div class="text-sm text-gray-500">Due date</div>
+          <div class="mt-1 text-sm text-gray-900"><strong><%= reportConfig.due_at || '-' %></strong></div>
         </div>
-        <div>
-          <div class="small-note">Signature due</div>
-          <div><strong><%= reportConfig.signature_due_at || '-' %></strong></div>
+        <div class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <div class="text-sm text-gray-500">Signature due</div>
+          <div class="mt-1 text-sm text-gray-900"><strong><%= reportConfig.signature_due_at || '-' %></strong></div>
         </div>
       </div>
-      <div class="report-description">
-        <div class="small-note">Description</div>
-        <div><%- formatInline(reportDescription || '-') %></div>
+      <div class="mx-5 mb-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div class="text-sm text-gray-500">Description</div>
+        <div class="mt-1 text-sm text-gray-900"><%- formatInline(reportDescription || '-') %></div>
       </div>
     <% } %>
     <% if (reportSetupEditable) { %>
-      <div class="report-meta report-setup-summary">
+      <div class="grid gap-3 border-t border-gray-200 px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
         <% const currentTaskOwner = reportConfig.submitted_for_signature_at ? responsible : author; %>
-        <div><span class="small-note">Current task owner</span><strong><%- formatInline(currentTaskOwner?.name || currentTaskOwner?.email || '-') %></strong></div>
-        <div><span class="small-note">Responsible signer</span><strong><%- formatInline(responsible?.name || responsible?.email || '-') %></strong></div>
-        <div><span class="small-note">Due date</span><strong><%= reportConfig.due_at || '-' %></strong></div>
-        <div><span class="small-note">Signature due</span><strong><%= reportConfig.signature_due_at || 'Calculated when sent' %></strong></div>
+        <div class="text-sm"><span class="block text-gray-500">Current task owner</span><strong class="mt-1 block text-gray-900"><%- formatInline(currentTaskOwner?.name || currentTaskOwner?.email || '-') %></strong></div>
+        <div class="text-sm"><span class="block text-gray-500">Responsible signer</span><strong class="mt-1 block text-gray-900"><%- formatInline(responsible?.name || responsible?.email || '-') %></strong></div>
+        <div class="text-sm"><span class="block text-gray-500">Due date</span><strong class="mt-1 block text-gray-900"><%= reportConfig.due_at || '-' %></strong></div>
+        <div class="text-sm"><span class="block text-gray-500">Signature due</span><strong class="mt-1 block text-gray-900"><%= reportConfig.signature_due_at || 'Calculated when sent' %></strong></div>
       </div>
     <% } %>
     <% if (typeof reportConfig !== 'undefined' && reportConfig) { %>
       <% if (typeof canOpenTextEditor !== 'undefined' && canOpenTextEditor) { %>
-        <section class="report-editor-entry" aria-labelledby="reportEditorEntryTitle">
+        <section class="mx-5 mb-4 flex flex-col gap-4 rounded-xl border border-blue-200 bg-blue-50 p-4 sm:flex-row sm:items-center sm:justify-between" aria-labelledby="reportEditorEntryTitle">
           <div>
-            <div class="report-editor-step">Next step</div>
-            <h2 id="reportEditorEntryTitle">Write the report</h2>
-            <p>Use the structured outline, add research data and prepare the document for signature.</p>
+            <div class="text-xs font-semibold uppercase tracking-wide text-blue-700">Next step</div>
+            <h2 class="mt-1 text-base font-semibold text-gray-900" id="reportEditorEntryTitle">Write the report</h2>
+            <p class="mt-1 text-sm text-gray-600">Use the structured outline, add research data and prepare the document for signature.</p>
           </div>
-          <a class="pure-button pure-button-primary report-editor-entry-button" href="/reports/<%= reportConfig.id %>/editor">
+          <a class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-medium text-white no-underline shadow-sm hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300" href="/reports/<%= reportConfig.id %>/editor">
             <span class="material-symbols-rounded" aria-hidden="true">edit_note</span>
             Open text editor
           </a>
         </section>
       <% } %>
       <% if (typeof canSubmitForSignature !== 'undefined' && canSubmitForSignature) { %>
-        <section class="report-signature-entry" aria-labelledby="reportSignatureEntryTitle">
+        <section class="mx-5 mb-4 flex flex-col gap-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between" aria-labelledby="reportSignatureEntryTitle">
           <div>
-            <div class="report-editor-step">Final step</div>
-            <h2 id="reportSignatureEntryTitle">Send for signature</h2>
-            <p>The writing task will be completed and reassigned to the responsible signer. The signature deadline is calculated from the SLA in setup.</p>
+            <div class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Final step</div>
+            <h2 class="mt-1 text-base font-semibold text-gray-900" id="reportSignatureEntryTitle">Send for signature</h2>
+            <p class="mt-1 text-sm text-gray-600">The writing task will be completed and reassigned to the responsible signer. The signature deadline is calculated from the SLA in setup.</p>
           </div>
           <form class="pure-form" action="/reports/<%= reportConfig.id %>/submit-for-signature" method="post" data-confirm="Send this report to the responsible signer?">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <button class="pure-button pure-button-primary report-editor-entry-button" type="submit">
+            <button class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-emerald-800 focus:outline-none focus:ring-4 focus:ring-emerald-300" type="submit">
               <span class="material-symbols-rounded" aria-hidden="true">draw</span>
               Send for signature
             </button>
           </form>
         </section>
       <% } %>
-      <div class="section-actions" style="margin-top: 0.75rem;">
+      <div class="flex flex-wrap gap-2 px-5 pb-5">
         <% if (typeof canRecallSignatureSubmission !== 'undefined' && canRecallSignatureSubmission) { %>
           <form class="pure-form inline-form" action="/reports/<%= reportConfig.id %>/recall-from-signature" method="post" data-confirm="Return this report to the author for revision?">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <button class="pure-button" type="submit">Return to author</button>
+            <button class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50" type="submit">Return to author</button>
           </form>
         <% } %>
         <% if (canSignReport) { %>
           <% if (reportConfig.signed_at) { %>
             <form class="pure-form inline-form" action="/reports/<%= reportConfig.id %>/unsign" method="post" data-confirm="Withdraw signature?">
-              <button class="pure-button" type="submit">Withdraw signature</button>
+              <button class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50" type="submit">Withdraw signature</button>
             </form>
           <% } else { %>
             <form class="pure-form inline-form" action="/reports/<%= reportConfig.id %>/sign" method="post" data-confirm="Sign this report?">
-              <button class="pure-button pure-button-primary" type="submit">Sign report</button>
+              <button class="inline-flex items-center rounded-lg bg-blue-700 px-3.5 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300" type="submit">Sign report</button>
             </form>
           <% } %>
         <% } %>
       </div>
     <% } %>
-  </div>
+  </section>
 
   <%- include('partials/entity_notes', {
     experimentId: report.experiment.id,
@@ -201,27 +202,27 @@
     canWrite: currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')
   }) %>
 
-  <div class="card">
-    <div class="card-header">
-      <h2 class="card-title">Recipes</h2>
+  <section class="mt-5 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+    <div class="border-b border-gray-200 px-5 py-4">
+      <h2 class="text-base font-semibold text-gray-900">Recipes</h2>
     </div>
     <% if (!report.recipes.length) { %>
-      <div class="small-note">No recipes linked.</div>
+      <div class="p-5 text-sm text-gray-500">No recipes linked.</div>
     <% } else { %>
-      <div class="recipe-card-grid">
+      <div class="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
         <% report.recipes.forEach((recipe) => { %>
-          <div class="recipe-card">
-            <div class="recipe-card-header">
-              <h3><%- formatInline(recipe.name) %></h3>
+          <div class="rounded-lg border border-gray-200 bg-white p-4">
+            <div>
+              <h3 class="text-sm font-semibold text-gray-900"><%- formatInline(recipe.name) %></h3>
             </div>
             <% if (recipe.description) { %>
-              <div class="recipe-desc"><%- formatInline(recipe.description) %></div>
+              <div class="mt-2 text-sm text-gray-500"><%- formatInline(recipe.description) %></div>
             <% } %>
-            <div class="recipe-components">
+            <div class="mt-3 divide-y divide-gray-100 rounded-lg bg-gray-50 px-3">
               <% (recipe.components || []).forEach((component) => { %>
-                <div class="recipe-comp-line">
-                  <span class="recipe-comp-name"><%- formatInline(component.component_name) %></span>
-                  <span class="recipe-comp-qty"><%= formatNumber(component.phr) %></span>
+                <div class="flex items-center justify-between gap-3 py-2 text-sm">
+                  <span class="min-w-0 truncate text-gray-700"><%- formatInline(component.component_name) %></span>
+                  <span class="shrink-0 font-medium text-gray-900"><%= formatNumber(component.phr) %></span>
                 </div>
               <% }); %>
             </div>
@@ -229,76 +230,74 @@
         <% }); %>
       </div>
     <% } %>
-  </div>
+  </section>
 
   <% if (options.includeQualification && report.qualification) { %>
-    <div class="card">
-      <div class="card-header">
-        <h2 class="card-title">Recommended Settings</h2>
+    <section class="mt-5 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div class="border-b border-gray-200 px-5 py-4">
+        <h2 class="text-base font-semibold text-gray-900">Recommended Settings</h2>
       </div>
-      <div class="outputs-grid">
-        <div class="output-card">
-          <div class="small-note">Injection speed</div>
-          <div><strong><%= formatNumber(report.qualification.recommended_inj_speed) %></strong> cm3/s</div>
+      <div class="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-4">
+        <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <div class="text-sm text-gray-500">Injection speed</div>
+          <div class="mt-1 text-sm text-gray-900"><strong><%= formatNumber(report.qualification.recommended_inj_speed) %></strong> cm3/s</div>
         </div>
-        <div class="output-card">
-          <div class="small-note">Process window center</div>
-          <div><strong><%= formatNumber(report.qualification.window.center_temp) %></strong> °C</div>
-          <div><strong><%= formatNumber(report.qualification.window.center_pressure) %></strong> bar</div>
+        <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <div class="text-sm text-gray-500">Process window center</div>
+          <div class="mt-1 text-sm text-gray-900"><strong><%= formatNumber(report.qualification.window.center_temp) %></strong> °C</div>
+          <div class="text-sm text-gray-900"><strong><%= formatNumber(report.qualification.window.center_pressure) %></strong> bar</div>
         </div>
-        <div class="output-card">
-          <div class="small-note">Gate seal time</div>
-          <div><strong><%= formatNumber(report.qualification.gate_seal_time_s) %></strong> s</div>
+        <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <div class="text-sm text-gray-500">Gate seal time</div>
+          <div class="mt-1 text-sm text-gray-900"><strong><%= formatNumber(report.qualification.gate_seal_time_s) %></strong> s</div>
         </div>
-        <div class="output-card">
-          <div class="small-note">Min cooling time</div>
-          <div><strong><%= formatNumber(report.qualification.min_cooling_time_s) %></strong> s</div>
+        <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <div class="text-sm text-gray-500">Min cooling time</div>
+          <div class="mt-1 text-sm text-gray-900"><strong><%= formatNumber(report.qualification.min_cooling_time_s) %></strong> s</div>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div class="card">
-      <div class="card-header">
-        <h2 class="card-title">Qualification Charts</h2>
+    <section class="mt-5 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div class="border-b border-gray-200 px-5 py-4">
+        <h2 class="text-base font-semibold text-gray-900">Qualification Charts</h2>
       </div>
-      <div class="chart-card">
-        <div id="reportRheoChart" style="width: 100%; height: 320px;"></div>
+      <div class="grid gap-4 p-5 xl:grid-cols-2">
+        <div class="overflow-hidden rounded-lg border border-gray-200 bg-white p-3"><div id="reportRheoChart" style="width: 100%; height: 320px;"></div></div>
+        <div class="overflow-hidden rounded-lg border border-gray-200 bg-white p-3"><div id="reportWindowChart" style="width: 100%; height: 320px;"></div></div>
       </div>
-      <div class="chart-card" style="margin-top: 1rem;">
-        <div id="reportWindowChart" style="width: 100%; height: 320px;"></div>
-      </div>
-    </div>
+    </section>
   <% } %>
 
   <% if (options.includeDoe && report.doe) { %>
-    <div class="card">
-      <div class="card-header">
-        <h2 class="card-title">DOE Studies</h2>
+    <section class="mt-5 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div class="border-b border-gray-200 px-5 py-4">
+        <h2 class="text-base font-semibold text-gray-900">DOE Studies</h2>
       </div>
       <% if (!report.doe.length) { %>
-        <div class="small-note">No DOE studies.</div>
+        <div class="p-5 text-sm text-gray-500">No DOE studies.</div>
       <% } else { %>
-        <div class="table-scroll">
-          <table class="pure-table table-compact">
-            <thead>
+        <div class="overflow-x-auto p-5">
+          <table class="w-full min-w-[680px] text-left text-sm text-gray-600">
+            <thead class="bg-gray-50 text-xs uppercase text-gray-500">
               <tr>
-                <th>ID</th>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Runs</th>
-                <th>Factors</th>
+                <th class="px-4 py-3">ID</th>
+                <th class="px-4 py-3">Name</th>
+                <th class="px-4 py-3">Type</th>
+                <th class="px-4 py-3">Runs</th>
+                <th class="px-4 py-3">Factors</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody class="divide-y divide-gray-100">
               <% report.doe.forEach((study) => { %>
                 <tr>
-                  <td><%= study.id %></td>
-                  <td><%- formatInline(study.name) %></td>
-                  <td><%= study.design_type %></td>
-                  <td><%= study.run_count %></td>
-                  <td>
+                  <td class="px-4 py-3"><%= study.id %></td>
+                  <td class="px-4 py-3 font-medium text-gray-900"><%- formatInline(study.name) %></td>
+                  <td class="px-4 py-3"><%= study.design_type %></td>
+                  <td class="px-4 py-3"><%= study.run_count %></td>
+                  <td class="px-4 py-3">
                     <% study.factors.forEach((factor) => { %>
-                      <div class="small-note"><strong><%- formatInline(factor.code) %></strong> <%= factor.mode %> <%= factor.values %></div>
+                      <div class="text-xs text-gray-500"><strong class="text-gray-700"><%- formatInline(factor.code) %></strong> <%= factor.mode %> <%= factor.values %></div>
                     <% }); %>
                   </td>
                 </tr>
@@ -307,20 +306,21 @@
           </table>
         </div>
       <% } %>
-    </div>
+    </section>
   <% } %>
 
-  <div class="card">
-    <div class="card-header">
-      <h2 class="card-title">Downloads</h2>
+  <section class="mt-5 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+    <div class="border-b border-gray-200 px-5 py-4">
+      <h2 class="text-base font-semibold text-gray-900">Downloads</h2>
     </div>
-    <div class="section-actions">
-      <a class="pure-button" href="/experiments/<%= report.experiment.id %>/report.csv?section=qualification">qualification.csv</a>
-      <a class="pure-button" href="/experiments/<%= report.experiment.id %>/report.csv?section=doe">doe.csv</a>
-      <a class="pure-button" href="/experiments/<%= report.experiment.id %>/report.csv?section=outputs">outputs.csv</a>
+    <div class="flex flex-wrap gap-2 p-5">
+      <a class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 no-underline shadow-sm hover:bg-gray-50" href="/experiments/<%= report.experiment.id %>/report.csv?section=qualification">qualification.csv</a>
+      <a class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 no-underline shadow-sm hover:bg-gray-50" href="/experiments/<%= report.experiment.id %>/report.csv?section=doe">doe.csv</a>
+      <a class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 no-underline shadow-sm hover:bg-gray-50" href="/experiments/<%= report.experiment.id %>/report.csv?section=outputs">outputs.csv</a>
     </div>
+  </section>
   </div>
-</div>
+</main>
 
 <% if (options.includeQualification && report.qualification) { %>
   <script nonce="<%= cspNonce %>" src="/vendor/echarts/dist/echarts.min.js"></script>
@@ -360,4 +360,4 @@
     });
   </script>
 <% } %>
-<%- include('partials/foot') %>
+<%- include('partials/foot', { uiKit: true }) %>
