@@ -1037,6 +1037,31 @@ function initDb(db: Db) {
   }
 
   const processNow = new Date().toISOString();
+  const findOrCreateDefaultProcess = (processTypeId: number, name: string, routeCode: string): number => {
+    const existing = db.prepare(
+      `SELECT id
+       FROM processes
+       WHERE process_type_id = ? AND (name = ? OR route_code = ?)
+       ORDER BY CASE WHEN name = ? THEN 0 ELSE 1 END, id
+       LIMIT 1`
+    ).get(processTypeId, name, routeCode, name) as { id: number } | undefined;
+    if (existing) return existing.id;
+
+    // A route can have been assigned to another legacy process type.  Keep the
+    // seed idempotent in that case without stealing the existing public route.
+    let availableRouteCode = routeCode;
+    let suffix = 2;
+    while (db.prepare("SELECT 1 FROM processes WHERE route_code = ? LIMIT 1").get(availableRouteCode)) {
+      availableRouteCode = `${routeCode}-default${suffix === 2 ? "" : `-${suffix}`}`;
+      suffix += 1;
+    }
+    return Number(
+      db.prepare(
+        `INSERT INTO processes (process_type_id, name, route_code, owner_user_id, status, meta_json, created_at)
+         VALUES (?, ?, ?, ?, 'active', NULL, ?)`
+      ).run(processTypeId, name, availableRouteCode, adminRow?.id ?? null, processNow).lastInsertRowid
+    );
+  };
   const processType = db
     .prepare("SELECT id FROM process_types WHERE code = ? LIMIT 1")
     .get("injection") as { id: number } | undefined;
@@ -1045,15 +1070,7 @@ function initDb(db: Db) {
       "INSERT INTO process_types (code, name, created_at) VALUES (?, ?, ?)"
     ).run("injection", "Injection", processNow).lastInsertRowid
   );
-  const defaultProcess = db
-    .prepare("SELECT id FROM processes WHERE process_type_id = ? AND name = ? LIMIT 1")
-    .get(injectionTypeId, "Injection Default Process") as { id: number } | undefined;
-  const defaultProcessId = defaultProcess?.id ?? Number(
-    db.prepare(
-      `INSERT INTO processes (process_type_id, name, route_code, owner_user_id, status, meta_json, created_at)
-       VALUES (?, ?, ?, ?, 'active', NULL, ?)`
-    ).run(injectionTypeId, "Injection Default Process", "injection", adminRow?.id ?? null, processNow).lastInsertRowid
-  );
+  const defaultProcessId = findOrCreateDefaultProcess(injectionTypeId, "Injection Default Process", "injection");
   db.prepare("UPDATE experiments SET process_id = ? WHERE process_id IS NULL").run(defaultProcessId);
 
   const compoundingType = db
@@ -1064,15 +1081,7 @@ function initDb(db: Db) {
       "INSERT INTO process_types (code, name, created_at) VALUES (?, ?, ?)"
     ).run("compounding", "Compounding (Twin-Screw Extrusion)", processNow).lastInsertRowid
   );
-  const compoundingProcess = db
-    .prepare("SELECT id FROM processes WHERE process_type_id = ? AND name = ? LIMIT 1")
-    .get(compoundingTypeId, "Compounding Default Process") as { id: number } | undefined;
-  if (!compoundingProcess) {
-    db.prepare(
-      `INSERT INTO processes (process_type_id, name, route_code, owner_user_id, status, meta_json, created_at)
-       VALUES (?, ?, ?, ?, 'active', NULL, ?)`
-    ).run(compoundingTypeId, "Compounding Default Process", "compounding", adminRow?.id ?? null, processNow);
-  }
+  findOrCreateDefaultProcess(compoundingTypeId, "Compounding Default Process", "compounding");
 
   const coatingType = db
     .prepare("SELECT id FROM process_types WHERE code = ? LIMIT 1")
@@ -1082,15 +1091,7 @@ function initDb(db: Db) {
       "INSERT INTO process_types (code, name, created_at) VALUES (?, ?, ?)"
     ).run("coating", "Coating", processNow).lastInsertRowid
   );
-  const coatingProcess = db
-    .prepare("SELECT id FROM processes WHERE process_type_id = ? AND name = ? LIMIT 1")
-    .get(coatingTypeId, "Coating Default Process") as { id: number } | undefined;
-  if (!coatingProcess) {
-    db.prepare(
-      `INSERT INTO processes (process_type_id, name, route_code, owner_user_id, status, meta_json, created_at)
-       VALUES (?, ?, ?, ?, 'active', NULL, ?)`
-    ).run(coatingTypeId, "Coating Default Process", "coating", adminRow?.id ?? null, processNow);
-  }
+  findOrCreateDefaultProcess(coatingTypeId, "Coating Default Process", "coating");
 
   const extrusionType = db
     .prepare("SELECT id FROM process_types WHERE code = ? LIMIT 1")
@@ -1100,15 +1101,7 @@ function initDb(db: Db) {
       "INSERT INTO process_types (code, name, created_at) VALUES (?, ?, ?)"
     ).run("extrusion_v1", "Extrusion v1", processNow).lastInsertRowid
   );
-  const extrusionProcess = db
-    .prepare("SELECT id FROM processes WHERE process_type_id = ? AND name = ? LIMIT 1")
-    .get(extrusionTypeId, "Extrusion v1 Default Process") as { id: number } | undefined;
-  if (!extrusionProcess) {
-    db.prepare(
-      `INSERT INTO processes (process_type_id, name, route_code, owner_user_id, status, meta_json, created_at)
-       VALUES (?, ?, ?, ?, 'active', NULL, ?)`
-    ).run(extrusionTypeId, "Extrusion v1 Default Process", "extrusion-v1", adminRow?.id ?? null, processNow);
-  }
+  findOrCreateDefaultProcess(extrusionTypeId, "Extrusion v1 Default Process", "extrusion-v1");
 
   if (!hasColumn(db, "analysis_fields", "is_standard")) {
     db.exec("ALTER TABLE analysis_fields ADD COLUMN is_standard INTEGER NOT NULL DEFAULT 0");
