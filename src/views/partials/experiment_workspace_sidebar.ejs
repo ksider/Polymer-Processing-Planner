@@ -31,5 +31,53 @@
     try { setCollapsed(window.localStorage.getItem(key) === 'true'); } catch (_) { setCollapsed(false); }
     hide.addEventListener('click', () => setCollapsed(true));
     show.addEventListener('click', () => setCollapsed(false));
+
+    const tree = sidebar.querySelector('[data-workspace-tree]');
+    if (!tree) return;
+    const nodes = Array.from(tree.querySelectorAll('details[data-workspace-tree-node]'));
+    const treeKey = `im-planner:workspace-tree:${tree.dataset.workspaceTreeId}`;
+    const saveTreeState = () => {
+      try {
+        const openNodes = nodes
+          .filter((node) => node.open)
+          .map((node) => node.dataset.workspaceTreeNode);
+        window.localStorage.setItem(treeKey, JSON.stringify(openNodes));
+      } catch (_) { /* storage can be unavailable */ }
+    };
+    try {
+      const saved = window.localStorage.getItem(treeKey);
+      if (saved !== null) {
+        const openNodes = new Set(JSON.parse(saved));
+        nodes.forEach((node) => { node.open = openNodes.has(node.dataset.workspaceTreeNode); });
+      }
+    } catch (_) { /* keep the server-side defaults */ }
+
+    const isCurrentLocation = (link) => {
+      const target = new URL(link.href, window.location.origin);
+      return target.pathname === window.location.pathname
+        && target.search === window.location.search
+        && (!target.hash || target.hash === window.location.hash);
+    };
+    const currentLinks = Array.from(tree.querySelectorAll('[data-workspace-location]'))
+      .filter(isCurrentLocation);
+    currentLinks.forEach((link) => {
+      link.setAttribute('aria-current', 'page');
+      link.closest('summary')?.setAttribute('data-workspace-current', '');
+      let parent = link.closest('details');
+      while (parent && tree.contains(parent)) {
+        parent.open = true;
+        parent = parent.parentElement?.closest('details') || null;
+      }
+    });
+
+    nodes.forEach((node) => node.addEventListener('toggle', saveTreeState));
+    Array.from(tree.querySelectorAll('[data-workspace-stage-link]')).forEach((link) => {
+      link.addEventListener('click', () => {
+        const stageNode = link.closest('details[data-workspace-tree-node]');
+        if (stageNode) stageNode.open = true;
+        saveTreeState();
+      });
+    });
+    saveTreeState();
   })();
 </script>

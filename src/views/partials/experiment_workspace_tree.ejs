@@ -1,18 +1,18 @@
-<% const workspaceExperiment = workspace.experiment; const workspacePath = experimentPath(workspaceExperiment); const folder = 'flex min-w-0 flex-nowrap cursor-pointer list-none items-center gap-1.5 overflow-hidden rounded-md px-1.5 py-1 text-xs leading-4 font-medium text-gray-700 hover:bg-gray-100 [&::-webkit-details-marker]:hidden'; const leaf = 'flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden rounded-md px-1.5 py-1 text-xs leading-4 text-gray-600 no-underline hover:bg-gray-100 hover:text-gray-900'; const nested = 'ml-2 mt-0.5 space-y-0.5 border-l border-gray-200 pl-2'; %>
-<nav class="min-w-0" aria-label="Project explorer">
+<% const workspaceExperiment = workspace.experiment; const workspacePath = experimentPath(workspaceExperiment); const folder = 'flex min-w-0 flex-nowrap cursor-pointer list-none items-center gap-1.5 overflow-hidden rounded-md px-1.5 py-1 text-xs leading-4 font-medium text-gray-700 hover:bg-gray-100 [&::-webkit-details-marker]:hidden [&[data-workspace-current]]:bg-gray-100 [&[data-workspace-current]]:text-gray-900'; const leaf = 'flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden rounded-md px-1.5 py-1 text-xs leading-4 text-gray-600 no-underline hover:bg-gray-100 hover:text-gray-900 [&[aria-current=page]]:bg-gray-100 [&[aria-current=page]]:font-semibold [&[aria-current=page]]:text-gray-900'; const nested = 'ml-2 mt-0.5 space-y-0.5 border-l border-gray-200 pl-2'; %>
+<nav class="min-w-0" data-workspace-tree data-workspace-tree-id="<%= workspaceExperiment.id %>" aria-label="Project explorer">
   <ul class="space-y-0.5" role="tree">
     <li role="treeitem" aria-expanded="true">
-      <details open class="group">
+      <details open class="group" data-workspace-tree-node="project">
         <summary class="flex min-w-0 flex-nowrap cursor-pointer list-none items-center gap-1.5 overflow-hidden rounded-md bg-blue-50 px-1.5 py-1.5 text-xs leading-4 font-semibold text-blue-800 hover:bg-blue-100 [&::-webkit-details-marker]:hidden">
           <span class="material-symbols-rounded text-[18px] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span>
           <span class="material-symbols-rounded text-[19px]" aria-hidden="true">folder_open</span>
           <span class="truncate"><%= workspaceExperiment.name %></span>
         </summary>
         <ul class="<%= nested %>" role="group">
-          <li role="treeitem"><a class="<%= leaf %> font-medium text-blue-700" href="<%= workspacePath %>"><span class="material-symbols-rounded text-[18px]" aria-hidden="true">space_dashboard</span>Overview</a></li>
+          <li role="treeitem"><a class="<%= leaf %> font-medium text-blue-700" data-workspace-location href="<%= workspacePath %>"><span class="material-symbols-rounded text-[18px]" aria-hidden="true">space_dashboard</span>Overview</a></li>
 
           <li role="treeitem" aria-expanded="true">
-            <details open class="group">
+            <details open class="group" data-workspace-tree-node="setup">
               <summary class="<%= folder %>"><span class="material-symbols-rounded text-[18px] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span><span class="material-symbols-rounded text-[18px]" aria-hidden="true">folder</span>Setup</summary>
               <ul class="<%= nested %>" role="group">
                 <% if (workspace.selectedMachine) { %>
@@ -20,7 +20,7 @@
                 <% } %>
                 <% (workspace.recipeLinks || []).forEach((recipe) => { %>
                   <li role="treeitem" aria-expanded="false">
-                    <details class="group">
+                    <details class="group" data-workspace-tree-node="recipe-<%= recipe.id %>">
                       <summary class="<%= folder %>"><span class="material-symbols-rounded text-[18px] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span><span class="material-symbols-rounded text-[18px] text-gray-400" aria-hidden="true">science</span><span class="truncate"><%= recipe.name %></span></summary>
                       <ul class="<%= nested %>" role="group">
                         <% if (recipe.components.length) { %>
@@ -36,17 +36,16 @@
           </li>
 
           <li role="treeitem" aria-expanded="true">
-            <details open class="group">
+            <details open class="group" data-workspace-tree-node="qualification">
               <summary class="<%= folder %>"><span class="material-symbols-rounded text-[18px] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span><span class="material-symbols-rounded text-[18px]" aria-hidden="true">fact_check</span>Qualification</summary>
               <ul class="<%= nested %>" role="group">
                 <% (workspace.coreQualificationCards || workspace.qualificationCards || []).forEach((stage) => { %>
                   <li role="treeitem" aria-expanded="false">
-                    <details class="group">
-                      <summary class="<%= folder %>"><span class="material-symbols-rounded text-[18px] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span><span class="size-2 shrink-0 rounded-full <%= stage.status === 'blocked' ? 'bg-red-500' : stage.status === 'done' ? 'bg-emerald-500' : stage.status === 'in_progress' ? 'bg-blue-500' : 'bg-gray-300' %>"></span><span class="truncate">Step <%= stage.stepNumber %> · <%= stage.name %></span></summary>
+                    <details class="group" data-workspace-tree-node="qualification-<%= stage.stepNumber %>">
+                      <summary class="<%= folder %>"><span class="material-symbols-rounded text-[18px] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span><span class="size-2 shrink-0 rounded-full <%= stage.status === 'blocked' ? 'bg-red-500' : stage.status === 'done' ? 'bg-emerald-500' : stage.status === 'in_progress' ? 'bg-blue-500' : 'bg-gray-300' %>"></span><a class="min-w-0 truncate text-inherit no-underline hover:underline [&[aria-current=page]]:font-semibold" data-workspace-stage-link data-workspace-location href="<%= workspacePath %>/qualification/<%= stage.stepNumber %>">Step <%= stage.stepNumber %> · <%= stage.name %></a></summary>
                       <ul class="<%= nested %>" role="group">
-                        <li role="treeitem"><a class="<%= leaf %>" href="<%= workspacePath %>/qualification/<%= stage.stepNumber %>"><span class="material-symbols-rounded text-[17px] text-gray-400" aria-hidden="true">description</span>Stage workspace</a></li>
                         <li role="treeitem" aria-expanded="false">
-                          <details class="group">
+                          <details class="group" data-workspace-tree-node="qualification-<%= stage.stepNumber %>-fields">
                             <summary class="<%= folder %>"><span class="material-symbols-rounded text-[17px] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span><span class="material-symbols-rounded text-[17px] text-gray-400" aria-hidden="true">tune</span>Fields (<%= stage.fields.length %>)</summary>
                             <ul class="<%= nested %>" role="group"><% if (stage.fields.length) { %><% stage.fields.forEach((field) => { %><li role="treeitem"><a class="<%= leaf %>" href="<%= workspacePath %>/qualification/<%= stage.stepNumber %>"><span class="material-symbols-rounded text-[16px] text-gray-400" aria-hidden="true">data_object</span><span class="truncate"><%= field.label %><%= field.unit ? ` · ${field.unit}` : '' %></span></a></li><% }); %><% } else { %><li class="px-2 py-1.5 text-xs text-gray-400">No fields.</li><% } %></ul>
                           </details>
@@ -58,11 +57,11 @@
                 <% }); %>
                 <% if ((workspace.conditionalQualificationCards || []).length) { %>
                   <li role="treeitem" aria-expanded="true">
-                    <details open class="group">
+                    <details open class="group" data-workspace-tree-node="conditional">
                       <summary class="<%= folder %> text-violet-800"><span class="material-symbols-rounded text-[17px] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span><span class="material-symbols-rounded text-[17px]" aria-hidden="true">account_tree</span><span class="truncate">Conditional &amp; scale-up</span></summary>
                       <ul class="<%= nested %>" role="group">
                         <% workspace.conditionalQualificationCards.forEach((stage) => { %>
-                          <li role="treeitem"><a class="<%= leaf %> text-violet-800 hover:text-violet-950" href="<%= workspacePath %>/qualification/<%= stage.stepNumber %>"><span class="size-2 shrink-0 rounded-full <%= stage.status === 'blocked' ? 'bg-red-500' : stage.status === 'done' ? 'bg-emerald-500' : stage.status === 'in_progress' ? 'bg-blue-500' : 'bg-violet-300' %>"></span><span class="truncate">Step <%= stage.stepNumber %> · <%= stage.name %></span></a></li>
+                          <li role="treeitem"><a class="<%= leaf %> text-violet-800 hover:text-violet-950" data-workspace-stage-link data-workspace-location href="<%= workspacePath %>/qualification/<%= stage.stepNumber %>"><span class="size-2 shrink-0 rounded-full <%= stage.status === 'blocked' ? 'bg-red-500' : stage.status === 'done' ? 'bg-emerald-500' : stage.status === 'in_progress' ? 'bg-blue-500' : 'bg-violet-300' %>"></span><span class="truncate">Step <%= stage.stepNumber %> · <%= stage.name %></span></a></li>
                         <% }); %>
                       </ul>
                     </details>
@@ -73,18 +72,18 @@
           </li>
 
           <li role="treeitem" aria-expanded="true">
-            <details open class="group">
+            <details open class="group" data-workspace-tree-node="optimization">
               <summary class="<%= folder %>"><span class="material-symbols-rounded text-[18px] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span><span class="material-symbols-rounded text-[18px]" aria-hidden="true">query_stats</span>Detailed optimization</summary>
               <ul class="<%= nested %>" role="group">
                 <% if ((workspace.doeStudies || []).length) { %>
                   <% workspace.doeStudies.forEach((doe) => { %>
                     <li role="treeitem" aria-expanded="false">
-                      <details class="group">
+                      <details class="group" data-workspace-tree-node="doe-<%= doe.id %>">
                         <summary class="<%= folder %>"><span class="material-symbols-rounded text-[18px] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span><span class="material-symbols-rounded text-[18px] text-gray-400" aria-hidden="true">tune</span><span class="truncate"><%= doe.name %></span></summary>
                         <ul class="<%= nested %>" role="group">
                           <li role="treeitem"><a class="<%= leaf %>" href="<%= workspacePath %>/doe/<%= doe.id %>?tab=design"><span class="material-symbols-rounded text-[17px] text-gray-400" aria-hidden="true">schema</span>Design and factors</a></li>
                           <li role="treeitem" aria-expanded="false">
-                            <details class="group">
+                          <details class="group" data-workspace-tree-node="doe-<%= doe.id %>-responses">
                               <summary class="<%= folder %>"><span class="material-symbols-rounded text-[17px] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span><span class="material-symbols-rounded text-[17px] text-gray-400" aria-hidden="true">dataset</span>Measured responses (<%= doe.analysisFields.length %>)</summary>
                               <ul class="<%= nested %>" role="group"><% if (doe.analysisFields.length) { %><% doe.analysisFields.forEach((field) => { %><li role="treeitem"><a class="<%= leaf %>" href="<%= workspacePath %>/doe/<%= doe.id %>?tab=design&amp;manage_fields=1"><span class="material-symbols-rounded text-[16px] text-gray-400" aria-hidden="true">data_object</span><span class="truncate"><%= field.label %><%= field.unit ? ` · ${field.unit}` : '' %></span></a></li><% }); %><% } else { %><li class="px-2 py-1.5 text-xs text-gray-400">No responses configured.</li><% } %></ul>
                             </details>
@@ -99,10 +98,10 @@
             </details>
           </li>
 
-          <li role="treeitem" aria-expanded="true"><details open class="group"><summary class="<%= folder %>"><span class="material-symbols-rounded text-[18px] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span><span class="material-symbols-rounded text-[18px]" aria-hidden="true">description</span>Reports</summary><ul class="<%= nested %>" role="group"><% if (workspace.reports.length) { %><% workspace.reports.forEach((report) => { %><li role="treeitem"><a class="<%= leaf %>" href="/reports/<%= report.id %>"><span class="material-symbols-rounded text-[17px] text-gray-400" aria-hidden="true">article</span><span class="truncate"><%= report.name %></span></a></li><% }); %><% } else { %><li class="px-2 py-1.5 text-xs text-gray-400">No reports.</li><% } %></ul></details></li>
+          <li role="treeitem" aria-expanded="true"><details open class="group" data-workspace-tree-node="reports"><summary class="<%= folder %>"><span class="material-symbols-rounded text-[18px] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span><span class="material-symbols-rounded text-[18px]" aria-hidden="true">description</span>Reports</summary><ul class="<%= nested %>" role="group"><% if (workspace.reports.length) { %><% workspace.reports.forEach((report) => { %><li role="treeitem"><a class="<%= leaf %>" data-workspace-location href="/reports/<%= report.id %>"><span class="material-symbols-rounded text-[17px] text-gray-400" aria-hidden="true">article</span><span class="truncate"><%= report.name %></span></a></li><% }); %><% } else { %><li class="px-2 py-1.5 text-xs text-gray-400">No reports.</li><% } %></ul></details></li>
 
-          <li role="treeitem" aria-expanded="true"><details open class="group"><summary class="<%= folder %>"><span class="material-symbols-rounded text-[18px] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span><span class="material-symbols-rounded text-[18px]" aria-hidden="true">assignment</span>Tasks</summary><ul class="<%= nested %>" role="group"><% if (workspace.tasks.length) { %><% workspace.tasks.forEach((task) => { %><li role="treeitem"><a class="<%= leaf %>" href="<%= workspacePath %>#tasks"><span class="size-2 shrink-0 rounded-full <%= task.status === 'done' ? 'bg-emerald-500' : task.status === 'failed' ? 'bg-red-500' : task.status === 'in_progress' ? 'bg-blue-500' : 'bg-gray-300' %>"></span><span class="truncate"><%= task.title %></span></a></li><% }); %><% } else { %><li class="px-2 py-1.5 text-xs text-gray-400">No tasks.</li><% } %></ul></details></li>
-          <li role="treeitem"><a class="<%= leaf %>" href="<%= workspacePath %>/journal"><span class="material-symbols-rounded text-[18px] text-gray-400" aria-hidden="true">menu_book</span>Lab journal</a></li>
+          <li role="treeitem" aria-expanded="true"><details open class="group" data-workspace-tree-node="tasks"><summary class="<%= folder %>"><span class="material-symbols-rounded text-[18px] transition-transform group-open:rotate-90" aria-hidden="true">chevron_right</span><span class="material-symbols-rounded text-[18px]" aria-hidden="true">assignment</span>Tasks</summary><ul class="<%= nested %>" role="group"><% if (workspace.tasks.length) { %><% workspace.tasks.forEach((task) => { %><li role="treeitem"><a class="<%= leaf %>" data-workspace-location href="<%= workspacePath %>#tasks"><span class="size-2 shrink-0 rounded-full <%= task.status === 'done' ? 'bg-emerald-500' : task.status === 'failed' ? 'bg-red-500' : task.status === 'in_progress' ? 'bg-blue-500' : 'bg-gray-300' %>"></span><span class="truncate"><%= task.title %></span></a></li><% }); %><% } else { %><li class="px-2 py-1.5 text-xs text-gray-400">No tasks.</li><% } %></ul></details></li>
+          <li role="treeitem"><a class="<%= leaf %>" data-workspace-location href="<%= workspacePath %>/journal"><span class="material-symbols-rounded text-[18px] text-gray-400" aria-hidden="true">menu_book</span>Lab journal</a></li>
         </ul>
       </details>
     </li>
