@@ -55,7 +55,11 @@ import {
 } from "../repos/reports_repo.js";
 import {
   listParamDefinitions,
+  listParamDefinitionsForProcess,
   listParamDefinitionsByKind,
+  listParamDefinitionsByKindForProcess,
+  listGlobalParamDefinitions,
+  getParamDefinition,
   listParamConfigs,
   deleteParamConfig,
   upsertParamConfig,
@@ -95,6 +99,11 @@ import {
   canAssignEntityResponsibility
 } from "../services/entity_assignment_service.js";
 import { buildExperimentWorkspace } from "../services/experiment_workspace_service.js";
+import {
+  extrusionDoePresets,
+  getExtrusionDoePreset,
+  getExtrusionPresetPrerequisiteWarnings
+} from "../services/extrusion_doe_presets.js";
 
 // Local helper for role checks in this router.
 function hasRole(req: express.Request, roles: string[]) {
@@ -178,38 +187,10 @@ function getQualificationCardSummaryItems(
     }));
 }
 
-type QualificationBriefItem = {
-  stepNumber: number;
-  stepName: string;
-  outputCode: string;
-  label: string;
-  unit: string | null;
-  value: number;
-  description: string;
-};
-
-function getQualificationBriefItems(db: Db, experimentId: number): QualificationBriefItem[] {
-  return listQualSteps(db, experimentId)
-    .filter((step) => step.is_active === 1)
-    .flatMap((step) => {
-      const definitionByCode = new Map(
-        getQualificationOutputDefinitionsForExperiment(db, experimentId, step.step_number)
-          .map((definition) => [definition.code, definition])
-      );
-      return listQualStepOutputs(db, step.id).flatMap((output) => {
-        const definition = definitionByCode.get(output.output_code);
-        if (!definition || output.value_real == null || !Number.isFinite(output.value_real)) return [];
-        return [{
-          stepNumber: step.step_number,
-          stepName: step.title,
-          outputCode: output.output_code,
-          label: definition.label,
-          unit: definition.unit,
-          value: output.value_real,
-          description: definition.description
-        }];
-      });
-    });
+function getProcessTypeCodeForExperiment(db: Db, experimentId: number) {
+  const experiment = getExperiment(db, experimentId);
+  if (!experiment?.process_id) return "injection";
+  return String(getProcessById(db, experiment.process_id)?.process_type_code || "injection").toLowerCase();
 }
 
 export function createExperimentsRouter(db: Db) {
@@ -468,6 +449,7 @@ export function createExperimentsRouter(db: Db) {
       assignmentByStep,
       assignmentByDoe,
       ownerName,
+      extrusionDoePresets: processTypeCode === "extrusion_v1" ? extrusionDoePresets : [],
       workspace
     });
   });
@@ -497,30 +479,48 @@ export function createExperimentsRouter(db: Db) {
   router.post("/experiments/:id/doe", (req, res) => {
     const experimentId = Number(req.params.id);
     if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
+    const presetCode = String(req.body.preset_code || "").trim();
+    const preset = presetCode ? getExtrusionDoePreset(presetCode) : undefined;
+    const processTypeCode = getProcessTypeCodeForExperiment(db, experimentId);
+    if (presetCode && (!preset || processTypeCode !== "extrusion_v1")) {
+      return res.status(400).send("DOE preset is not available for this process");
+    }
     const doeName = String(req.body.name || "").trim();
     const existing = listDoeStudies(db, experimentId);
-    const name = doeName || `DOE ${existing.length + 1}`;
-    const designType = String(req.body.design_type || "SIM");
+    const name = doeName || preset?.title || `DOE ${existing.length + 1}`;
+    const designType = preset?.designType || String(req.body.design_type || "SIM");
     const seed = Number(req.body.seed || 42);
-    const centerPoints = Number(req.body.center_points || 3);
-    const maxRuns = Number(req.body.max_runs || 200);
+    const centerPoints = preset?.centerPoints ?? Number(req.body.center_points || 3);
+    const maxRuns = preset?.maxRuns ?? Number(req.body.max_runs || 200);
     const replicateCount = Number(req.body.replicate_count || 1);
     const recipeAsBlock = req.body.recipe_as_block ? 1 : 0;
-    const doeId = createDoeWithDefaults(db, {
-      experimentId,
-      name,
-      design_type: designType,
-      seed,
-      center_points: centerPoints,
-      max_runs: maxRuns,
-      replicate_count: replicateCount,
-      recipe_as_block: recipeAsBlock
-    });
-    // Snapshot only confirmed, active qualification outputs. The DOE engine
-    // remains generic; this is provenance for any constraints imported below.
+    let doeId: number;
+    try {
+      doeId = createDoeWithDefaults(db, {
+        experimentId,
+        name,
+        design_type: designType,
+        seed,
+        center_points: centerPoints,
+        max_runs: maxRuns,
+        replicate_count: replicateCount,
+        recipe_as_block: recipeAsBlock,
+        preset_code: preset?.code ?? null
+      });
+    } catch (error) {
+      return res.status(400).send(error instanceof Error ? error.message : "Unable to create DOE");
+    }
     upsertDesignMetadata(db, experimentId, doeId, JSON.stringify({
-      qualification_brief: getQualificationBriefItems(db, experimentId),
-      qualification_brief_created_at: new Date().toISOString()
+      ...(preset ? {
+        extrusion_preset: {
+          code: preset.code,
+          title: preset.title,
+          safety_gates: preset.safetyGates,
+          prerequisite_warnings: getExtrusionPresetPrerequisiteWarnings(db, experimentId, preset),
+          follow_up: preset.followUp ?? null,
+          created_at: new Date().toISOString()
+        }
+      } : {})
     }));
     res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=design`);
   });
@@ -663,6 +663,7 @@ export function createExperimentsRouter(db: Db) {
         unit: field.unit,
         group_label: field.group_label,
         allowed_values_json: field.allowed_values_json,
+        param_def_id: field.param_def_id ?? null,
         is_standard: field.is_standard,
         is_active: field.is_active
       });
@@ -810,16 +811,68 @@ export function createExperimentsRouter(db: Db) {
     const recipes = listRecipes(db);
     const linkedRecipes = getExperimentRecipes(db, experimentId);
     const linkedRecipeOptions = recipes.filter((recipe) => linkedRecipes.includes(recipe.id));
-    const params = listParamDefinitions(db, experimentId);
-    const inputParams = listParamDefinitionsByKind(db, experimentId, "INPUT");
+    const processTypeCode = getProcessTypeCodeForExperiment(db, experimentId);
+    const params = listParamDefinitionsForProcess(db, experimentId, processTypeCode);
+    const rawCatalogueParams = listGlobalParamDefinitions(db);
+    const catalogueTags = rawCatalogueParams.length
+      ? db.prepare(
+        `SELECT param_def_id, tag
+         FROM param_tags
+         WHERE param_def_id IN (${rawCatalogueParams.map(() => "?").join(",")})
+         ORDER BY tag`
+      ).all(...rawCatalogueParams.map((param) => param.id)) as Array<{ param_def_id: number; tag: string }>
+      : [];
+    const tagsByParamId = new Map<number, string[]>();
+    for (const row of catalogueTags) {
+      tagsByParamId.set(row.param_def_id, [...(tagsByParamId.get(row.param_def_id) ?? []), row.tag]);
+    }
+    const catalogueParams = rawCatalogueParams.map((param) => ({
+      ...param,
+      tags: tagsByParamId.get(param.id) ?? []
+    }));
+    const processParamIds = params.filter((param) => param.scope === "GLOBAL").map((param) => param.id);
+    const extrusionCatalogueTags = processTypeCode === "extrusion_v1"
+      ? [
+        ["rheology", "Rheology"],
+        ["thermal", "Thermal"],
+        ["feeder", "Feeding"],
+        ["operating-window", "Operating window"],
+        ["energy", "Energy"],
+        ["rtd", "RTD"],
+        ["side-feeding", "Side feeding"],
+        ["liquid-injection", "Liquid injection"],
+        ["devolatilization", "Devolatilisation"],
+        ["reactive-extrusion", "Reactive extrusion"],
+        ["scale-up", "Scale-up"]
+      ].filter(([tag]) => catalogueParams.some((param) => param.tags.includes(tag)))
+      : [];
+    const inputParams = listParamDefinitionsByKindForProcess(db, experimentId, "INPUT", processTypeCode).map((param) => ({
+      ...param,
+      tags: tagsByParamId.get(param.id) ?? []
+    }));
     const configs = listParamConfigs(db, experimentId, doeId);
     const designMeta = parseDesignMetadata(getDesignMetadata(db, experimentId, doeId));
-    const qualificationBrief = Array.isArray(designMeta.qualification_brief)
-      ? designMeta.qualification_brief as QualificationBriefItem[]
-      : getQualificationBriefItems(db, experimentId);
-    const qualificationImports = Array.isArray(designMeta.qualification_imports)
-      ? designMeta.qualification_imports as Array<{ stepNumber: number; outputCode: string; paramDefId: number }>
-      : [];
+    const storedExtrusionPreset =
+      typeof designMeta.extrusion_preset === "object" && designMeta.extrusion_preset !== null
+        ? designMeta.extrusion_preset as {
+          code?: string;
+          title?: string;
+          safety_gates?: string[];
+          prerequisite_warnings?: string[];
+          follow_up?: string;
+        }
+        : null;
+    const currentExtrusionPreset = storedExtrusionPreset?.code
+      ? getExtrusionDoePreset(storedExtrusionPreset.code)
+      : null;
+    const extrusionPreset = storedExtrusionPreset
+      ? {
+        ...storedExtrusionPreset,
+        prerequisite_warnings: currentExtrusionPreset
+          ? getExtrusionPresetPrerequisiteWarnings(db, experimentId, currentExtrusionPreset)
+          : storedExtrusionPreset.prerequisite_warnings
+      }
+      : null;
     const nonRandomizedParamId =
       typeof designMeta.non_randomized_param_id === "number"
         ? designMeta.non_randomized_param_id
@@ -1005,6 +1058,10 @@ export function createExperimentsRouter(db: Db) {
       linkedRecipes,
       linkedRecipeOptions,
       params,
+      processTypeCode,
+      catalogueParams,
+      processParamIds,
+      extrusionCatalogueTags,
       inputParams,
       activeInputParams,
       activeAnalysisFields,
@@ -1021,8 +1078,7 @@ export function createExperimentsRouter(db: Db) {
       runPreview,
       errorMessage,
       nonRandomizedParamId,
-      qualificationBrief,
-      qualificationImports,
+      extrusionPreset,
       qualSummaries,
       canAssignEntities,
       assignableUsers,
@@ -1036,10 +1092,12 @@ export function createExperimentsRouter(db: Db) {
     const experimentId = Number(req.params.id);
     if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
     const doeId = Number(req.params.doeId);
+    const doe = getDoeStudy(db, doeId);
+    if (!doe || doe.experiment_id !== experimentId) return res.status(404).send("DOE not found");
     const code = String(req.body.code || "").trim();
     if (!code) return res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=design`);
 
-    createCustomParam(db, experimentId, {
+    const paramId = createCustomParam(db, experimentId, {
       code,
       label: req.body.label || code,
       unit: req.body.unit || null,
@@ -1050,59 +1108,23 @@ export function createExperimentsRouter(db: Db) {
         ? JSON.stringify(String(req.body.allowed_values).split(",").map((tag: string) => tag.trim()).filter(Boolean))
         : null
     });
-    res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=design`);
-  });
-
-  router.post("/experiments/:id/doe/:doeId/qualification-brief/fixed", (req, res) => {
-    const experimentId = Number(req.params.id);
-    const doeId = Number(req.params.doeId);
-    if (!canManageExperimentById(req, experimentId)) return res.status(403).send("Forbidden");
-    const doe = getDoeStudy(db, doeId);
-    if (!doe || doe.experiment_id !== experimentId) return res.status(404).send("DOE not found");
-    const stepNumber = Number(req.body.step_number);
-    const outputCode = String(req.body.output_code || "").trim();
-    const designMeta = parseDesignMetadata(getDesignMetadata(db, experimentId, doeId));
-    const brief = (Array.isArray(designMeta.qualification_brief)
-      ? designMeta.qualification_brief
-      : getQualificationBriefItems(db, experimentId)) as QualificationBriefItem[];
-    const item = brief.find((entry) => entry.stepNumber === stepNumber && entry.outputCode === outputCode);
-    if (!item || !Number.isFinite(item.value)) {
-      return res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=design&error=${encodeURIComponent("Confirmed qualification output not found")}`);
-    }
-    const code = `qualification_step_${item.stepNumber}_${item.outputCode}`.replace(/[^a-z0-9_]/gi, "_").toLowerCase();
-    let param = listParamDefinitionsByKind(db, experimentId, "INPUT").find((candidate) => candidate.code === code);
-    if (!param) {
-      createCustomParam(db, experimentId, {
-        code,
-        label: `${item.label} (Step ${item.stepNumber})`,
-        unit: item.unit,
-        field_kind: "INPUT",
-        field_type: "number",
-        group_label: "Qualification conditions",
-        allowed_values_json: null
+    const param = getParamDefinition(db, paramId);
+    if (param?.field_kind === "OUTPUT" && !findExperimentAnalysisFieldByCode(db, doeId, param.code)) {
+      insertAnalysisField(db, {
+        scope_type: "DOE",
+        scope_id: doeId,
+        code: param.code,
+        label: param.label,
+        field_type: param.field_type,
+        unit: param.unit,
+        group_label: param.group_label,
+        allowed_values_json: param.allowed_values_json,
+        param_def_id: param.id,
+        is_standard: 0,
+        is_active: 1
       });
-      param = listParamDefinitionsByKind(db, experimentId, "INPUT").find((candidate) => candidate.code === code);
     }
-    if (!param) return res.status(500).send("Unable to create qualification condition");
-    upsertParamConfig(db, {
-      experiment_id: experimentId,
-      doe_id: doeId,
-      param_def_id: param.id,
-      active: 1,
-      mode: "FIXED",
-      fixed_value_real: item.value,
-      range_min_real: null,
-      range_max_real: null,
-      list_json: null,
-      level_count: null
-    });
-    const imports = Array.isArray(designMeta.qualification_imports) ? designMeta.qualification_imports : [];
-    const nextImports = [
-      ...imports.filter((entry: any) => !(Number(entry?.stepNumber) === item.stepNumber && String(entry?.outputCode) === item.outputCode)),
-      { stepNumber: item.stepNumber, outputCode: item.outputCode, paramDefId: param.id, mode: "FIXED", value: item.value }
-    ];
-    upsertDesignMetadata(db, experimentId, doeId, JSON.stringify({ ...designMeta, qualification_brief: brief, qualification_imports: nextImports }));
-    return res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=design`);
+    res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=design`);
   });
 
   router.post("/experiments/:id/archive", (req, res) => {
@@ -1189,7 +1211,9 @@ export function createExperimentsRouter(db: Db) {
     const doe = getDoeStudy(db, doeId);
     if (!doe || doe.experiment_id !== experimentId) return res.status(404).send("DOE not found");
     const configs = listParamConfigs(db, experimentId, doeId);
-    const inputParams = listParamDefinitionsByKind(db, experimentId, "INPUT");
+    const inputParams = listParamDefinitionsByKindForProcess(
+      db, experimentId, "INPUT", getProcessTypeCodeForExperiment(db, experimentId)
+    );
     const configMap = new Map(configs.map((config) => [config.param_def_id, config]));
     const labelMap = new Map(inputParams.map((param) => [param.id, param.label]));
     const updates: Array<{
@@ -1371,7 +1395,7 @@ export function createExperimentsRouter(db: Db) {
     if (values.length) return res.json({ values });
 
     const runs = loadRuns(db, doeId);
-    const params = listParamDefinitions(db, experimentId);
+    const params = listParamDefinitionsForProcess(db, experimentId, getProcessTypeCodeForExperiment(db, experimentId));
     const fields = listExperimentAnalysisFields(db, doeId);
     const field = fields.find((item) => item.id === fieldId);
     if (!field) return res.json({ values: [] });
@@ -1528,6 +1552,15 @@ export function createExperimentsRouter(db: Db) {
       unit: unit || null,
       group_label: groupLabel,
       allowed_values_json: allowedValuesJson,
+      param_def_id: createCustomParam(db, experimentId, {
+        code,
+        label,
+        unit: unit || null,
+        field_kind: "OUTPUT",
+        field_type: fieldType as "number" | "text" | "tag" | "boolean",
+        group_label: groupLabel,
+        allowed_values_json: allowedValuesJson
+      }),
       is_standard: 0,
       is_active: 1
     });
@@ -1562,7 +1595,9 @@ export function createExperimentsRouter(db: Db) {
     if (!experiment) return res.status(404).send("Experiment not found");
     const doe = getDoeStudy(db, doeId);
     if (!doe || doe.experiment_id !== experimentId) return res.status(404).send("DOE not found");
-    const inputParams = listParamDefinitionsByKind(db, experimentId, "INPUT");
+    const inputParams = listParamDefinitionsByKindForProcess(
+      db, experimentId, "INPUT", getProcessTypeCodeForExperiment(db, experimentId)
+    );
     const configs = listParamConfigs(db, experimentId, doeId);
     const recipeIds = getExperimentRecipes(db, experimentId);
     const runPreview = buildRunPreview(doe, inputParams, configs, recipeIds);
@@ -1583,7 +1618,7 @@ export function createExperimentsRouter(db: Db) {
     const doeId = Number(req.params.doeId);
     const type = String(req.params.type);
     const runs = loadRuns(db, doeId);
-    const params = listParamDefinitions(db, experimentId);
+    const params = listParamDefinitionsForProcess(db, experimentId, getProcessTypeCodeForExperiment(db, experimentId));
     const activeAnalysisFields = listActiveAnalysisFields(db, doeId);
     const analysisValues = listAnalysisRunValuesByRunIds(db, runs.map((run) => run.id));
     const analysisValueMap = buildAnalysisValueMapWithFallback(
@@ -1761,6 +1796,13 @@ function buildRunPreview(
     formula = `BBD: 4*C(k,2)+center = ${baseRuns} (k=${k})`;
     if (k < 3) {
       warning = `BBD needs at least 3 factors with 3 levels. Currently: ${k}. Set Levels=3 or use LIST with 3 values.`;
+    }
+  } else if (experiment.design_type === "CCD") {
+    k = threeLevelFlags.filter(Boolean).length;
+    baseRuns = k >= 2 ? Math.pow(2, k) + 2 * k + (experiment.center_points || 0) : 0;
+    formula = `CCD (face-centred): 2^k + 2k + center = ${baseRuns} (k=${k})`;
+    if (k < 2) {
+      warning = `CCD needs at least 2 factors with 3 levels. Currently: ${k}. Set three levels or use LIST with 3 values.`;
     }
   } else {
     const k = levelCounts.length;

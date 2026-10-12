@@ -11,6 +11,9 @@ import {
 import { createDoeStudy, getDoeStudy } from "../repos/doe_repo.js";
 import {
   createParamDefinition,
+  attachParamToProcess,
+  findGlobalParamByCode,
+  listParamDefinitionsByKindForProcess,
   listParamDefinitionsByKind,
   listParamConfigs,
   upsertParamConfig
@@ -19,8 +22,9 @@ import { insertAnalysisField } from "../repos/analysis_repo.js";
 import { deleteRunsForExperiment, insertRuns } from "../repos/runs_repo.js";
 import { getDefaultProcessId, getProcessById } from "../repos/processes_repo.js";
 import type { ParamDefinition, ParamConfig } from "../repos/params_repo.js";
-import { buildBbdDesign, buildFfaDesign, buildScreenDesign, buildSimDesign } from "../domain/designs.js";
+import { buildBbdDesign, buildCcdDesign, buildFfaDesign, buildScreenDesign, buildSimDesign } from "../domain/designs.js";
 import { stableHash } from "../lib/hash.js";
+import { ensureExtrusionDoePresetCatalogue, getExtrusionDoePreset } from "./extrusion_doe_presets.js";
 
 export type ExperimentCreateInput = {
   name: string;
@@ -249,8 +253,15 @@ export function createDoeWithDefaults(
     max_runs: number;
     replicate_count: number;
     recipe_as_block: number;
+    preset_code?: string | null;
   }
 ): number {
+  const processTypeCode = getProcessTypeCodeForExperiment(db, input.experimentId);
+  const preset = input.preset_code ? getExtrusionDoePreset(input.preset_code) : undefined;
+  if (input.preset_code && (!preset || processTypeCode !== "extrusion_v1")) {
+    throw new Error("The selected DOE preset is not available for this process");
+  }
+  if (preset) ensureExtrusionDoePresetCatalogue(db);
   const doeId = createDoeStudy(db, {
     experiment_id: input.experimentId,
     name: input.name,
@@ -262,9 +273,17 @@ export function createDoeWithDefaults(
     recipe_as_block: input.recipe_as_block
   });
 
-  const inputParams = listParamDefinitionsByKind(db, input.experimentId, "INPUT");
-  const processTypeCode = getProcessTypeCodeForExperiment(db, input.experimentId);
-  const defaultFactors = getDefaultActiveFactors(input.design_type, processTypeCode);
+  const inputParams = listParamDefinitionsByKindForProcess(db, input.experimentId, "INPUT", processTypeCode);
+  const defaultFactors = preset
+    ? preset.factors.map((factor) => ({
+      code: factor.code,
+      mode: factor.mode,
+      rangeMin: factor.min,
+      rangeMax: factor.max,
+      list: factor.list,
+      levelCount: factor.levels
+    }))
+    : getDefaultActiveFactors(input.design_type, processTypeCode);
   for (const factor of defaultFactors) {
     const param = selectParamByCode(inputParams, factor.code, processTypeCode);
     if (!param) continue;
@@ -281,8 +300,26 @@ export function createDoeWithDefaults(
       level_count: factor.levelCount ?? null
     });
   }
+  if (preset) {
+    for (const condition of preset.fixedConditions) {
+      const param = selectParamByCode(inputParams, condition.code, processTypeCode);
+      if (!param) continue;
+      upsertParamConfig(db, {
+        experiment_id: input.experimentId,
+        doe_id: doeId,
+        param_def_id: param.id,
+        active: 1,
+        mode: "FIXED",
+        fixed_value_real: condition.value,
+        range_min_real: null,
+        range_max_real: null,
+        list_json: null,
+        level_count: null
+      });
+    }
+  }
   const outputParams = selectUniqueParamsByCode(
-    listParamDefinitionsByKind(db, input.experimentId, "OUTPUT"),
+    listParamDefinitionsByKindForProcess(db, input.experimentId, "OUTPUT", processTypeCode),
     processTypeCode
   );
   const defaultActiveOutputCodes = getDefaultActiveOutputCodes(processTypeCode);
@@ -296,9 +333,22 @@ export function createDoeWithDefaults(
       unit: output.unit,
       group_label: output.group_label,
       allowed_values_json: output.allowed_values_json,
+      param_def_id: output.id,
       is_standard: 0,
       is_active: defaultActiveOutputCodes.has(output.code) ? 1 : 0
     });
+  }
+  if (preset) {
+    db.prepare("UPDATE analysis_fields SET is_active = 0 WHERE scope_type = 'DOE' AND scope_id = ?")
+      .run(doeId);
+    const activate = db.prepare(
+      `UPDATE analysis_fields SET is_active = 1
+       WHERE scope_type = 'DOE' AND scope_id = ? AND param_def_id = ?`
+    );
+    for (const code of preset.responseCodes) {
+      const param = findGlobalParamByCode(db, code);
+      if (param) activate.run(doeId, param.id);
+    }
   }
   return doeId;
 }
@@ -308,17 +358,32 @@ export function createCustomParam(
   experimentId: number,
   data: Omit<ParamDefinition, "id" | "scope" | "experiment_id">
 ) {
-  createParamDefinition(db, {
-    scope: "EXPERIMENT",
-    experiment_id: experimentId,
+  const processTypeCode = getProcessTypeCodeForExperiment(db, experimentId);
+  // Custom fields belong to the same shared catalogue as code-owned fields.
+  // The experiment only decides whether a catalogue entry is active in a DOE.
+  const existing = findGlobalParamByCode(db, data.code);
+  if (existing) {
+    attachParamToProcess(db, existing.id, processTypeCode);
+    return existing.id;
+  }
+  const id = createParamDefinition(db, {
+    scope: "GLOBAL",
+    experiment_id: null,
     code: data.code,
     label: data.label,
     unit: data.unit,
     field_kind: data.field_kind,
     field_type: data.field_type,
     group_label: data.group_label,
-    allowed_values_json: data.allowed_values_json
+    allowed_values_json: data.allowed_values_json,
+    semantic_role: data.field_kind === "INPUT" ? "controlled" : "response",
+    doe_role: data.field_kind === "INPUT" ? "factor" : "response",
+    is_code_owned: 0
   });
+  attachParamToProcess(db, id, processTypeCode);
+  db.prepare("INSERT OR IGNORE INTO param_tags (param_def_id, tag) VALUES (?, ?)")
+    .run(id, "custom");
+  return id;
 }
 
 function configToFactor(config: ParamConfig, param: ParamDefinition) {
@@ -342,8 +407,9 @@ export function generateRuns(db: Db, experimentId: number, doeId: number) {
   const doe = getDoeStudy(db, doeId);
   if (!doe) throw new Error("DOE not found");
 
-  const inputParams = listParamDefinitionsByKind(db, experimentId, "INPUT");
-  const outputParams = listParamDefinitionsByKind(db, experimentId, "OUTPUT");
+  const processTypeCode = getProcessTypeCodeForExperiment(db, experimentId);
+  const inputParams = listParamDefinitionsByKindForProcess(db, experimentId, "INPUT", processTypeCode);
+  const outputParams = listParamDefinitionsByKindForProcess(db, experimentId, "OUTPUT", processTypeCode);
   const configs = listParamConfigs(db, experimentId, doeId);
   const existingMeta = parseDesignMetadata(getDesignMetadata(db, experimentId, doeId));
   const nonRandomizedParamId =
@@ -360,7 +426,7 @@ export function generateRuns(db: Db, experimentId: number, doeId: number) {
     .filter((entry) => entry.param != null) as Array<{ config: ParamConfig; param: ParamDefinition }>;
 
   const factorConfigs = activeFactors.map((entry) => {
-    if (doe.design_type === "BBD" && entry.config.mode === "RANGE") {
+    if ((doe.design_type === "BBD" || doe.design_type === "CCD") && entry.config.mode === "RANGE") {
       return configToFactor({ ...entry.config, level_count: 3 }, entry.param);
     }
     return configToFactor(entry.config, entry.param);
@@ -383,6 +449,14 @@ export function generateRuns(db: Db, experimentId: number, doeId: number) {
     );
     designRuns = runs;
     metadata = { design: "BBD", factors: factorConfigs, codedLevels };
+  } else if (doe.design_type === "CCD") {
+    const { runs, codedLevels } = buildCcdDesign(
+      factorConfigs,
+      doe.seed,
+      doe.center_points
+    );
+    designRuns = runs;
+    metadata = { design: "CCD_FACE_CENTERED", factors: factorConfigs, codedLevels };
   } else {
     designRuns = buildScreenDesign(factorConfigs, doe.seed, doe.max_runs);
     metadata = { design: "SCREEN_SAMPLE", factors: factorConfigs };

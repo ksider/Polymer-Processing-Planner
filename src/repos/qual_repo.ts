@@ -52,6 +52,7 @@ export type QualField = {
   is_derived: number;
   allowed_values_json: string | null;
   derived_formula_code: string | null;
+  param_def_id?: number | null;
 };
 
 export type QualRunValue = {
@@ -89,6 +90,7 @@ export type QualStepOutput = {
   step_id: number;
   output_group: string;
   output_code: string;
+  param_def_id?: number | null;
   value_real: number | null;
   value_text: string | null;
   updated_at: string;
@@ -272,7 +274,7 @@ export function listQualFields(db: Db, stepId: number): QualField[] {
   return db
     .prepare(
       `SELECT id, experiment_id, step_id, code, label, field_type, unit, group_label,
-              required, is_enabled, is_derived, allowed_values_json, derived_formula_code
+              required, is_enabled, is_derived, allowed_values_json, derived_formula_code, param_def_id
        FROM qual_fields WHERE step_id = ? ORDER BY id`
     )
     .all(stepId) as QualField[];
@@ -285,8 +287,8 @@ export function insertQualField(
   const result = db
     .prepare(
       `INSERT INTO qual_fields
-       (experiment_id, step_id, code, label, field_type, unit, group_label, required, is_enabled, is_derived, allowed_values_json, derived_formula_code)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       (experiment_id, step_id, code, label, field_type, unit, group_label, required, is_enabled, is_derived, allowed_values_json, derived_formula_code, param_def_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       field.experiment_id,
@@ -300,7 +302,8 @@ export function insertQualField(
       field.is_enabled,
       field.is_derived,
       field.allowed_values_json,
-      field.derived_formula_code
+      field.derived_formula_code,
+      field.param_def_id ?? null
     );
   return Number(result.lastInsertRowid);
 }
@@ -312,7 +315,7 @@ export function updateQualField(
 ) {
   const current = db
     .prepare(
-      `SELECT id, code, label, field_type, unit, group_label, required, is_enabled, is_derived, allowed_values_json, derived_formula_code
+      `SELECT id, code, label, field_type, unit, group_label, required, is_enabled, is_derived, allowed_values_json, derived_formula_code, param_def_id
        FROM qual_fields WHERE id = ?`
     )
     .get(fieldId) as QualField | undefined;
@@ -320,7 +323,7 @@ export function updateQualField(
   const next = { ...current, ...updates };
   db.prepare(
     `UPDATE qual_fields
-     SET code = ?, label = ?, field_type = ?, unit = ?, group_label = ?, required = ?, is_enabled = ?, is_derived = ?, allowed_values_json = ?, derived_formula_code = ?
+     SET code = ?, label = ?, field_type = ?, unit = ?, group_label = ?, required = ?, is_enabled = ?, is_derived = ?, allowed_values_json = ?, derived_formula_code = ?, param_def_id = ?
      WHERE id = ?`
   ).run(
     next.code,
@@ -333,6 +336,7 @@ export function updateQualField(
     next.is_derived,
     next.allowed_values_json,
     next.derived_formula_code,
+    next.param_def_id ?? null,
     fieldId
   );
 }
@@ -458,7 +462,7 @@ export function updateQualRunMetadata(
 export function listQualStepOutputs(db: Db, stepId: number): QualStepOutput[] {
   return db
     .prepare(
-      `SELECT id, experiment_id, step_id, output_group, output_code, value_real, value_text, updated_at
+      `SELECT id, experiment_id, step_id, output_group, output_code, param_def_id, value_real, value_text, updated_at
        FROM qual_step_outputs WHERE step_id = ? ORDER BY output_group, output_code`
     )
     .all(stepId) as QualStepOutput[];
@@ -468,12 +472,16 @@ export function upsertQualStepOutput(
   db: Db,
   input: Omit<QualStepOutput, "id" | "updated_at">
 ) {
+  const canonicalParamId = input.param_def_id ?? (db.prepare(
+    "SELECT id FROM param_definitions WHERE scope = 'GLOBAL' AND code = ? LIMIT 1"
+  ).get(input.output_code) as { id: number } | undefined)?.id ?? null;
   db.prepare(
     `INSERT INTO qual_step_outputs
-     (experiment_id, step_id, output_group, output_code, value_real, value_text, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+     (experiment_id, step_id, output_group, output_code, param_def_id, value_real, value_text, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(step_id, output_code) DO UPDATE SET
        output_group = excluded.output_group,
+       param_def_id = COALESCE(excluded.param_def_id, qual_step_outputs.param_def_id),
        value_real = excluded.value_real,
        value_text = excluded.value_text,
        updated_at = datetime('now')`
@@ -482,6 +490,7 @@ export function upsertQualStepOutput(
     input.step_id,
     input.output_group,
     input.output_code,
+    canonicalParamId,
     input.value_real,
     input.value_text
   );

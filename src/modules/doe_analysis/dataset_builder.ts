@@ -363,6 +363,7 @@ function loadFactors(db: Db, experimentId: number, doeId: number): FactorRecord[
        WHERE pc.experiment_id = ?
          AND pc.doe_id = ?
          AND pc.active = 1
+         AND pc.mode IN ('RANGE', 'LIST')
          AND p.field_kind = 'INPUT'
        ORDER BY pc.id`
     )

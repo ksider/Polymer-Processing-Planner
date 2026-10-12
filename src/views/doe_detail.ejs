@@ -84,39 +84,32 @@
       </div>
     </div>
 
-    <section class="mb-6 rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs sm:p-5">
-      <div class="flex flex-wrap items-start justify-between gap-3 border-b border-default pb-4">
-        <div>
-          <h2 class="text-base font-semibold text-heading">Qualification handoff</h2>
-          <p class="mt-1 max-w-3xl text-sm text-body">Confirmed active-stage outputs are snapshotted when this DOE is created. Import a value only when it is a fixed condition; factor ranges and measured responses remain explicit DOE choices.</p>
+    <% if (extrusionPreset) { %>
+      <section class="mb-6 rounded-xl border border-brand/30 bg-brand-soft/35 p-4 shadow-xs sm:p-5">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-brand-strong">Extrusion DOE scenario</p>
+            <h2 class="mt-1 text-base font-semibold text-heading"><%= extrusionPreset.title || extrusionPreset.code %></h2>
+          </div>
+          <span class="rounded-full bg-neutral-primary px-2.5 py-1 text-xs font-medium text-body"><%= doe.design_type %></span>
         </div>
-        <span class="rounded-full bg-neutral-secondary px-2.5 py-1 text-xs font-medium text-body"><%= qualificationBrief.length %> confirmed value<%= qualificationBrief.length === 1 ? '' : 's' %></span>
-      </div>
-      <% if (!qualificationBrief.length) { %>
-        <p class="mt-4 text-sm text-body">No confirmed qualification outputs are available yet. Save an accepted result on an active qualification stage, then create a new DOE to snapshot it.</p>
-      <% } else { %>
-        <div class="mt-4 overflow-x-auto"><table class="<%= factorTableClass %>">
-          <thead><tr><th>Source</th><th>Confirmed result</th><th>Use in this DOE</th></tr></thead>
-          <tbody>
-            <% qualificationBrief.forEach((item) => { const imported = qualificationImports.find((entry) => Number(entry.stepNumber) === Number(item.stepNumber) && entry.outputCode === item.outputCode); %>
-              <tr>
-                <td><span class="font-medium text-heading">Step <%= item.stepNumber %></span><span class="block text-xs text-body"><%= item.stepName %></span></td>
-                <td><span class="font-medium text-heading"><%= item.label %></span><span class="block text-xs text-body"><%= formatNumber(item.value) %><%= item.unit ? ` ${item.unit}` : '' %> · <%= item.description %></span></td>
-                <td>
-                  <% if (imported) { %>
-                    <span class="inline-flex rounded-full bg-success-soft px-2.5 py-1 text-xs font-medium text-success">Fixed condition imported</span>
-                  <% } else if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
-                    <form action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/qualification-brief/fixed" method="post"><input type="hidden" name="step_number" value="<%= item.stepNumber %>"><input type="hidden" name="output_code" value="<%= item.outputCode %>"><button class="inline-flex items-center justify-center rounded-base border border-default-medium bg-neutral-secondary px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-tertiary focus:outline-none focus:ring-4 focus:ring-brand-soft" type="submit">Use as fixed condition</button></form>
-                  <% } else { %>
-                    <span class="text-xs text-body">Not imported</span>
-                  <% } %>
-                </td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table></div>
-      <% } %>
-    </section>
+        <% if (Array.isArray(extrusionPreset.safety_gates) && extrusionPreset.safety_gates.length) { %>
+          <div class="mt-4">
+            <h3 class="text-sm font-medium text-heading">Safety gates</h3>
+            <ul class="mt-1 list-disc space-y-1 pl-5 text-sm text-body">
+              <% extrusionPreset.safety_gates.forEach((gate) => { %><li><%= gate %></li><% }); %>
+            </ul>
+          </div>
+        <% } %>
+        <% if (Array.isArray(extrusionPreset.prerequisite_warnings) && extrusionPreset.prerequisite_warnings.length) { %>
+          <div class="mt-4 rounded-base border border-warning/30 bg-warning-soft px-3 py-2 text-sm text-heading">
+            <span class="font-medium">Review before generation:</span>
+            <ul class="mt-1 list-disc space-y-1 pl-5"><% extrusionPreset.prerequisite_warnings.forEach((warning) => { %><li><%= warning %></li><% }); %></ul>
+          </div>
+        <% } %>
+        <% if (extrusionPreset.follow_up) { %><p class="mt-4 text-sm text-body"><span class="font-medium text-heading">Next decision:</span> <%= extrusionPreset.follow_up %></p><% } %>
+      </section>
+    <% } %>
 
     <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
@@ -169,21 +162,36 @@
         <% if (errorMessage) { %>
           <p class="text-sm text-gray-500"><strong><%= errorMessage %></strong></p>
         <% } %>
-        <% const groupSet = new Set(); inputParams.forEach((param) => groupSet.add(param.group_label || 'General')); const groupList = Array.from(groupSet); %>
+        <% const groupSet = new Set(); inputParams.forEach((param) => groupSet.add(param.group_label || 'General')); const groupList = Array.from(groupSet); const isExtrusionDoe = processTypeCode === 'extrusion_v1'; %>
         <div class="flex flex-wrap gap-2" data-group-filter>
           <button type="button" class="rounded-full border border-brand bg-brand px-3 py-1.5 text-sm font-medium text-white shadow-xs focus:outline-none focus:ring-4 focus:ring-brand-soft" data-group-filter-button="all">All</button>
           <button type="button" class="rounded-full border border-default-medium bg-neutral-primary px-3 py-1.5 text-sm font-medium text-heading shadow-xs hover:bg-neutral-secondary focus:outline-none focus:ring-4 focus:ring-brand-soft" data-group-filter-button="selected">Selected</button>
+          <% if (isExtrusionDoe) { %>
+            <% extrusionCatalogueTags.forEach(([tag, label]) => { %>
+              <button
+                type="button"
+                class="rounded-full border border-default-medium bg-neutral-primary px-3 py-1.5 text-sm font-medium text-heading shadow-xs hover:bg-neutral-secondary focus:outline-none focus:ring-4 focus:ring-brand-soft"
+                data-group-filter-button="<%= tag %>"
+                data-filter-type="tag"
+              >
+                <span class="size-2 rounded-full bg-current/70" data-group-marker="<%= tag %>" aria-hidden="true"></span>
+                <%= label %>
+              </button>
+            <% }); %>
+          <% } else { %>
           <% groupList.forEach((group) => { const groupKey = group.toLowerCase().replace(/[^a-z0-9]+/g, '-'); %>
             <button
               type="button"
               class="rounded-full border border-default-medium bg-neutral-primary px-3 py-1.5 text-sm font-medium text-heading shadow-xs hover:bg-neutral-secondary focus:outline-none focus:ring-4 focus:ring-brand-soft"
               data-group-filter-button="<%= groupKey %>"
+              data-filter-type="group"
               data-group-label="<%= group %>"
             >
               <span class="size-2 rounded-full bg-current/70" data-group-marker="<%= groupKey %>" aria-hidden="true"></span>
               <%- formatInline(group) %>
             </button>
           <% }); %>
+          <% } %>
         </div>
         <form class="grid gap-4" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/configs" method="post" id="factorForm">
           <div class="text-sm text-body">
@@ -211,7 +219,7 @@
               </tr>
             </thead>
             <tbody>
-              <% inputParams.forEach((param) => { const config = configMap.get(param.id); const groupKey = (param.group_label || 'General').toLowerCase().replace(/[^a-z0-9]+/g, '-'); %>
+              <% inputParams.forEach((param) => { const config = configMap.get(param.id); const groupKey = (param.group_label || 'General').toLowerCase().replace(/[^a-z0-9]+/g, '-'); const markerKey = isExtrusionDoe ? (param.tags || []).find((tag) => extrusionCatalogueTags.some(([catalogueTag]) => catalogueTag === tag)) || groupKey : groupKey; %>
                 <% const valueText = config?.mode === 'LIST' && config?.list_json ? JSON.parse(config.list_json).join(', ') : (config?.fixed_value_real ?? ''); %>
                 <tr
                   data-param-row
@@ -220,6 +228,7 @@
                   data-param-group="<%= param.group_label || 'General' %>"
                   data-param-unit="<%= param.unit || '' %>"
                   data-group-key="<%= groupKey %>"
+                  data-param-tags="<%= (param.tags || []).join(' ') %>"
                 >
                   <td>
                     <label class="inline-flex items-center">
@@ -239,7 +248,7 @@
                     </label>
                   </td>
                   <td>
-                    <span class="mr-2 inline-block size-2 rounded-full" data-group-marker="<%= groupKey %>" aria-hidden="true"></span>
+                    <span class="mr-2 inline-block size-2 rounded-full" data-group-marker="<%= markerKey %>" aria-hidden="true"></span>
                     <%- formatInline(param.label) %>
                     <% if (param.unit) { %>
                       <span class="text-sm text-gray-500">(<%- formatInline(param.unit) %>)</span>
@@ -257,7 +266,7 @@
                       <div class="grid grid-cols-[1fr_1fr_auto] gap-2" data-settings-range>
                         <input type="number" step="any" name="param_<%= param.id %>_min" data-range value="<%= config?.range_min_real ?? '' %>">
                         <input type="number" step="any" name="param_<%= param.id %>_max" data-range value="<%= config?.range_max_real ?? '' %>">
-                        <% if (doe.design_type !== 'BBD') { %>
+                        <% if (doe.design_type !== 'BBD' && doe.design_type !== 'CCD') { %>
                           <select name="param_<%= param.id %>_levels" data-levels>
                             <option value="2" <%= (config?.level_count || 2) === 2 ? 'selected' : '' %>>2</option>
                             <option value="3" <%= config?.level_count === 3 ? 'selected' : '' %>>3</option>
@@ -278,78 +287,108 @@
           </div>
         </form>
 
-        <div class="rounded-base border border-default-medium bg-neutral-primary p-4 shadow-xs">
-          <h2 class="text-lg font-semibold tracking-tight text-gray-900">Custom Fields</h2>
+        <section class="rounded-base border border-default-medium bg-neutral-primary p-4 shadow-xs">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 class="text-base font-semibold text-heading">Repository parameters</h2>
+              <p class="mt-1 text-sm text-body">Browse the full shared repository, then add a parameter with one click. Process-relevant parameters are shown first.</p>
+            </div>
+            <button class="inline-flex items-center gap-2 rounded-base border border-default-medium bg-neutral-secondary px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-tertiary focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="openRepositoryDialog">
+              <span class="material-symbols-rounded text-[18px]" aria-hidden="true">library_books</span>
+              Browse repository
+            </button>
+          </div>
+        </section>
+
+        <fieldset class="mt-4 rounded-base border border-default-medium bg-neutral-primary p-4 shadow-xs">
+          <legend class="px-1 text-sm font-semibold text-heading">New custom parameter</legend>
+          <p class="mb-4 text-sm text-body">Create this only when the parameter does not exist in the shared repository. It will be saved there and linked to this process.</p>
           <form class="grid gap-4" id="doeCustomFieldForm" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/params" method="post">
-            <div class="field-toolbar">
-              <label>
-                Library
-                <select id="doeLibrarySelect">
-                  <option value="">Select parameter…</option>
-                  <% params.filter((param) => param.scope === 'GLOBAL').forEach((param) => { %>
-                    <option
-                      value="<%= param.id %>"
-                      data-code="<%= param.code %>"
-                      data-label="<%= param.label %>"
-                      data-unit="<%= param.unit || '' %>"
-                      data-group="<%= param.group_label || '' %>"
-                      data-kind="<%= param.field_kind %>"
-                      data-type="<%= param.field_type %>"
-                      data-allowed="<%= param.allowed_values_json || '' %>"
-                    >
-                      <%- formatInline(param.label) %> (<%= param.code %>)
-                    </option>
-                  <% }); %>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="grid gap-1.5 text-sm font-medium text-heading">Code
+                <input class="block w-full rounded-base border border-default-medium bg-neutral-primary px-3 py-2.5 text-sm text-heading shadow-xs placeholder:text-body focus:border-brand focus:ring-brand" type="text" name="code" placeholder="custom_param" required>
+              </label>
+              <label class="grid gap-1.5 text-sm font-medium text-heading">Label
+                <input class="block w-full rounded-base border border-default-medium bg-neutral-primary px-3 py-2.5 text-sm text-heading shadow-xs placeholder:text-body focus:border-brand focus:ring-brand" type="text" name="label" placeholder="Custom parameter" required>
+              </label>
+              <label class="grid gap-1.5 text-sm font-medium text-heading">Unit
+                <input class="block w-full rounded-base border border-default-medium bg-neutral-primary px-3 py-2.5 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" type="text" name="unit">
+              </label>
+              <label class="grid gap-1.5 text-sm font-medium text-heading">Group
+                <input class="block w-full rounded-base border border-default-medium bg-neutral-primary px-3 py-2.5 text-sm text-heading shadow-xs placeholder:text-body focus:border-brand focus:ring-brand" type="text" name="group_label" placeholder="Outputs">
+              </label>
+              <label class="grid gap-1.5 text-sm font-medium text-heading">Kind
+                <select class="block w-full rounded-base border border-default-medium bg-neutral-primary px-3 py-2.5 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" name="field_kind">
+                  <option value="INPUT">Input</option><option value="OUTPUT">Output</option>
                 </select>
               </label>
-              <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" id="doeLibraryFill">Use selected</button>
-              <a class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" href="/param-library">Open library</a>
-            </div>
-            <div class="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label>Code</label>
-                <input type="text" name="code" placeholder="custom_param" required>
-              </div>
-              <div>
-                <label>Label</label>
-                <input type="text" name="label" placeholder="Custom Parameter" required>
-              </div>
-              <div>
-                <label>Unit</label>
-                <input type="text" name="unit">
-              </div>
-              <div>
-                <label>Group</label>
-                <input type="text" name="group_label" placeholder="Outputs">
-              </div>
-              <div>
-                <label>Kind</label>
-                <select name="field_kind">
-                  <option value="INPUT">Input</option>
-                  <option value="OUTPUT">Output</option>
+              <label class="grid gap-1.5 text-sm font-medium text-heading">Type
+                <select class="block w-full rounded-base border border-default-medium bg-neutral-primary px-3 py-2.5 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" name="field_type">
+                  <option value="number">Number</option><option value="text">Text</option><option value="tag">Tag</option>
                 </select>
-              </div>
-              <div>
-                <label>Type</label>
-                <select name="field_type">
-                  <option value="number">Number</option>
-                  <option value="text">Text</option>
-                  <option value="tag">Tag</option>
-                </select>
-              </div>
-              <div>
-                <label>Allowed Tags (comma-separated)</label>
-                <input type="text" name="allowed_values" placeholder="good, ok, fail">
-              </div>
+              </label>
+              <label class="grid gap-1.5 text-sm font-medium text-heading sm:col-span-2">Allowed tags (comma-separated)
+                <input class="block w-full rounded-base border border-default-medium bg-neutral-primary px-3 py-2.5 text-sm text-heading shadow-xs placeholder:text-body focus:border-brand focus:ring-brand" type="text" name="allowed_values" placeholder="good, ok, fail">
+              </label>
             </div>
-            <button class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="submit">Add Field</button>
+            <div><button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong focus:outline-none focus:ring-4 focus:ring-brand-soft" type="submit">Add custom parameter</button></div>
           </form>
-        </div>
+        </fieldset>
 
         
       </div>
       <div class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 px-5 py-4">
         <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-close>Close</button>
+      </div>
+    </dialog>
+
+    <dialog id="repositoryDialog" class="m-auto w-[min(96vw,70rem)] rounded-xl border border-default-medium bg-neutral-primary p-0 text-heading shadow-2xl backdrop:bg-gray-950/40">
+      <div class="flex items-center justify-between gap-4 border-b border-default px-5 py-4">
+        <div>
+          <h2 class="text-base font-semibold text-heading">Shared parameter repository</h2>
+          <p class="mt-0.5 text-sm text-body">Choose a parameter to link it to this process and add it to the DOE factor list.</p>
+        </div>
+        <button class="inline-flex size-9 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" data-close aria-label="Close repository">
+          <span class="material-symbols-rounded" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="grid gap-4 p-5">
+        <label class="relative block">
+          <span class="sr-only">Search repository parameters</span>
+          <span class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3 text-body"><span class="material-symbols-rounded text-[18px]" aria-hidden="true">search</span></span>
+          <input class="block w-full rounded-base border border-default-medium bg-neutral-primary py-2.5 ps-9 pe-3 text-sm text-heading shadow-xs placeholder:text-body focus:border-brand focus:ring-brand" type="search" data-repository-search placeholder="Search by name, code, group, unit or type">
+        </label>
+        <div class="flex flex-wrap items-center gap-2" data-repository-filter>
+          <button class="rounded-full border border-brand bg-brand px-3 py-1.5 text-sm font-medium text-white shadow-xs focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" data-repository-filter-button="all">All repository</button>
+          <button class="rounded-full border border-default-medium bg-neutral-primary px-3 py-1.5 text-sm font-medium text-heading shadow-xs hover:bg-neutral-secondary focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" data-repository-filter-button="suggested">For this process</button>
+          <% if (isExtrusionDoe) { %>
+            <% extrusionCatalogueTags.forEach(([tag, label]) => { %>
+              <button class="rounded-full border border-default-medium bg-neutral-primary px-3 py-1.5 text-sm font-medium text-heading shadow-xs hover:bg-neutral-secondary focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" data-repository-filter-button="tag:<%= tag %>">
+                <span class="mr-1 inline-block size-2 rounded-full bg-current/70" data-group-marker="<%= tag %>" aria-hidden="true"></span><%= label %>
+              </button>
+            <% }); %>
+          <% } %>
+        </div>
+        <div class="max-h-[55vh] overflow-y-auto rounded-base border border-default-medium">
+          <div class="divide-y divide-default" data-repository-list>
+            <% catalogueParams.forEach((param) => { const suggested = processParamIds.includes(param.id); const tagKey = isExtrusionDoe ? (param.tags || []).find((tag) => extrusionCatalogueTags.some(([catalogueTag]) => catalogueTag === tag)) || 'general' : (param.group_label || 'General').toLowerCase().replace(/[^a-z0-9]+/g, '-'); const searchText = [param.label, param.code, param.group_label, param.unit, param.field_kind, param.field_type, ...(param.tags || [])].filter(Boolean).join(' ').toLowerCase(); %>
+              <form method="post" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/params" data-repository-param data-repository-suggested="<%= suggested ? '1' : '0' %>" data-repository-tags="<%= (param.tags || []).join(' ') %>" data-repository-search-text="<%= searchText %>">
+                <input type="hidden" name="code" value="<%= param.code %>">
+                <button class="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-neutral-secondary focus:bg-neutral-secondary focus:outline-none" type="submit">
+                  <span class="size-2 shrink-0 rounded-full" data-group-marker="<%= tagKey %>" aria-hidden="true"></span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block truncate text-sm font-medium text-heading"><%- formatInline(param.label) %></span>
+                    <span class="mt-0.5 block truncate text-xs text-body"><%= param.code %><% if (param.group_label) { %> · <%- formatInline(param.group_label) %><% } %></span>
+                  </span>
+                  <span class="hidden shrink-0 text-xs text-body sm:block"><%= param.field_kind %> · <%= param.field_type %></span>
+                  <span class="shrink-0 text-xs text-body"><%= param.unit || '—' %></span>
+                  <span class="material-symbols-rounded shrink-0 text-[18px] text-brand" aria-hidden="true">add_circle</span>
+                </button>
+              </form>
+            <% }); %>
+          </div>
+          <p class="hidden px-4 py-8 text-center text-sm text-body" data-repository-empty>No parameters match these filters.</p>
+        </div>
       </div>
     </dialog>
 
@@ -363,34 +402,51 @@
         factorDialog.showModal();
       }
       document.querySelectorAll('[data-close]').forEach((btn) => {
-        btn.addEventListener('click', () => factorDialog.close());
+        btn.addEventListener('click', () => btn.closest('dialog')?.close());
       });
 
-      const librarySelect = document.getElementById('doeLibrarySelect');
-      const fillBtn = document.getElementById('doeLibraryFill');
-      const customForm = document.getElementById('doeCustomFieldForm');
-      const fillFromOption = (option) => {
-        if (!option || !customForm) return;
-        customForm.querySelector('input[name="code"]').value = option.dataset.code || '';
-        customForm.querySelector('input[name="label"]').value = option.dataset.label || option.textContent || '';
-        customForm.querySelector('input[name="unit"]').value = option.dataset.unit || '';
-        customForm.querySelector('input[name="group_label"]').value = option.dataset.group || '';
-        const kind = option.dataset.kind || 'INPUT';
-        const type = option.dataset.type || 'number';
-        customForm.querySelector('select[name="field_kind"]').value = kind;
-        customForm.querySelector('select[name="field_type"]').value = type;
-        let allowed = '';
-        if (option.dataset.allowed) {
-          try {
-            const parsed = JSON.parse(option.dataset.allowed);
-            if (Array.isArray(parsed)) allowed = parsed.join(', ');
-          } catch {}
-        }
-        customForm.querySelector('input[name="allowed_values"]').value = allowed;
+      const repositoryDialog = document.getElementById('repositoryDialog');
+      const openRepositoryDialog = document.getElementById('openRepositoryDialog');
+      const repositorySearch = document.querySelector('[data-repository-search]');
+      const repositoryFilter = document.querySelector('[data-repository-filter]');
+      const repositoryEmpty = document.querySelector('[data-repository-empty]');
+      let activeRepositoryFilter = 'all';
+      const refreshRepository = () => {
+        const query = (repositorySearch?.value || '').trim().toLowerCase();
+        let visible = 0;
+        document.querySelectorAll('[data-repository-param]').forEach((item) => {
+          const matchesSearch = !query || (item.dataset.repositorySearchText || '').includes(query);
+          const tags = (item.dataset.repositoryTags || '').split(' ').filter(Boolean);
+          const matchesFilter = activeRepositoryFilter === 'all'
+            || (activeRepositoryFilter === 'suggested' && item.dataset.repositorySuggested === '1')
+            || (activeRepositoryFilter.startsWith('tag:') && tags.includes(activeRepositoryFilter.slice(4)));
+          const show = matchesSearch && matchesFilter;
+          item.hidden = !show;
+          if (show) visible += 1;
+        });
+        if (repositoryEmpty) repositoryEmpty.hidden = visible > 0;
       };
-      fillBtn?.addEventListener('click', () => {
-        const option = librarySelect?.selectedOptions?.[0];
-        if (option && option.value) fillFromOption(option);
+      openRepositoryDialog?.addEventListener('click', () => {
+        repositoryDialog?.showModal();
+        refreshRepository();
+        window.setTimeout(() => repositorySearch?.focus(), 0);
+      });
+      repositorySearch?.addEventListener('input', refreshRepository);
+      repositoryFilter?.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-repository-filter-button]');
+        if (!button) return;
+        activeRepositoryFilter = button.dataset.repositoryFilterButton || 'all';
+        repositoryFilter.querySelectorAll('[data-repository-filter-button]').forEach((item) => {
+          const selected = item === button;
+          item.classList.toggle('border-brand', selected);
+          item.classList.toggle('bg-brand', selected);
+          item.classList.toggle('text-white', selected);
+          item.classList.toggle('border-default-medium', !selected);
+          item.classList.toggle('bg-neutral-primary', !selected);
+          item.classList.toggle('text-heading', !selected);
+          item.classList.toggle('hover:bg-neutral-secondary', !selected);
+        });
+        refreshRepository();
       });
 
       function updateRow(row) {
@@ -546,7 +602,10 @@
         applyGroupMarkers(tbody);
       }
 
-      const factorGroupColors = new Map(<%- jsonForScript(Array.from(new Set(inputParams.map((param) => (param.group_label || 'General').toLowerCase().replace(/[^a-z0-9]+/g, '-')))).map((key, index) => [key, `hsl(${[210, 160, 28, 280, 340, 190, 80, 15][index % 8]} 62% 42%)`])) %>);
+      const factorGroupColors = new Map(<%- jsonForScript(Array.from(new Set([
+        ...inputParams.map((param) => (param.group_label || 'General').toLowerCase().replace(/[^a-z0-9]+/g, '-')),
+        ...extrusionCatalogueTags.map(([tag]) => tag)
+      ])).map((key, index) => [key, `hsl(${[210, 160, 28, 280, 340, 190, 80, 15, 125, 235, 300][index % 11]} 62% 42%)`])) %>);
       function applyGroupMarkers(root = document) {
         root.querySelectorAll('[data-group-marker]').forEach((marker) => {
           marker.style.backgroundColor = factorGroupColors.get(marker.dataset.groupMarker) || 'hsl(210 62% 42%)';
@@ -600,7 +659,7 @@
             return parseListCount(valuesInput?.value || '') === 3;
           }
           if (mode === 'RANGE') {
-            if (designType === 'BBD') {
+            if (designType === 'BBD' || designType === 'CCD') {
               const minVal = parseFloat(minInput?.value || '');
               const maxVal = parseFloat(maxInput?.value || '');
               return Number.isFinite(minVal) && Number.isFinite(maxVal);
@@ -630,6 +689,13 @@
           formula = `BBD: 4*C(k,2)+center = ${baseRuns} (k=${k})`;
           if (k < 2) {
             warning = `BBD needs at least 2 factors with 3 levels. Currently: ${k}. Set Levels=3 or use LIST with 3 values.`;
+          }
+        } else if (designType === 'CCD') {
+          const k = threeLevelFlags.filter(Boolean).length;
+          baseRuns = k >= 2 ? Math.pow(2, k) + 2 * k + (centerPoints || 0) : 0;
+          formula = `CCD (face-centred): 2^k + 2k + center = ${baseRuns} (k=${k})`;
+          if (k < 2) {
+            warning = `CCD needs at least 2 factors with 3 levels. Currently: ${k}. Set three levels or use LIST with 3 values.`;
           }
         } else {
           const k = levelCounts.length;
@@ -673,17 +739,21 @@
       function wireGroupFilter() {
         const container = document.querySelector('[data-group-filter]');
         if (!container) return;
-        const applyFilter = (key) => {
+        const applyFilter = (key, type = 'group') => {
           document.querySelectorAll('[data-param-row]').forEach((row) => {
             const isSelected = Boolean(row.querySelector('[data-active-toggle]')?.checked);
             const rowKey = row.dataset.groupKey;
-            row.style.display = key === 'all' || (key === 'selected' ? isSelected : rowKey === key) ? '' : 'none';
+            const rowTags = (row.dataset.paramTags || '').split(' ').filter(Boolean);
+            const matches = key === 'all'
+              || (key === 'selected' ? isSelected : (type === 'tag' ? rowTags.includes(key) : rowKey === key));
+            row.style.display = matches ? '' : 'none';
           });
         };
         container.addEventListener('click', (event) => {
           const target = event.target.closest('[data-group-filter-button]');
           if (!target) return;
           const key = target.dataset.groupFilterButton || 'all';
+          const filterType = target.dataset.filterType || 'group';
           container.querySelectorAll('[data-group-filter-button]').forEach((chip) => {
             const isActive = chip === target;
             chip.classList.toggle('border-brand', isActive);
@@ -695,10 +765,11 @@
             chip.classList.toggle('hover:bg-neutral-secondary', !isActive);
           });
           container.dataset.activeFilter = key;
-          applyFilter(key);
+          container.dataset.activeFilterType = filterType;
+          applyFilter(key, filterType);
         });
         document.querySelectorAll('[data-active-toggle]').forEach((toggle) => {
-          toggle.addEventListener('change', () => applyFilter(container.dataset.activeFilter || 'all'));
+          toggle.addEventListener('change', () => applyFilter(container.dataset.activeFilter || 'all', container.dataset.activeFilterType || 'group'));
         });
       }
 

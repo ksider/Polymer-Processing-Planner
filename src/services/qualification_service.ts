@@ -21,6 +21,7 @@ import {
 } from "../repos/qual_repo.js";
 import type { QualField } from "../repos/qual_repo.js";
 import { listMachineParams } from "../repos/machine_params_repo.js";
+import { findGlobalParamByCode, upsertCanonicalParamDefinition } from "../repos/params_repo.js";
 
 type StepDefinition = {
   step_number: number;
@@ -611,6 +612,123 @@ const extrusionStepDefinitions: StepDefinition[] = [
   }
 ];
 
+/**
+ * The qualification catalogue describes how a parameter is measured; this
+ * routine registers the same parameter identity in the shared catalogue used
+ * by DOE, reports and custom fields. It is safe to run on every startup.
+ */
+export function ensureExtrusionParameterCatalogue(db: Db) {
+  const tagsFor = (stepNumber: number, group: string | null | undefined) => {
+    const normalized = String(group || "").toLowerCase();
+    const tags = ["extrusion", `step-${stepNumber}`];
+    const purposeByStep: Record<number, string> = {
+      1: "rheology",
+      2: "feeder",
+      3: "operating-window",
+      4: "energy",
+      5: "rtd",
+      6: "side-feeding",
+      7: "liquid-injection",
+      8: "devolatilization",
+      9: "reactive-extrusion",
+      10: "scale-up"
+    };
+    if (purposeByStep[stepNumber]) tags.push(purposeByStep[stepNumber]);
+    if (/rheolog|capillary/.test(normalized)) tags.push("rheology", "capillary");
+    if (/thermal|temperature|dsc|tga/.test(normalized)) tags.push("thermal");
+    if (/feeder|feed/.test(normalized)) tags.push("feeder");
+    if (/rtd|residence/.test(normalized)) tags.push("rtd");
+    if (/side/.test(normalized)) tags.push("side-feeding");
+    return tags;
+  };
+  for (const step of extrusionStepDefinitions) {
+    for (const field of step.fields) {
+      const derived = field.is_derived === 1;
+      const controlled = /input|varied|generator/i.test(String(field.group_label || ""));
+      upsertCanonicalParamDefinition(db, {
+        code: field.code,
+        label: field.label,
+        unit: field.unit ?? null,
+        field_kind: controlled ? "INPUT" : "OUTPUT",
+        field_type: field.field_type,
+        group_label: "Extrusion",
+        allowed_values_json: field.allowed_values_json ?? null,
+        semantic_role: derived ? "derived" : controlled ? "controlled" : "measurement",
+        doe_role: controlled && !derived ? "factor" : derived ? "response" : "none",
+        is_code_owned: 1,
+        process_type_codes: ["extrusion_v1"],
+        tags: tagsFor(step.step_number, field.group_label)
+      });
+    }
+    for (const output of getExtrusionOutputDefinitions(step.step_number)) {
+      upsertCanonicalParamDefinition(db, {
+        code: output.code,
+        label: output.label,
+        unit: output.unit,
+        field_kind: "OUTPUT",
+        field_type: output.field_type,
+        group_label: "Extrusion handoff",
+        allowed_values_json: null,
+        semantic_role: "constraint",
+        doe_role: "constraint",
+        is_code_owned: 1,
+        process_type_codes: ["extrusion_v1"],
+        tags: [...tagsFor(step.step_number, output.group), "handoff"]
+      });
+    }
+  }
+
+  // Existing extrusion experiments predate the catalogue link. Backfill the
+  // foreign key by code once, without changing measured values or fields.
+  db.exec(`
+    UPDATE qual_fields AS field
+    SET param_def_id = (
+      SELECT parameter.id FROM param_definitions parameter
+      WHERE parameter.scope = 'GLOBAL' AND parameter.code = field.code
+      LIMIT 1
+    )
+    WHERE field.param_def_id IS NULL
+      AND EXISTS (
+        SELECT 1
+        FROM experiments experiment
+        JOIN processes process ON process.id = experiment.process_id
+        JOIN process_types process_type ON process_type.id = process.process_type_id
+        WHERE experiment.id = field.experiment_id AND lower(process_type.code) = 'extrusion_v1'
+      )
+      AND EXISTS (
+        SELECT 1 FROM param_definitions parameter
+        WHERE parameter.scope = 'GLOBAL' AND parameter.code = field.code
+      );
+
+    UPDATE qual_step_outputs AS output
+    SET param_def_id = (
+      SELECT parameter.id FROM param_definitions parameter
+      WHERE parameter.scope = 'GLOBAL' AND parameter.code = output.output_code
+      LIMIT 1
+    )
+    WHERE output.param_def_id IS NULL
+      AND EXISTS (
+        SELECT 1
+        FROM experiments experiment
+        JOIN processes process ON process.id = experiment.process_id
+        JOIN process_types process_type ON process_type.id = process.process_type_id
+        WHERE experiment.id = output.experiment_id AND lower(process_type.code) = 'extrusion_v1'
+      )
+      AND EXISTS (
+        SELECT 1 FROM param_definitions parameter
+        WHERE parameter.scope = 'GLOBAL' AND parameter.code = output.output_code
+      );
+  `);
+}
+
+function getExtrusionOutputDefinitions(stepNumber: number) {
+  if (stepNumber === 1) return extrusionStep1OutputDefinitions;
+  if (stepNumber === 2) return extrusionStep2OutputDefinitions;
+  if (stepNumber === 3) return extrusionStep3OutputDefinitions;
+  if (stepNumber === 5) return extrusionStep5OutputDefinitions;
+  return extrusionOptionalOutputDefinitions[stepNumber] ?? [];
+}
+
 function getProcessTypeCodeForExperiment(db: Db, experimentId: number): string {
   const experiment = getExperiment(db, experimentId);
   if (!experiment || !experiment.process_id) return "injection";
@@ -749,6 +867,9 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
         continue;
       }
       if (fieldCodes.has(field.code)) continue;
+      const canonical = processTypeCode === "extrusion_v1"
+        ? findGlobalParamByCode(db, field.code)
+        : undefined;
       insertQualField(db, {
         experiment_id: experimentId,
         step_id: step.id,
@@ -761,7 +882,8 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
         is_enabled: field.is_enabled ?? 1,
         is_derived: field.is_derived ?? 0,
         allowed_values_json: field.allowed_values_json ?? null,
-        derived_formula_code: field.derived_formula_code ?? null
+        derived_formula_code: field.derived_formula_code ?? null,
+        param_def_id: canonical?.id ?? null
       });
     }
     for (const field of def.fields) {
@@ -775,6 +897,7 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
         is_derived: 0 | 1;
         derived_formula_code: string | null;
         allowed_values_json: string | null;
+        param_def_id: number | null;
       }> = {};
       const shouldRefreshLabel =
         processTypeCode === "extrusion_v1" &&
@@ -795,6 +918,10 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
       }
       if ((existingField.allowed_values_json ?? null) !== (field.allowed_values_json ?? null)) {
         updatePatch.allowed_values_json = field.allowed_values_json ?? null;
+      }
+      if (processTypeCode === "extrusion_v1" && !existingField.param_def_id) {
+        const canonical = findGlobalParamByCode(db, field.code);
+        if (canonical) updatePatch.param_def_id = canonical.id;
       }
       if (Object.keys(updatePatch).length) {
         updateQualField(db, existingField.id, updatePatch);

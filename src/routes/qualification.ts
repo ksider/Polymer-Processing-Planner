@@ -11,6 +11,7 @@ import {
   addCavityFields,
   getNextCavityIndex
 } from "../services/qualification_service.js";
+import { createCustomParam } from "../services/experiments_service.js";
 import {
   getQualRun,
   getQualStep,
@@ -39,6 +40,7 @@ import { getProcessById } from "../repos/processes_repo.js";
 import {
   createParamDefinition,
   deleteParamDefinition,
+  findGlobalParamByCode,
   getParamDefinition,
   listGlobalParamDefinitions,
   updateParamDefinition
@@ -65,6 +67,25 @@ function rejectBlockedStep(res: express.Response, step: { is_blocked: number; st
 
 export function createQualificationRouter(db: Db) {
   const router = express.Router();
+  const registerCustomQualificationParam = (
+    experimentId: number,
+    field: {
+      code: string;
+      label: string;
+      unit: string | null;
+      field_type: "number" | "text" | "tag" | "boolean";
+      group_label: string | null;
+      allowed_values_json: string | null;
+    }
+  ) => createCustomParam(db, experimentId, {
+    code: field.code,
+    label: field.label,
+    unit: field.unit,
+    field_kind: "OUTPUT",
+    field_type: field.field_type,
+    group_label: field.group_label,
+    allowed_values_json: field.allowed_values_json
+  });
 
   // Legacy qualification-run URLs are not nested under /experiments/:id, so
   // apply the same experiment-level authorization explicitly.
@@ -636,6 +657,7 @@ export function createQualificationRouter(db: Db) {
       step_id: step.id,
       output_group: definition.group,
       output_code: definition.code,
+      param_def_id: findGlobalParamByCode(db, definition.code)?.id ?? null,
       value_real: valueReal,
       value_text: definition.field_type === "text" ? rawValue || null : null
     });
@@ -1041,7 +1063,11 @@ export function createQualificationRouter(db: Db) {
         is_enabled: 1,
         is_derived: 0,
         allowed_values_json: null,
-        derived_formula_code: null
+        derived_formula_code: null,
+        param_def_id: registerCustomQualificationParam(experimentId, {
+          code: fieldCode, label: `Cavity ${index} ${label}`, unit, field_type: fieldType,
+          group_label: "Measurements", allowed_values_json: null
+        })
       });
       created.push({ index, id });
     });
@@ -1095,7 +1121,10 @@ export function createQualificationRouter(db: Db) {
       is_enabled: 1,
       is_derived: 0,
       allowed_values_json: null,
-      derived_formula_code: null
+      derived_formula_code: null,
+      param_def_id: registerCustomQualificationParam(experimentId, {
+        code, label, unit: "bar", field_type: "number", group_label: "Measurements", allowed_values_json: null
+      })
     });
     const suffixes = Array.from(
       new Set(
@@ -1125,7 +1154,11 @@ export function createQualificationRouter(db: Db) {
         is_enabled: 1,
         is_derived: 0,
         allowed_values_json: null,
-        derived_formula_code: null
+        derived_formula_code: null,
+        param_def_id: registerCustomQualificationParam(experimentId, {
+          code: fieldCode, label: `${label} ${suffix.replace(/_/g, " ")}`, unit: null,
+          field_type: "number", group_label: "Measurements", allowed_values_json: null
+        })
       });
       customFields.push({ suffix, id: customId });
     });
@@ -1209,7 +1242,11 @@ export function createQualificationRouter(db: Db) {
         is_enabled: 1,
         is_derived: 0,
         allowed_values_json: null,
-        derived_formula_code: null
+        derived_formula_code: null,
+        param_def_id: registerCustomQualificationParam(experimentId, {
+          code: fieldCode, label: `${section.label} ${label}`, unit, field_type: fieldType,
+          group_label: "Measurements", allowed_values_json: null
+        })
       });
       created.push({ section: section.code, id });
     });
@@ -1293,21 +1330,29 @@ export function createQualificationRouter(db: Db) {
       | "tag"
       | "boolean";
     if (!code) return res.status(400).json({ error: "Code required" });
+    const unit = req.body.unit ? String(req.body.unit) : null;
+    const groupLabel = req.body.group_label ? String(req.body.group_label) : null;
+    const allowedValuesJson = req.body.allowed_values_json
+      ? String(req.body.allowed_values_json)
+      : null;
+    const paramDefId = registerCustomQualificationParam(experimentId, {
+      code, label, unit, field_type: fieldType, group_label: groupLabel,
+      allowed_values_json: allowedValuesJson
+    });
     const id = insertQualField(db, {
       experiment_id: experimentId,
       step_id: step.id,
       code,
       label,
       field_type: fieldType,
-      unit: req.body.unit ? String(req.body.unit) : null,
-      group_label: req.body.group_label ? String(req.body.group_label) : null,
+      unit,
+      group_label: groupLabel,
       required: req.body.required ? 1 : 0,
       is_enabled: 1,
       is_derived: 0,
-      allowed_values_json: req.body.allowed_values_json
-        ? String(req.body.allowed_values_json)
-        : null,
-      derived_formula_code: null
+      allowed_values_json: allowedValuesJson,
+      derived_formula_code: null,
+      param_def_id: paramDefId
     });
     return res.json({
       id,
@@ -1353,7 +1398,8 @@ export function createQualificationRouter(db: Db) {
       is_enabled: 1,
       is_derived: 0,
       allowed_values_json: param.allowed_values_json,
-      derived_formula_code: null
+      derived_formula_code: null,
+      param_def_id: param.id
     });
     return res.json({
       id,

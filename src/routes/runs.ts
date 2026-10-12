@@ -2,8 +2,13 @@ import express from "express";
 import type { Db } from "../db.js";
 import { getRun, getNextPrevRunIds, listRunValues, updateRunStatus } from "../repos/runs_repo.js";
 import { getExperiment } from "../repos/experiments_repo.js";
+import { getProcessById } from "../repos/processes_repo.js";
 import { ensureExperimentAccess, ensureRunAccess } from "../middleware/experiment_access.js";
-import { listParamDefinitionsByKind, listParamDefinitions, listParamConfigs } from "../repos/params_repo.js";
+import {
+  listParamDefinitionsByKindForProcess,
+  listParamDefinitionsForProcess,
+  listParamConfigs
+} from "../repos/params_repo.js";
 import { getRecipe, getRecipeComponents } from "../repos/recipes_repo.js";
 import {
   listActiveAnalysisFields,
@@ -95,8 +100,11 @@ export function createRunsRouter(db: Db) {
     const workspace = buildExperimentWorkspace(db, experiment.id);
     if (!workspace) return res.status(404).send("Experiment not found");
 
-    const params = listParamDefinitions(db, run.experiment_id);
-    const inputParams = listParamDefinitionsByKind(db, run.experiment_id, "INPUT");
+    const processTypeCode = experiment.process_id
+      ? String(getProcessById(db, experiment.process_id)?.process_type_code || "injection").toLowerCase()
+      : "injection";
+    const params = listParamDefinitionsForProcess(db, run.experiment_id, processTypeCode);
+    const inputParams = listParamDefinitionsByKindForProcess(db, run.experiment_id, "INPUT", processTypeCode);
     const doeId = run.doe_id ?? 0;
     const configs = listParamConfigs(db, run.experiment_id, doeId);
     const activeSet = new Set(

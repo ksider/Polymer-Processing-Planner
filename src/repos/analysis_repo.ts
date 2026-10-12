@@ -10,6 +10,7 @@ export type AnalysisField = {
   unit: string | null;
   group_label: string | null;
   allowed_values_json: string | null;
+  param_def_id?: number | null;
   is_standard: number;
   is_active: number;
 };
@@ -69,8 +70,8 @@ export function insertAnalysisField(db: Db, field: Omit<AnalysisField, "id">) {
   return db
     .prepare(
       `INSERT INTO analysis_fields
-       (scope_type, scope_id, doe_id, code, label, field_type, unit, group_label, allowed_values_json, is_standard, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       (scope_type, scope_id, doe_id, code, label, field_type, unit, group_label, allowed_values_json, param_def_id, is_standard, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       field.scope_type,
@@ -82,6 +83,7 @@ export function insertAnalysisField(db: Db, field: Omit<AnalysisField, "id">) {
       field.unit,
       field.group_label,
       field.allowed_values_json,
+      field.param_def_id ?? null,
       field.is_standard,
       field.is_active
     );

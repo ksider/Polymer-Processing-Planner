@@ -156,6 +156,46 @@ export function buildBbdDesign(
   return { runs, codedLevels: shuffled };
 }
 
+/** Face-centred central composite design: 2^k factorial + 2k axial + centres. */
+export function buildCcdDesign(
+  factors: FactorConfig[],
+  seed: number,
+  centerPoints: number
+): { runs: DesignRun[]; codedLevels: Array<Record<number, number>> } {
+  const usable = factors.filter((factor) => levelsFromConfig(factor).length === 3);
+  const levelMap = new Map(usable.map((factor) => [factor.paramDefId, levelsFromConfig(factor)]));
+  const codedRuns: Array<Record<number, number>> = [];
+  for (const signs of cartesian(usable.map(() => [-1, 1]))) {
+    const coded: Record<number, number> = {};
+    usable.forEach((factor, index) => { coded[factor.paramDefId] = signs[index]; });
+    codedRuns.push(coded);
+  }
+  usable.forEach((factor) => {
+    for (const sign of [-1, 1]) {
+      const coded: Record<number, number> = {};
+      usable.forEach((other) => { coded[other.paramDefId] = other.paramDefId === factor.paramDefId ? sign : 0; });
+      codedRuns.push(coded);
+    }
+  });
+  for (let index = 0; index < centerPoints; index += 1) {
+    const coded: Record<number, number> = {};
+    usable.forEach((factor) => { coded[factor.paramDefId] = 0; });
+    codedRuns.push(coded);
+  }
+  const centres = codedRuns.filter((coded) => usable.every((factor) => coded[factor.paramDefId] === 0));
+  const nonCentres = codedRuns.filter((coded) => !usable.every((factor) => coded[factor.paramDefId] === 0));
+  const shuffled = interleaveCenters(seededShuffle(nonCentres, seed), centres);
+  const runs = shuffled.map((coded) => {
+    const values: Record<number, number> = {};
+    usable.forEach((factor) => {
+      const levels = levelMap.get(factor.paramDefId) ?? [];
+      values[factor.paramDefId] = levels[coded[factor.paramDefId] === -1 ? 0 : coded[factor.paramDefId] === 1 ? 2 : 1];
+    });
+    return { values, coded };
+  });
+  return { runs, codedLevels: shuffled };
+}
+
 export function buildScreenDesign(
   factors: FactorConfig[],
   seed: number,

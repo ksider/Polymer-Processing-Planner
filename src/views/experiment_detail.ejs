@@ -548,6 +548,18 @@
   </div>
   <form action="/experiments/<%= experiment.id %>/doe" method="post">
     <div class="p-5">
+      <% if (extrusionDoePresets.length) { %>
+        <div class="mb-5 rounded-base border border-brand/30 bg-brand-soft/40 p-4">
+          <label class="mb-1.5 block text-sm font-medium text-heading" for="extrusionPreset">Extrusion DOE scenario</label>
+          <select class="block w-full rounded-base border border-default-medium bg-neutral-primary px-3 py-2.5 text-sm text-heading focus:border-brand focus:ring-brand" id="extrusionPreset" name="preset_code">
+            <option value="">Manual DOE — choose the design and factors yourself</option>
+            <% extrusionDoePresets.forEach((preset) => { %>
+              <option value="<%= preset.code %>"><%= preset.title %> — <%= preset.designType %>, <%= preset.maxRuns %> runs</option>
+            <% }); %>
+          </select>
+          <p class="mt-2 text-xs text-body">A scenario applies reviewed factors, fixed conditions, responses, safety gates and prerequisite warnings. It never enables qualification studies or generates runs.</p>
+        </div>
+      <% } %>
       <div class="grid gap-4 sm:grid-cols-2">
         <div>
           <label class="mb-1.5 block text-sm font-medium text-gray-700">Name</label>
@@ -557,6 +569,7 @@
           <label class="mb-1.5 block text-sm font-medium text-gray-700">Design Type</label>
           <select class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" name="design_type">
             <option value="BBD">BBD (Box-Behnken)</option>
+            <option value="CCD">CCD (Face-centred central composite)</option>
             <option value="FFA">FFA (Full Factorial)</option>
             <option value="SCREEN">SCREEN (Sampled Factorial)</option>
             <option value="SIM" selected>SIM (Grid)</option>

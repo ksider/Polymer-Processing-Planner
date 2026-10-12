@@ -26,6 +26,66 @@ function hasColumn(db: Db, table: string, column: string): boolean {
   return rows.some((row) => row.name === column);
 }
 
+/**
+ * Earlier seeds allowed duplicate GLOBAL codes because SQLite treats NULL in a
+ * composite unique key as distinct. A code is the canonical identity, so
+ * consolidate old references before creating the partial unique index.
+ */
+function deduplicateGlobalParameterDefinitions(db: Db) {
+  const duplicates = db.prepare(
+    `SELECT code, MIN(id) AS canonical_id
+     FROM param_definitions
+     WHERE scope = 'GLOBAL'
+     GROUP BY code
+     HAVING COUNT(*) > 1`
+  ).all() as Array<{ code: string; canonical_id: number }>;
+  for (const duplicate of duplicates) {
+    const ids = db.prepare(
+      "SELECT id FROM param_definitions WHERE scope = 'GLOBAL' AND code = ? AND id <> ?"
+    ).all(duplicate.code, duplicate.canonical_id) as Array<{ id: number }>;
+    for (const row of ids) {
+      // Both configuration and run value tables have compound primary keys.
+      // Keep the canonical row when the same relationship already exists.
+      db.prepare(
+        `DELETE FROM param_configs
+         WHERE param_def_id = ?
+           AND EXISTS (
+             SELECT 1 FROM param_configs canonical
+             WHERE canonical.experiment_id = param_configs.experiment_id
+               AND canonical.doe_id = param_configs.doe_id
+               AND canonical.param_def_id = ?
+           )`
+      ).run(row.id, duplicate.canonical_id);
+      db.prepare("UPDATE param_configs SET param_def_id = ? WHERE param_def_id = ?")
+        .run(duplicate.canonical_id, row.id);
+      db.prepare(
+        `DELETE FROM run_values
+         WHERE param_def_id = ?
+           AND EXISTS (
+             SELECT 1 FROM run_values canonical
+             WHERE canonical.run_id = run_values.run_id
+               AND canonical.param_def_id = ?
+           )`
+      ).run(row.id, duplicate.canonical_id);
+      db.prepare("UPDATE run_values SET param_def_id = ? WHERE param_def_id = ?")
+        .run(duplicate.canonical_id, row.id);
+      db.prepare("UPDATE qual_fields SET param_def_id = ? WHERE param_def_id = ?")
+        .run(duplicate.canonical_id, row.id);
+      db.prepare("UPDATE qual_step_outputs SET param_def_id = ? WHERE param_def_id = ?")
+        .run(duplicate.canonical_id, row.id);
+      db.prepare("UPDATE analysis_fields SET param_def_id = ? WHERE param_def_id = ?")
+        .run(duplicate.canonical_id, row.id);
+      db.prepare(
+        "INSERT OR IGNORE INTO param_process_types (param_def_id, process_type_id) SELECT ?, process_type_id FROM param_process_types WHERE param_def_id = ?"
+      ).run(duplicate.canonical_id, row.id);
+      db.prepare(
+        "INSERT OR IGNORE INTO param_tags (param_def_id, tag) SELECT ?, tag FROM param_tags WHERE param_def_id = ?"
+      ).run(duplicate.canonical_id, row.id);
+      db.prepare("DELETE FROM param_definitions WHERE id = ?").run(row.id);
+    }
+  }
+}
+
 function initDb(db: Db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -422,6 +482,9 @@ function initDb(db: Db) {
       field_type TEXT NOT NULL,
       group_label TEXT,
       allowed_values_json TEXT,
+      semantic_role TEXT NOT NULL DEFAULT 'measurement',
+      doe_role TEXT NOT NULL DEFAULT 'none',
+      is_code_owned INTEGER NOT NULL DEFAULT 0,
       UNIQUE(scope, experiment_id, code),
       FOREIGN KEY (experiment_id) REFERENCES experiments(id) ON DELETE CASCADE
     );
@@ -483,10 +546,12 @@ function initDb(db: Db) {
       unit TEXT,
       group_label TEXT,
       allowed_values_json TEXT,
+      param_def_id INTEGER,
       is_standard INTEGER NOT NULL DEFAULT 0,
       is_active INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      UNIQUE(scope_type, scope_id, code)
+      UNIQUE(scope_type, scope_id, code),
+      FOREIGN KEY (param_def_id) REFERENCES param_definitions(id) ON DELETE SET NULL
     );
     CREATE TABLE IF NOT EXISTS analysis_run_values (
       run_id INTEGER NOT NULL,
@@ -762,9 +827,11 @@ function initDb(db: Db) {
       is_derived INTEGER NOT NULL DEFAULT 0,
       allowed_values_json TEXT,
       derived_formula_code TEXT,
+      param_def_id INTEGER,
       UNIQUE(step_id, code),
       FOREIGN KEY (experiment_id) REFERENCES experiments(id) ON DELETE CASCADE,
       FOREIGN KEY (step_id) REFERENCES qual_steps(id) ON DELETE CASCADE
+      ,FOREIGN KEY (param_def_id) REFERENCES param_definitions(id) ON DELETE SET NULL
     );
     CREATE TABLE IF NOT EXISTS qual_run_values (
       run_id INTEGER NOT NULL,
@@ -823,12 +890,14 @@ function initDb(db: Db) {
       step_id INTEGER NOT NULL,
       output_group TEXT NOT NULL,
       output_code TEXT NOT NULL,
+      param_def_id INTEGER,
       value_real REAL,
       value_text TEXT,
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(step_id, output_code),
       FOREIGN KEY (experiment_id) REFERENCES experiments(id) ON DELETE CASCADE,
       FOREIGN KEY (step_id) REFERENCES qual_steps(id) ON DELETE CASCADE
+      ,FOREIGN KEY (param_def_id) REFERENCES param_definitions(id) ON DELETE SET NULL
     );
   `);
 
@@ -1570,6 +1639,46 @@ function initDb(db: Db) {
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_qual_runs_due_at ON qual_runs(due_at)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_qual_runs_step_group ON qual_runs(step_id, run_group, run_order)");
+  if (!hasColumn(db, "param_definitions", "semantic_role")) {
+    db.exec("ALTER TABLE param_definitions ADD COLUMN semantic_role TEXT NOT NULL DEFAULT 'measurement'");
+  }
+  if (!hasColumn(db, "analysis_fields", "param_def_id")) {
+    db.exec("ALTER TABLE analysis_fields ADD COLUMN param_def_id INTEGER");
+  }
+  if (!hasColumn(db, "param_definitions", "doe_role")) {
+    db.exec("ALTER TABLE param_definitions ADD COLUMN doe_role TEXT NOT NULL DEFAULT 'none'");
+  }
+  if (!hasColumn(db, "param_definitions", "is_code_owned")) {
+    db.exec("ALTER TABLE param_definitions ADD COLUMN is_code_owned INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!hasColumn(db, "qual_fields", "param_def_id")) {
+    db.exec("ALTER TABLE qual_fields ADD COLUMN param_def_id INTEGER");
+  }
+  if (!hasColumn(db, "qual_step_outputs", "param_def_id")) {
+    db.exec("ALTER TABLE qual_step_outputs ADD COLUMN param_def_id INTEGER");
+  }
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS param_process_types (
+      param_def_id INTEGER NOT NULL,
+      process_type_id INTEGER NOT NULL,
+      PRIMARY KEY (param_def_id, process_type_id),
+      FOREIGN KEY (param_def_id) REFERENCES param_definitions(id) ON DELETE CASCADE,
+      FOREIGN KEY (process_type_id) REFERENCES process_types(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS param_tags (
+      param_def_id INTEGER NOT NULL,
+      tag TEXT NOT NULL,
+      PRIMARY KEY (param_def_id, tag),
+      FOREIGN KEY (param_def_id) REFERENCES param_definitions(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_param_process_types_process ON param_process_types(process_type_id, param_def_id);
+    CREATE INDEX IF NOT EXISTS idx_param_tags_tag ON param_tags(tag, param_def_id);
+    CREATE INDEX IF NOT EXISTS idx_qual_fields_param_def ON qual_fields(param_def_id);
+    CREATE INDEX IF NOT EXISTS idx_qual_step_outputs_param_def ON qual_step_outputs(param_def_id);
+    CREATE INDEX IF NOT EXISTS idx_analysis_fields_param_def ON analysis_fields(param_def_id);
+  `);
+  deduplicateGlobalParameterDefinitions(db);
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_param_definitions_global_code ON param_definitions(code) WHERE scope = 'GLOBAL'");
   if (!hasColumn(db, "qual_steps", "stage_code")) {
     db.exec("ALTER TABLE qual_steps ADD COLUMN stage_code TEXT");
   }

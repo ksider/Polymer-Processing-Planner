@@ -1,5 +1,7 @@
 import type { Db } from "../db.js";
-import { createParamDefinition } from "../repos/params_repo.js";
+import { createParamDefinition, findGlobalParamByCode } from "../repos/params_repo.js";
+import { ensureExtrusionParameterCatalogue } from "./qualification_service.js";
+import { ensureExtrusionDoePresetCatalogue } from "./extrusion_doe_presets.js";
 
 const DEFECT_TAGS = [
   "sticking",
@@ -161,6 +163,89 @@ export function ensureSeedParams(db: Db) {
       group_label: param.group_label,
       allowed_values_json: param.allowed_values_json ?? null
     });
+    existingSet.add(param.code);
+  }
+  // The legacy seed expressed process applicability only through group labels,
+  // and even intentionally repeated a few shared codes (such as screw RPM).
+  // Preserve that knowledge as normalized links after consolidating the global
+  // identity, rather than letting an extrusion link hide the parameter from
+  // its original process.
+  const processIdByCode = new Map(
+    (db.prepare("SELECT id, code FROM process_types").all() as Array<{ id: number; code: string }>)
+      .map((row) => [row.code.toLowerCase(), row.id])
+  );
+  const paramIdByCode = new Map(
+    (db.prepare("SELECT id, code FROM param_definitions WHERE scope = 'GLOBAL'").all() as Array<{ id: number; code: string }>)
+      .map((row) => [row.code, row.id])
+  );
+  const insertApplicability = db.prepare(
+    "INSERT OR IGNORE INTO param_process_types (param_def_id, process_type_id) VALUES (?, ?)"
+  );
+  for (const param of SEED_PARAMS) {
+    const group = param.group_label.toLowerCase();
+    const processCode = group.includes("compounding")
+      ? "compounding"
+      : group.includes("coating")
+        ? "coating"
+        : "injection";
+    const paramId = paramIdByCode.get(param.code);
+    const processId = processIdByCode.get(processCode);
+    if (paramId && processId) insertApplicability.run(paramId, processId);
+  }
+  ensureExtrusionParameterCatalogue(db);
+  ensureExtrusionDoePresetCatalogue(db);
+  backfillCustomDoeAnalysisFields(db);
+}
+
+/**
+ * Custom response columns existed before analysis_fields carried a parameter
+ * foreign key. Preserve those columns and their values, but give each one a
+ * global catalogue identity so it can be reused and found later.
+ */
+function backfillCustomDoeAnalysisFields(db: Db) {
+  const fields = db.prepare(
+    `SELECT field.id, field.code, field.label, field.field_type, field.unit,
+            field.group_label, field.allowed_values_json, process_type.id AS process_type_id
+     FROM analysis_fields field
+     JOIN doe_studies doe ON doe.id = field.scope_id
+     JOIN experiments experiment ON experiment.id = doe.experiment_id
+     LEFT JOIN processes process ON process.id = experiment.process_id
+     LEFT JOIN process_types process_type ON process_type.id = process.process_type_id
+     WHERE field.scope_type = 'DOE' AND field.is_standard = 0 AND field.param_def_id IS NULL`
+  ).all() as Array<{
+    id: number;
+    code: string;
+    label: string;
+    field_type: "number" | "text" | "tag" | "boolean";
+    unit: string | null;
+    group_label: string | null;
+    allowed_values_json: string | null;
+    process_type_id: number | null;
+  }>;
+  const updateField = db.prepare("UPDATE analysis_fields SET param_def_id = ? WHERE id = ?");
+  const linkProcess = db.prepare(
+    "INSERT OR IGNORE INTO param_process_types (param_def_id, process_type_id) VALUES (?, ?)"
+  );
+  const tagCustom = db.prepare("INSERT OR IGNORE INTO param_tags (param_def_id, tag) VALUES (?, 'custom')");
+  for (const field of fields) {
+    const existing = findGlobalParamByCode(db, field.code);
+    const paramId = existing?.id ?? createParamDefinition(db, {
+      scope: "GLOBAL",
+      experiment_id: null,
+      code: field.code,
+      label: field.label,
+      unit: field.unit,
+      field_kind: "OUTPUT",
+      field_type: field.field_type,
+      group_label: field.group_label,
+      allowed_values_json: field.allowed_values_json,
+      semantic_role: "response",
+      doe_role: "response",
+      is_code_owned: 0
+    });
+    if (field.process_type_id) linkProcess.run(paramId, field.process_type_id);
+    tagCustom.run(paramId);
+    updateField.run(paramId, field.id);
   }
 }
 

@@ -9,12 +9,15 @@ import {
   listQualRuns,
   listQualRunValues,
   listQualSteps,
+  listQualStepOutputs,
   listQualRunSeries,
   replaceQualRunSeries,
+  upsertQualStepOutput,
   upsertQualStepSettings,
   createQualRuns
 } from "../repos/qual_repo.js";
-import { createExperimentWithDefaults } from "../services/experiments_service.js";
+import { createCustomParam, createExperimentWithDefaults } from "../services/experiments_service.js";
+import { findGlobalParamByCode, getParamDefinition, listParamDefinitionsForProcess } from "../repos/params_repo.js";
 import {
   ensureQualificationDefaults,
   getQualificationOutputDefinitionsForExperiment,
@@ -57,6 +60,15 @@ test("extrusion_v1 seeds the core qualification catalogue and deterministic SME 
       process_id: extrusionProcess?.id
     });
     ensureQualificationDefaults(db, experimentId);
+    const fieldLinkCounts = db.prepare(
+      "SELECT COUNT(*) AS total, COUNT(param_def_id) AS linked FROM qual_fields WHERE experiment_id = ?"
+    ).get(experimentId) as { total: number; linked: number };
+    assert.equal(fieldLinkCounts.linked, fieldLinkCounts.total, "every instantiated extrusion field links to the catalogue");
+    const extrusionParams = listParamDefinitionsForProcess(db, experimentId, "extrusion_v1");
+    assert.ok(extrusionParams.some((param) => param.code === "screw_speed_rpm"));
+    assert.ok(extrusionParams.some((param) => param.code === "rtd_mean_residence_time_s"));
+    const feederCapacity = findGlobalParamByCode(db, "feeder_stable_throughput_max_kg_h");
+    assert.ok(feederCapacity, "handoff output is registered in the same catalogue");
     const stages = getQualificationStepsForExperiment(db, experimentId);
     assert.deepEqual(stages.map((stage) => stage.name), [
       "Raw Material Rheological & Thermal Profiling",
@@ -99,6 +111,19 @@ test("extrusion_v1 seeds the core qualification catalogue and deterministic SME 
     assert.equal(valueOf("dissipative_temp_rise_c"), 15);
 
     const stepTwo = listQualSteps(db, experimentId).find((stage) => stage.step_number === 2)!;
+    upsertQualStepOutput(db, {
+      experiment_id: experimentId,
+      step_id: stepTwo.id,
+      output_group: "Feeder limits",
+      output_code: "feeder_stable_throughput_max_kg_h",
+      value_real: 30,
+      value_text: null
+    });
+    assert.equal(
+      listQualStepOutputs(db, stepTwo.id).find((output) => output.output_code === "feeder_stable_throughput_max_kg_h")?.param_def_id,
+      feederCapacity?.id,
+      "saved qualification result keeps its canonical parameter identity"
+    );
     const feederFields = new Map(listQualFields(db, stepTwo.id).map((field) => [field.code, field]));
     const feederRuns = listQualRuns(db, stepTwo.id);
     const putFeeder = (runIndex: number, code: string, value: number) => {
@@ -162,6 +187,22 @@ test("extrusion_v1 seeds the core qualification catalogue and deterministic SME 
     assert.deepEqual(
       getQualificationOutputDefinitionsForExperiment(db, experimentId, 5).map((item) => item.code),
       ["rtd_mean_residence_time_s", "rtd_degree_of_fill_pct", "rtd_width_s"]
+    );
+
+    const customParamId = createCustomParam(db, experimentId, {
+      code: "operator_screening_index",
+      label: "Operator screening index",
+      unit: null,
+      field_kind: "OUTPUT",
+      field_type: "number",
+      group_label: "Custom",
+      allowed_values_json: null
+    });
+    assert.equal(getParamDefinition(db, customParamId)?.scope, "GLOBAL");
+    assert.ok(
+      listParamDefinitionsForProcess(db, experimentId, "extrusion_v1")
+        .some((param) => param.id === customParamId),
+      "a custom parameter is reusable from the process catalogue"
     );
 
     const step = listQualSteps(db, experimentId).find((item) => item.step_number === 1)!;
