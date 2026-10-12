@@ -5,6 +5,7 @@ import { getReportConfig } from "../repos/reports_repo.js";
 import { getRun } from "../repos/runs_repo.js";
 import { hasActiveAssignmentForExperiment } from "../repos/entity_assignments_repo.js";
 import { isProcessOwner } from "../repos/processes_repo.js";
+import { isDemoUser } from "../services/demo_mode.js";
 
 export function ensureExperimentAccess(db: Db) {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -52,6 +53,7 @@ export function canAccessExperiment(
   experimentId: number,
   experiment: { owner_user_id: number | null; process_id?: number | null }
 ) {
+  if (isDemoUser(user)) return true;
   if (user?.role === "admin") return true;
   if (user?.role === "manager") return true;
   if (experiment.owner_user_id == null) return true;

@@ -17,6 +17,7 @@ import {
   updateProcessSettings
 } from "../repos/processes_repo.js";
 import { findUserById, listUsers } from "../repos/users_repo.js";
+import { isDemoUser } from "../services/demo_mode.js";
 
 export function createHomeRouter(db: Db) {
   const router = express.Router();
@@ -60,7 +61,7 @@ export function createHomeRouter(db: Db) {
     });
 
   const renderProcesses = (req: express.Request, res: express.Response) => {
-    const isPrivileged = req.user?.role === "admin" || req.user?.role === "manager";
+    const isPrivileged = req.user?.role === "admin" || req.user?.role === "manager" || isDemoUser(req.user);
     const canCreateExperiment =
       ["admin", "manager", "engineer"].includes(req.user?.role ?? "") ||
       Boolean(req.user?.id && listProcessesForOwner(db, req.user.id).length);
@@ -161,7 +162,7 @@ export function createHomeRouter(db: Db) {
   const renderProcessPage = (req: express.Request, res: express.Response, processId: number) => {
     const process = getProcessById(db, processId);
     if (!process) return res.status(404).send("Process not found");
-    const isPrivileged = req.user?.role === "admin" || req.user?.role === "manager";
+    const isPrivileged = req.user?.role === "admin" || req.user?.role === "manager" || isDemoUser(req.user);
     const canManage =
       ["admin", "manager", "engineer"].includes(req.user?.role ?? "") ||
       (req.user?.id != null && process.owner_user_id === req.user.id);
@@ -235,9 +236,11 @@ export function createHomeRouter(db: Db) {
 
   router.get("/my-experiments", (req, res) => {
     // Personal list for the current user.
-    const experiments = req.user?.id
-      ? listExperimentsForUserWithMeta(db, req.user.id, false)
-      : [];
+    const experiments = isDemoUser(req.user)
+      ? listExperimentsWithMeta(db, false)
+      : req.user?.id
+        ? listExperimentsForUserWithMeta(db, req.user.id, false)
+        : [];
     const canCreateExperiment =
       ["admin", "manager", "engineer"].includes(req.user?.role ?? "") ||
       Boolean(req.user?.id && listProcessesForOwner(db, req.user.id).length);

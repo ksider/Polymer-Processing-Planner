@@ -20,8 +20,9 @@ export function buildBreadcrumbs(db: Db, req: Request): Breadcrumb[] {
   const segments = path.split("/").filter(Boolean);
   const crumbs: Breadcrumb[] = [];
   if (segments.length === 0) {
-    crumbs.push({ label: "Processes", href: "/" });
-    return crumbs;
+    // The logo already navigates home; rendering a one-item breadcrumb here
+    // only repeats "Processes" beside it.
+    return [];
   }
 
   const push = (label: string, href?: string) => {

@@ -29,7 +29,9 @@ import { createUsersRouter } from "./routes/users.js";
 import { createNotesRouter } from "./routes/notes.js";
 import { createCalendarRouter } from "./routes/calendar.js";
 import { createSystemHealthRouter } from "./routes/system_health.js";
+import { createDemoRouter } from "./routes/demo.js";
 import { buildBreadcrumbs } from "./services/breadcrumbs.js";
+import { isDemoModeEnabled, isDemoUser } from "./services/demo_mode.js";
 import { countUnreadMessageBoxes } from "./repos/messages_repo.js";
 import { getProcessById, getProcessRouteCode } from "./repos/processes_repo.js";
 import { getExperiment } from "./repos/experiments_repo.js";
@@ -235,6 +237,8 @@ app.use(csrfTokenMiddleware);
 app.use(xssProtectionMiddleware);
 app.use((req, res, next) => {
   res.locals.currentUser = req.user ?? null;
+  res.locals.demoModeEnabled = isDemoModeEnabled();
+  res.locals.isDemoUser = isDemoUser(req.user);
   res.locals.activeAdminPath = ["/machines", "/param-library", "/audit", "/system-health"].includes(req.path)
     ? req.path
     : "";
@@ -246,8 +250,23 @@ app.use((req, res, next) => {
   next();
 });
 
+// A public demo account may inspect its dedicated demo workspace, but no
+// unsafe request can change data. Keep logout available so a team member can
+// leave the demo session and use the ordinary sign-in page.
+app.use((req, res, next) => {
+  if (
+    isDemoUser(req.user) &&
+    !["GET", "HEAD", "OPTIONS"].includes(req.method) &&
+    req.path !== "/auth/logout"
+  ) {
+    return res.status(403).send("Demo workspace is read-only");
+  }
+  return next();
+});
+
 app.use(requireCsrf);
 app.use("/auth", createAuthRouter(db));
+app.use(createDemoRouter(db));
 
 app.use((req, res, next) => {
   if (req.user?.temp_password) {

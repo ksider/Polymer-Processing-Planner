@@ -3,6 +3,7 @@ import type { Db } from "../db.js";
 import { getProcessById } from "../repos/processes_repo.js";
 import { canAccessExperiment } from "../middleware/experiment_access.js";
 import { getExperiment, listExperimentsByProcessForUserWithMeta } from "../repos/experiments_repo.js";
+import { isDemoUser } from "../services/demo_mode.js";
 import {
   decodeCalendarEventToken,
   listExperimentCalendarEvents,
@@ -15,7 +16,8 @@ function hasPrivilegedRole(role: string | undefined): boolean {
   return role === "admin" || role === "manager";
 }
 
-function canViewProcessCalendar(db: Db, processId: number, userId: number, role?: string): { ok: boolean; visibleExperimentIds?: number[] } {
+function canViewProcessCalendar(db: Db, processId: number, userId: number, role?: string, demoUser = false): { ok: boolean; visibleExperimentIds?: number[] } {
+  if (demoUser) return { ok: true };
   if (hasPrivilegedRole(role)) return { ok: true };
   const process = getProcessById(db, processId);
   if (!process) return { ok: false };
@@ -93,7 +95,7 @@ export function createCalendarRouter(db: Db) {
       if (!Number.isFinite(processId) || processId <= 0) {
         return res.status(400).json({ error: "Invalid process_id" });
       }
-      const access = canViewProcessCalendar(db, processId, req.user.id, req.user.role ?? undefined);
+      const access = canViewProcessCalendar(db, processId, req.user.id, req.user.role ?? undefined, isDemoUser(req.user));
       if (!access.ok) return res.status(403).json({ error: "Forbidden" });
       const events = listProcessCalendarEvents(db, processId, {
         onlyVisibleExperimentIds: access.visibleExperimentIds
