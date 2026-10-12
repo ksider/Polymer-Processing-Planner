@@ -1,197 +1,98 @@
-<%- include('partials/head', { title: 'Polymer Processing Planner | Recipes' }) %>
-<%- include('partials/nav') %>
-<div class="container">
-  <div class="card">
-    <div class="recipes-header">
-      <div class="recipes-header-left">
-        <h1 class="card-title">Saved Recipes</h1>
-        <p class="small-note">Import BPACKs-style matrix CSV/TSV to populate recipe components.</p>
-        <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
-          <form class="pure-form recipes-import-file" action="/recipes/import" method="post" enctype="multipart/form-data">
-            <input type="file" name="matrix" accept=".csv,.tsv,text/csv,text/tab-separated-values" required>
-            <button class="icon-btn" type="submit" title="Import Recipes">Import</button>
-          </form>
-        <% } %>
-      </div>
-      <div class="recipes-actions">
-      </div>
-    </div>
-    <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
-      <form class="pure-form recipe-import-text" action="/recipes/import-text" method="post">
-        <label class="small-note" for="recipe_text">Plain text: recipe name on line 1, then "Component  PHR" (two spaces).</label>
-        <textarea id="recipe_text" name="recipe_text" rows="6" placeholder="Recipe Name&#10;Component A  12.5&#10;Component B  0.8" required></textarea>
-        <button class="icon-btn" type="submit" title="Import Recipe from Text">Add from text</button>
-      </form>
-    <% } %>
-    <% if (importedCount !== null) { %>
-      <p class="small-note"><%= importedCount %> recipes imported.</p>
-    <% } %>
-    <% if (error) { %>
-      <p class="small-note"><%= error %></p>
-    <% } %>
-    <% if (recipes.length === 0) { %>
-      <p class="small-note">No recipes loaded yet.</p>
-    <% } else { %>
-      <div class="recipes-list-toolbar">
-        <input type="search" class="recipe-search" placeholder="Search recipes..." data-recipe-search>
-        <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager')) { %>
-          <form class="pure-form inline-form" action="/recipes/clear" method="post" data-confirm="Delete all imported recipes?">
-            <button class="icon-btn danger" type="submit" title="Delete All Recipes">Delete All</button>
-          </form>
-        <% } %>
-      </div>
-      <div class="recipe-card-grid">
-        <% recipes.forEach((recipe) => { %>
-          <% const dataText = [recipe.name, recipe.description || '', ...recipe.components.map((c) => `${c.component_name} ${c.phr}`)].join(' ').toLowerCase(); %>
-          <div
-            class="recipe-card"
-            data-recipe-text="<%= dataText %>"
-            data-recipe-id="<%= recipe.id %>"
-            data-recipe-name="<%= recipe.name %>"
-            data-recipe-components="<%= JSON.stringify(recipe.components || []) %>"
-          >
-            <div class="recipe-card-header">
-              <h3><%- formatInline(recipe.name) %></h3>
-              <div>
-                <span class="badge imported">import</span>
-              </div>
-            </div>
-            <% if (recipe.description) { %>
-              <div class="recipe-desc"><%- formatInline(recipe.description) %></div>
-            <% } %>
-            <div class="recipe-components">
-              <% const maxLines = 10; %>
-              <% const comps = recipe.components || []; %>
-              <% comps.slice(0, maxLines).forEach((component) => { %>
-                <div class="recipe-comp-line">
-                  <span class="recipe-comp-name"><%- formatInline(component.component_name) %></span>
-                  <span class="recipe-comp-qty"><%= formatNumber(component.phr) %></span>
-                </div>
-              <% }); %>
-              <% if (comps.length > maxLines) { %>
-                <div class="recipe-comp-more">+<%= comps.length - maxLines %> more</div>
-              <% } %>
-            </div>
-            <div class="recipe-card-actions">
-              <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
-                <button class="icon-btn icon-only" type="button" data-recipe-edit title="Edit recipe" aria-label="Edit recipe">
-                  <span class="material-symbols-rounded" aria-hidden="true">edit</span>
-                </button>
-              <% } %>
-              <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager')) { %>
-                <form class="pure-form inline-form" action="/recipes/<%= recipe.id %>/delete" method="post" data-confirm="Archive this recipe?">
-                  <button class="icon-btn icon-only danger" type="submit" title="Archive recipe" aria-label="Archive recipe">
-                    <span class="material-symbols-rounded" aria-hidden="true">delete</span>
-                  </button>
-                </form>
-              <% } %>
-            </div>
-          </div>
-        <% }); %>
-      </div>
-    <% } %>
-  </div>
-</div>
+<%- include('partials/head', { title: 'Polymer Processing Planner | Recipes', uiKit: true }) %>
+<%- include('partials/experiment_workspace_nav') %>
+<% const canEditRecipes = currentUser && ['admin', 'manager', 'engineer'].includes(currentUser.role); %>
+<% const canDeleteRecipes = currentUser && ['admin', 'manager'].includes(currentUser.role); %>
 
-<dialog class="modal-frame" id="recipeEditDialog">
-  <div class="modal-header">
-    <strong>Edit Recipe</strong>
-    <button class="pure-button" type="button" data-close>Close</button>
-  </div>
-  <form class="pure-form" id="recipeEditForm" method="post">
-    <div class="modal-body">
-      <div class="field-grid">
-        <div>
-          <label for="recipeEditName">Recipe Name</label>
-          <input id="recipeEditName" name="name" required>
+<main class="min-h-[calc(100vh-4rem)] bg-gray-50">
+  <div class="w-full px-4 py-4 sm:px-6 lg:px-8">
+    <section class="rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div class="flex flex-col gap-4 border-b border-gray-200 px-5 py-5 sm:flex-row sm:items-start sm:justify-between">
+        <div class="flex items-center gap-2">
+          <span class="inline-flex size-9 items-center justify-center rounded-lg bg-blue-50 text-blue-700"><span class="material-symbols-rounded" aria-hidden="true">category</span></span>
+          <div><h1 class="text-lg font-semibold tracking-tight text-gray-900">Recipes</h1><p class="mt-0.5 text-sm text-gray-500">Reusable material formulations and component ratios.</p></div>
+        </div>
+        <% if (canEditRecipes) { %>
+          <button class="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300" type="button" data-modal-target="recipeImportModal" data-modal-toggle="recipeImportModal"><span class="material-symbols-rounded text-[19px]" aria-hidden="true">upload_file</span>Import recipes</button>
+        <% } %>
+      </div>
+
+      <% if (importedCount !== null) { %><div class="mx-5 mt-5 flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800" role="status"><span class="material-symbols-rounded shrink-0" aria-hidden="true">check_circle</span><span><strong><%= importedCount %></strong> recipes imported.</span></div><% } %>
+      <% if (error) { %><div class="mx-5 mt-5 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert"><span class="material-symbols-rounded shrink-0" aria-hidden="true">error</span><span><%= error %></span></div><% } %>
+
+      <div class="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div class="relative w-full sm:max-w-md"><span class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3 text-gray-500"><span class="material-symbols-rounded text-[20px]" aria-hidden="true">search</span></span><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 py-2.5 ps-10 pe-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:ring-blue-500" type="search" placeholder="Search recipes or components" aria-label="Search recipes" data-recipe-search></div>
+        <div class="flex shrink-0 items-center gap-2 text-sm text-gray-500"><span class="font-medium text-gray-900"><%= recipes.length %></span><span><%= recipes.length === 1 ? 'recipe' : 'recipes' %></span>
+          <% if (canDeleteRecipes && recipes.length > 0) { %><form action="/recipes/clear" method="post" data-confirm="Delete all imported recipes?"><button class="inline-flex items-center justify-center rounded-lg border border-red-200 bg-white p-2 text-red-700 hover:bg-red-50 focus:outline-none focus:ring-4 focus:ring-red-100" type="submit" title="Delete all recipes" aria-label="Delete all recipes"><span class="material-symbols-rounded text-[20px]" aria-hidden="true">delete_sweep</span></button></form><% } %>
         </div>
       </div>
-      <h3 class="card-title" style="margin-top: 1rem;">Mass Parts Table</h3>
-      <table class="pure-table table-compact recipe-edit-table">
-        <thead>
-          <tr>
-            <th>Component</th>
-            <th>Static parts</th>
-          </tr>
-        </thead>
-        <tbody id="recipeEditBody"></tbody>
-      </table>
-      <div class="recipe-edit-actions">
-        <button class="pure-button pure-button-secondary" type="button" id="recipeAddRow">Add component</button>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="pure-button" type="button" data-close>Cancel</button>
-      <button class="pure-button pure-button-primary" type="submit">Save</button>
-    </div>
-  </form>
-</dialog>
-<%- include('partials/foot') %>
+
+      <% if (recipes.length === 0) { %>
+        <div class="mx-5 mb-5 flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 px-6 py-14 text-center"><span class="material-symbols-rounded text-4xl text-gray-400" aria-hidden="true">inventory_2</span><h2 class="mt-3 text-base font-semibold text-gray-900">No recipes loaded</h2><p class="mt-1 max-w-sm text-sm text-gray-500">Import a BPACK-style CSV or TSV matrix, or paste a formulation in plain text.</p><% if (canEditRecipes) { %><button class="mt-5 inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300" type="button" data-modal-target="recipeImportModal" data-modal-toggle="recipeImportModal"><span class="material-symbols-rounded text-[19px]" aria-hidden="true">upload_file</span>Import recipes</button><% } %></div>
+      <% } else { %>
+        <div class="grid gap-4 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" data-recipe-grid>
+          <% recipes.forEach((recipe) => { %>
+            <% const components = recipe.components || []; %>
+            <% const dataText = [recipe.name, recipe.description || '', ...components.map((component) => `${component.component_name} ${component.phr}`)].join(' ').toLowerCase(); %>
+            <article class="flex min-w-0 flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition hover:border-blue-200 hover:shadow" data-recipe-card data-recipe-text="<%= dataText %>" data-recipe-id="<%= recipe.id %>" data-recipe-name="<%= recipe.name %>" data-recipe-components="<%= JSON.stringify(components) %>">
+              <div class="flex items-start justify-between gap-3"><div class="min-w-0"><h2 class="truncate text-base font-semibold text-gray-900" title="<%= recipe.name %>"><%- formatInline(recipe.name) %></h2><p class="mt-1 text-xs text-gray-500"><%= components.length %> <%= components.length === 1 ? 'component' : 'components' %></p></div><span class="inline-flex shrink-0 items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">Imported</span></div>
+              <% if (recipe.description) { %><p class="mt-3 text-sm text-gray-500"><%- formatInline(recipe.description) %></p><% } %>
+              <dl class="mt-4 divide-y divide-gray-100 border-y border-gray-100 text-sm">
+                <% components.slice(0, 8).forEach((component) => { %><div class="flex items-center justify-between gap-3 py-2"><dt class="min-w-0 truncate text-gray-600" title="<%= component.component_name %>"><%- formatInline(component.component_name) %></dt><dd class="shrink-0 font-medium text-gray-900"><%= formatNumber(component.phr) %> <span class="text-xs font-normal text-gray-500">phr</span></dd></div><% }); %>
+              </dl>
+              <% if (components.length > 8) { %><p class="mt-2 text-xs font-medium text-gray-500">+<%= components.length - 8 %> more components</p><% } %>
+              <% if (canEditRecipes || canDeleteRecipes) { %><div class="mt-4 flex items-center justify-end gap-2 border-t border-gray-100 pt-3"><% if (canEditRecipes) { %><button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-blue-700 focus:outline-none focus:ring-4 focus:ring-gray-100" type="button" title="Edit recipe" aria-label="Edit recipe" data-recipe-edit data-modal-target="recipeEditModal" data-modal-toggle="recipeEditModal"><span class="material-symbols-rounded text-[20px]" aria-hidden="true">edit</span></button><% } %><% if (canDeleteRecipes) { %><form action="/recipes/<%= recipe.id %>/delete" method="post" data-confirm="Archive this recipe?"><button class="inline-flex size-9 items-center justify-center rounded-lg border border-red-200 bg-white text-red-700 hover:bg-red-50 focus:outline-none focus:ring-4 focus:ring-red-100" type="submit" title="Archive recipe" aria-label="Archive recipe"><span class="material-symbols-rounded text-[20px]" aria-hidden="true">delete</span></button></form><% } %></div><% } %>
+            </article>
+          <% }); %>
+        </div>
+        <p class="hidden px-5 pb-5 text-sm text-gray-500" data-recipe-empty-search>No recipes match this search.</p>
+      <% } %>
+    </section>
+  </div>
+</main>
+
+<% if (canEditRecipes) { %>
+  <div id="recipeImportModal" tabindex="-1" aria-hidden="true" class="hidden fixed inset-0 z-50 h-[calc(100%-1rem)] max-h-full w-full items-center justify-center overflow-y-auto overflow-x-hidden p-4 md:inset-0"><div class="relative max-h-full w-full max-w-2xl"><div class="relative rounded-xl bg-white shadow"><div class="flex items-center justify-between rounded-t border-b border-gray-200 px-5 py-4"><h2 class="text-lg font-semibold text-gray-900">Import recipes</h2><button class="inline-flex size-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900" type="button" data-modal-hide="recipeImportModal" aria-label="Close"><span class="material-symbols-rounded" aria-hidden="true">close</span></button></div><div class="p-5">
+    <ul class="flex flex-wrap border-b border-gray-200 text-sm font-medium text-center" id="recipe-import-tabs" data-tabs-toggle="#recipe-import-panels" role="tablist"><li class="me-2" role="presentation"><button class="inline-block rounded-t-lg border-b-2 border-blue-700 p-3 text-blue-700" id="recipe-file-tab" data-tabs-target="#recipe-file-panel" type="button" role="tab" aria-controls="recipe-file-panel" aria-selected="true">CSV or TSV file</button></li><li role="presentation"><button class="inline-block rounded-t-lg border-b-2 border-transparent p-3 text-gray-500 hover:border-gray-300 hover:text-gray-600" id="recipe-text-tab" data-tabs-target="#recipe-text-panel" type="button" role="tab" aria-controls="recipe-text-panel" aria-selected="false">Paste text</button></li></ul>
+    <div id="recipe-import-panels"><div class="pt-5" id="recipe-file-panel" role="tabpanel" aria-labelledby="recipe-file-tab"><form action="/recipes/import" method="post" enctype="multipart/form-data" class="space-y-4"><div><label class="mb-2 block text-sm font-medium text-gray-900" for="recipeMatrix">Matrix file</label><input class="block w-full cursor-pointer rounded-lg border border-gray-300 bg-gray-50 text-sm text-gray-900 focus:outline-none" id="recipeMatrix" type="file" name="matrix" accept=".csv,.tsv,text/csv,text/tab-separated-values" required><p class="mt-2 text-sm text-gray-500">BPACK-style matrix in CSV or TSV format.</p></div><div class="flex justify-end"><button class="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300" type="submit"><span class="material-symbols-rounded text-[19px]" aria-hidden="true">upload</span>Import file</button></div></form></div>
+    <div class="hidden pt-5" id="recipe-text-panel" role="tabpanel" aria-labelledby="recipe-text-tab"><form action="/recipes/import-text" method="post" class="space-y-4"><div><label class="mb-2 block text-sm font-medium text-gray-900" for="recipe_text">Recipe text</label><textarea class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 font-mono text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="recipe_text" name="recipe_text" rows="8" placeholder="Recipe Name&#10;Component A  12.5&#10;Component B  0.8" required></textarea><p class="mt-2 text-sm text-gray-500">Recipe name on line one; then component and PHR, separated by two spaces.</p></div><div class="flex justify-end"><button class="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300" type="submit"><span class="material-symbols-rounded text-[19px]" aria-hidden="true">add</span>Add recipe</button></div></form></div></div>
+  </div></div></div></div>
+
+  <div id="recipeEditModal" tabindex="-1" aria-hidden="true" class="hidden fixed inset-0 z-50 h-[calc(100%-1rem)] max-h-full w-full items-center justify-center overflow-y-auto overflow-x-hidden p-4 md:inset-0"><div class="relative max-h-full w-full max-w-2xl"><div class="relative rounded-xl bg-white shadow"><div class="flex items-center justify-between rounded-t border-b border-gray-200 px-5 py-4"><h2 class="text-lg font-semibold text-gray-900">Edit recipe</h2><button class="inline-flex size-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900" type="button" data-modal-hide="recipeEditModal" aria-label="Close"><span class="material-symbols-rounded" aria-hidden="true">close</span></button></div><form id="recipeEditForm" method="post"><div class="space-y-5 p-5"><div><label class="mb-2 block text-sm font-medium text-gray-900" for="recipeEditName">Recipe name</label><input class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500" id="recipeEditName" name="name" required></div><div><div class="mb-2 flex items-center justify-between gap-3"><h3 class="text-sm font-semibold text-gray-900">Components</h3><button class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" type="button" id="recipeAddRow"><span class="material-symbols-rounded text-[18px]" aria-hidden="true">add</span>Add component</button></div><div class="overflow-x-auto rounded-lg border border-gray-200"><table class="w-full text-left text-sm text-gray-600"><thead class="bg-gray-50 text-xs uppercase text-gray-500"><tr><th class="px-3 py-3">Component</th><th class="w-36 px-3 py-3">PHR</th><th class="w-12 px-3 py-3"><span class="sr-only">Remove</span></th></tr></thead><tbody class="divide-y divide-gray-100" id="recipeEditBody"></tbody></table></div></div></div><div class="flex items-center justify-end gap-3 rounded-b border-t border-gray-200 px-5 py-4"><button class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50" type="button" data-modal-hide="recipeEditModal">Cancel</button><button class="rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300" type="submit">Save changes</button></div></form></div></div></div>
+<% } %>
+
+<%- include('partials/foot', { uiKit: true }) %>
 
 <script nonce="<%= cspNonce %>">
-  const searchInput = document.querySelector('[data-recipe-search]');
-  if (searchInput) {
-    searchInput.addEventListener('input', (event) => {
-      const query = event.target.value.toLowerCase();
-      document.querySelectorAll('[data-recipe-text]').forEach((card) => {
-        const text = card.getAttribute('data-recipe-text') || '';
-        card.style.display = text.includes(query) ? '' : 'none';
-      });
-    });
+  const recipeSearch = document.querySelector('[data-recipe-search]');
+  const recipeCards = Array.from(document.querySelectorAll('[data-recipe-card]'));
+  const recipeEmptySearch = document.querySelector('[data-recipe-empty-search]');
+  recipeSearch?.addEventListener('input', (event) => {
+    const query = String(event.target.value || '').trim().toLowerCase(); let visible = 0;
+    recipeCards.forEach((card) => { const matches = !query || (card.dataset.recipeText || '').includes(query); card.classList.toggle('hidden', !matches); if (matches) visible += 1; });
+    recipeEmptySearch?.classList.toggle('hidden', visible !== 0);
+  });
+
+  const recipeForm = document.getElementById('recipeEditForm');
+  const recipeNameInput = document.getElementById('recipeEditName');
+  const recipeBody = document.getElementById('recipeEditBody');
+  const recipeAddRow = document.getElementById('recipeAddRow');
+  function addRecipeComponentRow(name = '', phr = '') {
+    if (!recipeBody) return;
+    const row = document.createElement('tr'); const nameCell = document.createElement('td'); const phrCell = document.createElement('td'); const actionCell = document.createElement('td');
+    const nameInput = document.createElement('input'); const phrInput = document.createElement('input'); const removeButton = document.createElement('button'); const icon = document.createElement('span');
+    nameInput.type = 'text'; nameInput.name = 'component_name'; nameInput.required = true; nameInput.value = name ?? ''; nameInput.className = 'block w-full rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500';
+    phrInput.type = 'number'; phrInput.step = 'any'; phrInput.name = 'component_phr'; phrInput.required = true; phrInput.value = phr ?? ''; phrInput.className = 'block w-full rounded-lg border border-gray-300 bg-gray-50 p-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500';
+    removeButton.type = 'button'; removeButton.className = 'inline-flex size-8 items-center justify-center rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-700'; removeButton.setAttribute('aria-label', 'Remove component'); icon.className = 'material-symbols-rounded text-[19px]'; icon.setAttribute('aria-hidden', 'true'); icon.textContent = 'close'; removeButton.appendChild(icon);
+    removeButton.addEventListener('click', () => { if (recipeBody.children.length > 1) row.remove(); else { nameInput.value = ''; phrInput.value = ''; nameInput.focus(); } });
+    nameCell.className = 'px-3 py-2'; phrCell.className = 'px-3 py-2'; actionCell.className = 'px-2 py-2 text-center'; nameCell.appendChild(nameInput); phrCell.appendChild(phrInput); actionCell.appendChild(removeButton); row.append(nameCell, phrCell, actionCell); recipeBody.appendChild(row);
   }
-
-  const dialog = document.getElementById('recipeEditDialog');
-  const form = document.getElementById('recipeEditForm');
-  const nameInput = document.getElementById('recipeEditName');
-  const body = document.getElementById('recipeEditBody');
-  const addRowBtn = document.getElementById('recipeAddRow');
-
-  function addRow(name = '', phr = '') {
-    const row = document.createElement('tr');
-    const nameCell = document.createElement('td');
-    const phrCell = document.createElement('td');
-    const nameInput = document.createElement('input');
-    const phrInput = document.createElement('input');
-    nameInput.type = 'text';
-    nameInput.name = 'component_name';
-    nameInput.required = true;
-    nameInput.value = name ?? '';
-    phrInput.type = 'number';
-    phrInput.step = 'any';
-    phrInput.name = 'component_phr';
-    phrInput.required = true;
-    phrInput.value = phr ?? '';
-    nameCell.appendChild(nameInput);
-    phrCell.appendChild(phrInput);
-    row.appendChild(nameCell);
-    row.appendChild(phrCell);
-    body.appendChild(row);
-  }
-
   document.querySelectorAll('[data-recipe-edit]').forEach((button) => {
     button.addEventListener('click', () => {
-      const card = button.closest('.recipe-card');
-      if (!card || !dialog || !form || !nameInput || !body) return;
-      const recipeId = card.getAttribute('data-recipe-id');
-      const recipeName = card.getAttribute('data-recipe-name') || '';
-      const componentsRaw = card.getAttribute('data-recipe-components') || '[]';
-      let components = [];
-      try {
-        components = JSON.parse(componentsRaw);
-      } catch {}
-
-      form.setAttribute('action', `/recipes/${recipeId}/update`);
-      nameInput.value = recipeName;
-      body.innerHTML = '';
-      if (components.length === 0) addRow();
-      components.forEach((component) => addRow(component.component_name || '', component.phr ?? ''));
-      dialog.showModal();
+      const card = button.closest('[data-recipe-card]'); if (!card || !recipeForm || !recipeNameInput || !recipeBody) return;
+      let components = []; try { components = JSON.parse(card.dataset.recipeComponents || '[]'); } catch { components = []; }
+      recipeForm.action = `/recipes/${card.dataset.recipeId}/update`; recipeNameInput.value = card.dataset.recipeName || ''; recipeBody.replaceChildren();
+      if (components.length) components.forEach((component) => addRecipeComponentRow(component.component_name || '', component.phr ?? '')); else addRecipeComponentRow();
     });
   });
-
-  addRowBtn?.addEventListener('click', () => addRow());
-
-  dialog?.querySelectorAll('[data-close]').forEach((btn) => {
-    btn.addEventListener('click', () => dialog.close());
-  });
+  recipeAddRow?.addEventListener('click', () => addRecipeComponentRow());
 </script>

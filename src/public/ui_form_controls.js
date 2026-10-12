@@ -28,8 +28,16 @@
     || element.closest('.notes-drawer, .tiptap, [contenteditable]')
   );
 
+  // Migrated views already use Flowbite/Tailwind controls. Do not append the
+  // legacy adapter's `!px-*` utilities: they override `ps-*` in input addons
+  // and push an icon over the value. The adapter remains only for controls
+  // that have not yet been migrated.
+  const hasExplicitUiControlStyle = (control) => Array.from(control.classList || []).some((className) =>
+    /^!?(?:rounded|border|bg|p[trblxyse]?|text)-/.test(className)
+  );
+
   const applyControl = (control) => {
-    if (isExcluded(control) || control.type === 'hidden') return;
+    if (isExcluded(control) || hasExplicitUiControlStyle(control) || control.type === 'hidden') return;
     const isCompact = Boolean(control.closest('td, th'));
     if (control.type === 'checkbox') {
       control.classList.add(...checkboxClasses);
