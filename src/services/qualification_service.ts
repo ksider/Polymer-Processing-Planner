@@ -609,6 +609,7 @@ const extrusionStepDefinitions: StepDefinition[] = [
       { code: "production_sme_kwh_kg", label: "Production SME", field_type: "number", unit: "kWh/kg", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_scale_up_sme" },
       { code: "sme_parity_delta_pct", label: "SME parity deviation", field_type: "number", unit: "%", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_sme_parity" },
       { code: "melt_temp_parity_delta_c", label: "Melt-temperature deviation", field_type: "number", unit: "°C", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_melt_temp_parity" },
+      { code: "morphology_parity_delta_pct", label: "d50 deviation versus laboratory baseline", field_type: "number", unit: "%", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_morphology_parity" },
       { code: "automatic_scale_up_acceptance", label: "Meets configured scale-up limits", field_type: "boolean", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_scale_up_acceptance" }
     ]
   }
@@ -1708,6 +1709,7 @@ export function recomputeDerivedAndSummary(
         const meltTemperature = getNumber("production_melt_temp_c");
         const meltPressure = getNumber("production_melt_pressure_bar");
         const sourceMeltTemperature = resolveSettingNumber(stepSettings.scale_up_source_melt_temperature_c);
+        const sourceParticleSizeD50 = resolveSettingNumber(stepSettings.scale_up_source_particle_size_d50_um);
         if (sourceDiameter != null && sourceDiameter > 0 && productionDiameter != null && productionDiameter > 0 && sourceThroughput != null) {
           setDerived("scaled_throughput_target_kg_h", sourceThroughput * Math.pow(productionDiameter / sourceDiameter, 3));
         }
@@ -1724,6 +1726,10 @@ export function recomputeDerivedAndSummary(
         if (meltTemperature != null && sourceMeltTemperature != null) {
           setDerived("melt_temp_parity_delta_c", Math.abs(meltTemperature - sourceMeltTemperature));
         }
+        const particleSizeD50 = getNumber("particle_size_d50_um");
+        if (particleSizeD50 != null && sourceParticleSizeD50 != null && sourceParticleSizeD50 > 0) {
+          setDerived("morphology_parity_delta_pct", Math.abs(particleSizeD50 - sourceParticleSizeD50) / sourceParticleSizeD50 * 100);
+        }
         const checks: boolean[] = [];
         const smeParity = speed != null && throughput != null && throughput > 0 && torque != null && noLoadTorque != null && sourceSme != null && sourceSme > 0
           ? Math.abs((speed * (torque - noLoadTorque) / (9549 * throughput)) - sourceSme) / sourceSme * 100
@@ -1732,6 +1738,8 @@ export function recomputeDerivedAndSummary(
         if (smeParity != null) checks.push(smeParity <= smeTolerance);
         const meltTolerance = resolveSettingNumber(stepSettings.scale_up_melt_temperature_tolerance_c) ?? 3;
         if (meltTemperature != null && sourceMeltTemperature != null) checks.push(Math.abs(meltTemperature - sourceMeltTemperature) <= meltTolerance);
+        const morphologyTolerance = resolveSettingNumber(stepSettings.scale_up_morphology_tolerance_pct) ?? 5;
+        if (particleSizeD50 != null && sourceParticleSizeD50 != null && sourceParticleSizeD50 > 0) checks.push(Math.abs(particleSizeD50 - sourceParticleSizeD50) / sourceParticleSizeD50 * 100 <= morphologyTolerance);
         const pressureLimit = resolveSettingNumber(stepSettings.scale_up_production_max_melt_pressure_bar);
         if (meltPressure != null && pressureLimit != null && pressureLimit > 0) checks.push(meltPressure <= pressureLimit);
         const maxTipSpeed = resolveSettingNumber(stepSettings.scale_up_production_max_tip_speed_m_s);

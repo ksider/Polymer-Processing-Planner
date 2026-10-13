@@ -1727,6 +1727,7 @@ export function createQualificationRouter(db: Db) {
       scale_up_source_screw_configuration: req.body.scale_up_source_screw_configuration ? String(req.body.scale_up_source_screw_configuration).trim() : null,
       scale_up_production_screw_configuration: req.body.scale_up_production_screw_configuration ? String(req.body.scale_up_production_screw_configuration).trim() : null,
       scale_up_source_particle_size_d50_um: parseSettingValue(req.body.scale_up_source_particle_size_d50_um),
+      scale_up_morphology_tolerance_pct: parseSettingValue(req.body.scale_up_morphology_tolerance_pct),
       scale_up_source_rtd_run_id: parseSettingValue(req.body.scale_up_source_rtd_run_id),
       scale_up_source_torque_nm: parseSettingValue(req.body.scale_up_source_torque_nm),
       scale_up_source_no_load_torque_nm: parseSettingValue(req.body.scale_up_source_no_load_torque_nm),

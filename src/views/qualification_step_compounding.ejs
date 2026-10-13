@@ -1482,6 +1482,8 @@
       if (!container) return;
       const chart = echarts.getInstanceByDom(container) || echarts.init(container);
       const sourceD50 = parseNumber(container.dataset.sourceD50);
+      const sourceSme = parseNumber(container.dataset.sourceSme);
+      const morphologyTolerance = parseNumber(container.dataset.morphologyTolerance) ?? 5;
       const derivedNumber = (row, code) => parseNumber(row.querySelector(`[data-derived-code="${code}"]`)?.textContent);
       const points = Array.from(document.querySelectorAll('[data-run-table] tr[data-run-row]')).map((row) => ({
         run: row.querySelector('td')?.textContent?.trim() || 'Run',
@@ -1494,11 +1496,21 @@
         return;
       }
       chart.setOption({
-        tooltip: { trigger: 'item', formatter: (item) => `${item.data.run}<br>SME parity: ${item.value[0].toFixed(2)}%<br>d50: ${item.value[1].toFixed(2)} µm` },
+        tooltip: { trigger: 'item', formatter: (item) => item.data.run === 'Laboratory target'
+          ? `Laboratory target<br>SME: ${Number.isFinite(sourceSme) ? sourceSme.toFixed(4) : '—'} kWh/kg<br>d50: ${item.value[1].toFixed(2)} µm`
+          : `${item.data.run}<br>SME deviation vs lab: ${item.value[0].toFixed(2)}%<br>d50: ${item.value[1].toFixed(2)} µm` },
         grid: { left: 66, right: 24, top: 20, bottom: 50 },
-        xAxis: { type: 'value', name: 'SME parity deviation (%)', nameLocation: 'middle', nameGap: 32, min: 0, scale: true },
+        xAxis: { type: 'value', name: 'SME deviation versus laboratory baseline (%)', nameLocation: 'middle', nameGap: 32, min: 0, scale: true },
         yAxis: { type: 'value', name: 'Particle size d50 (µm)', nameLocation: 'middle', nameGap: 48, scale: true },
-        series: [{ type: 'scatter', symbolSize: 10, itemStyle: { color: '#7c3aed' }, data: points.map((point) => ({ value: [point.parity, point.d50], run: point.run })), markLine: { symbol: 'none', lineStyle: { color: '#d97706', type: 'dashed' }, label: { formatter: (params) => params.data.xAxis != null ? '3% SME criterion' : 'Source d50' }, data: [{ xAxis: 3 }, ...(Number.isFinite(sourceD50) ? [{ yAxis: sourceD50 }] : [])] } }]
+        series: [
+          {
+            name: 'Production runs', type: 'scatter', symbolSize: 10, itemStyle: { color: '#7c3aed' },
+            data: points.map((point) => ({ value: [point.parity, point.d50], run: point.run })),
+            markLine: { symbol: 'none', lineStyle: { color: '#d97706', type: 'dashed' }, label: { formatter: (params) => params.data.xAxis != null ? '3% SME criterion' : 'Laboratory d50' }, data: [{ xAxis: 3 }, ...(Number.isFinite(sourceD50) ? [{ yAxis: sourceD50 }] : [])] },
+            markArea: Number.isFinite(sourceD50) ? { silent: true, itemStyle: { color: 'rgba(22, 163, 74, 0.10)' }, label: { color: '#15803d', formatter: 'Laboratory acceptance window' }, data: [[{ xAxis: 0, yAxis: sourceD50 * (1 - morphologyTolerance / 100) }, { xAxis: 3, yAxis: sourceD50 * (1 + morphologyTolerance / 100) }]] } : undefined
+          },
+          ...(Number.isFinite(sourceD50) ? [{ name: 'Laboratory target', type: 'scatter', symbol: 'diamond', symbolSize: 16, itemStyle: { color: '#15803d' }, data: [{ value: [0, sourceD50], run: 'Laboratory target' }], z: 4 }] : [])
+        ]
       }, { notMerge: true });
     };
     const recomputeStep1Chart = () => {

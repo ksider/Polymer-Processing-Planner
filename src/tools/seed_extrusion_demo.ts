@@ -371,6 +371,8 @@ function seedStepTen(db: Db, experimentId: number, ownerId: number | null) {
     scale_up_source_melt_density_kg_l: 0.8,
     scale_up_source_barrel_temperature_profile_c: "185, 195, 205, 210",
     scale_up_source_melt_temperature_c: 210,
+    scale_up_source_particle_size_d50_um: 820,
+    scale_up_morphology_tolerance_pct: 5,
     scale_up_production_free_volume_l: 12.7,
     scale_up_production_melt_density_kg_l: 0.8,
     scale_up_capacity_exponent: 2.9,
