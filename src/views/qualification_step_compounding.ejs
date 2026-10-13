@@ -1468,12 +1468,38 @@
       try { updateExtrusionThermalDerived(); } catch {}
       try { renderExtrusionThermalCharts(); } catch {}
       try { renderExtrusionRtdCharts(); } catch {}
+      try { renderScaleUpMorphologyChart(); } catch {}
       try { recomputeStep1Recommendations(); } catch {}
       try { recomputeStep2Recommendations(); } catch {}
       try { recomputeStep3Recommendations(); } catch {}
       try { recomputeStep3Chart(); } catch {}
       try { recomputeStep3DeviationChart(); } catch {}
       try { recomputeExtrusionFlowCurve(); } catch {}
+    };
+    const renderScaleUpMorphologyChart = () => {
+      if (processTypeCode !== 'extrusion_v1' || stepNumber !== 10 || !window.echarts) return;
+      const container = document.getElementById('scaleUpMorphologyChart');
+      if (!container) return;
+      const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+      const sourceD50 = parseNumber(container.dataset.sourceD50);
+      const derivedNumber = (row, code) => parseNumber(row.querySelector(`[data-derived-code="${code}"]`)?.textContent);
+      const points = Array.from(document.querySelectorAll('[data-run-table] tr[data-run-row]')).map((row) => ({
+        run: row.querySelector('td')?.textContent?.trim() || 'Run',
+        parity: derivedNumber(row, 'sme_parity_delta_pct'),
+        d50: numFromRow(row, 'particle_size_d50_um')
+      })).filter((point) => Number.isFinite(point.parity) && Number.isFinite(point.d50));
+      if (!points.length) {
+        chart.clear();
+        chart.setOption({ title: { text: 'Enter production torque, throughput, no-load torque and d50 to plot measured parity.', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } } });
+        return;
+      }
+      chart.setOption({
+        tooltip: { trigger: 'item', formatter: (item) => `${item.data.run}<br>SME parity: ${item.value[0].toFixed(2)}%<br>d50: ${item.value[1].toFixed(2)} µm` },
+        grid: { left: 66, right: 24, top: 20, bottom: 50 },
+        xAxis: { type: 'value', name: 'SME parity deviation (%)', nameLocation: 'middle', nameGap: 32, min: 0, scale: true },
+        yAxis: { type: 'value', name: 'Particle size d50 (µm)', nameLocation: 'middle', nameGap: 48, scale: true },
+        series: [{ type: 'scatter', symbolSize: 10, itemStyle: { color: '#7c3aed' }, data: points.map((point) => ({ value: [point.parity, point.d50], run: point.run })), markLine: { symbol: 'none', lineStyle: { color: '#d97706', type: 'dashed' }, label: { formatter: (params) => params.data.xAxis != null ? '3% SME criterion' : 'Source d50' }, data: [{ xAxis: 3 }, ...(Number.isFinite(sourceD50) ? [{ yAxis: sourceD50 }] : [])] } }]
+      }, { notMerge: true });
     };
     const recomputeStep1Chart = () => {
       if (stepNumber !== 1) return;
@@ -1896,6 +1922,127 @@
       try { const result = await post(`/experiments/${experimentId}/qualification/${stepNumber}/optional-matrix`, form); showMessage('success', `Generated ${result?.run_count || 0} runs. Updating table…`); window.setTimeout(() => location.reload(), 350); }
       catch (error) { let message = error?.message || 'Run generation failed'; try { const parsed = JSON.parse(message); message = parsed.error || message; } catch {} showMessage('error', message); }
     });
+    let latestScaleUpRecommendation = null;
+    const savedScaleUpRecommendation = <%- jsonForScript(stepSettings?.scale_up_recommendation || null) %>;
+    const scaleUpResult = document.querySelector('[data-scale-up-recommendation]');
+    const machineCapabilityResult = document.querySelector('[data-machine-capability-result]');
+    const formatScaleUpNumber = (value, digits = 2) => Number.isFinite(Number(value)) ? Number(value).toLocaleString(undefined, { maximumFractionDigits: digits }) : '—';
+    const renderScaleUpRecommendation = (recommendation) => {
+      if (!scaleUpResult) return;
+      latestScaleUpRecommendation = recommendation;
+      scaleUpResult.classList.remove('hidden');
+      scaleUpResult.replaceChildren();
+      const title = document.createElement('p');
+      title.className = 'font-semibold text-heading';
+      title.textContent = recommendation.savedAt ? 'Saved production start point' : 'Recommended production start point';
+      scaleUpResult.append(title);
+      const grid = document.createElement('dl');
+      grid.className = 'mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4';
+      [
+        ['Throughput', `${formatScaleUpNumber(recommendation.throughputKgH)} kg/h`],
+        ['Screw speed', `${formatScaleUpNumber(recommendation.screwSpeedRpm)} rpm`],
+        ['Estimated residence time from free volume', recommendation.residenceTimeS == null ? 'Enter production free volume and melt density' : `${formatScaleUpNumber(recommendation.residenceTimeS)} s`],
+        ['Tip speed', `${formatScaleUpNumber(recommendation.tipSpeedMs, 3)} m/s`],
+        ['Barrel profile', recommendation.barrelTemperatureProfileC?.length ? `${recommendation.barrelTemperatureProfileC.join(', ')} °C` : 'Enter source profile'],
+        ['Melt temperature', recommendation.meltTemperatureC == null ? 'Enter source melt temperature' : `${formatScaleUpNumber(recommendation.meltTemperatureC)} °C`]
+      ].forEach(([label, value]) => {
+        const item = document.createElement('div');
+        const term = document.createElement('dt'); term.className = 'text-xs text-body'; term.textContent = label;
+        const definition = document.createElement('dd'); definition.className = 'mt-0.5 font-medium text-heading'; definition.textContent = value;
+        item.append(term, definition); grid.append(item);
+      });
+      scaleUpResult.append(grid);
+      if (recommendation.warnings?.length) {
+        const warnings = document.createElement('ul'); warnings.className = 'mt-3 list-disc space-y-1 pl-5 text-xs text-warning';
+        recommendation.warnings.forEach((warning) => { const item = document.createElement('li'); item.textContent = warning; warnings.append(item); });
+        scaleUpResult.append(warnings);
+      }
+      if (recommendation.errors?.length) {
+        const errors = document.createElement('ul'); errors.className = 'mt-3 list-disc space-y-1 rounded-base border border-danger-medium bg-danger-soft p-3 pl-8 text-xs text-danger';
+        recommendation.errors.forEach((error) => { const item = document.createElement('li'); item.textContent = error; errors.append(item); });
+        scaleUpResult.append(errors);
+      }
+      const actions = document.createElement('div'); actions.className = 'mt-4 flex flex-wrap items-center gap-3';
+      const useButton = document.createElement('button'); useButton.type = 'button'; useButton.className = 'inline-flex items-center justify-center rounded-base border border-default-medium bg-neutral-primary px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-secondary focus:outline-none focus:ring-4 focus:ring-brand'; useButton.textContent = 'Use for verification sweep';
+      useButton.addEventListener('click', () => {
+        const setValue = (name, value) => {
+          const input = optionalStudySetupForm?.querySelector(`[name="${name}"]`);
+          if (!input) return;
+          input.value = value;
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        };
+        const rpm = Number(recommendation.screwSpeedRpm);
+        const multiplier = Number(recommendation.throughputMultiplierVsD3);
+        setValue('scale_up_production_screw_speed_levels_rpm', [rpm * 0.9, rpm, rpm * 1.1].map((value) => Math.max(1, Math.round(value))).join(', '));
+        setValue('scale_up_production_throughput_multipliers', [multiplier * 0.9, multiplier, multiplier * 1.1].map((value) => Math.max(0.01, Number(value.toFixed(3)))).join(', '));
+        window.IMPlanner?.notify?.({ type: 'success', message: 'Verification sweep populated from the recommended start point.' });
+      });
+      actions.append(useButton);
+      scaleUpResult.append(actions);
+    };
+    const renderMachineCapability = (recommendation) => {
+      if (!machineCapabilityResult) return;
+      machineCapabilityResult.classList.remove('hidden');
+      machineCapabilityResult.replaceChildren();
+      const grid = document.createElement('dl'); grid.className = 'grid gap-3 sm:grid-cols-2 xl:grid-cols-3';
+      [
+        ['Source SME', recommendation.sourceSmeKwhKg == null ? 'Enter SME or source torque' : `${formatScaleUpNumber(recommendation.sourceSmeKwhKg, 4)} kWh/kg`],
+        ['Required production power', recommendation.requiredPowerKw == null ? 'Enter source SME' : `${formatScaleUpNumber(recommendation.requiredPowerKw)} kW`],
+        ['Required production torque', recommendation.requiredTorqueNm == null ? 'Enter source SME' : `${formatScaleUpNumber(recommendation.requiredTorqueNm)} N·m`],
+        ['Motor load', recommendation.motorPowerLoadPct == null ? 'Enter nominal power' : `${formatScaleUpNumber(recommendation.motorPowerLoadPct)}% power · ${recommendation.motorTorqueLoadPct == null ? '—' : `${formatScaleUpNumber(recommendation.motorTorqueLoadPct)}% torque`}`],
+        ['Torque density', recommendation.torqueDensityNmCm3 == null ? 'Enter centre distance' : `${formatScaleUpNumber(recommendation.torqueDensityNmCm3)} N·m/cm³`],
+        ['Adiabatic ΔT risk', recommendation.adiabaticTemperatureRiseC == null ? 'Enter source SME' : `${formatScaleUpNumber(recommendation.adiabaticTemperatureRiseC)} °C`]
+      ].forEach(([label, value]) => { const item = document.createElement('div'); const term = document.createElement('dt'); term.className = 'text-xs text-body'; term.textContent = label; const definition = document.createElement('dd'); definition.className = 'mt-0.5 font-medium text-heading'; definition.textContent = value; item.append(term, definition); grid.append(item); });
+      machineCapabilityResult.append(grid);
+      const messages = [...(recommendation.warnings || []), ...(recommendation.errors || [])];
+      if (messages.length) { const list = document.createElement('ul'); list.className = 'mt-3 list-disc space-y-1 pl-5 text-xs text-warning'; messages.forEach((message) => { const item = document.createElement('li'); item.textContent = message; list.append(item); }); machineCapabilityResult.append(list); }
+    };
+    if (savedScaleUpRecommendation) renderScaleUpRecommendation(savedScaleUpRecommendation);
+    document.querySelectorAll('[data-rtd-reference-select]').forEach((select) => {
+      select.addEventListener('change', () => {
+        const option = select.options[select.selectedIndex];
+        const link = optionalStudySetupForm?.querySelector(`[data-rtd-reference-link="${select.dataset.rtdReferenceSelect}"]`);
+        if (link && option?.dataset.rtdHref) link.href = option.dataset.rtdHref;
+      });
+    });
+    document.querySelector('[data-calculate-scale-up]')?.addEventListener('click', async () => {
+      const requiredInputs = Array.from(optionalStudySetupForm?.querySelectorAll('[data-scale-up-required]') || []);
+      const missing = requiredInputs.filter((input) => !String(input.value || '').trim());
+      requiredInputs.forEach((input) => input.classList.toggle('border-danger-medium', missing.includes(input)));
+      requiredInputs.forEach((input) => input.classList.toggle('focus:border-danger', missing.includes(input)));
+      if (missing.length) {
+        missing[0]?.focus();
+        window.IMPlanner?.notify?.({ type: 'error', message: 'Fill the highlighted required start-point fields.' });
+        return;
+      }
+      const form = new FormData();
+      optionalStudySetupForm?.querySelectorAll('[data-scale-up-request]').forEach((input) => form.append(input.getAttribute('data-scale-up-request'), input.value));
+      try {
+        const result = await post(`/experiments/${experimentId}/qualification/${stepNumber}/scale-up-recommendation`, form);
+        if (result?.recommendation) renderScaleUpRecommendation(result.recommendation);
+      } catch (error) {
+        let message = error?.message || 'Scale-up recommendation failed';
+        try { const parsed = JSON.parse(message); message = parsed.error || message; } catch {}
+        window.IMPlanner?.notify?.({ type: 'error', message });
+      }
+    });
+    document.querySelector('[data-calculate-machine-capability]')?.addEventListener('click', async () => {
+      const form = new FormData();
+      optionalStudySetupForm?.querySelectorAll('[data-scale-up-request]').forEach((input) => form.append(input.getAttribute('data-scale-up-request'), input.value));
+      try {
+        const result = await post(`/experiments/${experimentId}/qualification/${stepNumber}/scale-up-recommendation`, form);
+        if (result?.recommendation) renderMachineCapability(result.recommendation);
+      } catch (error) {
+        let message = error?.message || 'Machine capability check failed';
+        try { const parsed = JSON.parse(message); message = parsed.error || message; } catch {}
+        window.IMPlanner?.notify?.({ type: 'error', message });
+      }
+    });
+    document.querySelectorAll('[data-scale-up-required]').forEach((input) => input.addEventListener('input', () => {
+      if (String(input.value || '').trim()) {
+        input.classList.remove('border-danger-medium', 'focus:border-danger');
+      }
+    }));
     document.getElementById('targetScrewRpmInput')?.addEventListener('input', syncStep3Settings);
     setupExtrusionSeries();
     safeRecomputeCharts();
@@ -1934,6 +2081,8 @@
         const container = document.getElementById(id);
         if (container && window.echarts) echarts.getInstanceByDom(container)?.resize();
       });
+      const scaleUpMorphology = document.getElementById('scaleUpMorphologyChart');
+      if (scaleUpMorphology && window.echarts) echarts.getInstanceByDom(scaleUpMorphology)?.resize();
       document.querySelectorAll('[data-series-chart]').forEach((container) => {
         if (window.echarts) echarts.getInstanceByDom(container)?.resize();
       });

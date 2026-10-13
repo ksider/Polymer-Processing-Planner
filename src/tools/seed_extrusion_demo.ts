@@ -23,6 +23,7 @@ import {
   type QualField,
   type QualRun
 } from "../repos/qual_repo.js";
+import { calculateExtrusionScaleUpRecommendation } from "../services/extrusion_scale_up_service.js";
 
 const DEMO_MARKER = "demo-seed:extrusion-v1";
 const DEMO_NAME = "Extrusion demo · PP mineral-filled compound";
@@ -328,21 +329,90 @@ function seedDisabledOptionalStudies(db: Db, experimentId: number, ownerId: numb
 function seedStepTen(db: Db, experimentId: number, ownerId: number | null) {
   setOptionalQualificationStudyEnabled(db, experimentId, 10, true);
   const step = getQualStep(db, experimentId, 10)!;
+  const rtdStep = getQualStep(db, experimentId, 5);
+  const laboratoryRtdBaseline = rtdStep ? listQualRuns(db, rtdStep.id).find((run) => run.done === 1) : null;
   const fields = listQualFields(db, step.id);
   const runs = ensureRuns(db, experimentId, step.id, 3, "scale_up");
+  const verificationRuns = ensureRuns(db, experimentId, step.id, 9, "default");
+  const sourceSme = 0.27;
+  const savedRecommendation = {
+    ...calculateExtrusionScaleUpRecommendation({
+      sourceScrewDiameterMm: 27,
+      targetScrewDiameterMm: 50,
+      sourceThroughputKgH: 30,
+      sourceScrewSpeedRpm: 250,
+      sourceFreeVolumeL: 2,
+      targetFreeVolumeL: 12.7,
+      sourceMeltDensityKgL: 0.8,
+      targetMeltDensityKgL: 0.8,
+      sourceBarrelTemperatureProfileC: "185, 195, 205, 210",
+      sourceMeltTemperatureC: 210,
+      capacityExponent: 2.9,
+      targetMaxScrewSpeedRpm: 300,
+      targetMaxTipSpeedMs: 1.5,
+      sourceSmeKwhKg: sourceSme,
+      sourceTorqueNm: 380,
+      sourceNoLoadTorqueNm: 70,
+      targetNominalPowerKw: 110,
+      targetMaxTorqueNm: 9000,
+      targetNoLoadTorqueNm: 450,
+      targetMechanicalEfficiency: 0.95,
+      targetCenterDistanceCm: 4.1,
+      targetTorqueDensityLimitNmCm3: 50
+    }),
+    savedAt: `${COMPLETED_AT}T12:00:00.000Z`
+  };
   upsertQualStepSettings(db, experimentId, 10, JSON.stringify({
     scale_up_source_screw_diameter_mm: 27,
     scale_up_production_screw_diameter_mm: 50,
     scale_up_source_throughput_kg_h: 30,
-    scale_up_source_sme_kwh_kg: 0.27,
-    scale_up_production_screw_speed_levels_rpm: "65, 75, 85",
-    scale_up_production_throughput_multipliers: "0.9, 1, 1.1"
+    scale_up_source_screw_speed_rpm: 250,
+    scale_up_source_free_volume_l: 2,
+    scale_up_source_melt_density_kg_l: 0.8,
+    scale_up_source_barrel_temperature_profile_c: "185, 195, 205, 210",
+    scale_up_source_melt_temperature_c: 210,
+    scale_up_production_free_volume_l: 12.7,
+    scale_up_production_melt_density_kg_l: 0.8,
+    scale_up_capacity_exponent: 2.9,
+    scale_up_production_max_screw_speed_rpm: 300,
+    scale_up_production_max_tip_speed_m_s: 1.5,
+    scale_up_source_sme_kwh_kg: sourceSme,
+    scale_up_source_torque_nm: 380,
+    scale_up_source_no_load_torque_nm: 70,
+    scale_up_production_nominal_power_kw: 110,
+    scale_up_production_max_torque_nm: 9000,
+    scale_up_production_no_load_torque_nm: 450,
+    scale_up_production_mechanical_efficiency: 0.95,
+    scale_up_production_center_distance_cm: 4.1,
+    scale_up_production_torque_density_limit_nm_cm3: 50,
+    scale_up_source_rtd_run_id: laboratoryRtdBaseline?.id ?? null,
+    scale_up_recommendation: savedRecommendation,
+    scale_up_production_screw_speed_levels_rpm: "210, 235, 260",
+    scale_up_production_throughput_multipliers: "0.85, 0.94, 1.03"
   }));
   [[65, 171, 6900, 120, 211, 66], [75, 191, 6685, 120, 214, 74], [85, 210, 6470, 120, 218, 83]].forEach((row, index) => {
     fillRun(db, fields, runs[index], {
       production_screw_speed_rpm: row[0], production_throughput_kg_h: row[1], production_torque_nm: row[2],
       production_no_load_torque_nm: row[3], production_melt_temp_c: row[4], production_melt_pressure_bar: row[5],
       particle_size_d50_um: 820, scale_up_stable: true
+    }, ownerId);
+  });
+  const d3Target = 30 * Math.pow(50 / 27, 3);
+  const verificationSpeeds = [210, 235, 260];
+  const verificationMultipliers = [0.85, 0.94, 1.03];
+  verificationRuns.forEach((run, index) => {
+    const speed = verificationSpeeds[Math.floor(index / verificationMultipliers.length) % verificationSpeeds.length];
+    const throughput = Number((d3Target * verificationMultipliers[index % verificationMultipliers.length]).toFixed(2));
+    const torque = Math.round(sourceSme * 9549 * throughput / speed + 450);
+    fillRun(db, fields, run, {
+      production_screw_speed_rpm: speed,
+      production_throughput_kg_h: throughput,
+      production_torque_nm: torque,
+      production_no_load_torque_nm: 450,
+      production_melt_temp_c: 210 + (index % 3),
+      production_melt_pressure_bar: 82 + index * 2,
+      particle_size_d50_um: 820 + ((index % 3) - 1) * 8,
+      scale_up_stable: true
     }, ownerId);
   });
   recomputeDerivedAndSummary(db, experimentId, step.id, 10);

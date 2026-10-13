@@ -603,11 +603,13 @@ const extrusionStepDefinitions: StepDefinition[] = [
       { code: "production_melt_temp_c", label: "Production melt temperature", field_type: "number", unit: "°C", group_label: "Measurements", required: 1 },
       { code: "production_melt_pressure_bar", label: "Production melt pressure", field_type: "number", unit: "bar", group_label: "Measurements" },
       { code: "particle_size_d50_um", label: "Particle size d50", field_type: "number", unit: "µm", group_label: "Measurements" },
-      { code: "scale_up_stable", label: "SME and melt-temperature parity stable", field_type: "boolean", group_label: "Measurements", required: 1 },
+      { code: "scale_up_stable", label: "Manual morphology and steady-state approval", field_type: "boolean", group_label: "Measurements", required: 1 },
       { code: "scaled_throughput_target_kg_h", label: "D³ scaled throughput target", field_type: "number", unit: "kg/h", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_scale_up_throughput" },
       { code: "tip_speed_m_s", label: "Screw tip speed", field_type: "number", unit: "m/s", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_tip_speed" },
       { code: "production_sme_kwh_kg", label: "Production SME", field_type: "number", unit: "kWh/kg", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_scale_up_sme" },
-      { code: "sme_parity_delta_pct", label: "SME parity deviation", field_type: "number", unit: "%", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_sme_parity" }
+      { code: "sme_parity_delta_pct", label: "SME parity deviation", field_type: "number", unit: "%", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_sme_parity" },
+      { code: "melt_temp_parity_delta_c", label: "Melt-temperature deviation", field_type: "number", unit: "°C", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_melt_temp_parity" },
+      { code: "automatic_scale_up_acceptance", label: "Meets configured scale-up limits", field_type: "boolean", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_scale_up_acceptance" }
     ]
   }
 ];
@@ -1692,11 +1694,20 @@ export function recomputeDerivedAndSummary(
         const sourceDiameter = resolveSettingNumber(stepSettings.scale_up_source_screw_diameter_mm);
         const productionDiameter = resolveSettingNumber(stepSettings.scale_up_production_screw_diameter_mm);
         const sourceThroughput = resolveSettingNumber(stepSettings.scale_up_source_throughput_kg_h);
-        const sourceSme = resolveSettingNumber(stepSettings.scale_up_source_sme_kwh_kg);
+        const sourceScrewSpeed = resolveSettingNumber(stepSettings.scale_up_source_screw_speed_rpm);
+        const sourceTorque = resolveSettingNumber(stepSettings.scale_up_source_torque_nm);
+        const sourceNoLoadTorque = resolveSettingNumber(stepSettings.scale_up_source_no_load_torque_nm) ?? 0;
+        const configuredSourceSme = resolveSettingNumber(stepSettings.scale_up_source_sme_kwh_kg);
+        const sourceSme = sourceScrewSpeed != null && sourceThroughput != null && sourceThroughput > 0 && sourceTorque != null && sourceTorque > sourceNoLoadTorque
+          ? sourceScrewSpeed * (sourceTorque - sourceNoLoadTorque) / (9549 * sourceThroughput)
+          : configuredSourceSme;
         const speed = getNumber("production_screw_speed_rpm");
         const throughput = getNumber("production_throughput_kg_h");
         const torque = getNumber("production_torque_nm");
         const noLoadTorque = getNumber("production_no_load_torque_nm");
+        const meltTemperature = getNumber("production_melt_temp_c");
+        const meltPressure = getNumber("production_melt_pressure_bar");
+        const sourceMeltTemperature = resolveSettingNumber(stepSettings.scale_up_source_melt_temperature_c);
         if (sourceDiameter != null && sourceDiameter > 0 && productionDiameter != null && productionDiameter > 0 && sourceThroughput != null) {
           setDerived("scaled_throughput_target_kg_h", sourceThroughput * Math.pow(productionDiameter / sourceDiameter, 3));
         }
@@ -1710,6 +1721,22 @@ export function recomputeDerivedAndSummary(
             setDerived("sme_parity_delta_pct", Math.abs(sme - sourceSme) / sourceSme * 100);
           }
         }
+        if (meltTemperature != null && sourceMeltTemperature != null) {
+          setDerived("melt_temp_parity_delta_c", Math.abs(meltTemperature - sourceMeltTemperature));
+        }
+        const checks: boolean[] = [];
+        const smeParity = speed != null && throughput != null && throughput > 0 && torque != null && noLoadTorque != null && sourceSme != null && sourceSme > 0
+          ? Math.abs((speed * (torque - noLoadTorque) / (9549 * throughput)) - sourceSme) / sourceSme * 100
+          : null;
+        const smeTolerance = resolveSettingNumber(stepSettings.scale_up_sme_parity_tolerance_pct) ?? 3;
+        if (smeParity != null) checks.push(smeParity <= smeTolerance);
+        const meltTolerance = resolveSettingNumber(stepSettings.scale_up_melt_temperature_tolerance_c) ?? 3;
+        if (meltTemperature != null && sourceMeltTemperature != null) checks.push(Math.abs(meltTemperature - sourceMeltTemperature) <= meltTolerance);
+        const pressureLimit = resolveSettingNumber(stepSettings.scale_up_production_max_melt_pressure_bar);
+        if (meltPressure != null && pressureLimit != null && pressureLimit > 0) checks.push(meltPressure <= pressureLimit);
+        const maxTipSpeed = resolveSettingNumber(stepSettings.scale_up_production_max_tip_speed_m_s);
+        if (speed != null && productionDiameter != null && productionDiameter > 0 && maxTipSpeed != null && maxTipSpeed > 0) checks.push(Math.PI * (productionDiameter / 1000) * speed / 60 <= maxTipSpeed);
+        if (checks.length >= 2) setDerived("automatic_scale_up_acceptance", checks.every(Boolean) ? 1 : 0);
       }
     }
   }

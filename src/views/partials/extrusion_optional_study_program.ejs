@@ -44,40 +44,85 @@
       title: 'Scale-up verification matrix',
       description: 'Calculate the D³ throughput target from the source and production screw diameters, then generate a verification sweep around it. Use only when the formulation and screw geometry are comparable.',
       fields: [
-        { setting: 'scale_up_source_screw_diameter_mm', request: 'source_screw_diameter_mm', label: 'Source screw diameter', unit: 'mm', fallback: '' },
-        { setting: 'scale_up_production_screw_diameter_mm', request: 'production_screw_diameter_mm', label: 'Production screw diameter', unit: 'mm', fallback: '' },
-        { setting: 'scale_up_source_throughput_kg_h', request: 'source_throughput_kg_h', label: 'Source throughput', unit: 'kg/h', fallback: '' },
-        { setting: 'scale_up_source_sme_kwh_kg', request: 'source_sme_kwh_kg', label: 'Source SME target', unit: 'kWh/kg', fallback: '' },
+        { setting: 'scale_up_source_screw_diameter_mm', request: 'source_screw_diameter_mm', label: 'Source screw diameter', unit: 'mm', fallback: '', calculator: true },
+        { setting: 'scale_up_production_screw_diameter_mm', request: 'production_screw_diameter_mm', label: 'Production screw diameter', unit: 'mm', fallback: '', calculator: true },
+        { setting: 'scale_up_source_throughput_kg_h', request: 'source_throughput_kg_h', label: 'Source throughput', unit: 'kg/h', fallback: '', calculator: true },
+        { setting: 'scale_up_source_sme_kwh_kg', request: 'source_sme_kwh_kg', label: 'Source SME target', unit: 'kWh/kg', fallback: '', calculator: true },
         { setting: 'scale_up_production_screw_speed_levels_rpm', request: 'production_screw_speed_levels_rpm', label: 'Production screw-speed levels', unit: 'rpm', fallback: '100, 150, 200' },
         { setting: 'scale_up_production_throughput_multipliers', request: 'production_throughput_multipliers', label: 'Throughput multipliers', unit: '× D³ target', fallback: '0.85, 1, 1.15' }
       ]
     }
   };
   const setup = setupByStep[step.step_number];
+  const scaleUpSourceSettings = new Set([
+    'scale_up_source_screw_diameter_mm',
+    'scale_up_source_throughput_kg_h'
+  ]);
 %>
 
+<form id="extrusionOptionalSetupForm" action="/experiments/<%= step.experiment_id %>/qualification/<%= step.step_number %>/settings" method="post">
 <section class="mb-6 rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs sm:p-5">
   <div class="border-b border-default pb-4">
     <h2 class="text-base font-semibold text-heading"><%= setup.title %></h2>
     <p class="mt-1 max-w-3xl text-sm text-body"><%= setup.description %></p>
   </div>
-  <form id="extrusionOptionalSetupForm" class="mt-4" action="/experiments/<%= step.experiment_id %>/qualification/<%= step.step_number %>/settings" method="post">
-    <fieldset class="max-w-4xl rounded-base border border-default-medium bg-neutral-secondary p-4">
-      <legend class="px-1 text-sm font-semibold text-heading">Run generation</legend>
-      <div class="grid gap-4 md:grid-cols-3 md:items-end">
-        <% setup.fields.forEach((item) => { %>
-          <label class="text-sm font-medium text-heading"><%= item.label %> <span class="font-normal text-body">(<%= item.unit %>)</span>
-            <input class="<%= inputClass %>" name="<%= item.setting %>" data-optional-request="<%= item.request %>" value="<%= stepSettings?.[item.setting] ?? item.fallback %>" placeholder="<%= item.fallback || 'Required' %>">
-          </label>
-        <% }) %>
+  <div class="mt-4">
+    <% if (step.step_number === 10) { %>
+      <div class="max-w-7xl">
+        <h3 class="mb-1 text-sm font-semibold text-heading">Scale-up start-point recommendation</h3>
+        <p class="mb-4 text-sm text-body">Scale a comparable stable laboratory point by diameter, free volume, density and screw-speed limits. RTD remains verification evidence, not a calculation input.</p>
+        <div class="grid gap-4 lg:grid-cols-3">
+          <fieldset class="rounded-base border border-default-medium bg-neutral-secondary p-4">
+            <legend class="px-1 text-sm font-semibold text-heading">Laboratory point</legend>
+            <div class="grid gap-4">
+              <% setup.fields.filter((item) => scaleUpSourceSettings.has(item.setting)).forEach((item) => { %>
+                <label class="text-sm font-medium text-heading"><%= item.label %> <span class="font-normal text-body">(<%= item.unit %>)</span><input class="<%= inputClass %>" name="<%= item.setting %>" data-scale-up-request="<%= item.request %>" data-optional-request="<%= item.request %>" data-scale-up-required value="<%= stepSettings?.[item.setting] ?? item.fallback %>" placeholder="Required"></label>
+              <% }) %>
+              <label class="text-sm font-medium text-heading">Source screw speed <span class="font-normal text-body">(rpm)</span><input class="<%= inputClass %>" name="scale_up_source_screw_speed_rpm" data-scale-up-request="source_screw_speed_rpm" data-scale-up-required value="<%= stepSettings?.scale_up_source_screw_speed_rpm ?? '' %>" placeholder="Required"></label>
+              <label class="text-sm font-medium text-heading">Source free volume <span class="font-normal text-body">(L, optional)</span><input class="<%= inputClass %>" name="scale_up_source_free_volume_l" data-scale-up-request="source_free_volume_l" value="<%= stepSettings?.scale_up_source_free_volume_l ?? '' %>" placeholder="For comparable fill"></label>
+              <label class="text-sm font-medium text-heading">Source melt density <span class="font-normal text-body">(kg/L, optional)</span><input class="<%= inputClass %>" name="scale_up_source_melt_density_kg_l" data-scale-up-request="source_melt_density_kg_l" value="<%= stepSettings?.scale_up_source_melt_density_kg_l ?? '' %>" placeholder="For density correction"></label>
+              <label class="text-sm font-medium text-heading">Source barrel profile <span class="font-normal text-body">(°C, comma separated)</span><input class="<%= inputClass %>" name="scale_up_source_barrel_temperature_profile_c" data-scale-up-request="source_barrel_temperature_profile_c" data-scale-up-required value="<%= stepSettings?.scale_up_source_barrel_temperature_profile_c ?? '' %>" placeholder="e.g. 170, 180, 190, 195"></label>
+              <label class="text-sm font-medium text-heading">Source melt temperature <span class="font-normal text-body">(°C)</span><input class="<%= inputClass %>" name="scale_up_source_melt_temperature_c" data-scale-up-request="source_melt_temperature_c" data-scale-up-required value="<%= stepSettings?.scale_up_source_melt_temperature_c ?? '' %>" placeholder="Required"></label>
+            </div>
+          </fieldset>
+          <fieldset class="rounded-base border border-default-medium bg-neutral-secondary p-4">
+            <legend class="px-1 text-sm font-semibold text-heading">Production line</legend>
+            <div class="grid gap-4">
+              <% setup.fields.filter((item) => item.setting === 'scale_up_production_screw_diameter_mm').forEach((item) => { %>
+                <label class="text-sm font-medium text-heading"><%= item.label %> <span class="font-normal text-body">(<%= item.unit %>)</span><input class="<%= inputClass %>" name="<%= item.setting %>" data-scale-up-request="<%= item.request %>" data-optional-request="<%= item.request %>" data-scale-up-required value="<%= stepSettings?.[item.setting] ?? item.fallback %>" placeholder="Required"></label>
+              <% }) %>
+              <label class="text-sm font-medium text-heading">Production free volume <span class="font-normal text-body">(L)</span><input class="<%= inputClass %>" name="scale_up_production_free_volume_l" data-scale-up-request="production_free_volume_l" data-scale-up-required value="<%= stepSettings?.scale_up_production_free_volume_l ?? '' %>" placeholder="Required for residence time"></label>
+              <label class="text-sm font-medium text-heading">Production melt density <span class="font-normal text-body">(kg/L)</span><input class="<%= inputClass %>" name="scale_up_production_melt_density_kg_l" data-scale-up-request="production_melt_density_kg_l" data-scale-up-required value="<%= stepSettings?.scale_up_production_melt_density_kg_l ?? '' %>" placeholder="Required for residence time"></label>
+              <label class="text-sm font-medium text-heading">Capacity exponent <span class="font-normal text-body">(x, 2.8–3.0)</span><input class="<%= inputClass %>" name="scale_up_capacity_exponent" data-scale-up-request="capacity_exponent" value="<%= stepSettings?.scale_up_capacity_exponent ?? 3 %>"></label>
+              <label class="text-sm font-medium text-heading">Maximum screw speed <span class="font-normal text-body">(rpm, optional)</span><input class="<%= inputClass %>" name="scale_up_production_max_screw_speed_rpm" data-scale-up-request="production_max_screw_speed_rpm" value="<%= stepSettings?.scale_up_production_max_screw_speed_rpm ?? '' %>"></label>
+              <label class="text-sm font-medium text-heading">Maximum tip speed <span class="font-normal text-body">(m/s)</span><input class="<%= inputClass %>" name="scale_up_production_max_tip_speed_m_s" data-scale-up-request="production_max_tip_speed_m_s" value="<%= stepSettings?.scale_up_production_max_tip_speed_m_s ?? 1.5 %>"></label>
+            </div>
+          </fieldset>
+          <aside class="rounded-base border border-default-medium bg-neutral-secondary p-4 text-sm text-body">
+            <h4 class="font-semibold text-heading">How the recommendation works</h4>
+            <ol class="mt-3 list-decimal space-y-2 pl-5">
+              <li>It calculates the diameter ratio <span class="font-mono text-xs text-heading">a = D₂ / D₁</span>.</li>
+              <li>It recommends throughput <span class="font-mono text-xs text-heading">Q₂ = Q₁ × aˣ</span>, with x from 2.8 to 3.0.</li>
+              <li>It sets screw speed to preserve comparable channel fill, using the two free volumes when available, then applies the rpm and tip-speed limits.</li>
+              <li>It estimates residence time from <span class="font-mono text-xs text-heading">Vfree₂ × ρ₂ / Q₂</span>, not from RTD.</li>
+            </ol>
+            <div class="mt-4 border-t border-default pt-3">
+              <h5 class="font-medium text-heading">What you get</h5>
+              <p class="mt-1 text-xs">A starting throughput, screw speed, tip speed, temperature profile and theoretical residence-time estimate for the first production run. It is a starting point, not proof of process transfer.</p>
+            </div>
+          </aside>
+        </div>
+        <fieldset class="mt-4 rounded-base border border-brand-medium bg-brand-soft p-4">
+          <legend class="px-1 text-sm font-semibold text-heading">Recommended production start point</legend>
+          <div class="flex flex-wrap items-center gap-3">
+            <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2.5 text-sm font-medium text-white shadow-xs hover:bg-brand-strong focus:outline-none focus:ring-4 focus:ring-brand" type="button" data-calculate-scale-up>Recommend start point</button>
+            <p class="text-xs text-body">The calculated recommendation is saved automatically. Validate it before approving an operating window.</p>
+          </div>
+          <div class="mt-4 hidden rounded-base border border-brand-medium bg-neutral-primary p-4 text-sm text-heading" data-scale-up-recommendation aria-live="polite"></div>
+        </fieldset>
       </div>
-      <div class="mt-4 flex flex-wrap items-center gap-3 border-t border-default pt-4">
-        <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2.5 text-sm font-medium text-white shadow-xs hover:bg-brand-strong focus:outline-none focus:ring-4 focus:ring-brand" type="button" data-generate-optional-matrix>Generate runs</button>
-        <p class="text-xs text-body">Existing rows are retained; generation updates the first rows with the selected conditions.</p>
-      </div>
-      <div class="mt-3 hidden rounded-base border px-3 py-2 text-sm" data-optional-matrix-message role="alert"></div>
-    </fieldset>
-  </form>
+    <% } %>
+  </div>
 </section>
 
 <section class="mb-6 overflow-hidden rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs sm:p-5">
@@ -85,6 +130,46 @@
     <div><h2 class="text-base font-semibold text-heading">Study runs</h2><p class="mt-1 text-sm text-body">Enter actual measurements only after each condition has stabilized. Derived values are calculated from the row.</p></div>
     <span class="rounded-full bg-neutral-secondary px-2.5 py-1 text-xs font-medium text-body"><%= runs.length %> run<%= runs.length === 1 ? '' : 's' %></span>
   </div>
+  <% if (step.step_number === 10) { %>
+    <% const rtdReferences = rtdReferenceRuns || []; const rtdById = new Map(rtdReferences.map((run) => [String(run.id), run])); const sourceRtd = rtdById.get(String(stepSettings?.scale_up_source_rtd_run_id || '')); %>
+    <fieldset class="mb-4 rounded-base border border-default-medium bg-neutral-secondary p-4">
+      <legend class="px-1 text-sm font-semibold text-heading">Laboratory RTD evidence</legend>
+      <p class="mb-4 text-sm text-body">Step 5 contains only laboratory tracer runs. Select the laboratory baseline for traceability; industrial RTD does not exist before the production trial and is not requested here.</p>
+      <label class="block max-w-xl text-sm font-medium text-heading">Laboratory RTD baseline<select class="<%= inputClass %>" name="scale_up_source_rtd_run_id" data-rtd-reference-select="source"><option value="">Choose an existing Step 5 run (optional)</option><% rtdReferences.forEach((run) => { %><option value="<%= run.id %>" data-rtd-href="<%= run.href %>" <%= Number(stepSettings?.scale_up_source_rtd_run_id) === run.id ? 'selected' : '' %>><%= run.runCode %> · N <%= formatNumber(run.screwSpeedRpm) %> rpm · Q <%= formatNumber(run.throughputKgH) %> kg/h · t̄ <%= formatNumber(run.meanResidenceTimeS) %> s</option><% }) %></select><a class="mt-1 inline-block text-xs font-normal text-brand hover:underline" data-rtd-reference-link="source" href="<%= sourceRtd?.href || `/experiments/${step.experiment_id}/qualification/5` %>">Open RTD study / selected run</a></label>
+    </fieldset>
+    <fieldset class="mb-4 rounded-base border border-default-medium bg-neutral-secondary p-4">
+      <legend class="px-1 text-sm font-semibold text-heading">Machine capability check</legend>
+      <p class="mb-4 text-sm text-body">Optional equipment-data assessment. It does not change the recommended start point; it checks whether the selected machine can deliver it.</p>
+      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <label class="text-sm font-medium text-heading">Source SME target <span class="font-normal text-body">(kWh/kg)</span><input class="<%= inputClass %>" name="scale_up_source_sme_kwh_kg" data-scale-up-request="source_sme_kwh_kg" value="<%= stepSettings?.scale_up_source_sme_kwh_kg ?? '' %>"></label>
+        <label class="text-sm font-medium text-heading">Source shaft torque <span class="font-normal text-body">(N·m)</span><input class="<%= inputClass %>" name="scale_up_source_torque_nm" data-scale-up-request="source_torque_nm" value="<%= stepSettings?.scale_up_source_torque_nm ?? '' %>"></label>
+        <label class="text-sm font-medium text-heading">Source no-load torque <span class="font-normal text-body">(N·m)</span><input class="<%= inputClass %>" name="scale_up_source_no_load_torque_nm" data-scale-up-request="source_no_load_torque_nm" value="<%= stepSettings?.scale_up_source_no_load_torque_nm ?? '' %>"></label>
+        <label class="text-sm font-medium text-heading">Production nominal power <span class="font-normal text-body">(kW)</span><input class="<%= inputClass %>" name="scale_up_production_nominal_power_kw" data-scale-up-request="production_nominal_power_kw" value="<%= stepSettings?.scale_up_production_nominal_power_kw ?? '' %>"></label>
+        <label class="text-sm font-medium text-heading">Production max shaft torque <span class="font-normal text-body">(N·m)</span><input class="<%= inputClass %>" name="scale_up_production_max_torque_nm" data-scale-up-request="production_max_torque_nm" value="<%= stepSettings?.scale_up_production_max_torque_nm ?? '' %>"></label>
+        <label class="text-sm font-medium text-heading">Production no-load torque <span class="font-normal text-body">(N·m)</span><input class="<%= inputClass %>" name="scale_up_production_no_load_torque_nm" data-scale-up-request="production_no_load_torque_nm" value="<%= stepSettings?.scale_up_production_no_load_torque_nm ?? '' %>" placeholder="5% of max torque"></label>
+        <label class="text-sm font-medium text-heading">Mechanical efficiency <span class="font-normal text-body">(0–1)</span><input class="<%= inputClass %>" name="scale_up_production_mechanical_efficiency" data-scale-up-request="production_mechanical_efficiency" value="<%= stepSettings?.scale_up_production_mechanical_efficiency ?? 0.95 %>"></label>
+        <label class="text-sm font-medium text-heading">Twin-screw centre distance <span class="font-normal text-body">(cm)</span><input class="<%= inputClass %>" name="scale_up_production_center_distance_cm" data-scale-up-request="production_center_distance_cm" value="<%= stepSettings?.scale_up_production_center_distance_cm ?? '' %>"></label>
+        <label class="text-sm font-medium text-heading">Torque-density limit <span class="font-normal text-body">(N·m/cm³)</span><input class="<%= inputClass %>" name="scale_up_production_torque_density_limit_nm_cm3" data-scale-up-request="production_torque_density_limit_nm_cm3" value="<%= stepSettings?.scale_up_production_torque_density_limit_nm_cm3 ?? '' %>"></label>
+      </div>
+      <div class="mt-4 flex flex-wrap items-center gap-3"><button class="inline-flex items-center justify-center rounded-base border border-default-medium bg-neutral-primary px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-secondary" type="button" data-calculate-machine-capability>Check machine capability</button><p class="text-xs text-body">Requires the start-point fields above plus an SME target or measured source torque.</p></div>
+      <div class="mt-4 hidden rounded-base border border-default-medium bg-neutral-primary p-4 text-sm text-heading" data-machine-capability-result aria-live="polite"></div>
+    </fieldset>
+  <% } %>
+  <fieldset class="mb-4 max-w-4xl rounded-base border border-default-medium bg-neutral-secondary p-4">
+    <legend class="px-1 text-sm font-semibold text-heading"><%= step.step_number === 10 ? 'Verification sweep' : 'Run generation' %></legend>
+    <div class="grid gap-4 md:grid-cols-3 md:items-end">
+      <% setup.fields.filter((item) => !item.calculator).forEach((item) => { %>
+        <label class="text-sm font-medium text-heading"><%= item.label %> <span class="font-normal text-body">(<%= item.unit %>)</span>
+          <input class="<%= inputClass %>" name="<%= item.setting %>" data-optional-request="<%= item.request %>" value="<%= stepSettings?.[item.setting] ?? item.fallback %>" placeholder="<%= item.fallback || 'Required' %>">
+        </label>
+      <% }) %>
+    </div>
+    <div class="mt-4 flex flex-wrap items-center gap-3 border-t border-default pt-4">
+      <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2.5 text-sm font-medium text-white shadow-xs hover:bg-brand-strong focus:outline-none focus:ring-4 focus:ring-brand" type="button" data-generate-optional-matrix>Generate runs</button>
+      <p class="text-xs text-body">Existing rows are retained; generation updates the first rows with the selected conditions.</p>
+    </div>
+    <div class="mt-3 hidden rounded-base border px-3 py-2 text-sm" data-optional-matrix-message role="alert"></div>
+  </fieldset>
   <div class="overflow-x-auto">
     <table class="<%= inputTableClass %>" data-run-table>
       <thead><tr><th>Run</th><th>Date</th><th>Responsible</th><% activeFields.forEach((field) => { %><th><%= field.label %><% if (field.unit) { %> <span class="normal-case text-body">(<%= field.unit %>)</span><% } %></th><% }); %><th>Done</th><th>Exclude</th><th></th></tr></thead>
@@ -106,7 +191,14 @@
       </tbody>
     </table>
   </div>
+  <% if (step.step_number === 10) { %>
+    <article class="mt-5 rounded-base border border-default bg-neutral-secondary p-4">
+      <div class="border-b border-default pb-3"><h3 class="text-sm font-semibold text-heading">Measured morphology versus SME parity</h3><p class="mt-1 text-xs text-body">Only entered production measurements are plotted. The vertical marker is the ±3% SME-parity criterion; it is not a synthetic RTD comparison.</p></div>
+      <div class="mt-4 h-72 w-full" id="scaleUpMorphologyChart" data-source-d50="<%= stepSettings?.scale_up_source_particle_size_d50_um ?? '' %>"></div>
+    </article>
+  <% } %>
 </section>
+</form>
 
 <section class="mb-6 rounded-xl border border-default-medium bg-neutral-primary p-4 shadow-xs sm:p-5">
   <div class="border-b border-default pb-4"><h2 class="text-base font-semibold text-heading">Transferable result</h2><p class="mt-1 text-sm text-body">Confirm the accepted limits below. DOE will use these values as a documented constraint or factor range, not as an untraceable default.</p></div>

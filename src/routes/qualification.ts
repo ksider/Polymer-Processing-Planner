@@ -54,6 +54,7 @@ import { canAssignEntityResponsibility } from "../services/entity_assignment_ser
 import { insertAudit } from "../repos/audit_repo.js";
 import { buildExperimentWorkspace } from "../services/experiment_workspace_service.js";
 import { getQualificationStudyGuide } from "../services/qualification_guides.js";
+import { calculateExtrusionScaleUpRecommendation } from "../services/extrusion_scale_up_service.js";
 
 function hasRole(req: express.Request, roles: string[]) {
   return roles.includes(req.user?.role ?? "");
@@ -253,6 +254,33 @@ export function createQualificationRouter(db: Db) {
         return null;
       }
     })();
+    const rtdReferenceRuns = (() => {
+      if (processTypeCode !== "extrusion_v1" || stepNumber !== 10) return [] as Array<{ id: number; runCode: string; meanResidenceTimeS: number; widthS: number | null; throughputKgH: number | null; screwSpeedRpm: number | null; href: string }>;
+      const rtdStep = getQualStep(db, experimentId, 5);
+      if (!rtdStep) return [];
+      const rtdFields = new Map(listQualFields(db, rtdStep.id).map((field) => [field.code, field]));
+      const read = (values: Map<number, { value_real: number | null }>, code: string) => {
+        const field = rtdFields.get(code);
+        const value = field ? values.get(field.id)?.value_real : null;
+        return typeof value === "number" && Number.isFinite(value) ? value : null;
+      };
+      return listQualRuns(db, rtdStep.id)
+        .map((run) => {
+          const values = new Map(listQualRunValues(db, run.id).map((value) => [value.field_id, value]));
+          const meanResidenceTimeS = read(values, "mean_residence_time_s");
+          if (meanResidenceTimeS == null || meanResidenceTimeS <= 0) return null;
+          return {
+            id: run.id,
+            runCode: run.run_code,
+            meanResidenceTimeS,
+            widthS: read(values, "rtd_width_s"),
+            throughputKgH: read(values, "throughput_kg_h"),
+            screwSpeedRpm: read(values, "screw_speed_rpm"),
+            href: `/experiments/${experimentId}/qualification/5#rtd-run-${run.id}`
+          };
+        })
+        .filter((run): run is NonNullable<typeof run> => run != null);
+    })();
     // The original IM panels are retained for their six established studies.
     // Every other catalogue stage uses the shared table/detail shell, so a new
     // code-owned stage never needs a new micro-application or a six-step fork.
@@ -285,6 +313,7 @@ export function createQualificationRouter(db: Db) {
           ? `Q = ${rtdFeederCalibration.slope.toFixed(3)} · F ${rtdFeederCalibration.intercept >= 0 ? '+' : '−'} ${Math.abs(rtdFeederCalibration.intercept).toFixed(3)} kg/h${rtdFeederCalibration.rSquared != null ? `, R² ${rtdFeederCalibration.rSquared.toFixed(3)}` : ''}`
           : null,
         rtdCalibrationRange: rtdFeederCalibration ? `${rtdFeederCalibration.minThroughput.toFixed(2)}–${rtdFeederCalibration.maxThroughput.toFixed(2)} kg/h` : null,
+        rtdReferenceRuns,
         canAssignEntities,
         assignableUsers,
         stepAssigneeId,
@@ -853,6 +882,64 @@ export function createQualificationRouter(db: Db) {
     });
     recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
     return res.json({ ok: true, run_count: cells.length, feeder_calibration: { slope, intercept } });
+  });
+
+  router.post("/experiments/:id/qualification/:step/scale-up-recommendation", (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer"])) return res.status(403).json({ error: "Forbidden" });
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    const step = getQualStep(db, experimentId, stepNumber);
+    if (!step || stepNumber !== 10) return res.status(404).json({ error: "Scale-up study not found" });
+    if (step.is_active !== 1) return res.status(409).json({ error: "Enable the scale-up study before calculating a recommendation" });
+    if (rejectBlockedStep(res, step)) return;
+    const number = (value: unknown) => {
+      const parsed = Number(String(value ?? "").trim().replace(",", "."));
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    try {
+      const recommendation = calculateExtrusionScaleUpRecommendation({
+        sourceScrewDiameterMm: number(req.body?.source_screw_diameter_mm) ?? 0,
+        targetScrewDiameterMm: number(req.body?.production_screw_diameter_mm) ?? 0,
+        sourceThroughputKgH: number(req.body?.source_throughput_kg_h) ?? 0,
+        sourceScrewSpeedRpm: number(req.body?.source_screw_speed_rpm) ?? 0,
+        sourceBarrelTemperatureProfileC: req.body?.source_barrel_temperature_profile_c ? String(req.body.source_barrel_temperature_profile_c) : null,
+        sourceMeltTemperatureC: number(req.body?.source_melt_temperature_c),
+        sourceFreeVolumeL: number(req.body?.source_free_volume_l),
+        targetFreeVolumeL: number(req.body?.production_free_volume_l),
+        sourceMeltDensityKgL: number(req.body?.source_melt_density_kg_l),
+        targetMeltDensityKgL: number(req.body?.production_melt_density_kg_l),
+        sourceLengthToDiameter: number(req.body?.source_l_d),
+        targetLengthToDiameter: number(req.body?.production_l_d),
+        sourceScrewConfiguration: req.body?.source_screw_configuration ? String(req.body.source_screw_configuration) : null,
+        targetScrewConfiguration: req.body?.production_screw_configuration ? String(req.body.production_screw_configuration) : null,
+        sourceSmeKwhKg: number(req.body?.source_sme_kwh_kg),
+        sourceTorqueNm: number(req.body?.source_torque_nm),
+        sourceNoLoadTorqueNm: number(req.body?.source_no_load_torque_nm),
+        targetNominalPowerKw: number(req.body?.production_nominal_power_kw),
+        targetMaxTorqueNm: number(req.body?.production_max_torque_nm),
+        targetNoLoadTorqueNm: number(req.body?.production_no_load_torque_nm),
+        targetMechanicalEfficiency: number(req.body?.production_mechanical_efficiency),
+        targetCenterDistanceCm: number(req.body?.production_center_distance_cm),
+        targetTorqueDensityLimitNmCm3: number(req.body?.production_torque_density_limit_nm_cm3),
+        materialHeatCapacityKjKgC: number(req.body?.material_heat_capacity_kj_kg_c),
+        mechanicalToHeatFraction: number(req.body?.mechanical_to_heat_fraction),
+        capacityExponent: number(req.body?.capacity_exponent),
+        targetMaxScrewSpeedRpm: number(req.body?.production_max_screw_speed_rpm),
+        targetMaxTipSpeedMs: number(req.body?.production_max_tip_speed_m_s),
+        temperatureOffsetC: number(req.body?.temperature_offset_c),
+        materialTemperatureMinC: number(req.body?.material_temp_min_c),
+        materialTemperatureMaxC: number(req.body?.material_temp_max_c)
+      });
+      const settingsJson = getQualStepSettings(db, experimentId, stepNumber);
+      let settings: Record<string, unknown> = {};
+      try { settings = JSON.parse(settingsJson || "{}") as Record<string, unknown>; } catch {}
+      const savedRecommendation = { ...recommendation, savedAt: new Date().toISOString() };
+      settings.scale_up_recommendation = savedRecommendation;
+      upsertQualStepSettings(db, experimentId, stepNumber, JSON.stringify(settings));
+      return res.json({ ok: true, recommendation: savedRecommendation });
+    } catch (error) {
+      return res.status(400).json({ error: error instanceof Error ? error.message : "Could not calculate scale-up recommendation" });
+    }
   });
 
   router.post("/experiments/:id/qualification/:step/optional-matrix", (req, res) => {
@@ -1567,7 +1654,11 @@ export function createQualificationRouter(db: Db) {
       return Number.isFinite(num) ? num : raw;
     };
     const intensificationValue = parseSettingValue(req.body.intensification_coeff);
+    const existingSettingsJson = getQualStepSettings(db, experimentId, stepNumber);
+    let existingSettings: Record<string, unknown> = {};
+    try { existingSettings = JSON.parse(existingSettingsJson || "{}") as Record<string, unknown>; } catch {}
     const settings = {
+      ...existingSettings,
       intensification_coeff: intensificationValue == null ? 1 : intensificationValue,
       melt_temp_c: parseSettingValue(req.body.melt_temp_c),
       recommended_inj_speed: parseSettingValue(req.body.recommended_inj_speed),
@@ -1622,6 +1713,40 @@ export function createQualificationRouter(db: Db) {
       scale_up_production_screw_diameter_mm: parseSettingValue(req.body.scale_up_production_screw_diameter_mm),
       scale_up_source_throughput_kg_h: parseSettingValue(req.body.scale_up_source_throughput_kg_h),
       scale_up_source_sme_kwh_kg: parseSettingValue(req.body.scale_up_source_sme_kwh_kg),
+      scale_up_source_screw_speed_rpm: parseSettingValue(req.body.scale_up_source_screw_speed_rpm),
+      scale_up_source_residence_time_s: parseSettingValue(req.body.scale_up_source_residence_time_s),
+      scale_up_target_residence_time_s: parseSettingValue(req.body.scale_up_target_residence_time_s),
+      scale_up_source_barrel_temperature_profile_c: req.body.scale_up_source_barrel_temperature_profile_c ? String(req.body.scale_up_source_barrel_temperature_profile_c).trim() : null,
+      scale_up_source_melt_temperature_c: parseSettingValue(req.body.scale_up_source_melt_temperature_c),
+      scale_up_source_free_volume_l: parseSettingValue(req.body.scale_up_source_free_volume_l),
+      scale_up_production_free_volume_l: parseSettingValue(req.body.scale_up_production_free_volume_l),
+      scale_up_source_melt_density_kg_l: parseSettingValue(req.body.scale_up_source_melt_density_kg_l),
+      scale_up_production_melt_density_kg_l: parseSettingValue(req.body.scale_up_production_melt_density_kg_l),
+      scale_up_source_l_d: parseSettingValue(req.body.scale_up_source_l_d),
+      scale_up_production_l_d: parseSettingValue(req.body.scale_up_production_l_d),
+      scale_up_source_screw_configuration: req.body.scale_up_source_screw_configuration ? String(req.body.scale_up_source_screw_configuration).trim() : null,
+      scale_up_production_screw_configuration: req.body.scale_up_production_screw_configuration ? String(req.body.scale_up_production_screw_configuration).trim() : null,
+      scale_up_source_particle_size_d50_um: parseSettingValue(req.body.scale_up_source_particle_size_d50_um),
+      scale_up_source_rtd_run_id: parseSettingValue(req.body.scale_up_source_rtd_run_id),
+      scale_up_source_torque_nm: parseSettingValue(req.body.scale_up_source_torque_nm),
+      scale_up_source_no_load_torque_nm: parseSettingValue(req.body.scale_up_source_no_load_torque_nm),
+      scale_up_production_nominal_power_kw: parseSettingValue(req.body.scale_up_production_nominal_power_kw),
+      scale_up_production_max_torque_nm: parseSettingValue(req.body.scale_up_production_max_torque_nm),
+      scale_up_production_no_load_torque_nm: parseSettingValue(req.body.scale_up_production_no_load_torque_nm),
+      scale_up_production_mechanical_efficiency: parseSettingValue(req.body.scale_up_production_mechanical_efficiency),
+      scale_up_production_center_distance_cm: parseSettingValue(req.body.scale_up_production_center_distance_cm),
+      scale_up_production_torque_density_limit_nm_cm3: parseSettingValue(req.body.scale_up_production_torque_density_limit_nm_cm3),
+      scale_up_material_heat_capacity_kj_kg_c: parseSettingValue(req.body.scale_up_material_heat_capacity_kj_kg_c),
+      scale_up_mechanical_to_heat_fraction: parseSettingValue(req.body.scale_up_mechanical_to_heat_fraction),
+      scale_up_capacity_exponent: parseSettingValue(req.body.scale_up_capacity_exponent),
+      scale_up_production_max_screw_speed_rpm: parseSettingValue(req.body.scale_up_production_max_screw_speed_rpm),
+      scale_up_production_max_tip_speed_m_s: parseSettingValue(req.body.scale_up_production_max_tip_speed_m_s),
+      scale_up_temperature_offset_c: parseSettingValue(req.body.scale_up_temperature_offset_c),
+      scale_up_material_temp_min_c: parseSettingValue(req.body.scale_up_material_temp_min_c),
+      scale_up_material_temp_max_c: parseSettingValue(req.body.scale_up_material_temp_max_c),
+      scale_up_sme_parity_tolerance_pct: parseSettingValue(req.body.scale_up_sme_parity_tolerance_pct),
+      scale_up_melt_temperature_tolerance_c: parseSettingValue(req.body.scale_up_melt_temperature_tolerance_c),
+      scale_up_production_max_melt_pressure_bar: parseSettingValue(req.body.scale_up_production_max_melt_pressure_bar),
       scale_up_production_screw_speed_levels_rpm: req.body.scale_up_production_screw_speed_levels_rpm ? String(req.body.scale_up_production_screw_speed_levels_rpm).trim() : null,
       scale_up_production_throughput_multipliers: req.body.scale_up_production_throughput_multipliers ? String(req.body.scale_up_production_throughput_multipliers).trim() : null,
       custom_fields: customFields

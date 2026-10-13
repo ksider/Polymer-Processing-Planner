@@ -14,7 +14,7 @@
           <tr><td colspan="<%= displayedFields.length + 6 + (hasMeasurementSeries ? 1 : 0) %>" class="py-6 text-center text-sm text-body"><%= emptyMessage %></td></tr>
         <% } %>
         <% runs.forEach((run) => { const values = valuesFor(run); %>
-          <tr data-run-row data-run-id="<%= run.id %>" data-run-group="<%= run.run_group %>">
+          <tr<% if (hasMeasurementSeries) { %> id="rtd-run-<%= run.id %>"<% } %> data-run-row data-run-id="<%= run.id %>" data-run-group="<%= run.run_group %>">
             <td class="whitespace-nowrap"><strong><%= run.run_code %></strong></td>
             <td><input class="w-32" type="date" data-run-performed value="<%= run.performed_at || '' %>"></td>
             <td><select class="w-36" data-run-responsible><option value="">Unassigned</option><% assignableUsers.forEach((user) => { %><option value="<%= user.id %>" <%= Number(run.responsible_user_id) === Number(user.id) ? 'selected' : '' %>><%= user.name || user.email %></option><% }) %></select></td>
