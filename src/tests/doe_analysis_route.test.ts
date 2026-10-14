@@ -267,11 +267,19 @@ test("Analysis V2 dataset endpoint uses experiment access and DOE ownership", as
         interpretation: interpretation.body.interpretation
       })
       .expect(403);
-    await agent
+    const savedInterpretationsWorkspace = await agent
       .get(`/experiments/${experimentId}/doe/${doeId}/analysis-v2?analysis_id=${createdAnalysis.body.analysis.id}`)
       .expect(200)
-      .expect(/Saved interpretations/)
-      .expect(new RegExp(`Saved interpretation</strong><span class="small-note">#${savedInterpretation.body.artifact.id}`));
+      .expect(/Saved interpretations/);
+    const savedInterpretationsMatch = savedInterpretationsWorkspace.text.match(
+      /<script[^>]+id="analysis-saved-ai-interpretations"[^>]*>([\s\S]*?)<\/script>/
+    );
+    assert.ok(savedInterpretationsMatch?.[1], "saved AI interpretations are bootstrapped for the workspace");
+    const bootstrappedInterpretations = JSON.parse(savedInterpretationsMatch[1]) as Array<{ id: number }>;
+    assert.ok(
+      bootstrappedInterpretations.some((artifact) => artifact.id === savedInterpretation.body.artifact.id),
+      "the saved interpretation is available to the client-side renderer"
+    );
 
     const reportId = createReportConfig(db, {
       experiment_id: experimentId,

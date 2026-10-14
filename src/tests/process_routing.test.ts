@@ -87,9 +87,10 @@ test("process routing, route_code settings and process-owner access", async () =
   ensureQualificationDefaults(db, extrusionExperimentId);
   const extrusionStepResponse = await adminAgent
     .get(`/extrusion-v1/${extrusionExperimentId}/qualification/1`)
-    .expect(200)
-    .expect(/Measurement series/)
-    .expect(/Flow curves by temperature/);
+    .expect(200);
+  assert.match(extrusionStepResponse.text, /const processTypeCode = "extrusion_v1";/);
+  assert.match(extrusionStepResponse.text, /data-extrusion-step-one/);
+  assert.match(extrusionStepResponse.text, /Material characterisation programme/);
   const inlineScripts = Array.from(extrusionStepResponse.text.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g));
   const qualificationScript = inlineScripts
     .map((match) => match[1])

@@ -25,6 +25,11 @@ import type { ParamDefinition, ParamConfig } from "../repos/params_repo.js";
 import { buildBbdDesign, buildCcdDesign, buildFfaDesign, buildScreenDesign, buildSimDesign } from "../domain/designs.js";
 import { stableHash } from "../lib/hash.js";
 import { ensureExtrusionDoePresetCatalogue, getExtrusionDoePreset } from "./extrusion_doe_presets.js";
+import {
+  captureExtrusionQualificationConstraints,
+  getExtrusionQualificationConstraintSnapshot,
+  validateExtrusionDoeConstraints
+} from "./extrusion_doe_constraints.js";
 
 export type ExperimentCreateInput = {
   name: string;
@@ -350,6 +355,11 @@ export function createDoeWithDefaults(
       if (param) activate.run(doeId, param.id);
     }
   }
+  if (processTypeCode === "extrusion_v1") {
+    upsertDesignMetadata(db, input.experimentId, doeId, JSON.stringify({
+      extrusion_qualification_constraints: captureExtrusionQualificationConstraints(db, input.experimentId)
+    }));
+  }
   return doeId;
 }
 
@@ -412,6 +422,10 @@ export function generateRuns(db: Db, experimentId: number, doeId: number) {
   const outputParams = listParamDefinitionsByKindForProcess(db, experimentId, "OUTPUT", processTypeCode);
   const configs = listParamConfigs(db, experimentId, doeId);
   const existingMeta = parseDesignMetadata(getDesignMetadata(db, experimentId, doeId));
+  const constraintErrors = processTypeCode === "extrusion_v1"
+    ? validateExtrusionDoeConstraints(configs, inputParams, getExtrusionQualificationConstraintSnapshot(existingMeta))
+    : [];
+  if (constraintErrors.length) throw new Error(constraintErrors[0]);
   const nonRandomizedParamId =
     typeof existingMeta.non_randomized_param_id === "number"
       ? existingMeta.non_randomized_param_id

@@ -104,6 +104,7 @@ import {
   getExtrusionDoePreset,
   getExtrusionPresetPrerequisiteWarnings
 } from "../services/extrusion_doe_presets.js";
+import { getExtrusionQualificationConstraintSnapshot } from "../services/extrusion_doe_constraints.js";
 
 // Local helper for role checks in this router.
 function hasRole(req: express.Request, roles: string[]) {
@@ -511,7 +512,9 @@ export function createExperimentsRouter(db: Db) {
     } catch (error) {
       return res.status(400).send(error instanceof Error ? error.message : "Unable to create DOE");
     }
+    const existingDesignMeta = parseDesignMetadata(getDesignMetadata(db, experimentId, doeId));
     upsertDesignMetadata(db, experimentId, doeId, JSON.stringify({
+      ...existingDesignMeta,
       ...(preset ? {
         extrusion_preset: {
           code: preset.code,
@@ -668,6 +671,10 @@ export function createExperimentsRouter(db: Db) {
         is_standard: field.is_standard,
         is_active: field.is_active
       });
+    }
+    const sourceDesignMetadata = getDesignMetadata(db, experimentId, doeId);
+    if (sourceDesignMetadata) {
+      upsertDesignMetadata(db, experimentId, clonedId, sourceDesignMetadata);
     }
     res.redirect(`/experiments/${experimentId}/doe/${clonedId}?tab=design`);
   });
@@ -853,6 +860,7 @@ export function createExperimentsRouter(db: Db) {
     }));
     const configs = listParamConfigs(db, experimentId, doeId);
     const designMeta = parseDesignMetadata(getDesignMetadata(db, experimentId, doeId));
+    const extrusionQualificationConstraints = getExtrusionQualificationConstraintSnapshot(designMeta);
     const storedExtrusionPreset =
       typeof designMeta.extrusion_preset === "object" && designMeta.extrusion_preset !== null
         ? designMeta.extrusion_preset as {
@@ -1080,6 +1088,7 @@ export function createExperimentsRouter(db: Db) {
       errorMessage,
       nonRandomizedParamId,
       extrusionPreset,
+      extrusionQualificationConstraints,
       qualSummaries,
       canAssignEntities,
       assignableUsers,
@@ -1610,7 +1619,12 @@ export function createExperimentsRouter(db: Db) {
         `/experiments/${experimentId}/doe/${doeId}?tab=design&error=${encodeURIComponent(message)}`
       );
     }
-    generateRuns(db, experimentId, doeId);
+    try {
+      generateRuns(db, experimentId, doeId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to generate DOE runs.";
+      return res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=design&error=${encodeURIComponent(message)}`);
+    }
     res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=runs`);
   });
 

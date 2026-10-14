@@ -37,14 +37,15 @@ test("qualification settings autosave returns JSON and persists rheology values"
       .expect(302);
 
     const pageCsrf = await getCsrfToken(agent, `/experiments/${experimentId}/qualification/1`);
-    await agent
+    const saveResponse = await agent
       .post(`/experiments/${experimentId}/qualification/1/settings`)
       .set("x-csrf-token", pageCsrf)
       .set("x-requested-with", "XMLHttpRequest")
       .type("form")
       .send({ intensification_coeff: "2.5", melt_temp_c: "215", recommended_inj_speed: "42" })
-      .expect(200)
-      .expect({ ok: true });
+      .expect(200);
+    assert.equal(saveResponse.body.ok, true);
+    assert.equal(saveResponse.body.summary.recommended_inj_speed, 42);
 
     const stored = JSON.parse(getQualStepSettings(db, experimentId, 1) || "{}");
     assert.equal(stored.intensification_coeff, 2.5);
