@@ -281,6 +281,23 @@ export function createQualificationRouter(db: Db) {
         })
         .filter((run): run is NonNullable<typeof run> => run != null);
     })();
+    const reactiveDosingEvidence = (() => {
+      if (processTypeCode !== "extrusion_v1" || stepNumber !== 9) return null;
+      const rangeFor = (sourceStepNumber: number, minCode: string, maxCode: string) => {
+        const sourceStep = getQualStep(db, experimentId, sourceStepNumber);
+        if (!sourceStep) return null;
+        const outputs = new Map(listQualStepOutputs(db, sourceStep.id).map((output) => [output.output_code, output.value_real]));
+        const min = outputs.get(minCode);
+        const max = outputs.get(maxCode);
+        return Number.isFinite(min) && Number.isFinite(max) ? { min: min as number, max: max as number } : null;
+      };
+      const sideFeederStep = getQualStep(db, experimentId, 6);
+      return {
+        mainFeeder: rangeFor(2, "feeder_stable_throughput_min_kg_h", "feeder_stable_throughput_max_kg_h"),
+        liquidPump: rangeFor(7, "calibrated_liquid_throughput_min_kg_h", "calibrated_liquid_throughput_max_kg_h"),
+        sideFeederQualified: sideFeederStep ? listQualRuns(db, sideFeederStep.id).length > 0 : false
+      };
+    })();
     // The original IM panels are retained for their six established studies.
     // Every other catalogue stage uses the shared table/detail shell, so a new
     // code-owned stage never needs a new micro-application or a six-step fork.
@@ -314,6 +331,7 @@ export function createQualificationRouter(db: Db) {
           : null,
         rtdCalibrationRange: rtdFeederCalibration ? `${rtdFeederCalibration.minThroughput.toFixed(2)}–${rtdFeederCalibration.maxThroughput.toFixed(2)} kg/h` : null,
         rtdReferenceRuns,
+        reactiveDosingEvidence,
         canAssignEntities,
         assignableUsers,
         stepAssigneeId,
@@ -439,6 +457,7 @@ export function createQualificationRouter(db: Db) {
       machineIntensification,
       machineParamMap,
       summaryJson: summaryRow?.summary_json ?? null,
+      studyGuide: getQualificationStudyGuide(processTypeCode, stepNumber),
       canAssignEntities,
       assignableUsers,
       stepAssigneeId,
@@ -955,6 +974,9 @@ export function createQualificationRouter(db: Db) {
       return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
     };
     const levels = (value: unknown) => [...new Set(String(value || "").split(/[;,\s]+/).map((item) => Number(item.replace(",", "."))).filter((item) => Number.isFinite(item) && item > 0))].sort((a, b) => a - b);
+    const orderedLevels = (value: unknown) => String(value || "").split(/[;,\s]+/)
+      .map((item) => Number(item.replace(",", ".")))
+      .filter((item) => Number.isFinite(item) && item > 0);
     const fields = new Map(listQualFields(db, step.id).map((field) => [field.code, field]));
     const write = (runId: number, values: Record<string, number>) => {
       Object.entries(values).forEach(([code, value]) => {
@@ -963,29 +985,113 @@ export function createQualificationRouter(db: Db) {
       });
     };
     let cells: Array<Record<string, number>> = [];
+    let runGroup = "default";
     if (stepNumber === 6) {
       const screw = number(req.body?.main_screw_speed_rpm);
       const matrix = number(req.body?.matrix_throughput_kg_h);
-      const sideSpeeds = levels(req.body?.side_feeder_speed_levels_rpm);
-      if (!screw || !matrix || !sideSpeeds.length) return res.status(400).json({ error: "Enter main screw speed, matrix throughput and at least one side-feeder speed" });
-      cells = sideSpeeds.map((side) => ({ main_screw_speed_rpm: screw, matrix_throughput_kg_h: matrix, side_feeder_speed_rpm: side }));
+      const program = String(req.body?.side_feeding_program || "feeder_stability");
+      const materialMode = req.body?.side_feeding_material_mode === "fiber" ? "fiber" : "particulate";
+      if (!["feeder_stability", "material_incorporation"].includes(program)) return res.status(400).json({ error: "Choose the feeder-stability or material-incorporation program" });
+      if (!screw || !matrix) return res.status(400).json({ error: "Enter main screw speed and matrix throughput" });
+      runGroup = program === "feeder_stability" ? "feeder_stability" : materialMode === "fiber" ? "fiber_retention" : "particulate_filler";
+      if (program === "feeder_stability") {
+        const sideSpeeds = levels(req.body?.side_feeder_speed_levels_rpm);
+        if (!sideSpeeds.length) return res.status(400).json({ error: "Enter at least one side-feeder speed for the stability sweep" });
+        cells = sideSpeeds.map((side) => ({ main_screw_speed_rpm: screw, matrix_throughput_kg_h: matrix, side_feeder_speed_rpm: side }));
+      } else {
+        const fillerRates = orderedLevels(req.body?.filler_throughput_levels_kg_h);
+        const incorporationSpeeds = orderedLevels(req.body?.incorporation_side_feeder_speed_levels_rpm);
+        if (!fillerRates.length || !incorporationSpeeds.length || fillerRates.length !== incorporationSpeeds.length) {
+          return res.status(400).json({ error: "Enter equal-length filler/fibre throughput and matching side-feeder speed lists" });
+        }
+        const initialFibreLength = materialMode === "fiber" ? number(req.body?.fiber_initial_length_mm) : null;
+        if (materialMode === "fiber" && !initialFibreLength) return res.status(400).json({ error: "Enter the reference initial fibre length L0" });
+        cells = fillerRates.map((filler, index) => ({
+          main_screw_speed_rpm: screw,
+          matrix_throughput_kg_h: matrix,
+          side_feeder_speed_rpm: incorporationSpeeds[index],
+          filler_throughput_kg_h: filler,
+          ...(initialFibreLength ? { fiber_initial_length_mm: initialFibreLength } : {})
+        }));
+      }
     } else if (stepNumber === 7) {
-      const screw = number(req.body?.screw_speed_rpm);
-      const polymer = number(req.body?.polymer_throughput_kg_h);
-      const liquidRates = levels(req.body?.liquid_throughput_levels_kg_h);
-      if (!screw || !polymer || !liquidRates.length) return res.status(400).json({ error: "Enter screw speed, polymer throughput and at least one liquid dosing rate" });
-      cells = liquidRates.map((liquid) => ({ screw_speed_rpm: screw, polymer_throughput_kg_h: polymer, liquid_throughput_kg_h: liquid }));
+      const program = String(req.body?.liquid_program || "liquid_pump_calibration");
+      if (!["liquid_pump_calibration", "liquid_melt_injection"].includes(program)) {
+        return res.status(400).json({ error: "Choose the pump-calibration or melt-injection program" });
+      }
+      runGroup = program;
+      const liquidRates = levels(req.body?.liquid_target_throughput_levels_kg_h);
+      if (!liquidRates.length) return res.status(400).json({ error: "Enter at least one target liquid throughput" });
+      if (program === "liquid_pump_calibration") {
+        cells = liquidRates.map((liquid) => ({ liquid_target_throughput_kg_h: liquid }));
+      } else {
+        const screw = number(req.body?.screw_speed_rpm);
+        const polymer = number(req.body?.polymer_throughput_kg_h);
+        const injectionZoneTemp = number(req.body?.injection_zone_temp_c);
+        if (!screw || !polymer || !injectionZoneTemp) {
+          return res.status(400).json({ error: "Enter screw speed, polymer throughput and injection-zone temperature" });
+        }
+        cells = liquidRates.map((liquid) => ({
+          screw_speed_rpm: screw,
+          polymer_throughput_kg_h: polymer,
+          liquid_target_throughput_kg_h: liquid,
+          liquid_throughput_kg_h: liquid
+        }));
+      }
     } else if (stepNumber === 8) {
-      const screw = number(req.body?.screw_speed_rpm);
-      const throughput = number(req.body?.throughput_kg_h);
-      const vacuumLevels = levels(req.body?.vacuum_pressure_levels_mbar);
-      if (!screw || !throughput || !vacuumLevels.length) return res.status(400).json({ error: "Enter screw speed, throughput and at least one vacuum-pressure level" });
-      cells = vacuumLevels.map((vacuum) => ({ screw_speed_rpm: screw, throughput_kg_h: throughput, vacuum_pressure_mbar: vacuum }));
+      const program = String(req.body?.vacuum_program || "vacuum_calibration");
+      if (!["vacuum_calibration", "vacuum_capacity"].includes(program)) {
+        return res.status(400).json({ error: "Choose the vacuum-calibration or capacity-verification program" });
+      }
+      const initialVolatiles = number(req.body?.initial_volatiles_pct);
+      const ventTemperature = number(req.body?.vent_zone_temp_c);
+      if (!initialVolatiles || !ventTemperature) {
+        return res.status(400).json({ error: "Enter the measured incoming volatile content and vent-zone temperature" });
+      }
+      runGroup = program;
+      if (program === "vacuum_calibration") {
+        const screw = number(req.body?.screw_speed_rpm);
+        const throughput = number(req.body?.throughput_kg_h);
+        const vacuumLevels = levels(req.body?.vacuum_target_pressure_levels_mbar);
+        if (!screw || !throughput || !vacuumLevels.length) {
+          return res.status(400).json({ error: "Enter screw speed, melt throughput and at least one target vacuum pressure" });
+        }
+        cells = vacuumLevels.map((vacuum) => ({
+          screw_speed_rpm: screw,
+          devol_target_throughput_kg_h: throughput,
+          throughput_kg_h: throughput,
+          vacuum_target_pressure_mbar: vacuum,
+          initial_volatiles_pct: initialVolatiles
+        }));
+      } else {
+        const selectedVacuum = number(req.body?.selected_vacuum_pressure_mbar);
+        const throughputs = orderedLevels(req.body?.capacity_throughput_levels_kg_h);
+        const screwSpeeds = orderedLevels(req.body?.capacity_screw_speed_levels_rpm);
+        if (!selectedVacuum || !throughputs.length || throughputs.length !== screwSpeeds.length) {
+          return res.status(400).json({ error: "Enter the selected vacuum and equal-length throughput and screw-speed lists" });
+        }
+        cells = throughputs.map((throughput, index) => ({
+          screw_speed_rpm: screwSpeeds[index],
+          devol_target_throughput_kg_h: throughput,
+          throughput_kg_h: throughput,
+          vacuum_target_pressure_mbar: selectedVacuum,
+          initial_volatiles_pct: initialVolatiles
+        }));
+      }
     } else if (stepNumber === 9) {
       const temperatures = levels(req.body?.reaction_temp_levels_c);
-      const residenceTimes = levels(req.body?.mean_residence_time_levels_s);
-      if (!temperatures.length || !residenceTimes.length) return res.status(400).json({ error: "Enter reaction-temperature and residence-time levels" });
-      cells = temperatures.flatMap((temperature) => residenceTimes.map((residenceTime) => ({ reaction_temp_c: temperature, mean_residence_time_s: residenceTime })));
+      const screwSpeeds = orderedLevels(req.body?.reaction_screw_speed_levels_rpm);
+      const throughputs = orderedLevels(req.body?.reaction_throughput_levels_kg_h);
+      if (!temperatures.length || !screwSpeeds.length || screwSpeeds.length !== throughputs.length) {
+        return res.status(400).json({ error: "Enter reaction temperatures and equal-length screw-speed/throughput pairs" });
+      }
+      runGroup = "reactive_extrusion";
+      cells = temperatures.flatMap((temperature) => screwSpeeds.map((screwSpeed, index) => ({
+        reaction_temp_c: temperature,
+        screw_speed_rpm: screwSpeed,
+        reaction_target_throughput_kg_h: throughputs[index],
+        throughput_kg_h: throughputs[index]
+      })));
     } else {
       const speeds = levels(req.body?.production_screw_speed_levels_rpm);
       const multipliers = levels(req.body?.production_throughput_multipliers);
@@ -1001,10 +1107,10 @@ export function createQualificationRouter(db: Db) {
         production_throughput_kg_h: Math.round(scaledTarget * multiplier * 100) / 100
       })));
     }
-    let runs = listQualRuns(db, step.id).filter((run) => run.run_group === "default");
+    let runs = listQualRuns(db, step.id).filter((run) => run.run_group === runGroup);
     while (runs.length < cells.length) {
-      createQualRuns(db, experimentId, step.id, 1);
-      runs = listQualRuns(db, step.id).filter((run) => run.run_group === "default");
+      createQualRuns(db, experimentId, step.id, 1, runGroup);
+      runs = listQualRuns(db, step.id).filter((run) => run.run_group === runGroup);
     }
     cells.forEach((cell, index) => write(runs[index].id, cell));
     recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
@@ -1657,6 +1763,13 @@ export function createQualificationRouter(db: Db) {
     const existingSettingsJson = getQualStepSettings(db, experimentId, stepNumber);
     let existingSettings: Record<string, unknown> = {};
     try { existingSettings = JSON.parse(existingSettingsJson || "{}") as Record<string, unknown>; } catch {}
+    const wasSubmitted = (key: string) => Object.prototype.hasOwnProperty.call(req.body || {}, key);
+    const submittedNumberOrSaved = (key: string) => wasSubmitted(key)
+      ? parseSettingValue(req.body[key])
+      : (existingSettings[key] ?? null);
+    const submittedTextOrSaved = (key: string) => wasSubmitted(key)
+      ? (req.body[key] ? String(req.body[key]).trim() : null)
+      : (existingSettings[key] ?? null);
     const settings = {
       ...existingSettings,
       intensification_coeff: intensificationValue == null ? 1 : intensificationValue,
@@ -1698,17 +1811,44 @@ export function createQualificationRouter(db: Db) {
       rtd_measurement_method: req.body.rtd_measurement_method ? String(req.body.rtd_measurement_method) : null,
       rtd_screw_speed_levels_rpm: req.body.rtd_screw_speed_levels_rpm ? String(req.body.rtd_screw_speed_levels_rpm).trim() : null,
       rtd_throughput_levels_kg_h: req.body.rtd_throughput_levels_kg_h ? String(req.body.rtd_throughput_levels_kg_h).trim() : null,
-      side_feeding_main_screw_speed_rpm: parseSettingValue(req.body.side_feeding_main_screw_speed_rpm),
-      side_feeding_matrix_throughput_kg_h: parseSettingValue(req.body.side_feeding_matrix_throughput_kg_h),
-      side_feeding_speed_levels_rpm: req.body.side_feeding_speed_levels_rpm ? String(req.body.side_feeding_speed_levels_rpm).trim() : null,
-      liquid_dosing_screw_speed_rpm: parseSettingValue(req.body.liquid_dosing_screw_speed_rpm),
-      liquid_dosing_polymer_throughput_kg_h: parseSettingValue(req.body.liquid_dosing_polymer_throughput_kg_h),
-      liquid_dosing_levels_kg_h: req.body.liquid_dosing_levels_kg_h ? String(req.body.liquid_dosing_levels_kg_h).trim() : null,
-      devol_screw_speed_rpm: parseSettingValue(req.body.devol_screw_speed_rpm),
-      devol_throughput_kg_h: parseSettingValue(req.body.devol_throughput_kg_h),
-      devol_vacuum_levels_mbar: req.body.devol_vacuum_levels_mbar ? String(req.body.devol_vacuum_levels_mbar).trim() : null,
-      reaction_temp_levels_c: req.body.reaction_temp_levels_c ? String(req.body.reaction_temp_levels_c).trim() : null,
-      reaction_residence_time_levels_s: req.body.reaction_residence_time_levels_s ? String(req.body.reaction_residence_time_levels_s).trim() : null,
+      side_feeding_main_screw_speed_rpm: submittedNumberOrSaved("side_feeding_main_screw_speed_rpm"),
+      side_feeding_matrix_throughput_kg_h: submittedNumberOrSaved("side_feeding_matrix_throughput_kg_h"),
+      side_feeding_injection_zone_temp_c: submittedNumberOrSaved("side_feeding_injection_zone_temp_c"),
+      side_feeding_speed_levels_rpm: submittedTextOrSaved("side_feeding_speed_levels_rpm"),
+      side_feeding_material_mode: wasSubmitted("side_feeding_material_mode") ? (req.body.side_feeding_material_mode === "fiber" ? "fiber" : "particulate") : (existingSettings.side_feeding_material_mode ?? "particulate"),
+      side_feeding_filler_density_kg_m3: submittedNumberOrSaved("side_feeding_filler_density_kg_m3"),
+      side_feeding_matrix_density_kg_m3: submittedNumberOrSaved("side_feeding_matrix_density_kg_m3"),
+      side_feeding_max_packing_fraction: submittedNumberOrSaved("side_feeding_max_packing_fraction"),
+      side_feeding_filler_throughput_levels_kg_h: submittedTextOrSaved("side_feeding_filler_throughput_levels_kg_h"),
+      side_feeding_incorporation_speed_levels_rpm: submittedTextOrSaved("side_feeding_incorporation_speed_levels_rpm"),
+      side_feeding_fiber_initial_length_mm: submittedNumberOrSaved("side_feeding_fiber_initial_length_mm"),
+      liquid_calibration_target_throughput_levels_kg_h: submittedTextOrSaved("liquid_calibration_target_throughput_levels_kg_h"),
+      liquid_injection_screw_speed_rpm: submittedNumberOrSaved("liquid_injection_screw_speed_rpm"),
+      liquid_injection_polymer_throughput_kg_h: submittedNumberOrSaved("liquid_injection_polymer_throughput_kg_h"),
+      liquid_injection_zone_temp_c: submittedNumberOrSaved("liquid_injection_zone_temp_c"),
+      liquid_injection_baseline_torque_nm: submittedNumberOrSaved("liquid_injection_baseline_torque_nm"),
+      liquid_injection_target_throughput_levels_kg_h: submittedTextOrSaved("liquid_injection_target_throughput_levels_kg_h"),
+      devol_calibration_screw_speed_rpm: submittedNumberOrSaved("devol_calibration_screw_speed_rpm"),
+      devol_calibration_throughput_kg_h: submittedNumberOrSaved("devol_calibration_throughput_kg_h"),
+      devol_vent_zone_temp_c: submittedNumberOrSaved("devol_vent_zone_temp_c"),
+      devol_initial_volatiles_pct: submittedNumberOrSaved("devol_initial_volatiles_pct"),
+      devol_residual_volatiles_target_pct: submittedNumberOrSaved("devol_residual_volatiles_target_pct"),
+      devol_vacuum_target_levels_mbar: submittedTextOrSaved("devol_vacuum_target_levels_mbar"),
+      devol_selected_vacuum_pressure_mbar: submittedNumberOrSaved("devol_selected_vacuum_pressure_mbar"),
+      devol_capacity_throughput_levels_kg_h: submittedTextOrSaved("devol_capacity_throughput_levels_kg_h"),
+      devol_capacity_screw_speed_levels_rpm: submittedTextOrSaved("devol_capacity_screw_speed_levels_rpm"),
+      reaction_temp_levels_c: submittedTextOrSaved("reaction_temp_levels_c"),
+      reaction_screw_speed_levels_rpm: submittedTextOrSaved("reaction_screw_speed_levels_rpm"),
+      reaction_throughput_levels_kg_h: submittedTextOrSaved("reaction_throughput_levels_kg_h"),
+      reaction_dosing_route: wasSubmitted("reaction_dosing_route") ? String(req.body.reaction_dosing_route || "main_feeder") : (existingSettings.reaction_dosing_route ?? "main_feeder"),
+      reaction_reagent_name: submittedTextOrSaved("reaction_reagent_name"),
+      reaction_reagent_concentration_pct: submittedNumberOrSaved("reaction_reagent_concentration_pct"),
+      reaction_chemical_analysis_method: wasSubmitted("reaction_chemical_analysis_method") ? String(req.body.reaction_chemical_analysis_method || "ftir") : (existingSettings.reaction_chemical_analysis_method ?? "ftir"),
+      reaction_chemical_marker: submittedTextOrSaved("reaction_chemical_marker"),
+      reaction_conversion_target_pct: submittedNumberOrSaved("reaction_conversion_target_pct"),
+      reaction_mfr_min_g_10min: submittedNumberOrSaved("reaction_mfr_min_g_10min"),
+      reaction_mfr_max_g_10min: submittedNumberOrSaved("reaction_mfr_max_g_10min"),
+      reaction_thermal_limit_c: submittedNumberOrSaved("reaction_thermal_limit_c"),
       scale_up_source_screw_diameter_mm: parseSettingValue(req.body.scale_up_source_screw_diameter_mm),
       scale_up_production_screw_diameter_mm: parseSettingValue(req.body.scale_up_production_screw_diameter_mm),
       scale_up_source_throughput_kg_h: parseSettingValue(req.body.scale_up_source_throughput_kg_h),

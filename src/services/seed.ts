@@ -1,6 +1,6 @@
 import type { Db } from "../db.js";
 import { createParamDefinition, findGlobalParamByCode } from "../repos/params_repo.js";
-import { ensureExtrusionParameterCatalogue } from "./qualification_service.js";
+import { ensureExtrusionParameterCatalogue, ensureInjectionParameterCatalogue } from "./qualification_service.js";
 import { ensureExtrusionDoePresetCatalogue } from "./extrusion_doe_presets.js";
 
 const DEFECT_TAGS = [
@@ -192,6 +192,7 @@ export function ensureSeedParams(db: Db) {
     const processId = processIdByCode.get(processCode);
     if (paramId && processId) insertApplicability.run(paramId, processId);
   }
+  ensureInjectionParameterCatalogue(db);
   ensureExtrusionParameterCatalogue(db);
   ensureExtrusionDoePresetCatalogue(db);
   backfillCustomDoeAnalysisFields(db);

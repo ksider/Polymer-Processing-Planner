@@ -248,19 +248,43 @@ function seedDisabledOptionalStudies(db: Db, experimentId: number, ownerId: numb
   setOptionalQualificationStudyEnabled(db, experimentId, 6, true);
   let step = getQualStep(db, experimentId, 6)!;
   let fields = listQualFields(db, step.id);
-  let runs = ensureRuns(db, experimentId, step.id, 3, "side_feeding");
+  // Preserve previously seeded Step 6 data, but move the legacy undifferentiated
+  // sweep into the first, feeder-stability program.
+  db.prepare("UPDATE qual_runs SET run_group = 'feeder_stability' WHERE step_id = ? AND run_group = 'side_feeding'").run(step.id);
+  let runs = ensureRuns(db, experimentId, step.id, 3, "feeder_stability");
+  const particulateRuns = ensureRuns(db, experimentId, step.id, 3, "particulate_filler");
   upsertQualStepSettings(db, experimentId, 6, JSON.stringify({
-    side_feeding_main_screw_speed_rpm: 250, side_feeding_matrix_throughput_kg_h: 30, side_feeding_speed_levels_rpm: "18, 27, 36"
+    side_feeding_main_screw_speed_rpm: 250,
+    side_feeding_matrix_throughput_kg_h: 30,
+    side_feeding_injection_zone_temp_c: 190,
+    side_feeding_speed_levels_rpm: "18, 27, 36",
+    side_feeding_material_mode: "particulate",
+    side_feeding_filler_density_kg_m3: 2600,
+    side_feeding_matrix_density_kg_m3: 900,
+    side_feeding_max_packing_fraction: 0.64,
+    side_feeding_filler_throughput_levels_kg_h: "7.5, 10.8, 14.4",
+    side_feeding_incorporation_speed_levels_rpm: "27, 36, 45"
   }));
-  [[250, 30, 18, 4.8, 26], [250, 30, 27, 7.5, 38], [300, 36, 36, 10.8, 51]].forEach((row, index) => {
+  [[250, 30, 18, 4.8, 26, 0.8, 18], [250, 30, 27, 7.5, 38, 1.0, 22], [250, 30, 36, 10.8, 51, 1.4, 28]].forEach((row, index) => {
     fillRun(db, fields, runs[index], {
       main_screw_speed_rpm: row[0], matrix_throughput_kg_h: row[1], side_feeder_speed_rpm: row[2],
-      filler_throughput_kg_h: row[3], side_feeder_torque_nm: row[4], no_powder_accumulation: true
+      filler_throughput_kg_h: row[3], side_feeder_torque_nm: row[4], side_feeder_throughput_cv_pct: row[5],
+      injection_port_pressure_bar: row[6], no_powder_accumulation: true
+    }, ownerId);
+  });
+  [[250, 30, 27, 7.5, 38, 1.0, 22, 850], [250, 30, 36, 10.8, 51, 1.3, 28, 1030], [250, 30, 45, 14.4, 68, 1.5, 35, 1320]].forEach((row, index) => {
+    fillRun(db, fields, particulateRuns[index], {
+      main_screw_speed_rpm: row[0], matrix_throughput_kg_h: row[1], side_feeder_speed_rpm: row[2],
+      filler_throughput_kg_h: row[3], side_feeder_torque_nm: row[4], side_feeder_throughput_cv_pct: row[5],
+      injection_port_pressure_bar: row[6], composite_viscosity_pa_s: row[7], no_powder_accumulation: true
     }, ownerId);
   });
   recomputeDerivedAndSummary(db, experimentId, step.id, 6);
   putOutputs(db, experimentId, step.id, 6, {
-    side_feeder_stable_speed_min_rpm: 18, side_feeder_stable_speed_max_rpm: 36, filler_mass_fraction_max_pct: 23.1
+    side_feeder_stable_speed_min_rpm: 18,
+    side_feeder_stable_speed_max_rpm: 45,
+    filler_mass_fraction_max_pct: 32.43,
+    filler_volume_fraction_max_pct: 14.25
   });
   recomputeDerivedAndSummary(db, experimentId, step.id, 6);
   updateQualStepStatus(db, step.id, "DONE");
@@ -269,19 +293,36 @@ function seedDisabledOptionalStudies(db: Db, experimentId: number, ownerId: numb
   setOptionalQualificationStudyEnabled(db, experimentId, 7, true);
   step = getQualStep(db, experimentId, 7)!;
   fields = listQualFields(db, step.id);
-  runs = ensureRuns(db, experimentId, step.id, 3, "liquid_dosing");
+  // Preserve the original liquid-dose demo measurements as melt-injection
+  // evidence when refreshing an existing demo database.
+  db.prepare("UPDATE qual_runs SET run_group = 'liquid_melt_injection' WHERE step_id = ? AND run_group = 'liquid_dosing'").run(step.id);
+  const calibrationRuns = ensureRuns(db, experimentId, step.id, 3, "liquid_pump_calibration");
+  const injectionRuns = ensureRuns(db, experimentId, step.id, 3, "liquid_melt_injection");
   upsertQualStepSettings(db, experimentId, 7, JSON.stringify({
-    liquid_dosing_screw_speed_rpm: 250, liquid_dosing_polymer_throughput_kg_h: 30, liquid_dosing_levels_kg_h: "0.6, 1.2, 2"
+    liquid_calibration_target_throughput_levels_kg_h: "0.6, 1.2, 2",
+    liquid_injection_screw_speed_rpm: 250,
+    liquid_injection_polymer_throughput_kg_h: 30,
+    liquid_injection_zone_temp_c: 190,
+    liquid_injection_baseline_torque_nm: 184,
+    liquid_injection_target_throughput_levels_kg_h: "0.6, 1.2, 2"
   }));
-  [[250, 30, 0.6, 92, 68], [250, 30, 1.2, 96, 69], [300, 36, 2.0, 104, 73]].forEach((row, index) => {
-    fillRun(db, fields, runs[index], {
-      screw_speed_rpm: row[0], polymer_throughput_kg_h: row[1], liquid_throughput_kg_h: row[2],
-      injection_pressure_bar: row[3], barrel_pressure_bar: row[4], no_liquid_backflow: true
+  [[0.6, 0.59, 0.8], [1.2, 1.19, 1.0], [2, 1.98, 1.2]].forEach((row, index) => {
+    fillRun(db, fields, calibrationRuns[index], {
+      liquid_target_throughput_kg_h: row[0], liquid_throughput_kg_h: row[1], liquid_throughput_cv_pct: row[2]
+    }, ownerId);
+  });
+  [[0.6, 0.59, 92, 68, 181], [1.2, 1.19, 96, 69, 178], [2, 1.98, 104, 73, 174]].forEach((row, index) => {
+    fillRun(db, fields, injectionRuns[index], {
+      screw_speed_rpm: 250, polymer_throughput_kg_h: 30,
+      liquid_target_throughput_kg_h: row[0], liquid_throughput_kg_h: row[1], liquid_throughput_cv_pct: 1.2,
+      injection_pressure_bar: row[2], barrel_pressure_bar: row[3], motor_torque_nm: row[4],
+      no_liquid_backflow: true, no_liquid_leak: true
     }, ownerId);
   });
   recomputeDerivedAndSummary(db, experimentId, step.id, 7);
   putOutputs(db, experimentId, step.id, 7, {
-    liquid_mass_fraction_min_pct: 1.96, liquid_mass_fraction_max_pct: 5.26, injection_pressure_delta_min_bar: 24
+    calibrated_liquid_throughput_min_kg_h: 0.59, calibrated_liquid_throughput_max_kg_h: 1.98,
+    liquid_mass_fraction_max_pct: 6.19, injection_pressure_delta_min_bar: 24
   });
   recomputeDerivedAndSummary(db, experimentId, step.id, 7);
   updateQualStepStatus(db, step.id, "DONE");
@@ -290,18 +331,37 @@ function seedDisabledOptionalStudies(db: Db, experimentId: number, ownerId: numb
   setOptionalQualificationStudyEnabled(db, experimentId, 8, true);
   step = getQualStep(db, experimentId, 8)!;
   fields = listQualFields(db, step.id);
-  runs = ensureRuns(db, experimentId, step.id, 3, "devolatilization");
+  db.prepare("UPDATE qual_runs SET run_group = 'vacuum_calibration' WHERE step_id = ? AND run_group = 'devolatilization'").run(step.id);
+  const vacuumCalibrationRuns = ensureRuns(db, experimentId, step.id, 3, "vacuum_calibration");
+  const vacuumCapacityRuns = ensureRuns(db, experimentId, step.id, 3, "vacuum_capacity");
   upsertQualStepSettings(db, experimentId, 8, JSON.stringify({
-    devol_screw_speed_rpm: 300, devol_throughput_kg_h: 36, devol_vacuum_levels_mbar: "80, 65, 50"
+    devol_calibration_screw_speed_rpm: 300,
+    devol_calibration_throughput_kg_h: 36,
+    devol_vent_zone_temp_c: 185,
+    devol_initial_volatiles_pct: 0.58,
+    devol_residual_volatiles_target_pct: 0.12,
+    devol_vacuum_target_levels_mbar: "100, 75, 50",
+    devol_selected_vacuum_pressure_mbar: 75,
+    devol_capacity_throughput_levels_kg_h: "24, 36, 42",
+    devol_capacity_screw_speed_levels_rpm: "220, 300, 350"
   }));
-  [[250, 30, 80, 0.58, 0.14, 2.1], [300, 36, 65, 0.58, 0.1, 2.8], [300, 42, 50, 0.58, 0.08, 3.2]].forEach((row, index) => {
-    fillRun(db, fields, runs[index], {
-      screw_speed_rpm: row[0], throughput_kg_h: row[1], vacuum_pressure_mbar: row[2], initial_volatiles_pct: row[3],
-      residual_volatiles_pct: row[4], trap_carryover_g: row[5], vacuum_stable: true
+  [[100, 102, 0.14, 0.1], [75, 76, 0.1, 0.12], [50, 51, 0.08, 0.18]].forEach((row, index) => {
+    fillRun(db, fields, vacuumCalibrationRuns[index], {
+      screw_speed_rpm: 300, devol_target_throughput_kg_h: 36, throughput_kg_h: 36,
+      vacuum_target_pressure_mbar: row[0], vacuum_pressure_mbar: row[1], initial_volatiles_pct: 0.58,
+      residual_volatiles_pct: row[2], trap_carryover_g: row[3], vacuum_stable: true, no_vent_foam_or_stuffing: true
+    }, ownerId);
+  });
+  [[220, 24, 23.8, 0.11, 0.08, true], [300, 36, 35.9, 0.1, 0.12, true], [350, 42, 41.7, 0.14, 0.7, false]].forEach((row, index) => {
+    fillRun(db, fields, vacuumCapacityRuns[index], {
+      screw_speed_rpm: row[0], devol_target_throughput_kg_h: row[1], throughput_kg_h: row[2],
+      vacuum_target_pressure_mbar: 75, vacuum_pressure_mbar: 76, initial_volatiles_pct: 0.58,
+      residual_volatiles_pct: row[3], trap_carryover_g: row[4], vacuum_stable: true, no_vent_foam_or_stuffing: row[5]
     }, ownerId);
   });
   recomputeDerivedAndSummary(db, experimentId, step.id, 8);
-  putOutputs(db, experimentId, step.id, 8, { residual_volatiles_min_pct: 0.08, devolatilization_efficiency_max_pct: 86.2 });
+  db.prepare("DELETE FROM qual_step_outputs WHERE step_id = ? AND output_code IN ('residual_volatiles_min_pct', 'devolatilization_efficiency_max_pct')").run(step.id);
+  putOutputs(db, experimentId, step.id, 8, { required_vacuum_pressure_mbar: 75, max_throughput_without_vent_stuffing_kg_h: 35.9 });
   recomputeDerivedAndSummary(db, experimentId, step.id, 8);
   updateQualStepStatus(db, step.id, "DONE");
   setOptionalQualificationStudyEnabled(db, experimentId, 8, false);
@@ -309,18 +369,37 @@ function seedDisabledOptionalStudies(db: Db, experimentId: number, ownerId: numb
   setOptionalQualificationStudyEnabled(db, experimentId, 9, true);
   step = getQualStep(db, experimentId, 9)!;
   fields = listQualFields(db, step.id);
-  runs = ensureRuns(db, experimentId, step.id, 3, "reactive_extrusion");
+  db.prepare("DELETE FROM qual_run_values WHERE run_id IN (SELECT id FROM qual_runs WHERE step_id = ?)").run(step.id);
+  db.prepare("DELETE FROM qual_runs WHERE step_id = ?").run(step.id);
+  runs = ensureRuns(db, experimentId, step.id, 9, "reactive_extrusion");
   upsertQualStepSettings(db, experimentId, 9, JSON.stringify({
-    reaction_temp_levels_c: "205, 215, 225", reaction_residence_time_levels_s: "56, 64, 72"
+    reaction_temp_levels_c: "185, 200, 215",
+    reaction_screw_speed_levels_rpm: "180, 250, 320",
+    reaction_throughput_levels_kg_h: "20, 30, 38",
+    reaction_dosing_route: "liquid_injection",
+    reaction_reagent_name: "DCP / MAH",
+    reaction_reagent_concentration_pct: 0.15,
+    reaction_chemical_analysis_method: "ftir",
+    reaction_chemical_marker: "C=O 1780 / CH₂ 1456 cm⁻¹",
+    reaction_conversion_target_pct: 90,
+    reaction_mfr_min_g_10min: 4,
+    reaction_mfr_max_g_10min: 9,
+    reaction_thermal_limit_c: 210
   }));
-  [[205, 72, 0.006, 74, 6.5], [215, 64, 0.009, 84, 8.1], [225, 56, 0.012, 91, 10.4]].forEach((row, index) => {
+  [
+    [185, 180, 20, 19.8, 75, 0.31, 91, 4.8, 198, true], [185, 250, 30, 29.8, 62, 0.28, 88, 5.1, 199, true], [185, 320, 38, 37.7, 52, 0.24, 84, 5.4, 200, true],
+    [200, 180, 20, 19.9, 75, 0.46, 96, 5.7, 214, true], [200, 250, 30, 29.9, 62, 0.42, 93, 6.2, 216, true], [200, 320, 38, 37.8, 52, 0.37, 89, 6.7, 218, true],
+    [215, 180, 20, 19.8, 75, 0.55, 97, 8.4, 230, true], [215, 250, 30, 29.7, 62, 0.51, 95, 9.6, 234, true], [215, 320, 38, 37.6, 52, 0.45, 91, 10.3, 238, false]
+  ].forEach((row, index) => {
     fillRun(db, fields, runs[index], {
-      reaction_temp_c: row[0], mean_residence_time_s: row[1], reaction_rate_constant_s_inv: row[2], conversion_pct: row[3],
-      product_mfr_g_10min: row[4], reaction_stable: true
+      reaction_temp_c: row[0], screw_speed_rpm: row[1], reaction_target_throughput_kg_h: row[2], throughput_kg_h: row[3], mean_residence_time_s: row[4],
+      chemical_signal_ratio: row[5], conversion_pct: row[6],
+      product_mfr_g_10min: row[7], reaction_exotherm_peak_c: row[8], reaction_stable: row[9]
     }, ownerId);
   });
   recomputeDerivedAndSummary(db, experimentId, step.id, 9);
-  putOutputs(db, experimentId, step.id, 9, { conversion_max_pct: 91, product_mfr_min_g_10min: 6.5, product_mfr_max_g_10min: 10.4 });
+  db.prepare("DELETE FROM qual_step_outputs WHERE step_id = ? AND output_code IN ('conversion_max_pct', 'product_mfr_min_g_10min', 'product_mfr_max_g_10min')").run(step.id);
+  putOutputs(db, experimentId, step.id, 9, { reactive_temp_min_c: 185, reactive_temp_max_c: 200, reactive_min_residence_time_s: 75 });
   recomputeDerivedAndSummary(db, experimentId, step.id, 9);
   updateQualStepStatus(db, step.id, "DONE");
   setOptionalQualificationStudyEnabled(db, experimentId, 9, false);

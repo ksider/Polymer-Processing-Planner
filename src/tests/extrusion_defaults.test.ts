@@ -267,7 +267,13 @@ test("extrusion_v1 seeds the core qualification catalogue and deterministic SME 
     assert.equal(listQualRuns(db, disabledSideFeeding!.id).length, sideFeedingRunCount, "disabling retains evidence");
     assert.deepEqual(
       getQualificationOutputDefinitionsForExperiment(db, experimentId, 6).map((item) => item.code),
-      ["side_feeder_stable_speed_min_rpm", "side_feeder_stable_speed_max_rpm", "filler_mass_fraction_max_pct"]
+      [
+        "side_feeder_stable_speed_min_rpm",
+        "side_feeder_stable_speed_max_rpm",
+        "filler_mass_fraction_max_pct",
+        "filler_volume_fraction_max_pct",
+        "fiber_length_retention_min_pct"
+      ]
     );
     [7, 8, 9].forEach((stepNumber) => {
       const optionalStep = setOptionalQualificationStudyEnabled(db, experimentId, stepNumber, true);
@@ -275,6 +281,73 @@ test("extrusion_v1 seeds the core qualification catalogue and deterministic SME 
       assert.equal(listQualRuns(db, optionalStep!.id).length, 0);
       assert.ok(getQualificationOutputDefinitionsForExperiment(db, experimentId, stepNumber).length > 0);
     });
+    const liquidStep = listQualSteps(db, experimentId).find((item) => item.step_number === 7)!;
+    createQualRuns(db, experimentId, liquidStep.id, 1, "liquid_melt_injection");
+    const liquidRun = listQualRuns(db, liquidStep.id).find((item) => item.run_group === "liquid_melt_injection")!;
+    const liquidFields = new Map(listQualFields(db, liquidStep.id).map((field) => [field.code, field]));
+    const putLiquid = (code: string, type: "number" | "boolean", value: number | boolean) =>
+      saveQualRunValue(db, liquidRun.id, liquidFields.get(code)!.id, type, value);
+    putLiquid("polymer_throughput_kg_h", "number", 30);
+    putLiquid("liquid_target_throughput_kg_h", "number", 1.2);
+    putLiquid("liquid_throughput_kg_h", "number", 1.2);
+    putLiquid("injection_pressure_bar", "number", 96);
+    putLiquid("barrel_pressure_bar", "number", 69);
+    putLiquid("no_liquid_backflow", "boolean", true);
+    putLiquid("no_liquid_leak", "boolean", true);
+    recomputeDerivedAndSummary(db, experimentId, liquidStep.id, 7);
+    const liquidValues = new Map(listQualRunValues(db, liquidRun.id).map((value) => [value.field_id, value.value_real]));
+    assert.ok(Math.abs((liquidValues.get(liquidFields.get("liquid_mass_fraction_pct")!.id) ?? 0) - (1.2 / 31.2 * 100)) < 0.000001);
+    assert.equal(liquidValues.get(liquidFields.get("injection_pressure_delta_bar")!.id), 27);
+    assert.equal(liquidValues.get(liquidFields.get("liquid_throughput_error_pct")!.id), 0);
+    assert.deepEqual(
+      getQualificationOutputDefinitionsForExperiment(db, experimentId, 7).map((item) => item.code),
+      [
+        "calibrated_liquid_throughput_min_kg_h",
+        "calibrated_liquid_throughput_max_kg_h",
+        "liquid_mass_fraction_max_pct",
+        "injection_pressure_delta_min_bar"
+      ]
+    );
+    const vacuumStep = listQualSteps(db, experimentId).find((item) => item.step_number === 8)!;
+    createQualRuns(db, experimentId, vacuumStep.id, 1, "vacuum_calibration");
+    const vacuumRun = listQualRuns(db, vacuumStep.id).find((item) => item.run_group === "vacuum_calibration")!;
+    const vacuumFields = new Map(listQualFields(db, vacuumStep.id).map((field) => [field.code, field]));
+    const putVacuum = (code: string, type: "number" | "boolean", value: number | boolean) =>
+      saveQualRunValue(db, vacuumRun.id, vacuumFields.get(code)!.id, type, value);
+    putVacuum("initial_volatiles_pct", "number", 0.58);
+    putVacuum("residual_volatiles_pct", "number", 0.1);
+    putVacuum("vacuum_pressure_mbar", "number", 76);
+    putVacuum("vacuum_stable", "boolean", true);
+    putVacuum("no_vent_foam_or_stuffing", "boolean", true);
+    recomputeDerivedAndSummary(db, experimentId, vacuumStep.id, 8);
+    const vacuumValues = new Map(listQualRunValues(db, vacuumRun.id).map((value) => [value.field_id, value.value_real]));
+    assert.ok(Math.abs((vacuumValues.get(vacuumFields.get("devolatilization_efficiency_pct")!.id) ?? 0) - ((0.58 - 0.1) / 0.58 * 100)) < 0.000001);
+    assert.deepEqual(
+      getQualificationOutputDefinitionsForExperiment(db, experimentId, 8).map((item) => item.code),
+      ["required_vacuum_pressure_mbar", "max_throughput_without_vent_stuffing_kg_h"]
+    );
+    const reactiveStep = listQualSteps(db, experimentId).find((item) => item.step_number === 9)!;
+    createQualRuns(db, experimentId, reactiveStep.id, 1, "reactive_extrusion");
+    upsertQualStepSettings(db, experimentId, 9, JSON.stringify({ reaction_conversion_target_pct: 90, reaction_mfr_min_g_10min: 4, reaction_mfr_max_g_10min: 9, reaction_thermal_limit_c: 210 }));
+    const reactiveRun = listQualRuns(db, reactiveStep.id).find((item) => item.run_group === "reactive_extrusion")!;
+    const reactiveFields = new Map(listQualFields(db, reactiveStep.id).map((field) => [field.code, field]));
+    assert.equal(reactiveFields.has("chemical_sample_id"), false);
+    const putReactive = (code: string, type: "number" | "boolean", value: number | boolean) =>
+      saveQualRunValue(db, reactiveRun.id, reactiveFields.get(code)!.id, type, value);
+    putReactive("reaction_temp_c", "number", 200);
+    putReactive("mean_residence_time_s", "number", 75);
+    putReactive("conversion_pct", "number", 96);
+    putReactive("product_mfr_g_10min", "number", 5.7);
+    putReactive("reaction_stable", "boolean", true);
+    recomputeDerivedAndSummary(db, experimentId, reactiveStep.id, 9);
+    const reactiveValues = new Map(listQualRunValues(db, reactiveRun.id).map((value) => [value.field_id, value.value_real]));
+    const expectedApparentRate = -Math.log(1 - 0.96) / 75;
+    assert.ok(Math.abs((reactiveValues.get(reactiveFields.get("reaction_rate_constant_s_inv")!.id) ?? 0) - expectedApparentRate) < 0.000001);
+    assert.ok(Math.abs((reactiveValues.get(reactiveFields.get("damkohler_number")!.id) ?? 0) - (-Math.log(0.04))) < 0.000001);
+    assert.deepEqual(
+      getQualificationOutputDefinitionsForExperiment(db, experimentId, 9).map((item) => item.code),
+      ["reactive_temp_min_c", "reactive_temp_max_c", "reactive_min_residence_time_s"]
+    );
     const scaleUp = setOptionalQualificationStudyEnabled(db, experimentId, 10, true)!;
     assert.equal(listQualRuns(db, scaleUp.id).length, 0);
     assert.ok(getQualificationOutputDefinitionsForExperiment(db, experimentId, 10).length > 0);

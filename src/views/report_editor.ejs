@@ -1,4 +1,4 @@
-<%- include('partials/head', { title: `Polymer Processing Planner | Report Editor ${report.experiment.id}` }) %>
+<%- include('partials/head', { title: `Polymer Processing Planner | Report Editor ${report.experiment.id}`, uiKitAssets: true, bodyClass: 'report-editor-page' }) %>
 <main class="report-workspace" id="reportWorkspace">
   <header class="report-workspace-header">
     <div class="report-workspace-title">
@@ -65,14 +65,14 @@
       <button class="pure-button button-sm icon-only" type="button" data-cmd="undo" title="Undo"><span class="material-symbols-rounded">undo</span></button>
       <button class="pure-button button-sm icon-only" type="button" data-cmd="redo" title="Redo"><span class="material-symbols-rounded">redo</span></button>
       <span class="toolbar-sep" aria-hidden="true"></span>
-      <select class="toolbar-select" id="fontFamilySelect" title="Font family">
+      <select class="report-toolbar-select report-toolbar-select--font h-9 appearance-auto rounded-base border border-default-medium bg-white px-3 text-sm font-medium leading-5 text-heading shadow-xs focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand-soft" id="fontFamilySelect" title="Font family">
         <option value="">Font</option>
         <option value="Trebuchet MS">Trebuchet</option>
         <option value="Georgia">Georgia</option>
         <option value="Arial">Arial</option>
         <option value="Courier New">Courier</option>
       </select>
-      <select class="toolbar-select" id="fontSizeSelect" title="Font size">
+      <select class="report-toolbar-select report-toolbar-select--compact h-9 appearance-auto rounded-base border border-default-medium bg-white px-3 text-sm font-medium leading-5 text-heading shadow-xs focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand-soft" id="fontSizeSelect" title="Font size">
         <option value="">Size</option>
         <option value="12px">12</option>
         <option value="14px">14</option>
@@ -82,7 +82,7 @@
         <option value="24px">24</option>
         <option value="28px">28</option>
       </select>
-      <select class="toolbar-select" id="lineHeightSelect" title="Line height">
+      <select class="report-toolbar-select report-toolbar-select--compact h-9 appearance-auto rounded-base border border-default-medium bg-white px-3 text-sm font-medium leading-5 text-heading shadow-xs focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand-soft" id="lineHeightSelect" title="Line height">
         <option value="">Line</option>
         <option value="1.2">1.2</option>
         <option value="1.35">1.35</option>
@@ -91,7 +91,7 @@
         <option value="1.8">1.8</option>
         <option value="2">2</option>
       </select>
-      <select class="toolbar-select" id="textPresetSelect" title="Text style preset">
+      <select class="report-toolbar-select report-toolbar-select--preset h-9 appearance-auto rounded-base border border-default-medium bg-white px-3 text-sm font-medium leading-5 text-heading shadow-xs focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand-soft" id="textPresetSelect" title="Text style preset">
         <option value="">Preset</option>
         <option value="body">Body</option>
         <option value="subtitle">Subtitle</option>
@@ -163,105 +163,177 @@
   </div>
 </main>
 
-<dialog class="modal-frame source-preview-dialog" id="sourcePreviewDialog">
-  <div class="modal-header">
-    <strong id="sourcePreviewTitle">Source preview</strong>
-    <button class="pure-button" type="button" id="closeSourcePreview">Close</button>
+<dialog class="modal-frame source-preview-dialog m-auto rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="sourcePreviewDialog" aria-labelledby="sourcePreviewTitle">
+  <div class="modal-header flex items-center justify-between gap-4 border-b border-gray-200 bg-white px-5 py-4">
+    <div class="min-w-0"><span class="block text-xs font-medium uppercase tracking-wide text-body">Research source</span><strong class="block truncate text-base text-heading" id="sourcePreviewTitle">Source preview</strong></div>
+    <button class="inline-flex size-9 shrink-0 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="closeSourcePreview" aria-label="Close source preview"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
   </div>
-  <div class="modal-body" id="sourcePreviewBody"></div>
-  <div class="modal-footer source-preview-actions" id="sourcePreviewActions">
-    <button class="pure-button" type="button" data-source-insert="value">Insert value</button>
-    <button class="pure-button pure-button-primary" type="button" data-source-insert="label">Insert label + value</button>
-    <button class="pure-button" type="button" data-source-insert="table">Insert table</button>
-    <button class="pure-button pure-button-primary" type="button" data-source-insert="section">Insert section</button>
-    <button class="pure-button pure-button-primary" type="button" data-source-insert="figure">Insert figure</button>
+  <div class="modal-body overflow-auto p-5" id="sourcePreviewBody"></div>
+  <div class="modal-footer source-preview-actions flex flex-wrap justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-4" id="sourcePreviewActions">
+    <button class="inline-flex size-9 items-center justify-center rounded-base border border-default-medium bg-white text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="copySourceTable" data-copy-table="#sourcePreviewBody table" data-copy-icon title="Copy table as TSV" aria-label="Copy table as TSV" hidden><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button>
+    <button class="inline-flex items-center justify-center rounded-base border border-default-medium bg-white px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-tertiary focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" data-source-insert="value">Insert value</button>
+    <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" data-source-insert="label">Insert label + value</button>
+    <button class="inline-flex items-center justify-center rounded-base border border-default-medium bg-white px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-tertiary focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" data-source-insert="table">Insert table</button>
+    <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" data-source-insert="section">Insert section</button>
+    <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" data-source-insert="figure">Insert figure</button>
   </div>
 </dialog>
 
-<dialog class="modal-frame doe-analysis-dialog" id="doeAnalysisDialog">
-  <div class="modal-header">
-    <div>
-      <span class="workspace-eyebrow">DOE analysis</span>
-      <strong id="doeAnalysisTitle">Analysis</strong>
+<dialog class="modal-frame chart-builder-dialog m-auto rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="chartBuilderDialog" aria-labelledby="chartBuilderTitle">
+  <div class="modal-header flex items-start justify-between gap-4 border-b border-gray-200 bg-white px-5 py-4">
+    <div class="min-w-0">
+      <span class="block text-xs font-medium uppercase tracking-wide text-body">Qualification runs</span>
+      <strong class="block truncate text-base text-heading" id="chartBuilderTitle">Build chart</strong>
     </div>
-    <button class="pure-button" type="button" id="closeDoeAnalysis">Close</button>
+    <button class="inline-flex size-9 shrink-0 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="closeChartBuilder" aria-label="Close chart builder"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
   </div>
-  <div class="modal-body doe-dialog-body">
-    <div class="doe-analysis-controls">
-      <label>View
-        <select id="doeAnalysisMode">
+  <div class="modal-body chart-builder-body p-5">
+    <div class="chart-builder-controls">
+      <label>Chart type
+        <select id="chartBuilderType">
+          <option value="scatter">Scatter</option>
+          <option value="line">Line</option>
+          <option value="bar">Bar</option>
+        </select>
+      </label>
+      <label>X axis
+        <select id="chartBuilderX"></select>
+      </label>
+      <label>Y axis
+        <select id="chartBuilderY"></select>
+      </label>
+      <label>Figure title
+        <input id="chartBuilderFigureTitle" type="text" autocomplete="off">
+      </label>
+      <label class="chart-builder-toggle"><input id="chartBuilderIncludeExcluded" type="checkbox"> Include runs excluded from analysis</label>
+    </div>
+    <div class="chart-builder-preview" id="chartBuilderPreview" aria-label="Chart preview"></div>
+    <p class="small-note" id="chartBuilderMeta"></p>
+  </div>
+  <div class="modal-footer flex flex-wrap justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-4">
+    <button class="inline-flex items-center justify-center rounded-base border border-default-medium bg-white px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-tertiary focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="cancelChartBuilder">Cancel</button>
+    <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="insertChartBuilder">Insert figure</button>
+  </div>
+</dialog>
+
+<dialog class="modal-frame doe-analysis-dialog report-fullscreen-dialog m-auto rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="doeAnalysisDialog" aria-labelledby="doeAnalysisTitle">
+  <div class="modal-header flex items-start justify-between gap-4 border-b border-gray-200 bg-white px-5 py-4">
+    <div class="min-w-0">
+      <span class="workspace-eyebrow block text-xs font-medium uppercase tracking-wide text-brand">DOE analysis</span>
+      <strong class="block truncate text-base text-heading" id="doeAnalysisTitle">Analysis</strong>
+    </div>
+    <button class="inline-flex size-9 shrink-0 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="closeDoeAnalysis" aria-label="Close DOE analysis"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
+  </div>
+  <div class="modal-body doe-dialog-body overflow-auto p-5">
+    <div class="doe-analysis-controls grid gap-4">
+      <label class="grid gap-1 text-sm font-medium text-heading">View
+        <select class="rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" id="doeAnalysisMode">
           <option value="overall">Overall summary</option>
           <option value="factor">By factor</option>
           <option value="matrix">Factor matrix</option>
           <option value="regression">Linear model</option>
         </select>
       </label>
-      <label>Output
-        <select id="doeAnalysisOutput"></select>
+      <label class="grid gap-1 text-sm font-medium text-heading">Output
+        <select class="rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" id="doeAnalysisOutput"></select>
       </label>
-      <label id="doeAnalysisFactorField">Factor
-        <select id="doeAnalysisFactor"></select>
+      <label class="grid gap-1 text-sm font-medium text-heading" id="doeAnalysisFactorField">Factor
+        <select class="rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" id="doeAnalysisFactor"></select>
       </label>
-      <label id="doeAnalysisSecondFactorField">Second factor
-        <select id="doeAnalysisSecondFactor"></select>
+      <label class="grid gap-1 text-sm font-medium text-heading" id="doeAnalysisSecondFactorField">Second factor
+        <select class="rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" id="doeAnalysisSecondFactor"></select>
       </label>
     </div>
     <p class="small-note" id="doeAnalysisMessage" hidden></p>
     <div class="doe-table-scroll" id="doeAnalysisTable"></div>
   </div>
-  <div class="modal-footer source-preview-actions">
-    <button class="pure-button" type="button" id="insertDoeAnalysisTable">Insert table</button>
-    <button class="pure-button pure-button-primary" type="button" id="insertDoeAnalysisSection">Insert section</button>
-    <button class="pure-button pure-button-primary" type="button" id="insertDoeAnalysisChart">Insert chart</button>
+  <div class="modal-footer source-preview-actions flex flex-wrap justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-4">
+    <button class="inline-flex items-center justify-center rounded-base border border-default-medium bg-white px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-tertiary focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="insertDoeAnalysisTable">Insert table</button>
+    <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="insertDoeAnalysisSection">Insert section</button>
+    <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="insertDoeAnalysisChart">Insert chart</button>
   </div>
 </dialog>
 
-<dialog class="modal-frame doe-analysis-dialog" id="doeAnalysisV2Dialog">
-  <div class="modal-header">
-    <div>
-      <span class="workspace-eyebrow">Saved DOE analysis</span>
-      <strong id="doeAnalysisV2Title">Analysis snapshot</strong>
+<dialog class="modal-frame doe-analysis-dialog report-fullscreen-dialog m-auto rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="doeAnalysisV2Dialog" aria-labelledby="doeAnalysisV2Title">
+  <div class="modal-header flex items-start justify-between gap-4 border-b border-gray-200 bg-white px-5 py-4">
+    <div class="min-w-0">
+      <span class="workspace-eyebrow block text-xs font-medium uppercase tracking-wide text-brand">Saved DOE analysis</span>
+      <strong class="block truncate text-base text-heading" id="doeAnalysisV2Title">Analysis snapshot</strong>
     </div>
-    <button class="pure-button" type="button" id="closeDoeAnalysisV2">Close</button>
+    <button class="inline-flex size-9 shrink-0 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="closeDoeAnalysisV2" aria-label="Close saved DOE analysis"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
   </div>
-  <div class="modal-body doe-dialog-body">
-    <div class="doe-analysis-controls">
-      <label>Analysis
-        <select id="doeAnalysisV2Select"></select>
+  <div class="modal-body doe-dialog-body overflow-auto p-5">
+    <div class="doe-analysis-controls grid gap-4">
+      <label class="grid gap-1 text-sm font-medium text-heading">Analysis
+        <select class="rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" id="doeAnalysisV2Select"></select>
       </label>
-      <label>Calculation revision
-        <select id="doeAnalysisV2Revision"></select>
+      <label class="grid gap-1 text-sm font-medium text-heading">Calculation revision
+        <select class="rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" id="doeAnalysisV2Revision"></select>
       </label>
     </div>
     <p class="small-note" id="doeAnalysisV2Meta">Loading saved result…</p>
     <div class="doe-table-scroll" id="doeAnalysisV2Table"></div>
   </div>
-  <div class="modal-footer source-preview-actions">
-    <button class="pure-button" type="button" id="insertDoeAnalysisV2Summary">Insert summary</button>
-    <button class="pure-button pure-button-primary" type="button" id="insertDoeAnalysisV2Section">Insert analysis section</button>
+  <div class="modal-footer source-preview-actions flex flex-wrap justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-4">
+    <button class="inline-flex items-center justify-center rounded-base border border-default-medium bg-white px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-tertiary focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="insertDoeAnalysisV2Summary">Insert summary</button>
+    <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="insertDoeAnalysisV2Section">Insert analysis section</button>
   </div>
 </dialog>
 
-<dialog class="modal-frame doe-runs-dialog" id="doeRunsDialog">
-  <div class="modal-header">
-    <div>
-      <span class="workspace-eyebrow">DOE run data</span>
-      <strong id="doeRunsTitle">Runs</strong>
+<dialog class="modal-frame doe-runs-dialog report-fullscreen-dialog m-auto rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="doeRunsDialog" aria-labelledby="doeRunsTitle">
+  <div class="modal-header flex items-start justify-between gap-4 border-b border-gray-200 bg-white px-5 py-4">
+    <div class="min-w-0">
+      <span class="workspace-eyebrow block text-xs font-medium uppercase tracking-wide text-brand">DOE run data</span>
+      <strong class="block truncate text-base text-heading" id="doeRunsTitle">Runs</strong>
     </div>
-    <button class="pure-button" type="button" id="closeDoeRuns">Close</button>
+    <button class="inline-flex size-9 shrink-0 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="closeDoeRuns" aria-label="Close DOE runs"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
   </div>
-  <div class="modal-body doe-dialog-body">
+  <div class="modal-body doe-dialog-body overflow-auto p-5">
     <p class="small-note" id="doeRunsMeta"></p>
     <div class="doe-table-scroll" id="doeRunsTable"></div>
   </div>
-  <div class="modal-footer doe-runs-footer">
-    <div class="doe-runs-pagination">
-      <button class="pure-button" type="button" id="doeRunsPrevious">Previous</button>
+  <div class="modal-footer doe-runs-footer flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-5 py-4">
+    <div class="doe-runs-pagination inline-flex items-center gap-2">
+      <button class="inline-flex items-center justify-center rounded-base border border-default-medium bg-white px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-tertiary focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="doeRunsPrevious">Previous</button>
       <span class="small-note" id="doeRunsPage">Page 1</span>
-      <button class="pure-button" type="button" id="doeRunsNext">Next</button>
+      <button class="inline-flex items-center justify-center rounded-base border border-default-medium bg-white px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-tertiary focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="doeRunsNext">Next</button>
     </div>
-    <button class="pure-button pure-button-primary" type="button" id="insertDoeRunReferences">Insert selected runs</button>
+    <div class="flex flex-wrap items-center justify-end gap-2">
+      <button class="inline-flex size-9 items-center justify-center rounded-base border border-default-medium bg-white text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" data-copy-table="#doeRunsTable table" data-copy-exclude-columns="responsible,owner,due date,date" data-copy-icon title="Copy visible runs as TSV" aria-label="Copy visible runs as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button>
+      <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="insertDoeRunReferences">Insert selected runs</button>
+    </div>
   </div>
+</dialog>
+
+<dialog class="modal-frame source-preview-dialog m-auto rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="imageImportDialog" aria-labelledby="imageImportTitle">
+  <form method="dialog" id="imageImportForm">
+    <div class="modal-header flex items-center justify-between gap-4 border-b border-gray-200 bg-white px-5 py-4">
+      <div><span class="block text-xs font-medium uppercase tracking-wide text-body">Report asset</span><strong class="block text-base text-heading" id="imageImportTitle">Insert image</strong></div>
+      <button class="inline-flex size-9 shrink-0 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="closeImageImport" aria-label="Close image import"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
+    </div>
+    <div class="modal-body grid gap-4 p-5">
+      <figure class="image-import-preview" id="imageImportPreview">
+        <div class="image-import-preview-empty" id="imageImportPreviewEmpty">
+          <span class="material-symbols-rounded" aria-hidden="true">image</span>
+          <span>Choose an image to preview it here</span>
+        </div>
+        <img id="imageImportPreviewImage" alt="Selected image preview" hidden>
+        <figcaption class="small-note" id="imageImportPreviewCaption">Preview is shown before insertion.</figcaption>
+      </figure>
+      <label class="grid gap-1 text-sm font-medium text-heading">Image file
+        <input class="block w-full cursor-pointer rounded-base border border-default-medium bg-neutral-secondary-medium p-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" type="file" id="imageFileInput" accept="image/png,image/jpeg,image/gif,image/bmp">
+      </label>
+      <p class="small-note">PNG, JPEG, GIF and BMP are kept as the original file for sharp editor and DOCX output. Maximum file size: 15 MB.</p>
+      <label class="grid gap-1 text-sm font-medium text-heading">or image URL
+        <input class="block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" type="url" id="imageUrlInput" placeholder="https://example.com/figure.png">
+      </label>
+      <p class="rounded-base bg-danger-soft px-3 py-2 text-sm text-danger" id="imageImportError" hidden></p>
+    </div>
+    <div class="modal-footer flex flex-wrap justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-4">
+      <button class="inline-flex items-center justify-center rounded-base border border-default-medium bg-white px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-tertiary focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="cancelImageImport">Cancel</button>
+      <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs focus:outline-none focus:ring-4 focus:ring-brand-soft" type="submit" id="insertImageImport">Insert image</button>
+    </div>
+  </form>
 </dialog>
 
 <script nonce="<%= cspNonce %>" src="/vendor/echarts/dist/echarts.min.js"></script>
@@ -560,13 +632,18 @@
     };
   };
 
-  const buildRunSeriesOption = (chartData, title) => ({
-    grid: { left: 60, right: 30, top: 45, bottom: 70, containLabel: true },
-    title: { text: title, left: 'center', textStyle: { fontSize: 14 } },
-    xAxis: { type: 'category', data: chartData?.categories || [], axisLabel: { rotate: 35 } },
-    yAxis: { type: 'value', name: chartData?.unit || '' },
-    series: [{ type: 'line', symbol: 'circle', connectNulls: false, data: chartData?.values || [] }]
-  });
+  // A source-preview figure and the image inserted into the report must be
+  // literally the same snapshot. Cache it while this editor session is open.
+  const sourceChartSnapshots = new Map();
+  const sourceChartSnapshot = (source) => {
+    const cacheKey = sourceText(source?.id);
+    if (cacheKey && sourceChartSnapshots.has(cacheKey)) return sourceChartSnapshots.get(cacheKey);
+    const imageUrl = source.chartType === 'rheology'
+      ? renderChartImage(buildRheoOption)
+      : renderChartImage(buildWindowOption);
+    if (cacheKey) sourceChartSnapshots.set(cacheKey, imageUrl);
+    return imageUrl;
+  };
 
   const buildInitialContent = () => {
     if (htmlSnapshot) return normalizeSavedHtmlInlineTags(htmlSnapshot);
@@ -631,6 +708,24 @@
   const sourcePreviewDialog = document.getElementById('sourcePreviewDialog');
   const sourcePreviewTitle = document.getElementById('sourcePreviewTitle');
   const sourcePreviewBody = document.getElementById('sourcePreviewBody');
+  const chartBuilderDialog = document.getElementById('chartBuilderDialog');
+  const chartBuilderTitle = document.getElementById('chartBuilderTitle');
+  const chartBuilderType = document.getElementById('chartBuilderType');
+  const chartBuilderX = document.getElementById('chartBuilderX');
+  const chartBuilderY = document.getElementById('chartBuilderY');
+  const chartBuilderFigureTitle = document.getElementById('chartBuilderFigureTitle');
+  const chartBuilderIncludeExcluded = document.getElementById('chartBuilderIncludeExcluded');
+  const chartBuilderPreview = document.getElementById('chartBuilderPreview');
+  const chartBuilderMeta = document.getElementById('chartBuilderMeta');
+  const imageImportDialog = document.getElementById('imageImportDialog');
+  const imageImportForm = document.getElementById('imageImportForm');
+  const imageFileInput = document.getElementById('imageFileInput');
+  const imageUrlInput = document.getElementById('imageUrlInput');
+  const imageImportError = document.getElementById('imageImportError');
+  const imageImportPreview = document.getElementById('imageImportPreview');
+  const imageImportPreviewEmpty = document.getElementById('imageImportPreviewEmpty');
+  const imageImportPreviewImage = document.getElementById('imageImportPreviewImage');
+  const imageImportPreviewCaption = document.getElementById('imageImportPreviewCaption');
   const reportId = <%= Number(reportConfig.id) %>;
   const doeAnalysisDialog = document.getElementById('doeAnalysisDialog');
   const doeAnalysisTitle = document.getElementById('doeAnalysisTitle');
@@ -666,9 +761,76 @@
   let doeAnalysisData = null;
   let doeAnalysisV2Data = null;
   let doeRunsData = null;
+  let chartBuilderSource = null;
+  let chartBuilderChart = null;
+  let chartBuilderTitleIsAuto = true;
   const selectedDoeRuns = new Map();
 
   const sourceText = (value) => String(value ?? '').trim();
+  const supportedImageTypes = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/bmp']);
+  const maxImportedImageBytes = 15 * 1024 * 1024;
+  let imagePreviewRequestId = 0;
+  let imageUrlPreviewTimer = null;
+  const showImageImportError = (message = '') => {
+    if (!imageImportError) return;
+    imageImportError.hidden = !message;
+    imageImportError.textContent = message;
+  };
+  const clearImagePreview = () => {
+    if (imageUrlPreviewTimer) {
+      window.clearTimeout(imageUrlPreviewTimer);
+      imageUrlPreviewTimer = null;
+    }
+    imagePreviewRequestId += 1;
+    if (imageImportPreviewImage instanceof HTMLImageElement) {
+      imageImportPreviewImage.onload = null;
+      imageImportPreviewImage.onerror = null;
+      imageImportPreviewImage.removeAttribute('src');
+      imageImportPreviewImage.hidden = true;
+    }
+    if (imageImportPreviewEmpty) imageImportPreviewEmpty.hidden = false;
+    if (imageImportPreviewCaption) imageImportPreviewCaption.textContent = 'Preview is shown before insertion.';
+  };
+  const showImagePreview = (src, caption) => {
+    if (!(imageImportPreviewImage instanceof HTMLImageElement) || !imageImportPreview) return;
+    if (imageImportPreviewEmpty) imageImportPreviewEmpty.hidden = true;
+    imageImportPreviewImage.hidden = true;
+    if (imageImportPreviewCaption) imageImportPreviewCaption.textContent = caption;
+    imageImportPreviewImage.onload = () => {
+      imageImportPreviewImage.hidden = false;
+      showImageImportError();
+    };
+    imageImportPreviewImage.onerror = () => {
+      clearImagePreview();
+      showImageImportError('The image preview could not be loaded. Check the file or URL.');
+    };
+    imageImportPreviewImage.src = src;
+  };
+  const validateImageFile = (file) => {
+    if (!supportedImageTypes.has(file.type)) {
+      throw new Error('Choose a PNG, JPEG, GIF or BMP image so it can also be exported to DOCX.');
+    }
+    if (file.size > maxImportedImageBytes) {
+      throw new Error('The image is larger than 15 MB. Use the original in a smaller file.');
+    }
+  };
+  const insertReportImage = (src) => {
+    const value = sourceText(src);
+    if (!value || isSigned) return;
+    editor.chain().focus().setImage({ src: value, width: '80%', align: 'center' }).run();
+  };
+  const imageFileToDataUrl = (file) => new Promise((resolve, reject) => {
+    try {
+      validateImageFile(file);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('The image file could not be read.'));
+    reader.onload = () => resolve(reader.result);
+    reader.readAsDataURL(file);
+  });
   const makeTextNode = (text) => ({ type: 'text', text: sourceText(text) });
   const makeParagraphNode = (text = '') => {
     const value = sourceText(text);
@@ -740,23 +902,6 @@
       ...(source.rows?.length ? [makeRowsTable(source.rows)] : []),
       ...(addObservation ? [makeParagraphNode('Test observation / artifact: ')] : [])
     ];
-  };
-
-  const makeDoeRunReference = (run, fields) => {
-    const reference = {
-      type: 'paragraph',
-      content: [{
-        type: 'text',
-        text: `DOE run: ${run.code}`,
-        marks: [{ type: 'link', attrs: { href: run.url, target: '_blank', rel: 'noopener noreferrer' } }]
-      }]
-    };
-    const rows = [
-      { label: 'Responsible', value: run.responsible },
-      { label: 'Status', value: run.excluded ? 'Excluded from analysis' : run.done ? 'Done' : 'In progress' },
-      ...(fields || []).map((field) => ({ label: field.unit ? `${field.label} (${field.unit})` : field.label, value: run.values?.[field.key] || '–' }))
-    ];
-    return [reference, makeRowsTable(rows), makeParagraphNode('Run observation / error / artifact: ')];
   };
 
   const buildDoeAnalysisOption = (chart) => {
@@ -1001,6 +1146,135 @@
     }
   };
 
+  const chartBuilderFields = () => chartBuilderSource?.chartBuilder?.fields || [];
+  const chartBuilderField = (key) => chartBuilderFields().find((field) => field.key === key) || null;
+  const chartBuilderFieldLabel = (field) => field
+    ? `${field.label}${field.unit ? ` (${field.unit})` : ''}`
+    : '';
+  const chartBuilderDefaultTitle = () => {
+    const xField = chartBuilderField(sourceText(chartBuilderX?.value));
+    const yField = chartBuilderField(sourceText(chartBuilderY?.value));
+    return xField && yField ? `${yField.label} vs ${xField.label}` : 'Qualification chart';
+  };
+  const chartBuilderPairedCount = (xKey, yKey, includeExcluded = false) => (chartBuilderSource?.chartBuilder?.runs || [])
+    .filter((run) => includeExcluded || !run.excluded)
+    .filter((run) => Number.isFinite(run.values?.[xKey]) && Number.isFinite(run.values?.[yKey])).length;
+  const selectChartBuilderDefaults = () => {
+    const fields = chartBuilderFields();
+    let best = null;
+    fields.forEach((xField) => fields.forEach((yField) => {
+      if (xField.key === yField.key) return;
+      const score = chartBuilderPairedCount(xField.key, yField.key);
+      if (!best || score > best.score) best = { xKey: xField.key, yKey: yField.key, score };
+    }));
+    return best || { xKey: fields[0]?.key || '', yKey: fields[1]?.key || '' };
+  };
+  const chartBuilderModel = () => {
+    if (!chartBuilderSource) return null;
+    const xField = chartBuilderField(sourceText(chartBuilderX?.value));
+    const yField = chartBuilderField(sourceText(chartBuilderY?.value));
+    if (!xField || !yField || xField.key === yField.key) return null;
+    const includeExcluded = chartBuilderIncludeExcluded instanceof HTMLInputElement && chartBuilderIncludeExcluded.checked;
+    const points = (chartBuilderSource.chartBuilder?.runs || [])
+      .filter((run) => includeExcluded || !run.excluded)
+      .map((run) => ({
+        run: run.code,
+        x: run.values?.[xField.key],
+        y: run.values?.[yField.key]
+      }))
+      .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+      .sort((a, b) => a.x - b.x);
+    const type = ['scatter', 'line', 'bar'].includes(sourceText(chartBuilderType?.value))
+      ? chartBuilderType.value
+      : 'scatter';
+    const title = sourceText(chartBuilderFigureTitle?.value) || chartBuilderDefaultTitle();
+    return { xField, yField, includeExcluded, points, type, title };
+  };
+  const renderChartBuilderPreview = () => {
+    if (!chartBuilderPreview || !chartBuilderSource) return;
+    const model = chartBuilderModel();
+    if (!model || !model.points.length) {
+      chartBuilderChart?.dispose();
+      chartBuilderChart = null;
+      chartBuilderPreview.replaceChildren();
+      const message = document.createElement('p');
+      message.className = 'small-note chart-builder-empty';
+      message.textContent = 'Choose distinct numeric axes with paired run values.';
+      chartBuilderPreview.appendChild(message);
+      if (chartBuilderMeta) chartBuilderMeta.textContent = 'No plotted points for this selection.';
+      return;
+    }
+    if (!chartBuilderChart) chartBuilderChart = echarts.init(chartBuilderPreview, null, { renderer: 'canvas' });
+    const xLabel = chartBuilderFieldLabel(model.xField);
+    const yLabel = chartBuilderFieldLabel(model.yField);
+    const option = model.type === 'bar'
+      ? {
+          title: { text: model.title, left: 'center', textStyle: { fontSize: 14 } },
+          tooltip: { trigger: 'axis' },
+          grid: { left: 62, right: 30, top: 54, bottom: 72, containLabel: true },
+          xAxis: { type: 'category', name: xLabel, nameLocation: 'middle', nameGap: 48, data: model.points.map((point) => String(point.x)) },
+          yAxis: { type: 'value', name: yLabel },
+          series: [{ type: 'bar', data: model.points.map((point) => point.y), itemStyle: { color: '#2563eb' } }]
+        }
+      : {
+          title: { text: model.title, left: 'center', textStyle: { fontSize: 14 } },
+          tooltip: { trigger: 'item', formatter: (params) => `${params.data.run}<br>${xLabel}: ${params.data.value[0]}<br>${yLabel}: ${params.data.value[1]}` },
+          grid: { left: 62, right: 30, top: 54, bottom: 62, containLabel: true },
+          xAxis: { type: 'value', name: xLabel, nameLocation: 'middle', nameGap: 42 },
+          yAxis: { type: 'value', name: yLabel },
+          series: [{
+            type: model.type,
+            showSymbol: true,
+            symbolSize: 8,
+            data: model.points.map((point) => ({ value: [point.x, point.y], run: point.run })),
+            itemStyle: { color: '#2563eb' },
+            lineStyle: { color: '#2563eb' }
+          }]
+        };
+    chartBuilderChart.clear();
+    chartBuilderChart.setOption(option, true);
+    chartBuilderChart.resize();
+    if (chartBuilderMeta) {
+      const eligibleRuns = (chartBuilderSource.chartBuilder?.runs || []).filter((run) => model.includeExcluded || !run.excluded).length;
+      chartBuilderMeta.textContent = `${model.points.length} paired point${model.points.length === 1 ? '' : 's'} from ${eligibleRuns} eligible run${eligibleRuns === 1 ? '' : 's'}${model.includeExcluded ? ' (including analysis-excluded runs).' : '.'}`;
+    }
+  };
+  const openChartBuilder = (source) => {
+    const fields = source.chartBuilder?.fields || [];
+    if (fields.length < 2 || !(chartBuilderDialog instanceof HTMLDialogElement)) return;
+    chartBuilderSource = source;
+    const defaults = selectChartBuilderDefaults();
+    [chartBuilderX, chartBuilderY].forEach((select) => {
+      if (!(select instanceof HTMLSelectElement)) return;
+      select.replaceChildren(...fields.map((field) => {
+        const option = document.createElement('option');
+        option.value = field.key;
+        option.textContent = chartBuilderFieldLabel(field);
+        return option;
+      }));
+    });
+    if (chartBuilderX instanceof HTMLSelectElement) chartBuilderX.value = defaults.xKey;
+    if (chartBuilderY instanceof HTMLSelectElement) chartBuilderY.value = defaults.yKey;
+    if (chartBuilderType instanceof HTMLSelectElement) chartBuilderType.value = 'scatter';
+    if (chartBuilderIncludeExcluded instanceof HTMLInputElement) chartBuilderIncludeExcluded.checked = false;
+    chartBuilderTitleIsAuto = true;
+    if (chartBuilderFigureTitle instanceof HTMLInputElement) chartBuilderFigureTitle.value = chartBuilderDefaultTitle();
+    if (chartBuilderTitle) chartBuilderTitle.textContent = `Build chart — ${source.chartBuilder?.stepLabel || source.label}`;
+    chartBuilderDialog.showModal();
+    window.requestAnimationFrame(renderChartBuilderPreview);
+  };
+  const closeChartBuilder = () => {
+    chartBuilderChart?.dispose();
+    chartBuilderChart = null;
+    chartBuilderSource = null;
+    if (chartBuilderDialog instanceof HTMLDialogElement) chartBuilderDialog.close();
+  };
+  chartBuilderDialog?.addEventListener('close', () => {
+    chartBuilderChart?.dispose();
+    chartBuilderChart = null;
+    chartBuilderSource = null;
+  });
+
   const renderSourcePreview = (source) => {
     if (!sourcePreviewBody || !sourcePreviewTitle) return;
     sourcePreviewTitle.textContent = source.label;
@@ -1035,6 +1309,8 @@
         });
       }
       sourcePreviewBody.appendChild(table);
+    } else if (source.table) {
+      sourcePreviewBody.appendChild(makePreviewTable(source.table.columns, source.table.rows, 'No runs are available.'));
     } else if (source.rows) {
       const table = document.createElement('table');
       table.className = 'pure-table table-compact source-preview-table';
@@ -1048,9 +1324,16 @@
       });
       sourcePreviewBody.appendChild(table);
     } else if (source.kind === 'chart') {
-      const note = document.createElement('p');
-      note.textContent = 'Insert a PNG snapshot of the current qualification chart.';
-      sourcePreviewBody.appendChild(note);
+      const figure = document.createElement('figure');
+      figure.className = 'source-chart-preview';
+      const image = document.createElement('img');
+      image.src = sourceChartSnapshot(source);
+      image.alt = source.label;
+      const caption = document.createElement('figcaption');
+      caption.className = 'small-note';
+      caption.textContent = 'PNG preview — this exact snapshot will be inserted into the report.';
+      figure.append(image, caption);
+      sourcePreviewBody.appendChild(figure);
     } else {
       const list = document.createElement('dl');
       list.className = 'source-preview-value';
@@ -1062,11 +1345,17 @@
       sourcePreviewBody.appendChild(list);
     }
 
+    const copySourceTable = document.getElementById('copySourceTable');
+    if (copySourceTable instanceof HTMLButtonElement) {
+      copySourceTable.hidden = !['recipe', 'results', 'run-table'].includes(source.kind);
+    }
     document.querySelectorAll('[data-source-insert]').forEach((button) => {
       const action = button.getAttribute('data-source-insert');
       const visible = source.kind === 'recipe'
-        ? action === 'table' || action === 'section'
-        : source.kind === 'results'
+          ? action === 'table' || action === 'section'
+          : source.kind === 'run-table'
+            ? action === 'table' || action === 'section'
+          : source.kind === 'results'
           ? action === 'table' || action === 'section'
           : source.kind === 'run'
             ? action === 'value' || action === 'label'
@@ -1081,6 +1370,10 @@
   };
 
   const openSourcePreview = (source) => {
+    if (source.kind === 'chart-builder') {
+      openChartBuilder(source);
+      return;
+    }
     if (source.kind === 'doe-analysis') {
       selectedDoeStudyId = source.studyId;
       doeAnalysisData = null;
@@ -1105,6 +1398,13 @@
       return;
     }
     selectedSource = source;
+    if (sourcePreviewDialog instanceof HTMLDialogElement) {
+      const hasResearchTable = source.kind === 'recipe'
+        || source.kind === 'results'
+        || source.kind === 'run-table'
+        || Boolean(source.table);
+      sourcePreviewDialog.classList.toggle('report-fullscreen-dialog', hasResearchTable);
+    }
     renderSourcePreview(source);
     if (sourcePreviewDialog instanceof HTMLDialogElement) sourcePreviewDialog.showModal();
   };
@@ -1145,7 +1445,9 @@
             ? 'Saved calculation revisions — no report-time recalculation'
           : source.kind === 'doe-runs'
             ? `${source.runCount || 0} runs · data and responsible person`
-            : source.kind === 'run' ? 'Run result and reference' : source.kind === 'chart' ? 'Preview and insert figure' : source.kind === 'results' ? 'Preview and insert results' : source.kind === 'recipe' ? `${source.components?.length || 0} components` : 'Preview and insert';
+            : source.kind === 'chart-builder'
+              ? 'Choose X, Y and figure type'
+              : source.kind === 'run' ? 'Run result and reference' : source.kind === 'chart' ? 'Preview and insert figure' : source.kind === 'results' ? 'Preview and insert results' : source.kind === 'recipe' ? `${source.components?.length || 0} components` : 'Preview and insert';
         button.append(name, detail);
         button.addEventListener('click', () => openSourcePreview(source));
         parent.appendChild(button);
@@ -1177,6 +1479,94 @@
 
   document.getElementById('closeSourcePreview')?.addEventListener('click', () => {
     if (sourcePreviewDialog instanceof HTMLDialogElement) sourcePreviewDialog.close();
+  });
+
+  const refreshChartBuilderFromAxes = () => {
+    if (chartBuilderX instanceof HTMLSelectElement && chartBuilderY instanceof HTMLSelectElement && chartBuilderX.value === chartBuilderY.value) {
+      const alternative = chartBuilderFields().find((field) => field.key !== chartBuilderX.value);
+      if (alternative) chartBuilderY.value = alternative.key;
+    }
+    if (chartBuilderTitleIsAuto && chartBuilderFigureTitle instanceof HTMLInputElement) chartBuilderFigureTitle.value = chartBuilderDefaultTitle();
+    renderChartBuilderPreview();
+  };
+  [chartBuilderType, chartBuilderX, chartBuilderY, chartBuilderIncludeExcluded].forEach((control) => {
+    control?.addEventListener('change', refreshChartBuilderFromAxes);
+  });
+  chartBuilderFigureTitle?.addEventListener('input', () => {
+    chartBuilderTitleIsAuto = false;
+    renderChartBuilderPreview();
+  });
+  document.getElementById('closeChartBuilder')?.addEventListener('click', closeChartBuilder);
+  document.getElementById('cancelChartBuilder')?.addEventListener('click', closeChartBuilder);
+  document.getElementById('insertChartBuilder')?.addEventListener('click', () => {
+    if (isSigned || !chartBuilderChart) return;
+    const model = chartBuilderModel();
+    if (!model || !model.points.length) return;
+    const chartTypes = { scatter: 'Scatter', line: 'Line', bar: 'Bar' };
+    const imageUrl = chartBuilderChart.getDataURL({ type: 'png', pixelRatio: 3, backgroundColor: '#ffffff' });
+    const caption = `${chartTypes[model.type]}: ${chartBuilderFieldLabel(model.yField)} vs ${chartBuilderFieldLabel(model.xField)}; ${model.points.length} plotted run${model.points.length === 1 ? '' : 's'}${model.includeExcluded ? ', including analysis-excluded runs' : ', excluding analysis-excluded runs'}.`;
+    editor.chain().focus().insertContent([
+      makeHeadingNode(model.title),
+      { type: 'image', attrs: { src: imageUrl, alt: model.title, title: null } },
+      makeParagraphNode(caption)
+    ]).run();
+    closeChartBuilder();
+  });
+
+  const resetImageImport = () => {
+    showImageImportError();
+    clearImagePreview();
+    if (imageFileInput instanceof HTMLInputElement) imageFileInput.value = '';
+    if (imageUrlInput instanceof HTMLInputElement) imageUrlInput.value = '';
+  };
+  const closeImageImport = () => {
+    resetImageImport();
+    if (imageImportDialog instanceof HTMLDialogElement) imageImportDialog.close();
+  };
+  document.getElementById('closeImageImport')?.addEventListener('click', closeImageImport);
+  document.getElementById('cancelImageImport')?.addEventListener('click', closeImageImport);
+  imageFileInput?.addEventListener('change', async () => {
+    const file = imageFileInput instanceof HTMLInputElement ? imageFileInput.files?.[0] : null;
+    clearImagePreview();
+    showImageImportError();
+    if (!file) return;
+    try {
+      validateImageFile(file);
+      if (imageUrlInput instanceof HTMLInputElement) imageUrlInput.value = '';
+      const requestId = ++imagePreviewRequestId;
+      const dataUrl = await imageFileToDataUrl(file);
+      if (requestId !== imagePreviewRequestId) return;
+      showImagePreview(dataUrl, `${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB`);
+    } catch (error) {
+      showImageImportError(error instanceof Error ? error.message : 'The image preview could not be prepared.');
+    }
+  });
+  imageUrlInput?.addEventListener('input', () => {
+    const url = sourceText(imageUrlInput instanceof HTMLInputElement ? imageUrlInput.value : '');
+    clearImagePreview();
+    showImageImportError();
+    if (imageFileInput instanceof HTMLInputElement && url) imageFileInput.value = '';
+    if (!url) return;
+    imageUrlPreviewTimer = window.setTimeout(() => {
+      imageUrlPreviewTimer = null;
+      showImagePreview(url, 'Preview from image URL');
+    }, 250);
+  });
+  imageImportForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (isSigned) return;
+    showImageImportError();
+    try {
+      const file = imageFileInput instanceof HTMLInputElement ? imageFileInput.files?.[0] : null;
+      const src = file
+        ? await imageFileToDataUrl(file)
+        : sourceText(imageUrlInput?.value);
+      if (!src) throw new Error('Choose an image file or enter an image URL.');
+      insertReportImage(src);
+      closeImageImport();
+    } catch (error) {
+      showImageImportError(error instanceof Error ? error.message : 'The image could not be inserted.');
+    }
   });
 
   document.getElementById('closeDoeAnalysis')?.addEventListener('click', () => {
@@ -1247,8 +1637,18 @@
   insertDoeAnalysisV2Section?.addEventListener('click', () => insertDoeAnalysisV2('section'));
   insertDoeRunReferences?.addEventListener('click', () => {
     if (isSigned || !selectedDoeRuns.size || !doeRunsData) return;
-    const content = [makeHeadingNode(`${doeRunsData.study.name} — selected runs`)];
-    selectedDoeRuns.forEach((run) => content.push(...makeDoeRunReference(run, doeRunsData.fields)));
+    const fields = doeRunsData.fields || [];
+    const content = [
+      makeHeadingNode(`${doeRunsData.study.name} — selected runs`),
+      makeDataTable(
+        ['Run', 'Status', ...fields.map((field) => field.unit ? `${field.label} (${field.unit})` : field.label)],
+        [...selectedDoeRuns.values()].map((run) => [
+          run.code,
+          run.excluded ? 'Excluded from analysis' : run.done ? 'Done' : 'In progress',
+          ...fields.map((field) => run.values?.[field.key] || '–')
+        ])
+      )
+    ];
     editor.chain().focus().insertContent(content).run();
     if (doeRunsDialog instanceof HTMLDialogElement) doeRunsDialog.close();
   });
@@ -1270,14 +1670,13 @@
       } else if (selectedSource.kind === 'results') {
         const table = makeRowsTable(selectedSource.rows);
         content = action === 'section' ? [makeHeadingNode('Qualification results'), table] : [table];
+      } else if (selectedSource.kind === 'run-table') {
+        const table = makeDataTable(selectedSource.table?.columns, selectedSource.table?.rows);
+        content = action === 'section' ? [makeHeadingNode(selectedSource.label), table] : [table];
       } else if (selectedSource.kind === 'run') {
         content = makeRunReference(selectedSource, action === 'label');
       } else if (selectedSource.kind === 'chart') {
-        const imageUrl = selectedSource.chartType === 'rheology'
-          ? renderChartImage(buildRheoOption)
-          : selectedSource.chartType === 'process-window'
-            ? renderChartImage(buildWindowOption)
-            : renderChartImage(() => buildRunSeriesOption(selectedSource.chartData, selectedSource.label));
+        const imageUrl = sourceChartSnapshot(selectedSource);
         content = [
           makeHeadingNode(selectedSource.label),
           { type: 'image', attrs: { src: imageUrl, alt: selectedSource.label, title: null } },
@@ -1334,9 +1733,9 @@
       }
     }
     if (command === 'image') {
-      const src = window.prompt('Image URL');
-      if (!src) return;
-      chain.setImage({ src: src.trim(), width: '80%', align: 'center' }).run();
+      resetImageImport();
+      if (imageImportDialog instanceof HTMLDialogElement) imageImportDialog.showModal();
+      return;
     }
     if (command === 'chemical-structure' || command === 'chemical-structure-edit') {
       const chemicalEditor = window.ChemicalStructureEditor;

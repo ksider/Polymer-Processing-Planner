@@ -188,7 +188,7 @@ app.use(
           "https://unpkg.com"
         ],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
-        imgSrc: ["'self'", "data:", "https://api.dicebear.com", "https://fonts.googleapis.com"],
+        imgSrc: ["'self'", "data:", "https:", "https://api.dicebear.com", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         connectSrc: ["'self'"],
         // Only local embedded tools, such as the self-hosted chemistry editor,

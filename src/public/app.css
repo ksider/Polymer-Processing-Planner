@@ -4093,29 +4093,6 @@ textarea {
   opacity: 0.6;
 }
 
-/* The report toolbar is a single-line flex row. Keep its native selects at
-   their intended control widths so an inherited flex rule cannot consume the
-   remaining header width. */
-.report-workspace .document-toolbar-slot .toolbar-select {
-  box-sizing: border-box;
-  flex: 0 0 auto !important;
-  width: 84px !important;
-  min-width: 84px;
-  max-width: 84px;
-}
-
-.report-workspace .document-toolbar-slot #fontFamilySelect {
-  width: 132px !important;
-  min-width: 132px;
-  max-width: 132px;
-}
-
-.report-workspace .document-toolbar-slot #textPresetSelect {
-  width: 96px !important;
-  min-width: 96px;
-  max-width: 96px;
-}
-
 .button-sm.icon-only {
   width: 34px;
   height: 34px;
@@ -4232,12 +4209,31 @@ textarea {
   display: none;
 }
 
+dialog.chemical-structure-dialog[open] {
+  display: flex;
+}
+
 .chemical-structure-dialog {
-  width: min(1220px, calc(100vw - 2rem));
+  box-sizing: border-box;
+  flex-direction: column;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
   max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
 }
 
 .chemical-structure-dialog-body {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   padding: 0.85rem 1.25rem 1.1rem;
 }
 
@@ -4246,8 +4242,8 @@ textarea {
 }
 
 .chemical-structure-frame-wrap {
-  height: min(70vh, 720px);
-  min-height: 480px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -4263,8 +4259,63 @@ textarea {
 }
 
 .chemical-structure-dialog .modal-footer {
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
+}
+
+.chemical-structure-export-settings {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  min-width: 0;
+}
+
+.chemical-structure-export-quality {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--slate);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.chemical-structure-export-quality select {
+  min-height: 2rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  padding: 0.25rem 1.8rem 0.25rem 0.5rem;
+}
+
+.chemical-structure-header {
+  flex: 0 0 auto;
+}
+
+.chemical-structure-title {
+  min-width: 0;
+}
+
+.chemical-structure-title strong {
+  display: block;
+}
+
+.chemical-structure-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  color: var(--slate);
+}
+
+.chemical-structure-icon-button:hover {
+  background: #f1eee8;
+  color: var(--ink);
 }
 
 .chemical-structure-actions {
@@ -4274,18 +4325,19 @@ textarea {
 }
 
 @media (max-width: 720px) {
-  .chemical-structure-dialog {
-    width: calc(100vw - 1rem);
-  }
-
   .chemical-structure-frame-wrap {
-    height: 62vh;
-    min-height: 380px;
+    border-radius: 6px;
   }
 
   .chemical-structure-dialog .modal-footer {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .chemical-structure-export-settings {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.45rem;
   }
 }
 
@@ -4414,12 +4466,11 @@ textarea {
   display: block;
   box-sizing: border-box;
   max-width: 100%;
-  max-height: 72vh;
-  height: auto;
+  max-height: none;
+  height: auto !important;
+  aspect-ratio: auto;
   object-fit: contain;
-  background: #fafafa;
-  border: 1px solid #ebe7de;
-  border-radius: 8px;
+  object-position: center;
 }
 
 .editor-surface .ProseMirror img.ProseMirror-selectednode {
@@ -4531,12 +4582,35 @@ textarea {
   max-width: 100%;
   margin: 0;
   padding: 0;
-  overflow-x: auto;
+  overflow: visible;
   border: 0;
   border-radius: 0;
   background: transparent;
   backdrop-filter: none;
   scrollbar-width: thin;
+}
+
+/* Fixed-width controls are part of the report toolbar's layout contract. */
+.document-toolbar-slot .report-toolbar-select {
+  box-sizing: border-box;
+  flex: 0 0 5rem;
+  inline-size: 5rem;
+  min-inline-size: 5rem;
+  max-inline-size: 5rem;
+}
+
+.document-toolbar-slot .report-toolbar-select--font {
+  flex-basis: 9rem;
+  inline-size: 9rem;
+  min-inline-size: 9rem;
+  max-inline-size: 9rem;
+}
+
+.document-toolbar-slot .report-toolbar-select--preset {
+  flex-basis: 6rem;
+  inline-size: 6rem;
+  min-inline-size: 6rem;
+  max-inline-size: 6rem;
 }
 
 .editor-toolbar-tabs {
@@ -4920,9 +4994,196 @@ textarea {
   white-space: pre-wrap;
 }
 
+.source-chart-preview {
+  display: grid;
+  justify-items: center;
+  gap: 0.55rem;
+  margin: 0;
+}
+
+.source-chart-preview img {
+  display: block;
+  width: 100%;
+  max-height: min(56dvh, 460px);
+  object-fit: contain;
+}
+
+.source-chart-preview figcaption {
+  margin: 0;
+  text-align: center;
+}
+
+.chart-builder-dialog {
+  width: min(1040px, calc(100vw - 2rem));
+}
+
+.chart-builder-body {
+  display: grid;
+  gap: 1rem;
+}
+
+.chart-builder-controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+  gap: 0.8rem;
+}
+
+.chart-builder-controls > label:not(.chart-builder-toggle) {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.chart-builder-controls select,
+.chart-builder-controls input[type="text"] {
+  width: 100%;
+  min-height: 2.4rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 500;
+  padding: 0.4rem 0.6rem;
+}
+
+.chart-builder-toggle {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--slate);
+  font-size: 0.86rem;
+}
+
+.chart-builder-preview {
+  min-height: 400px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.chart-builder-empty {
+  display: grid;
+  min-height: 400px;
+  place-content: center;
+  margin: 0;
+  padding: 1rem;
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .chart-builder-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .chart-builder-preview {
+    min-height: 300px;
+  }
+
+  .chart-builder-empty {
+    min-height: 300px;
+  }
+}
+
+.image-import-preview {
+  display: grid;
+  justify-items: center;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #faf9f6;
+}
+
+.image-import-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: min(34vh, 280px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.image-import-preview img[hidden] {
+  display: none;
+}
+
+.image-import-preview-empty {
+  display: grid;
+  min-height: 9rem;
+  width: 100%;
+  place-content: center;
+  gap: 0.45rem;
+  color: var(--slate);
+  text-align: center;
+}
+
+.image-import-preview-empty .material-symbols-rounded {
+  font-size: 2rem;
+}
+
+.image-import-preview figcaption {
+  margin: 0;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
 .doe-analysis-dialog,
 .doe-runs-dialog {
   width: min(1080px, calc(100vw - 2rem));
+}
+
+/* The editor is a document workspace, not a regular site page.  It must not
+   render a second global footer below the full-height working area. */
+.report-editor-page footer {
+  display: none !important;
+}
+
+/* Analysis and run matrices need room to be read and compared.  They are
+   full-screen work surfaces; small entity and image previews stay compact. */
+dialog.report-fullscreen-dialog[open] {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.report-fullscreen-dialog .modal-header,
+.report-fullscreen-dialog .modal-footer {
+  flex: 0 0 auto;
+}
+
+.report-fullscreen-dialog .modal-body {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.report-fullscreen-dialog .doe-dialog-body {
+  min-width: 0;
+}
+
+.report-fullscreen-dialog .doe-table-scroll {
+  flex: 1 1 auto;
+  min-height: 14rem;
+  max-height: none;
 }
 
 body.is-ai-split-mode { overflow: hidden; }

@@ -67,7 +67,6 @@ let analysisUsesCodedFactors = false;
   bindRunSelection(workspace);
   bindTermSelection(workspace);
   bindDataWorksheet(workspace);
-  bindTableCopy(workspace);
   bindAnalysisLifecycleActions(workspace, {
     csrfToken,
     savedAnalysisId,
@@ -2259,36 +2258,6 @@ function chartFor(element) {
   return window.echarts.getInstanceByDom(element) || window.echarts.init(element);
 }
 
-function bindTableCopy(workspace) {
-  workspace.querySelectorAll("[data-copy-table]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      const table = workspace.querySelector(button.dataset.copyTable || "");
-      if (!table) return;
-      const icon = button.querySelector(".material-symbols-rounded");
-      const label = button.dataset.copyLabel || button.textContent.trim() || "Copy TSV";
-      const originalAria = button.dataset.copyAria ?? button.getAttribute("aria-label") ?? "";
-      button.dataset.copyLabel = label;
-      button.dataset.copyAria = originalAria;
-      try {
-        await copyTextAsTsv(tableToTsv(table));
-        if (button.dataset.copyIcon && icon) icon.textContent = "check";
-        else button.textContent = "Copied";
-        button.setAttribute("aria-label", "Table copied as TSV");
-      } catch {
-        if (button.dataset.copyIcon && icon) icon.textContent = "error";
-        else button.textContent = "Copy failed";
-        button.setAttribute("aria-label", "Table could not be copied");
-      }
-      window.setTimeout(() => {
-        if (button.dataset.copyIcon && icon) icon.textContent = "content_copy";
-        else button.textContent = label;
-        if (originalAria) button.setAttribute("aria-label", originalAria);
-        else button.removeAttribute("aria-label");
-      }, 1800);
-    });
-  });
-}
-
 function bindDataWorksheet(workspace) {
   const toggle = workspace.querySelector("[data-toggle-data-worksheet]");
   const body = workspace.querySelector("[data-data-worksheet-body]");
@@ -2300,36 +2269,6 @@ function bindDataWorksheet(workspace) {
     const icon = toggle.querySelector(".material-symbols-rounded");
     if (icon) icon.textContent = expanded ? "expand_more" : "expand_less";
   });
-}
-
-function tableToTsv(table) {
-  return [...table.querySelectorAll("tr")]
-    .map((row) => [...row.querySelectorAll("th, td")]
-      .map((cell) => tsvCell((cell.innerText || cell.textContent || "").replace(/\s+/g, " ").trim()))
-      .join("\t"))
-    .filter(Boolean)
-    .join("\n");
-}
-
-function tsvCell(value) {
-  return /[\t\n\r\"]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
-}
-
-async function copyTextAsTsv(text) {
-  if (!text) throw new Error("The table is empty.");
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-  const fallback = document.createElement("textarea");
-  fallback.value = text;
-  fallback.setAttribute("readonly", "");
-  fallback.style.cssText = "position:fixed;left:-10000px;top:0";
-  document.body.append(fallback);
-  fallback.select();
-  const copied = document.execCommand("copy");
-  fallback.remove();
-  if (!copied) throw new Error("Clipboard access was denied.");
 }
 
 function axisRange(values, padding = 0.04) {

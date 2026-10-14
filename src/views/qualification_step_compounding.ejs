@@ -1458,6 +1458,287 @@
         }
       }
     };
+    const renderSideFeedingCharts = () => {
+      if (processTypeCode !== 'extrusion_v1' || stepNumber !== 6 || !window.echarts) return;
+      const rows = Array.from(document.querySelectorAll('[data-run-table] tr[data-run-row]'));
+      const value = (row, code) => numFromRow(row, code);
+      const derived = (row, code) => parseNumber(row.querySelector(`[data-derived-code="${code}"]`)?.textContent);
+      const fillerDensity = parseNumber(document.querySelector('[name="side_feeding_filler_density_kg_m3"]')?.value);
+      const matrixDensity = parseNumber(document.querySelector('[name="side_feeding_matrix_density_kg_m3"]')?.value);
+      const points = rows.map((row) => {
+        const matrixThroughput = value(row, 'matrix_throughput_kg_h');
+        const fillerThroughput = value(row, 'filler_throughput_kg_h');
+        const massFraction = Number.isFinite(matrixThroughput) && Number.isFinite(fillerThroughput) && matrixThroughput + fillerThroughput > 0
+          ? fillerThroughput / (matrixThroughput + fillerThroughput) : null;
+        return {
+          run: row.querySelector('td')?.textContent?.trim() || 'Run',
+          group: row.dataset.runGroup,
+          speed: value(row, 'side_feeder_speed_rpm'),
+          throughput: fillerThroughput,
+          cv: value(row, 'side_feeder_throughput_cv_pct'),
+          torque: value(row, 'side_feeder_torque_nm'),
+          viscosity: value(row, 'composite_viscosity_pa_s'),
+          sme: value(row, 'specific_mechanical_energy_kwh_kg'),
+          retention: (() => { const initial = value(row, 'fiber_initial_length_mm'); const final = value(row, 'fiber_final_length_mm'); return Number.isFinite(initial) && initial > 0 && Number.isFinite(final) ? final / initial * 100 : derived(row, 'fiber_length_retention_pct'); })(),
+          volumeFraction: Number.isFinite(massFraction) && Number.isFinite(fillerDensity) && fillerDensity > 0 && Number.isFinite(matrixDensity) && matrixDensity > 0
+            ? (massFraction / fillerDensity) / (massFraction / fillerDensity + (1 - massFraction) / matrixDensity) * 100
+            : derived(row, 'filler_volume_fraction_pct'),
+          noAccumulation: row.querySelector(`[data-field-id="${fieldIdByCode?.no_powder_accumulation}"]`)?.checked === true,
+          massFraction
+        };
+      });
+      const draw = (id, series, xAxisName, yAxisName, empty) => {
+        const container = document.getElementById(id); if (!container) return;
+        const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+        if (!series.some((item) => item.data?.length)) {
+          chart.clear();
+          chart.setOption({ title: { text: empty, left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } } });
+          return;
+        }
+        chart.setOption({
+          tooltip: { trigger: 'item', formatter: (item) => `${item.seriesName}<br>${item.data.run}<br>${xAxisName}: ${fmtLive(item.value[0], 2)}<br>${yAxisName}: ${fmtLive(item.value[1], 2)}` },
+          legend: { top: 2 }, grid: { left: 70, right: 24, top: 38, bottom: 54 },
+          xAxis: { type: 'value', name: xAxisName, nameLocation: 'middle', nameGap: 34, scale: true },
+          yAxis: { type: 'value', name: yAxisName, nameLocation: 'middle', nameGap: 48, scale: true },
+          series
+        }, { notMerge: true });
+      };
+      const stability = points.filter((point) => point.group === 'feeder_stability' || point.group === 'side_feeding');
+      draw('sideFeederStabilityChart', [
+        { name: 'Stable (CV ≤ 1.5%, no accumulation)', type: 'scatter', symbolSize: 10, itemStyle: { color: '#059669' }, data: stability.filter((point) => point.noAccumulation && Number.isFinite(point.cv) && point.cv <= 1.5 && Number.isFinite(point.speed) && Number.isFinite(point.throughput)).map((point) => ({ value: [point.speed, point.throughput], run: point.run })) },
+        { name: 'Investigate', type: 'scatter', symbolSize: 10, itemStyle: { color: '#dc2626' }, data: stability.filter((point) => (!point.noAccumulation || !Number.isFinite(point.cv) || point.cv > 1.5) && Number.isFinite(point.speed) && Number.isFinite(point.throughput)).map((point) => ({ value: [point.speed, point.throughput], run: point.run })) }
+      ], 'Side-feeder speed (rpm)', 'Measured filler throughput (kg/h)', 'Enter actual feeder rate, CV and the 10-minute accumulation observation.');
+      const particulate = points.filter((point) => point.group === 'particulate_filler' && Number.isFinite(point.volumeFraction));
+      draw('sideFeederTorqueChart', [{ name: 'Particulate-filler run', type: 'scatter', symbolSize: 10, itemStyle: { color: '#2563eb' }, data: particulate.filter((point) => Number.isFinite(point.torque)).map((point) => ({ value: [point.volumeFraction, point.torque], run: point.run })) }], 'Filler volume fraction φv (%)', 'Side-feeder torque (N·m)', 'Enter filler density, matrix density, actual rate and side-feeder torque.');
+      draw('sideFeederViscosityChart', [{ name: 'Particulate-filler run', type: 'scatter', symbolSize: 10, itemStyle: { color: '#7c3aed' }, data: particulate.filter((point) => Number.isFinite(point.viscosity)).map((point) => ({ value: [point.volumeFraction, point.viscosity], run: point.run })) }], 'Filler volume fraction φv (%)', 'Composite viscosity (Pa·s)', 'Enter filler density, matrix density, actual rate and composite viscosity.');
+      const fibre = points.filter((point) => point.group === 'fiber_retention');
+      draw('fiberRetentionChart', [{ name: 'Fibre-retention run', type: 'scatter', symbolSize: 10, itemStyle: { color: '#d97706' }, data: fibre.filter((point) => Number.isFinite(point.sme) && Number.isFinite(point.retention)).map((point) => ({ value: [point.sme, point.retention], run: point.run })) }], 'SME (kWh/kg)', 'Fibre-length retention (%)', 'Enter initial/final fibre length and SME to plot retention.');
+    };
+    const renderLiquidDosingCharts = () => {
+      if (processTypeCode !== 'extrusion_v1' || stepNumber !== 7 || !window.echarts) return;
+      const rows = Array.from(document.querySelectorAll('[data-run-table] tr[data-run-row]'));
+      const value = (row, code) => numFromRow(row, code);
+      const derived = (row, code) => parseNumber(row.querySelector(`[data-derived-code="${code}"]`)?.textContent);
+      const baselineTorque = parseNumber(document.querySelector('[name="liquid_injection_baseline_torque_nm"]')?.value);
+      const fixedPolymerThroughput = parseNumber(document.querySelector('[name="liquid_injection_polymer_throughput_kg_h"]')?.value);
+      const points = rows.map((row) => {
+        const target = value(row, 'liquid_target_throughput_kg_h');
+        const actual = value(row, 'liquid_throughput_kg_h');
+        const polymer = value(row, 'polymer_throughput_kg_h') ?? fixedPolymerThroughput;
+        const injectionPressure = value(row, 'injection_pressure_bar');
+        const barrelPressure = value(row, 'barrel_pressure_bar');
+        const fraction = Number.isFinite(polymer) && Number.isFinite(actual) && polymer + actual > 0 ? actual / (polymer + actual) * 100 : derived(row, 'liquid_mass_fraction_pct');
+        const margin = Number.isFinite(injectionPressure) && Number.isFinite(barrelPressure) ? injectionPressure - barrelPressure : derived(row, 'injection_pressure_delta_bar');
+        const error = Number.isFinite(target) && target > 0 && Number.isFinite(actual) ? (actual - target) / target * 100 : derived(row, 'liquid_throughput_error_pct');
+        const updateDerived = (code, number) => {
+          const cell = row.querySelector(`[data-derived-code="${code}"]`);
+          if (cell && Number.isFinite(number)) cell.textContent = fmtLive(number, 2);
+        };
+        updateDerived('liquid_mass_fraction_pct', fraction);
+        updateDerived('injection_pressure_delta_bar', margin);
+        updateDerived('liquid_throughput_error_pct', error);
+        return {
+          run: row.querySelector('td')?.textContent?.trim() || 'Run',
+          group: row.dataset.runGroup,
+          target, actual,
+          cv: value(row, 'liquid_throughput_cv_pct'),
+          fraction, barrelPressure,
+          torque: value(row, 'motor_torque_nm'),
+          margin,
+          noBackflow: row.querySelector(`[data-field-id="${fieldIdByCode?.no_liquid_backflow}"]`)?.checked === true,
+          noLeak: row.querySelector(`[data-field-id="${fieldIdByCode?.no_liquid_leak}"]`)?.checked === true
+        };
+      });
+      const draw = (id, series, xAxisName, yAxisName, empty) => {
+        const container = document.getElementById(id); if (!container) return;
+        const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+        if (!series.some((item) => item.data?.length)) {
+          chart.clear();
+          chart.setOption({ title: { text: empty, left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } } });
+          return;
+        }
+        chart.setOption({
+          tooltip: { trigger: 'item', formatter: (item) => `${item.seriesName}<br>${item.data.run}<br>${xAxisName}: ${fmtLive(item.value[0], 3)}<br>${yAxisName}: ${fmtLive(item.value[1], 2)}` },
+          legend: { top: 2 }, grid: { left: 70, right: 24, top: 38, bottom: 54 },
+          xAxis: { type: 'value', name: xAxisName, nameLocation: 'middle', nameGap: 34, scale: true },
+          yAxis: { type: 'value', name: yAxisName, nameLocation: 'middle', nameGap: 48, scale: true },
+          series
+        }, { notMerge: true });
+      };
+      const calibration = points.filter((point) => point.group === 'liquid_pump_calibration');
+      draw('liquidPumpCalibrationChart', [
+        { name: 'Accepted (CV ≤ 1.5%)', type: 'scatter', symbolSize: 10, itemStyle: { color: '#059669' }, data: calibration.filter((point) => Number.isFinite(point.target) && Number.isFinite(point.actual) && Number.isFinite(point.cv) && point.cv <= 1.5).map((point) => ({ value: [point.target, point.actual], run: point.run })) },
+        { name: 'Investigate', type: 'scatter', symbolSize: 10, itemStyle: { color: '#dc2626' }, data: calibration.filter((point) => Number.isFinite(point.target) && Number.isFinite(point.actual) && (!Number.isFinite(point.cv) || point.cv > 1.5)).map((point) => ({ value: [point.target, point.actual], run: point.run })) }
+      ], 'Target liquid throughput (kg/h)', 'Actual liquid throughput (kg/h)', 'Enter target flow, actual flow and CV for each calibration sample.');
+      const injection = points.filter((point) => point.group === 'liquid_melt_injection' || point.group === 'liquid_dosing');
+      const accepted = (point) => point.noBackflow && point.noLeak && Number.isFinite(point.margin) && point.margin > 2;
+      draw('liquidTorqueChart', [
+        { name: 'Accepted injection point', type: 'scatter', symbolSize: 10, itemStyle: { color: '#059669' }, data: injection.filter((point) => accepted(point) && Number.isFinite(point.fraction) && Number.isFinite(point.torque) && Number.isFinite(baselineTorque)).map((point) => ({ value: [point.fraction, point.torque - baselineTorque], run: point.run })) },
+        { name: 'Investigate', type: 'scatter', symbolSize: 10, itemStyle: { color: '#dc2626' }, data: injection.filter((point) => !accepted(point) && Number.isFinite(point.fraction) && Number.isFinite(point.torque) && Number.isFinite(baselineTorque)).map((point) => ({ value: [point.fraction, point.torque - baselineTorque], run: point.run })) }
+      ], 'Liquid mass fraction wliq (%)', 'Torque change ΔM (N·m)', 'Enter zero-liquid motor torque, liquid fraction inputs and motor torque.');
+      draw('liquidPressureChart', [
+        { name: 'Accepted injection point', type: 'scatter', symbolSize: 10, itemStyle: { color: '#059669' }, data: injection.filter((point) => accepted(point) && Number.isFinite(point.actual) && Number.isFinite(point.barrelPressure)).map((point) => ({ value: [point.actual, point.barrelPressure], run: point.run })) },
+        { name: 'Investigate', type: 'scatter', symbolSize: 10, itemStyle: { color: '#dc2626' }, data: injection.filter((point) => !accepted(point) && Number.isFinite(point.actual) && Number.isFinite(point.barrelPressure)).map((point) => ({ value: [point.actual, point.barrelPressure], run: point.run })) }
+      ], 'Actual liquid throughput (kg/h)', 'Barrel pressure at injection (bar)', 'Enter actual liquid flow, barrel/injection pressure and seal observations.');
+    };
+    const renderVacuumDegassingCharts = () => {
+      if (processTypeCode !== 'extrusion_v1' || stepNumber !== 8 || !window.echarts) return;
+      const rows = Array.from(document.querySelectorAll('[data-run-table] tr[data-run-row]'));
+      const value = (row, code) => numFromRow(row, code);
+      const fixedIncomingVolatiles = parseNumber(document.querySelector('[name="devol_initial_volatiles_pct"]')?.value);
+      const residualTarget = parseNumber(document.querySelector('[name="devol_residual_volatiles_target_pct"]')?.value);
+      const points = rows.map((row) => {
+        const residual = value(row, 'residual_volatiles_pct');
+        const initial = value(row, 'initial_volatiles_pct') ?? fixedIncomingVolatiles;
+        const efficiency = Number.isFinite(initial) && initial > 0 && Number.isFinite(residual) ? (initial - residual) / initial * 100 : null;
+        const derivedCell = row.querySelector('[data-derived-code="devolatilization_efficiency_pct"]');
+        if (derivedCell && Number.isFinite(efficiency)) derivedCell.textContent = fmtLive(efficiency, 2);
+        return {
+          run: row.querySelector('td')?.textContent?.trim() || 'Run',
+          group: row.dataset.runGroup,
+          targetVacuum: value(row, 'vacuum_target_pressure_mbar'),
+          actualVacuum: value(row, 'vacuum_pressure_mbar'),
+          targetThroughput: value(row, 'devol_target_throughput_kg_h'),
+          actualThroughput: value(row, 'throughput_kg_h'),
+          residual, carryover: value(row, 'trap_carryover_g'), efficiency,
+          stable: row.querySelector(`[data-field-id="${fieldIdByCode?.vacuum_stable}"]`)?.checked === true,
+          noFoam: row.querySelector(`[data-field-id="${fieldIdByCode?.no_vent_foam_or_stuffing}"]`)?.checked === true
+        };
+      });
+      const accepted = (point) => point.stable && point.noFoam && (!Number.isFinite(residualTarget) || !Number.isFinite(point.residual) || point.residual <= residualTarget);
+      const draw = (id, series, xAxisName, yAxisName, empty) => {
+        const container = document.getElementById(id); if (!container) return;
+        const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+        if (!series.some((item) => item.data?.length)) {
+          chart.clear();
+          chart.setOption({ title: { text: empty, left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } } });
+          return;
+        }
+        chart.setOption({
+          tooltip: { trigger: 'item', formatter: (item) => `${item.seriesName}<br>${item.data.run}<br>${xAxisName}: ${fmtLive(item.value[0], 2)}<br>${yAxisName}: ${fmtLive(item.value[1], 3)}` },
+          legend: { top: 2 }, grid: { left: 70, right: 24, top: 38, bottom: 54 },
+          xAxis: { type: 'value', name: xAxisName, nameLocation: 'middle', nameGap: 34, scale: true },
+          yAxis: { type: 'value', name: yAxisName, nameLocation: 'middle', nameGap: 48, scale: true },
+          series
+        }, { notMerge: true });
+      };
+      const calibration = points.filter((point) => point.group === 'vacuum_calibration' || point.group === 'devolatilization');
+      draw('vacuumCalibrationChart', [
+        { name: 'Accepted', type: 'scatter', symbolSize: 10, itemStyle: { color: '#059669' }, data: calibration.filter((point) => accepted(point) && Number.isFinite(point.actualVacuum) && Number.isFinite(point.residual)).map((point) => ({ value: [point.actualVacuum, point.residual], run: point.run })) },
+        { name: 'Investigate', type: 'scatter', symbolSize: 10, itemStyle: { color: '#dc2626' }, data: calibration.filter((point) => !accepted(point) && Number.isFinite(point.actualVacuum) && Number.isFinite(point.residual)).map((point) => ({ value: [point.actualVacuum, point.residual], run: point.run })) }
+      ], 'Actual vacuum pressure (mbar)', 'Residual volatiles (%)', 'Enter actual vacuum, residual volatiles and both vent-stability observations.');
+      const capacity = points.filter((point) => point.group === 'vacuum_capacity');
+      const container = document.getElementById('vacuumCapacityChart');
+      if (!container) return;
+      const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+      const valid = capacity.filter((point) => Number.isFinite(point.actualThroughput) && (Number.isFinite(point.residual) || Number.isFinite(point.carryover)));
+      if (!valid.length) {
+        chart.clear();
+        chart.setOption({ title: { text: 'Enter actual throughput with residual volatiles or trap carryover to plot the capacity check.', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } } });
+        return;
+      }
+      const seriesFor = (key, label, color, axisIndex) => [
+        { name: `${label} · accepted`, type: 'scatter', yAxisIndex: axisIndex, symbolSize: 10, itemStyle: { color }, data: valid.filter((point) => accepted(point) && Number.isFinite(point[key])).map((point) => ({ value: [point.actualThroughput, point[key]], run: point.run })) },
+        { name: `${label} · investigate`, type: 'scatter', yAxisIndex: axisIndex, symbolSize: 10, itemStyle: { color: '#dc2626' }, data: valid.filter((point) => !accepted(point) && Number.isFinite(point[key])).map((point) => ({ value: [point.actualThroughput, point[key]], run: point.run })) }
+      ];
+      chart.setOption({
+        tooltip: { trigger: 'item', formatter: (item) => `${item.seriesName}<br>${item.data.run}<br>Actual throughput: ${fmtLive(item.value[0], 2)} kg/h<br>${item.seriesName.includes('Residual') ? 'Residual volatiles' : 'Trap carryover'}: ${fmtLive(item.value[1], 3)}` },
+        legend: { top: 2 }, grid: { left: 70, right: 70, top: 58, bottom: 54 },
+        xAxis: { type: 'value', name: 'Actual melt throughput (kg/h)', nameLocation: 'middle', nameGap: 34, scale: true },
+        yAxis: [{ type: 'value', name: 'Residual volatiles (%)', nameLocation: 'middle', nameGap: 48, scale: true }, { type: 'value', name: 'Trap carryover (g)', nameLocation: 'middle', nameGap: 48, scale: true }],
+        series: [...seriesFor('residual', 'Residual volatiles', '#2563eb', 0), ...seriesFor('carryover', 'Trap carryover', '#d97706', 1)]
+      }, { notMerge: true });
+    };
+    const renderReactiveExtrusionCharts = () => {
+      if (processTypeCode !== 'extrusion_v1' || stepNumber !== 9) return;
+      const rows = Array.from(document.querySelectorAll('[data-run-table] tr[data-run-row]'));
+      const settingNumber = (name) => parseNumber(document.querySelector(`[name="${name}"]`)?.value);
+      const targetConversion = settingNumber('reaction_conversion_target_pct');
+      const mfrMinimum = settingNumber('reaction_mfr_min_g_10min');
+      const mfrMaximum = settingNumber('reaction_mfr_max_g_10min');
+      const thermalLimit = settingNumber('reaction_thermal_limit_c');
+      const points = rows.map((row) => {
+        const residence = numFromRow(row, 'mean_residence_time_s');
+        const conversion = numFromRow(row, 'conversion_pct');
+        const apparentRate = Number.isFinite(residence) && residence > 0 && Number.isFinite(conversion) && conversion >= 0 && conversion < 100
+          ? -Math.log(1 - conversion / 100) / residence : null;
+        const damkohler = Number.isFinite(apparentRate) && Number.isFinite(residence) ? apparentRate * residence : null;
+        const rateCell = row.querySelector('[data-derived-code="reaction_rate_constant_s_inv"]');
+        const daCell = row.querySelector('[data-derived-code="damkohler_number"]');
+        if (rateCell && Number.isFinite(apparentRate)) rateCell.textContent = fmtLive(apparentRate, 5);
+        if (daCell && Number.isFinite(damkohler)) daCell.textContent = fmtLive(damkohler, 3);
+        const temperature = numFromRow(row, 'reaction_temp_c');
+        const mfr = numFromRow(row, 'product_mfr_g_10min');
+        const stable = row.querySelector(`[data-field-id="${fieldIdByCode?.reaction_stable}"]`)?.checked === true;
+        const candidate = stable && Number.isFinite(conversion) &&
+          (!Number.isFinite(targetConversion) || conversion >= targetConversion) &&
+          (!Number.isFinite(mfrMinimum) || (Number.isFinite(mfr) && mfr >= mfrMinimum)) &&
+          (!Number.isFinite(mfrMaximum) || (Number.isFinite(mfr) && mfr <= mfrMaximum)) &&
+          (!Number.isFinite(thermalLimit) || (Number.isFinite(temperature) && temperature <= thermalLimit));
+        return {
+          run: row.querySelector('td')?.textContent?.trim() || 'Run', temperature, residence, conversion, mfr,
+          apparentRate, damkohler, candidate,
+          kineticsConfirmed: candidate && Number.isFinite(residence) && residence > 0 && Number.isFinite(damkohler) && damkohler >= 3
+        };
+      });
+      const candidates = points.filter((point) => point.candidate);
+      const confirmed = points.filter((point) => point.kineticsConfirmed);
+      const candidateTemperatures = candidates
+        .map((point) => point.temperature)
+        .filter((temperature) => Number.isFinite(temperature));
+      const observedWindowMin = candidateTemperatures.length ? Math.min(...candidateTemperatures) : null;
+      const observedWindowMax = candidateTemperatures.length ? Math.max(...candidateTemperatures) : null;
+      const decision = document.querySelector('[data-reactive-recommendation]');
+      if (decision) {
+        const criteria = `Criteria: α ${Number.isFinite(targetConversion) ? `≥ ${fmtLive(targetConversion, 2)}%` : 'not set'} · MFR ${Number.isFinite(mfrMinimum) ? `≥ ${fmtLive(mfrMinimum, 2)}` : 'no minimum'}${Number.isFinite(mfrMaximum) ? ` and ≤ ${fmtLive(mfrMaximum, 2)}` : ''} · T ${Number.isFinite(thermalLimit) ? `≤ ${fmtLive(thermalLimit, 1)} °C` : 'no thermal limit'} · stable for 15 min.`;
+        if (!candidates.length) decision.textContent = `${criteria} No accepted operating-window point yet: enter chemical result, MFR and the stability observation.`;
+        else if (!confirmed.length) decision.textContent = `${criteria} Observed candidate window: ${fmtLive(observedWindowMin, 1)}–${fmtLive(observedWindowMax, 1)} °C across ${candidates.length} measured point(s). Add REX-specific RTD before claiming a minimum residence time or Da confirmation.`;
+        else decision.textContent = `${criteria} Observed candidate window: ${fmtLive(observedWindowMin, 1)}–${fmtLive(observedWindowMax, 1)} °C across ${candidates.length} measured point(s). ${confirmed.length} point(s) confirm Da ≥ 3 with REX-specific RTD; shortest confirmed t̄ is ${fmtLive(Math.min(...confirmed.map((point) => point.residence)), 2)} s.`;
+      }
+      if (!window.echarts) {
+        ['reactiveConversionChart', 'reactiveMfrChart', 'reactiveArrheniusChart'].forEach((id) => {
+          const container = document.getElementById(id);
+          if (container) container.textContent = 'Charts are unavailable because ECharts did not load. Reload the page or check the browser console.';
+        });
+        return;
+      }
+      const draw = (id, series, xAxisName, yAxisName, empty) => {
+        const container = document.getElementById(id); if (!container) return;
+        const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+        if (!series.some((item) => item.data?.length)) {
+          chart.clear(); chart.setOption({ title: { text: empty, left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } } }); return;
+        }
+        chart.setOption({
+          tooltip: { trigger: 'item', formatter: (item) => `${item.seriesName}<br>${item.data.run}<br>${xAxisName}: ${fmtLive(item.value[0], 4)}<br>${yAxisName}: ${fmtLive(item.value[1], 4)}` },
+          legend: { top: 2 }, grid: { left: 70, right: 24, top: 38, bottom: 54 },
+          xAxis: { type: 'value', name: xAxisName, nameLocation: 'middle', nameGap: 34, scale: true },
+          yAxis: { type: 'value', name: yAxisName, nameLocation: 'middle', nameGap: 48, scale: true }, series
+        }, { notMerge: true });
+      };
+      const conversionPoints = points.filter((point) => Number.isFinite(point.residence) && Number.isFinite(point.conversion));
+      draw('reactiveConversionChart', [
+        { name: 'Kinetics confirmed', type: 'scatter', symbolSize: 10, itemStyle: { color: '#059669' }, data: conversionPoints.filter((point) => point.kineticsConfirmed).map((point) => ({ value: [point.residence, point.conversion], run: point.run })) },
+        { name: 'REX RTD entered · investigate', type: 'scatter', symbolSize: 10, itemStyle: { color: '#d97706' }, data: conversionPoints.filter((point) => !point.kineticsConfirmed).map((point) => ({ value: [point.residence, point.conversion], run: point.run })) }
+      ], 'REX mean residence time (s)', 'Validated chemical result α (%)', 'Add REX-specific mean residence time and chemical result to evaluate kinetic evidence.');
+      const mfrPoints = points.filter((point) => Number.isFinite(point.temperature) && Number.isFinite(point.mfr));
+      const mfrGateLines = [
+        ...(Number.isFinite(mfrMinimum) ? [{ yAxis: mfrMinimum, label: { formatter: 'MFR minimum' } }] : []),
+        ...(Number.isFinite(mfrMaximum) ? [{ yAxis: mfrMaximum, label: { formatter: 'MFR maximum' } }] : []),
+        ...(Number.isFinite(thermalLimit) ? [{ xAxis: thermalLimit, label: { formatter: 'Thermal limit' } }] : [])
+      ];
+      const observedWindowArea = Number.isFinite(observedWindowMin) && Number.isFinite(observedWindowMax) && Number.isFinite(mfrMinimum) && Number.isFinite(mfrMaximum)
+        ? { silent: true, itemStyle: { color: 'rgba(22, 163, 74, 0.10)' }, label: { color: '#15803d', formatter: 'Observed candidate envelope' }, data: [[{ xAxis: observedWindowMin, yAxis: mfrMinimum }, { xAxis: observedWindowMax, yAxis: mfrMaximum }]] }
+        : undefined;
+      draw('reactiveMfrChart', [
+        { name: 'Operating-window candidate', type: 'scatter', symbolSize: 10, itemStyle: { color: '#059669' }, data: mfrPoints.filter((point) => point.candidate).map((point) => ({ value: [point.temperature, point.mfr], run: point.run })), markLine: mfrGateLines.length ? { symbol: 'none', lineStyle: { color: '#d97706', type: 'dashed' }, data: mfrGateLines } : undefined, markArea: observedWindowArea },
+        { name: 'Investigate', type: 'scatter', symbolSize: 10, itemStyle: { color: '#dc2626' }, data: mfrPoints.filter((point) => !point.candidate).map((point) => ({ value: [point.temperature, point.mfr], run: point.run })) }
+      ], 'Reaction-zone temperature (°C)', 'Product MFR (g/10 min)', 'Enter reaction temperature and product MFR to plot the operating window.');
+      const arrheniusPoints = points.filter((point) => Number.isFinite(point.temperature) && point.temperature > -273.15 && Number.isFinite(point.apparentRate) && point.apparentRate > 0);
+      draw('reactiveArrheniusChart', [
+        { name: 'Kinetics confirmed', type: 'scatter', symbolSize: 10, itemStyle: { color: '#059669' }, data: arrheniusPoints.filter((point) => point.kineticsConfirmed).map((point) => ({ value: [1 / (point.temperature + 273.15), Math.log(point.apparentRate)], run: point.run })) },
+        { name: 'REX RTD entered · investigate', type: 'scatter', symbolSize: 10, itemStyle: { color: '#d97706' }, data: arrheniusPoints.filter((point) => !point.kineticsConfirmed).map((point) => ({ value: [1 / (point.temperature + 273.15), Math.log(point.apparentRate)], run: point.run })) }
+      ], '1 / T (K⁻¹)', 'ln(kapp)', 'Add REX RTD and conversion; this chart is descriptive, not a fitted kinetic model.');
+    };
     const safeRecomputeCharts = () => {
       try { updateStep2DerivedCells(); } catch {}
       try { recomputeStep1Chart(); } catch {}
@@ -1468,6 +1749,10 @@
       try { updateExtrusionThermalDerived(); } catch {}
       try { renderExtrusionThermalCharts(); } catch {}
       try { renderExtrusionRtdCharts(); } catch {}
+      try { renderSideFeedingCharts(); } catch {}
+      try { renderLiquidDosingCharts(); } catch {}
+      try { renderVacuumDegassingCharts(); } catch {}
+      try { renderReactiveExtrusionCharts(); } catch {}
       try { renderScaleUpMorphologyChart(); } catch {}
       try { recomputeStep1Recommendations(); } catch {}
       try { recomputeStep2Recommendations(); } catch {}
@@ -1934,6 +2219,124 @@
       try { const result = await post(`/experiments/${experimentId}/qualification/${stepNumber}/optional-matrix`, form); showMessage('success', `Generated ${result?.run_count || 0} runs. Updating table…`); window.setTimeout(() => location.reload(), 350); }
       catch (error) { let message = error?.message || 'Run generation failed'; try { const parsed = JSON.parse(message); message = parsed.error || message; } catch {} showMessage('error', message); }
     });
+    document.querySelectorAll('[data-generate-side-feeding-program]').forEach((button) => button.addEventListener('click', async () => {
+      if (!optionalStudySetupForm) return;
+      const form = new FormData();
+      optionalStudySetupForm?.querySelectorAll('[data-optional-request]').forEach((input) => form.append(input.getAttribute('data-optional-request'), input.value));
+      form.append('side_feeding_program', button.getAttribute('data-generate-side-feeding-program') || 'feeder_stability');
+      form.append('side_feeding_material_mode', optionalStudySetupForm?.querySelector('[name="side_feeding_material_mode"]')?.value || 'particulate');
+      try { await post(`/experiments/${experimentId}/qualification/${stepNumber}/settings`, new FormData(optionalStudySetupForm)); const result = await post(`/experiments/${experimentId}/qualification/${stepNumber}/optional-matrix`, form); window.IMPlanner?.notify?.({ type: 'success', message: `Generated ${result?.run_count || 0} side-feeding runs. Updating table…` }); window.setTimeout(() => location.reload(), 350); }
+      catch (error) { let message = error?.message || 'Run generation failed'; try { const parsed = JSON.parse(message); message = parsed.error || message; } catch {} window.IMPlanner?.notify?.({ type: 'error', message }); }
+    }));
+    document.querySelectorAll('[data-generate-liquid-program]').forEach((button) => button.addEventListener('click', async () => {
+      if (!optionalStudySetupForm) return;
+      const program = button.getAttribute('data-generate-liquid-program') || 'liquid_pump_calibration';
+      const form = new FormData();
+      form.append('liquid_program', program);
+      const read = (name) => optionalStudySetupForm.querySelector(`[name="${name}"]`)?.value || '';
+      if (program === 'liquid_pump_calibration') {
+        form.append('liquid_target_throughput_levels_kg_h', read('liquid_calibration_target_throughput_levels_kg_h'));
+      } else {
+        form.append('screw_speed_rpm', read('liquid_injection_screw_speed_rpm'));
+        form.append('polymer_throughput_kg_h', read('liquid_injection_polymer_throughput_kg_h'));
+        form.append('injection_zone_temp_c', read('liquid_injection_zone_temp_c'));
+        form.append('liquid_target_throughput_levels_kg_h', read('liquid_injection_target_throughput_levels_kg_h'));
+      }
+      try {
+        await post(`/experiments/${experimentId}/qualification/${stepNumber}/settings`, new FormData(optionalStudySetupForm));
+        const result = await post(`/experiments/${experimentId}/qualification/${stepNumber}/optional-matrix`, form);
+        window.IMPlanner?.notify?.({ type: 'success', message: `Generated ${result?.run_count || 0} liquid-study runs. Updating table…` });
+        window.setTimeout(() => location.reload(), 350);
+      } catch (error) {
+        let message = error?.message || 'Run generation failed'; try { const parsed = JSON.parse(message); message = parsed.error || message; } catch {}
+        window.IMPlanner?.notify?.({ type: 'error', message });
+      }
+    }));
+    document.querySelectorAll('[data-generate-vacuum-program]').forEach((button) => button.addEventListener('click', async () => {
+      if (!optionalStudySetupForm) return;
+      const program = button.getAttribute('data-generate-vacuum-program') || 'vacuum_calibration';
+      const read = (name) => optionalStudySetupForm.querySelector(`[name="${name}"]`)?.value || '';
+      const requiredNames = program === 'vacuum_calibration'
+        ? ['devol_calibration_screw_speed_rpm', 'devol_calibration_throughput_kg_h', 'devol_vent_zone_temp_c', 'devol_initial_volatiles_pct', 'devol_vacuum_target_levels_mbar']
+        : ['devol_vent_zone_temp_c', 'devol_initial_volatiles_pct', 'devol_selected_vacuum_pressure_mbar', 'devol_capacity_throughput_levels_kg_h', 'devol_capacity_screw_speed_levels_rpm'];
+      const requiredInputs = requiredNames.map((name) => optionalStudySetupForm.querySelector(`[name="${name}"]`)).filter(Boolean);
+      const missing = requiredInputs.filter((input) => !String(input.value || '').trim());
+      requiredInputs.forEach((input) => {
+        input.classList.toggle('border-danger-medium', missing.includes(input));
+        input.classList.toggle('focus:border-danger', missing.includes(input));
+      });
+      if (missing.length) {
+        missing[0].focus();
+        window.IMPlanner?.notify?.({ type: 'error', message: 'Fill the highlighted required fields before generating runs.' });
+        return;
+      }
+      const form = new FormData();
+      form.append('vacuum_program', program);
+      form.append('vent_zone_temp_c', read('devol_vent_zone_temp_c'));
+      form.append('initial_volatiles_pct', read('devol_initial_volatiles_pct'));
+      if (program === 'vacuum_calibration') {
+        form.append('screw_speed_rpm', read('devol_calibration_screw_speed_rpm'));
+        form.append('throughput_kg_h', read('devol_calibration_throughput_kg_h'));
+        form.append('vacuum_target_pressure_levels_mbar', read('devol_vacuum_target_levels_mbar'));
+      } else {
+        form.append('selected_vacuum_pressure_mbar', read('devol_selected_vacuum_pressure_mbar'));
+        form.append('capacity_throughput_levels_kg_h', read('devol_capacity_throughput_levels_kg_h'));
+        form.append('capacity_screw_speed_levels_rpm', read('devol_capacity_screw_speed_levels_rpm'));
+      }
+      try {
+        await post(`/experiments/${experimentId}/qualification/${stepNumber}/settings`, new FormData(optionalStudySetupForm));
+        const result = await post(`/experiments/${experimentId}/qualification/${stepNumber}/optional-matrix`, form);
+        window.IMPlanner?.notify?.({ type: 'success', message: `Generated ${result?.run_count || 0} vacuum-study runs. Updating table…` });
+        window.setTimeout(() => location.reload(), 350);
+      } catch (error) {
+        let message = error?.message || 'Run generation failed'; try { const parsed = JSON.parse(message); message = parsed.error || message; } catch {}
+        window.IMPlanner?.notify?.({ type: 'error', message });
+      }
+    }));
+    ['devol_calibration_screw_speed_rpm', 'devol_calibration_throughput_kg_h', 'devol_vent_zone_temp_c', 'devol_initial_volatiles_pct', 'devol_vacuum_target_levels_mbar', 'devol_selected_vacuum_pressure_mbar', 'devol_capacity_throughput_levels_kg_h', 'devol_capacity_screw_speed_levels_rpm'].forEach((name) => {
+      optionalStudySetupForm?.querySelector(`[name="${name}"]`)?.addEventListener('input', (event) => {
+        if (String(event.currentTarget.value || '').trim()) event.currentTarget.classList.remove('border-danger-medium', 'focus:border-danger');
+      });
+    });
+    document.querySelector('[data-generate-reactive-program]')?.addEventListener('click', async () => {
+      if (!optionalStudySetupForm) return;
+      const requiredNames = ['reaction_temp_levels_c', 'reaction_screw_speed_levels_rpm', 'reaction_throughput_levels_kg_h'];
+      const requiredInputs = requiredNames.map((name) => optionalStudySetupForm.querySelector(`[name="${name}"]`)).filter(Boolean);
+      const missing = requiredInputs.filter((input) => !String(input.value || '').trim());
+      requiredInputs.forEach((input) => {
+        input.classList.toggle('border-danger-medium', missing.includes(input));
+        input.classList.toggle('focus:border-danger', missing.includes(input));
+      });
+      if (missing.length) {
+        missing[0].focus();
+        window.IMPlanner?.notify?.({ type: 'error', message: 'Fill the highlighted REX-condition fields before generating runs.' });
+        return;
+      }
+      const read = (name) => optionalStudySetupForm.querySelector(`[name="${name}"]`)?.value || '';
+      const form = new FormData();
+      form.append('reaction_temp_levels_c', read('reaction_temp_levels_c'));
+      form.append('reaction_screw_speed_levels_rpm', read('reaction_screw_speed_levels_rpm'));
+      form.append('reaction_throughput_levels_kg_h', read('reaction_throughput_levels_kg_h'));
+      try {
+        await post(`/experiments/${experimentId}/qualification/${stepNumber}/settings`, new FormData(optionalStudySetupForm));
+        const result = await post(`/experiments/${experimentId}/qualification/${stepNumber}/optional-matrix`, form);
+        window.IMPlanner?.notify?.({ type: 'success', message: `Generated ${result?.run_count || 0} REX runs. Updating table…` });
+        window.setTimeout(() => location.reload(), 350);
+      } catch (error) {
+        let message = error?.message || 'REX run generation failed'; try { const parsed = JSON.parse(message); message = parsed.error || message; } catch {}
+        window.IMPlanner?.notify?.({ type: 'error', message });
+      }
+    });
+    ['reaction_temp_levels_c', 'reaction_screw_speed_levels_rpm', 'reaction_throughput_levels_kg_h'].forEach((name) => {
+      optionalStudySetupForm?.querySelector(`[name="${name}"]`)?.addEventListener('input', (event) => {
+        if (String(event.currentTarget.value || '').trim()) event.currentTarget.classList.remove('border-danger-medium', 'focus:border-danger');
+      });
+    });
+    document.querySelector('[data-side-feeding-mode]')?.addEventListener('change', async () => {
+      if (!optionalStudySetupForm) return;
+      try { await post(`/experiments/${experimentId}/qualification/${stepNumber}/settings`, new FormData(optionalStudySetupForm)); location.reload(); }
+      catch (error) { window.IMPlanner?.notify?.({ type: 'error', message: error?.message || 'Unable to change side-feeding scenario' }); }
+    });
     let latestScaleUpRecommendation = null;
     const savedScaleUpRecommendation = <%- jsonForScript(stepSettings?.scale_up_recommendation || null) %>;
     const scaleUpResult = document.querySelector('[data-scale-up-recommendation]');
@@ -2090,6 +2493,22 @@
         if (container && window.echarts) echarts.getInstanceByDom(container)?.resize();
       });
       ['extrusionRtdCurvesChart', 'extrusionRtdSummaryChart'].forEach((id) => {
+        const container = document.getElementById(id);
+        if (container && window.echarts) echarts.getInstanceByDom(container)?.resize();
+      });
+      ['sideFeederStabilityChart', 'sideFeederTorqueChart', 'sideFeederViscosityChart', 'fiberRetentionChart'].forEach((id) => {
+        const container = document.getElementById(id);
+        if (container && window.echarts) echarts.getInstanceByDom(container)?.resize();
+      });
+      ['liquidPumpCalibrationChart', 'liquidTorqueChart', 'liquidPressureChart'].forEach((id) => {
+        const container = document.getElementById(id);
+        if (container && window.echarts) echarts.getInstanceByDom(container)?.resize();
+      });
+      ['vacuumCalibrationChart', 'vacuumCapacityChart'].forEach((id) => {
+        const container = document.getElementById(id);
+        if (container && window.echarts) echarts.getInstanceByDom(container)?.resize();
+      });
+      ['reactiveConversionChart', 'reactiveMfrChart', 'reactiveArrheniusChart'].forEach((id) => {
         const container = document.getElementById(id);
         if (container && window.echarts) echarts.getInstanceByDom(container)?.resize();
       });

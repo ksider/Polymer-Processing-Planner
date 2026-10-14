@@ -126,21 +126,24 @@ const extrusionOptionalOutputDefinitions: Record<number, QualificationOutputDefi
   6: [
     { group: "side_feeding", code: "side_feeder_stable_speed_min_rpm", label: "Minimum stable side-feeder speed", unit: "rpm", field_type: "number", description: "Lowest side-feeder setting without accumulation or bridging." },
     { group: "side_feeding", code: "side_feeder_stable_speed_max_rpm", label: "Maximum stable side-feeder speed", unit: "rpm", field_type: "number", description: "Highest side-feeder setting without accumulation or bridging." },
-    { group: "side_feeding", code: "filler_mass_fraction_max_pct", label: "Maximum accepted filler fraction", unit: "%", field_type: "number", description: "Highest stable filler mass fraction for downstream formulation work." }
+    { group: "side_feeding", code: "filler_mass_fraction_max_pct", label: "Maximum accepted filler mass fraction", unit: "%", field_type: "number", description: "Highest stable filler mass fraction for downstream formulation work." },
+    { group: "side_feeding", code: "filler_volume_fraction_max_pct", label: "Maximum accepted filler volume fraction", unit: "%", field_type: "number", description: "Highest stable calculated filler volume fraction." },
+    { group: "side_feeding", code: "fiber_length_retention_min_pct", label: "Minimum accepted fibre-length retention", unit: "%", field_type: "number", description: "Lowest accepted retained fibre length in the stable incorporation window." }
   ],
   7: [
-    { group: "liquid_dosing", code: "liquid_mass_fraction_min_pct", label: "Minimum stable liquid fraction", unit: "%", field_type: "number", description: "Lowest accepted liquid mass fraction." },
-    { group: "liquid_dosing", code: "liquid_mass_fraction_max_pct", label: "Maximum stable liquid fraction", unit: "%", field_type: "number", description: "Highest accepted liquid fraction without backflow." },
-    { group: "liquid_dosing", code: "injection_pressure_delta_min_bar", label: "Minimum injection pressure differential", unit: "bar", field_type: "number", description: "Minimum stable injection-pressure margin over barrel pressure." }
+    { group: "liquid_calibration", code: "calibrated_liquid_throughput_min_kg_h", label: "Minimum calibrated liquid throughput", unit: "kg/h", field_type: "number", description: "Lowest pump rate with an accepted flow-stability result." },
+    { group: "liquid_calibration", code: "calibrated_liquid_throughput_max_kg_h", label: "Maximum calibrated liquid throughput", unit: "kg/h", field_type: "number", description: "Highest pump rate with an accepted flow-stability result." },
+    { group: "liquid_dosing", code: "liquid_mass_fraction_max_pct", label: "Maximum stable liquid fraction", unit: "%", field_type: "number", description: "Highest accepted liquid fraction with no backflow or leak and a pressure margin above 2 bar." },
+    { group: "liquid_dosing", code: "injection_pressure_delta_min_bar", label: "Minimum stable injection pressure differential", unit: "bar", field_type: "number", description: "Lowest accepted injection-pressure margin above barrel pressure." }
   ],
   8: [
-    { group: "devolatilization", code: "residual_volatiles_min_pct", label: "Lowest residual volatiles", unit: "%", field_type: "number", description: "Lowest measured residual volatile content at stable vacuum." },
-    { group: "devolatilization", code: "devolatilization_efficiency_max_pct", label: "Maximum devolatilization efficiency", unit: "%", field_type: "number", description: "Best stable removal efficiency for downstream quality limits." }
+    { group: "devolatilization", code: "required_vacuum_pressure_mbar", label: "Required vacuum pressure", unit: "mbar", field_type: "number", description: "Highest accepted absolute pressure that meets the residual-volatiles target without vent stuffing." },
+    { group: "devolatilization", code: "max_throughput_without_vent_stuffing_kg_h", label: "Maximum throughput without vent stuffing", unit: "kg/h", field_type: "number", description: "Highest accepted measured melt throughput at the selected vacuum, with no foam or carryover." }
   ],
   9: [
-    { group: "reaction", code: "conversion_max_pct", label: "Maximum stable conversion", unit: "%", field_type: "number", description: "Highest conversion at stable product properties." },
-    { group: "reaction", code: "product_mfr_min_g_10min", label: "Minimum product MFR", unit: "g/10 min", field_type: "number", description: "Lower boundary of product melt-flow response in the accepted reaction range." },
-    { group: "reaction", code: "product_mfr_max_g_10min", label: "Maximum product MFR", unit: "g/10 min", field_type: "number", description: "Upper boundary of product melt-flow response in the accepted reaction range." }
+    { group: "reaction", code: "reactive_temp_min_c", label: "Minimum accepted reaction temperature", unit: "°C", field_type: "number", description: "Lowest stable reaction-zone temperature that meets the configured chemical and MFR criteria." },
+    { group: "reaction", code: "reactive_temp_max_c", label: "Maximum accepted reaction temperature", unit: "°C", field_type: "number", description: "Highest stable reaction-zone temperature that remains inside the configured thermal limit." },
+    { group: "reaction", code: "reactive_min_residence_time_s", label: "Minimum REX residence time", unit: "s", field_type: "number", description: "Shortest REX-specific RTD measurement that confirms the chemical result and Da criterion." }
   ],
   10: [
     { group: "scale_up", code: "scaled_throughput_target_kg_h", label: "Scaled throughput target", unit: "kg/h", field_type: "number", description: "Volumetric D³ scale-up estimate before production verification." },
@@ -535,8 +538,17 @@ const extrusionStepDefinitions: StepDefinition[] = [
       { code: "side_feeder_speed_rpm", label: "Side-feeder speed", field_type: "number", unit: "rpm", group_label: "Inputs", required: 1 },
       { code: "filler_throughput_kg_h", label: "Filler throughput", field_type: "number", unit: "kg/h", group_label: "Measurements", required: 1 },
       { code: "side_feeder_torque_nm", label: "Side-feeder torque", field_type: "number", unit: "N·m", group_label: "Measurements" },
-      { code: "no_powder_accumulation", label: "No powder accumulation for 10 min", field_type: "boolean", group_label: "Measurements", required: 1 },
-      { code: "filler_mass_fraction_pct", label: "Filler mass fraction", field_type: "number", unit: "%", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_filler_mass_fraction" }
+      { code: "side_feeder_throughput_cv_pct", label: "Side-feeder throughput CV", field_type: "number", unit: "%", group_label: "Measurements" },
+      { code: "injection_port_pressure_bar", label: "Pressure before injection zone", field_type: "number", unit: "bar", group_label: "Measurements" },
+      { code: "no_powder_accumulation", label: "No accumulation or bridging for 10 min", field_type: "boolean", group_label: "Measurements", required: 1 },
+      { code: "filler_mass_fraction_pct", label: "Filler mass fraction", field_type: "number", unit: "%", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_filler_mass_fraction" },
+      { code: "filler_volume_fraction_pct", label: "Filler volume fraction", field_type: "number", unit: "%", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_filler_volume_fraction" },
+      { code: "reduced_filler_volume_fraction", label: "Reduced filler volume fraction φ/φm", field_type: "number", unit: null, group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_reduced_filler_fraction" },
+      { code: "composite_viscosity_pa_s", label: "Composite viscosity", field_type: "number", unit: "Pa·s", group_label: "Measurements" },
+      { code: "fiber_initial_length_mm", label: "Initial fibre length L0", field_type: "number", unit: "mm", group_label: "Measurements" },
+      { code: "fiber_final_length_mm", label: "Final fibre length Ln", field_type: "number", unit: "mm", group_label: "Measurements" },
+      { code: "specific_mechanical_energy_kwh_kg", label: "Specific mechanical energy", field_type: "number", unit: "kWh/kg", group_label: "Measurements" },
+      { code: "fiber_length_retention_pct", label: "Fibre-length retention", field_type: "number", unit: "%", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_fiber_retention" }
     ]
   },
   {
@@ -548,12 +560,17 @@ const extrusionStepDefinitions: StepDefinition[] = [
     fields: [
       { code: "screw_speed_rpm", label: "Screw speed", field_type: "number", unit: "rpm", group_label: "Inputs", required: 1 },
       { code: "polymer_throughput_kg_h", label: "Polymer throughput", field_type: "number", unit: "kg/h", group_label: "Inputs", required: 1 },
-      { code: "liquid_throughput_kg_h", label: "Liquid dosing rate", field_type: "number", unit: "kg/h", group_label: "Inputs", required: 1 },
+      { code: "liquid_target_throughput_kg_h", label: "Target liquid throughput", field_type: "number", unit: "kg/h", group_label: "Inputs", required: 1 },
+      { code: "liquid_throughput_kg_h", label: "Actual liquid throughput", field_type: "number", unit: "kg/h", group_label: "Measurements", required: 1 },
+      { code: "liquid_throughput_cv_pct", label: "Liquid throughput CV", field_type: "number", unit: "%", group_label: "Measurements" },
       { code: "injection_pressure_bar", label: "Injection pressure", field_type: "number", unit: "bar", group_label: "Measurements", required: 1 },
       { code: "barrel_pressure_bar", label: "Barrel pressure at injection", field_type: "number", unit: "bar", group_label: "Measurements", required: 1 },
+      { code: "motor_torque_nm", label: "Motor torque", field_type: "number", unit: "N·m", group_label: "Measurements" },
       { code: "no_liquid_backflow", label: "No liquid backflow", field_type: "boolean", group_label: "Measurements", required: 1 },
+      { code: "no_liquid_leak", label: "No leak at injection port", field_type: "boolean", group_label: "Measurements", required: 1 },
       { code: "liquid_mass_fraction_pct", label: "Liquid mass fraction", field_type: "number", unit: "%", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_liquid_mass_fraction" },
-      { code: "injection_pressure_delta_bar", label: "Injection pressure differential", field_type: "number", unit: "bar", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_injection_pressure_delta" }
+      { code: "injection_pressure_delta_bar", label: "Injection pressure differential", field_type: "number", unit: "bar", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_injection_pressure_delta" },
+      { code: "liquid_throughput_error_pct", label: "Liquid-throughput error", field_type: "number", unit: "%", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_liquid_throughput_error" }
     ]
   },
   {
@@ -564,12 +581,15 @@ const extrusionStepDefinitions: StepDefinition[] = [
     activation_description: "Use when the line has a vacuum vent for moisture, solvent or volatile removal.",
     fields: [
       { code: "screw_speed_rpm", label: "Screw speed", field_type: "number", unit: "rpm", group_label: "Inputs", required: 1 },
-      { code: "throughput_kg_h", label: "Throughput", field_type: "number", unit: "kg/h", group_label: "Inputs", required: 1 },
-      { code: "vacuum_pressure_mbar", label: "Vacuum pressure", field_type: "number", unit: "mbar", group_label: "Inputs", required: 1 },
+      { code: "devol_target_throughput_kg_h", label: "Target melt throughput", field_type: "number", unit: "kg/h", group_label: "Inputs", required: 1 },
+      { code: "throughput_kg_h", label: "Actual melt throughput", field_type: "number", unit: "kg/h", group_label: "Measurements", required: 1 },
+      { code: "vacuum_target_pressure_mbar", label: "Target vacuum pressure", field_type: "number", unit: "mbar", group_label: "Inputs", required: 1 },
+      { code: "vacuum_pressure_mbar", label: "Actual vacuum pressure", field_type: "number", unit: "mbar", group_label: "Measurements", required: 1 },
       { code: "initial_volatiles_pct", label: "Initial volatile content", field_type: "number", unit: "%", group_label: "Measurements", required: 1 },
       { code: "residual_volatiles_pct", label: "Residual volatile content", field_type: "number", unit: "%", group_label: "Measurements", required: 1 },
       { code: "trap_carryover_g", label: "Carryover in vacuum trap", field_type: "number", unit: "g", group_label: "Measurements" },
       { code: "vacuum_stable", label: "Vacuum stable (±5 mbar)", field_type: "boolean", group_label: "Measurements", required: 1 },
+      { code: "no_vent_foam_or_stuffing", label: "No foam, stuffing or unacceptable carryover", field_type: "boolean", group_label: "Measurements", required: 1 },
       { code: "devolatilization_efficiency_pct", label: "Devolatilization efficiency", field_type: "number", unit: "%", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_devolatilization_efficiency" }
     ]
   },
@@ -581,11 +601,16 @@ const extrusionStepDefinitions: StepDefinition[] = [
     activation_description: "Use for grafting, reaction, crosslinking or deliberate MFR modification.",
     fields: [
       { code: "reaction_temp_c", label: "Reaction-zone temperature", field_type: "number", unit: "°C", group_label: "Inputs", required: 1 },
-      { code: "mean_residence_time_s", label: "Mean residence time", field_type: "number", unit: "s", group_label: "Inputs", required: 1 },
-      { code: "conversion_pct", label: "Conversion", field_type: "number", unit: "%", group_label: "Measurements", required: 1 },
-      { code: "product_mfr_g_10min", label: "Product MFR", field_type: "number", unit: "g/10 min", group_label: "Measurements" },
+      { code: "screw_speed_rpm", label: "Screw speed", field_type: "number", unit: "rpm", group_label: "Inputs", required: 1 },
+      { code: "reaction_target_throughput_kg_h", label: "Target melt throughput", field_type: "number", unit: "kg/h", group_label: "Inputs", required: 1 },
+      { code: "throughput_kg_h", label: "Actual melt throughput", field_type: "number", unit: "kg/h", group_label: "Measurements", required: 1 },
+      { code: "mean_residence_time_s", label: "REX mean residence time (RTD)", field_type: "number", unit: "s", group_label: "Measurements" },
+      { code: "chemical_signal_ratio", label: "Chemical-analysis signal ratio", field_type: "number", unit: null, group_label: "Measurements" },
+      { code: "conversion_pct", label: "Validated chemical result α", field_type: "number", unit: "%", group_label: "Measurements", required: 1 },
+      { code: "product_mfr_g_10min", label: "Product MFR", field_type: "number", unit: "g/10 min", group_label: "Measurements", required: 1 },
+      { code: "reaction_exotherm_peak_c", label: "Reaction exotherm peak", field_type: "number", unit: "°C", group_label: "Measurements" },
       { code: "reaction_stable", label: "Conversion and MFR stable for 15 min", field_type: "boolean", group_label: "Measurements", required: 1 },
-      { code: "reaction_rate_constant_s_inv", label: "Reaction-rate constant k", field_type: "number", unit: "s⁻¹", group_label: "Inputs" },
+      { code: "reaction_rate_constant_s_inv", label: "Apparent reaction-rate constant k", field_type: "number", unit: "s⁻¹", group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_apparent_reaction_rate" },
       { code: "damkohler_number", label: "Damköhler number", field_type: "number", unit: null, group_label: "Derived", is_derived: 1, derived_formula_code: "extrusion_damkohler" }
     ]
   },
@@ -724,6 +749,48 @@ export function ensureExtrusionParameterCatalogue(db: Db) {
   `);
 }
 
+/** Registers the six established injection-qualification studies in the same
+ * shared parameter repository used by DOE, reports and custom fields. */
+export function ensureInjectionParameterCatalogue(db: Db) {
+  const tagsFor = (stepNumber: number, group: string | null | undefined) => {
+    const normalized = String(group || "").toLowerCase();
+    const tags = ["injection", `step-${stepNumber}`];
+    const purposeByStep: Record<number, string> = {
+      1: "fill-response",
+      2: "cavity-balance",
+      3: "pressure-drop",
+      4: "cosmetic-window",
+      5: "gate-seal",
+      6: "cooling"
+    };
+    if (purposeByStep[stepNumber]) tags.push(purposeByStep[stepNumber]);
+    if (/input/.test(normalized)) tags.push("controlled");
+    if (/measurement/.test(normalized)) tags.push("measurement");
+    if (/derived/.test(normalized)) tags.push("derived");
+    return tags;
+  };
+  for (const step of injectionStepDefinitions) {
+    for (const field of step.fields) {
+      const derived = field.is_derived === 1;
+      const controlled = /input|varied|generator/i.test(String(field.group_label || ""));
+      upsertCanonicalParamDefinition(db, {
+        code: field.code,
+        label: field.label,
+        unit: field.unit ?? null,
+        field_kind: controlled ? "INPUT" : "OUTPUT",
+        field_type: field.field_type,
+        group_label: "Injection qualification",
+        allowed_values_json: field.allowed_values_json ?? null,
+        semantic_role: derived ? "derived" : controlled ? "controlled" : "measurement",
+        doe_role: controlled && !derived ? "factor" : derived ? "response" : "none",
+        is_code_owned: 1,
+        process_type_codes: ["injection"],
+        tags: tagsFor(step.step_number, field.group_label)
+      });
+    }
+  }
+}
+
 function getExtrusionOutputDefinitions(stepNumber: number) {
   if (stepNumber === 1) return extrusionStep1OutputDefinitions;
   if (stepNumber === 2) return extrusionStep2OutputDefinitions;
@@ -860,6 +927,13 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
     if (def.is_optional && step.is_active === 0) continue;
     const fields = listQualFields(db, step.id);
     const fieldCodes = new Set(fields.map((field) => field.code));
+    // A chemical result belongs to its REX run. Older experiments may still
+    // contain this redundant field and its historical values; hide it without
+    // deleting that history.
+    if (processTypeCode === "extrusion_v1" && step.step_number === 9) {
+      const legacySampleField = fields.find((field) => field.code === "chemical_sample_id");
+      if (legacySampleField?.is_enabled) updateQualField(db, legacySampleField.id, { is_enabled: 0 });
+    }
     const hasCavityWeights =
       step.step_number === 2 &&
       fields.some((field) => /^cavity\d+_weight_g$/.test(field.code));
@@ -871,7 +945,7 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
         continue;
       }
       if (fieldCodes.has(field.code)) continue;
-      const canonical = processTypeCode === "extrusion_v1"
+      const canonical = ["extrusion_v1", "injection"].includes(processTypeCode)
         ? findGlobalParamByCode(db, field.code)
         : undefined;
       insertQualField(db, {
@@ -907,7 +981,10 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
         processTypeCode === "extrusion_v1" &&
         ((step.step_number === 2 && field.code === "target_throughput_kg_h" && existingField.label === "Target throughput") ||
           (step.step_number === 3 && field.code === "throughput_kg_h" && ["Throughput", "Feeder throughput (from Step 2)"].includes(existingField.label)) ||
-          step.step_number === 5);
+          step.step_number === 5 ||
+          step.step_number === 7 ||
+          step.step_number === 8 ||
+          step.step_number === 9);
       if (shouldRefreshLabel) {
         updatePatch.label = field.label;
         updatePatch.unit = field.unit ?? null;
@@ -923,7 +1000,7 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
       if ((existingField.allowed_values_json ?? null) !== (field.allowed_values_json ?? null)) {
         updatePatch.allowed_values_json = field.allowed_values_json ?? null;
       }
-      if (processTypeCode === "extrusion_v1" && !existingField.param_def_id) {
+      if (!existingField.param_def_id) {
         const canonical = findGlobalParamByCode(db, field.code);
         if (canonical) updatePatch.param_def_id = canonical.id;
       }
@@ -1662,12 +1739,26 @@ export function recomputeDerivedAndSummary(
         const matrixThroughput = getNumber("matrix_throughput_kg_h");
         const fillerThroughput = getNumber("filler_throughput_kg_h");
         if (matrixThroughput != null && fillerThroughput != null && matrixThroughput + fillerThroughput > 0) {
-          setDerived("filler_mass_fraction_pct", fillerThroughput / (matrixThroughput + fillerThroughput) * 100);
+          const fillerMassFractionPct = fillerThroughput / (matrixThroughput + fillerThroughput) * 100;
+          setDerived("filler_mass_fraction_pct", fillerMassFractionPct);
+          const fillerDensity = resolveSettingNumber(stepSettings.side_feeding_filler_density_kg_m3);
+          const matrixDensity = resolveSettingNumber(stepSettings.side_feeding_matrix_density_kg_m3);
+          if (fillerDensity != null && fillerDensity > 0 && matrixDensity != null && matrixDensity > 0) {
+            const fillerMassFraction = fillerMassFractionPct / 100;
+            const volumeFraction = (fillerMassFraction / fillerDensity) / (fillerMassFraction / fillerDensity + (1 - fillerMassFraction) / matrixDensity);
+            setDerived("filler_volume_fraction_pct", volumeFraction * 100);
+            const maximumPackingFraction = resolveSettingNumber(stepSettings.side_feeding_max_packing_fraction);
+            if (maximumPackingFraction != null && maximumPackingFraction > 0) setDerived("reduced_filler_volume_fraction", volumeFraction / maximumPackingFraction);
+          }
         }
+        const initialFiberLength = getNumber("fiber_initial_length_mm");
+        const finalFiberLength = getNumber("fiber_final_length_mm");
+        if (initialFiberLength != null && initialFiberLength > 0 && finalFiberLength != null) setDerived("fiber_length_retention_pct", finalFiberLength / initialFiberLength * 100);
       }
       if (stepNumber === 7) {
         const polymerThroughput = getNumber("polymer_throughput_kg_h");
         const liquidThroughput = getNumber("liquid_throughput_kg_h");
+        const liquidTargetThroughput = getNumber("liquid_target_throughput_kg_h");
         const injectionPressure = getNumber("injection_pressure_bar");
         const barrelPressure = getNumber("barrel_pressure_bar");
         if (polymerThroughput != null && liquidThroughput != null && polymerThroughput + liquidThroughput > 0) {
@@ -1675,6 +1766,9 @@ export function recomputeDerivedAndSummary(
         }
         if (injectionPressure != null && barrelPressure != null) {
           setDerived("injection_pressure_delta_bar", injectionPressure - barrelPressure);
+        }
+        if (liquidTargetThroughput != null && liquidTargetThroughput > 0 && liquidThroughput != null) {
+          setDerived("liquid_throughput_error_pct", (liquidThroughput - liquidTargetThroughput) / liquidTargetThroughput * 100);
         }
       }
       if (stepNumber === 8) {
@@ -1685,10 +1779,12 @@ export function recomputeDerivedAndSummary(
         }
       }
       if (stepNumber === 9) {
-        const rateConstant = getNumber("reaction_rate_constant_s_inv");
         const residenceTime = getNumber("mean_residence_time_s");
-        if (rateConstant != null && residenceTime != null) {
-          setDerived("damkohler_number", rateConstant * residenceTime);
+        const conversionPct = getNumber("conversion_pct");
+        if (residenceTime != null && residenceTime > 0 && conversionPct != null && conversionPct >= 0 && conversionPct < 100) {
+          const apparentRate = -Math.log(1 - conversionPct / 100) / residenceTime;
+          setDerived("reaction_rate_constant_s_inv", apparentRate);
+          setDerived("damkohler_number", apparentRate * residenceTime);
         }
       }
       if (stepNumber === 10) {
@@ -2296,36 +2392,107 @@ function buildStepSummary(
       minMax("rtd_width_s", valuesFor("rtd_width_s"));
     }
     if (stepNumber === 6) {
-      const stableRows = activeRows.filter((row) => boolFor(row.values, "no_powder_accumulation") === true);
+      const stableRows = activeRows.filter((row) => {
+        const feederCv = numberFor(row.values, "side_feeder_throughput_cv_pct");
+        return boolFor(row.values, "no_powder_accumulation") === true && feederCv != null && feederCv <= 1.5;
+      });
       const stableSpeeds = stableRows.map((row) => numberFor(row.values, "side_feeder_speed_rpm")).filter((value): value is number => Number.isFinite(value));
       const stableFractions = stableRows.map((row) => numberFor(row.values, "filler_mass_fraction_pct")).filter((value): value is number => Number.isFinite(value));
+      const stableVolumeFractions = stableRows.map((row) => numberFor(row.values, "filler_volume_fraction_pct")).filter((value): value is number => Number.isFinite(value));
+      const fiberRetention = stableRows.map((row) => numberFor(row.values, "fiber_length_retention_pct")).filter((value): value is number => Number.isFinite(value));
       minMax("stable_side_feeder_speed_rpm", stableSpeeds);
       minMax("stable_filler_mass_fraction_pct", stableFractions);
+      minMax("stable_filler_volume_fraction_pct", stableVolumeFractions);
+      minMax("fiber_length_retention_pct", fiberRetention);
       summaries.stable_side_feeder_point_count = stableRows.length;
     }
     if (stepNumber === 7) {
-      const stableRows = activeRows.filter((row) => boolFor(row.values, "no_liquid_backflow") === true);
+      const calibrationRows = activeRows.filter((row) => row.run.run_group === "liquid_pump_calibration");
+      const stableCalibrationRows = calibrationRows.filter((row) => {
+        const cv = numberFor(row.values, "liquid_throughput_cv_pct");
+        return cv != null && cv <= 1.5;
+      });
+      const calibratedRates = stableCalibrationRows
+        .map((row) => numberFor(row.values, "liquid_throughput_kg_h"))
+        .filter((value): value is number => Number.isFinite(value));
+      minMax("calibrated_liquid_throughput_kg_h", calibratedRates);
+      summaries.stable_liquid_calibration_point_count = stableCalibrationRows.length;
+
+      const injectionRows = activeRows.filter((row) => row.run.run_group === "liquid_melt_injection" || row.run.run_group === "liquid_dosing");
+      const stableRows = injectionRows.filter((row) => {
+        const pressureMargin = numberFor(row.values, "injection_pressure_delta_bar");
+        const noLeak = boolOrNullFor(row.values, "no_liquid_leak");
+        return boolFor(row.values, "no_liquid_backflow") === true &&
+          pressureMargin != null && pressureMargin > 2 &&
+          (noLeak === true || (row.run.run_group === "liquid_dosing" && noLeak == null));
+      });
       const stableFractions = stableRows.map((row) => numberFor(row.values, "liquid_mass_fraction_pct")).filter((value): value is number => Number.isFinite(value));
       const stableMargins = stableRows.map((row) => numberFor(row.values, "injection_pressure_delta_bar")).filter((value): value is number => Number.isFinite(value));
       minMax("stable_liquid_mass_fraction_pct", stableFractions);
       minMax("stable_injection_pressure_delta_bar", stableMargins);
-      summaries.stable_liquid_dosing_point_count = stableRows.length;
+      summaries.stable_liquid_injection_point_count = stableRows.length;
     }
     if (stepNumber === 8) {
-      const stableRows = activeRows.filter((row) => boolFor(row.values, "vacuum_stable") === true);
+      const stableRows = activeRows.filter((row) =>
+        boolFor(row.values, "vacuum_stable") === true &&
+        boolFor(row.values, "no_vent_foam_or_stuffing") === true
+      );
       const residual = stableRows.map((row) => numberFor(row.values, "residual_volatiles_pct")).filter((value): value is number => Number.isFinite(value));
       const efficiencies = stableRows.map((row) => numberFor(row.values, "devolatilization_efficiency_pct")).filter((value): value is number => Number.isFinite(value));
+      const actualVacuum = stableRows.map((row) => numberFor(row.values, "vacuum_pressure_mbar")).filter((value): value is number => Number.isFinite(value));
+      const actualThroughput = stableRows.map((row) => numberFor(row.values, "throughput_kg_h")).filter((value): value is number => Number.isFinite(value));
       minMax("stable_residual_volatiles_pct", residual);
       minMax("stable_devolatilization_efficiency_pct", efficiencies);
+      minMax("stable_vacuum_pressure_mbar", actualVacuum);
+      minMax("stable_throughput_kg_h", actualThroughput);
       summaries.stable_vacuum_point_count = stableRows.length;
     }
     if (stepNumber === 9) {
-      const stableRows = activeRows.filter((row) => boolFor(row.values, "reaction_stable") === true);
-      const conversion = stableRows.map((row) => numberFor(row.values, "conversion_pct")).filter((value): value is number => Number.isFinite(value));
-      const mfr = stableRows.map((row) => numberFor(row.values, "product_mfr_g_10min")).filter((value): value is number => Number.isFinite(value));
-      minMax("stable_conversion_pct", conversion);
-      minMax("stable_product_mfr_g_10min", mfr);
-      summaries.stable_reaction_point_count = stableRows.length;
+      let conversionTarget: number | null = null;
+      let mfrMinimum: number | null = null;
+      let mfrMaximum: number | null = null;
+      let thermalLimit: number | null = null;
+      try {
+        const settings = JSON.parse(getQualStepSettings(db, experimentId, stepNumber) || "{}") as Record<string, unknown>;
+        const settingNumber = (key: string) => {
+          const value = Number(settings[key]);
+          return Number.isFinite(value) ? value : null;
+        };
+        conversionTarget = settingNumber("reaction_conversion_target_pct");
+        mfrMinimum = settingNumber("reaction_mfr_min_g_10min");
+        mfrMaximum = settingNumber("reaction_mfr_max_g_10min");
+        thermalLimit = settingNumber("reaction_thermal_limit_c");
+      } catch {}
+      const candidateRows = activeRows.filter((row) => {
+        const conversion = numberFor(row.values, "conversion_pct");
+        const mfr = numberFor(row.values, "product_mfr_g_10min");
+        const temperature = numberFor(row.values, "reaction_temp_c");
+        return boolFor(row.values, "reaction_stable") === true &&
+          conversion != null &&
+          (conversionTarget == null || conversion >= conversionTarget) &&
+          (mfrMinimum == null || (mfr != null && mfr >= mfrMinimum)) &&
+          (mfrMaximum == null || (mfr != null && mfr <= mfrMaximum)) &&
+          (thermalLimit == null || (temperature != null && temperature <= thermalLimit));
+      });
+      const kineticsConfirmedRows = candidateRows.filter((row) => {
+        const residence = numberFor(row.values, "mean_residence_time_s");
+        const damkohler = numberFor(row.values, "damkohler_number");
+        return residence != null && residence > 0 && damkohler != null && damkohler >= 3;
+      });
+      const conversion = candidateRows.map((row) => numberFor(row.values, "conversion_pct")).filter((value): value is number => Number.isFinite(value));
+      const mfr = candidateRows.map((row) => numberFor(row.values, "product_mfr_g_10min")).filter((value): value is number => Number.isFinite(value));
+      const temperatures = candidateRows.map((row) => numberFor(row.values, "reaction_temp_c")).filter((value): value is number => Number.isFinite(value));
+      const residenceTimes = kineticsConfirmedRows.map((row) => numberFor(row.values, "mean_residence_time_s")).filter((value): value is number => Number.isFinite(value));
+      minMax("accepted_conversion_pct", conversion);
+      minMax("accepted_product_mfr_g_10min", mfr);
+      minMax("accepted_reaction_temp_c", temperatures);
+      minMax("confirmed_rex_residence_time_s", residenceTimes);
+      summaries.reaction_candidate_point_count = candidateRows.length;
+      summaries.reaction_kinetics_confirmed_point_count = kineticsConfirmedRows.length;
+      summaries.reaction_conversion_target_pct = conversionTarget;
+      summaries.reaction_mfr_min_g_10min = mfrMinimum;
+      summaries.reaction_mfr_max_g_10min = mfrMaximum;
+      summaries.reaction_thermal_limit_c = thermalLimit;
     }
     if (stepNumber === 10) {
       const stableRows = activeRows.filter((row) => boolFor(row.values, "scale_up_stable") === true);

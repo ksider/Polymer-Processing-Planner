@@ -67,6 +67,8 @@
     <% } %>
   </section>
 
+  <% if (studyGuide) { %><%- include('partials/qualification_study_guide', { studyGuide }) %><% } %>
+
   <% if (canAssignEntities) { %>
     <dialog class="m-auto w-[min(96vw,48rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="qualSettingsDialog">
       <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
@@ -153,9 +155,9 @@
             </select>
           </label>
         </div>
-        <button class="inline-flex size-9 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="rheoAddRow" title="Add row">
+        <div class="flex items-center gap-2"><button class="inline-flex size-9 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" data-copy-table="#rheoRunsTable" data-copy-exclude-columns="due date,date,responsible,owner" data-copy-icon title="Copy runs as TSV" aria-label="Copy runs as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button><button class="inline-flex size-9 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="rheoAddRow" title="Add row">
           <span class="material-symbols-rounded" aria-hidden="true">add</span>
-        </button>
+        </button></div>
       </div>
       <% const fieldByCode = new Map(); fields.forEach((field) => fieldByCode.set(field.code, field)); %>
       <% const injField = fieldByCode.get('inj_speed'); %>
@@ -173,7 +175,7 @@
         data-press="<%= pressFieldId ?? '' %>"
         data-fill="<%= fillFieldId ?? '' %>">
       <div class="overflow-x-auto rounded-lg border border-gray-200">
-        <table class="<%= inputTableClass %> rheo-table">
+        <table class="<%= inputTableClass %> rheo-table" id="rheoRunsTable">
           <thead>
             <tr>
               <th>Run</th>
@@ -307,6 +309,7 @@
               <input class="block w-full rounded-base border border-default-medium bg-neutral-secondary-medium py-2 pe-3 ps-9 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" type="date" id="cavityRunDue" value="<%= runs[0]?.due_at || '' %>" data-ui-datepicker datepicker-autohide datepicker-format="yyyy-mm-dd" data-ui-control-exempt>
             </div>
           </div>
+          <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" data-copy-table="#cavityTable" data-copy-icon title="Copy table as TSV" aria-label="Copy table as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button>
           <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" id="addCavityBtn" title="Add cavity">
             <span class="material-symbols-rounded" aria-hidden="true">add</span>
           </button>
@@ -333,7 +336,7 @@
       <% const parseSelected = (field) => { let selected = []; if (field && runValues2[String(field.id)]?.value_tags_json) { try { const parsed = JSON.parse(runValues2[String(field.id)]?.value_tags_json); if (Array.isArray(parsed)) selected = parsed.map(String); } catch {} } return selected; }; %>
       <input type="hidden" id="cavityRunId" value="<%= run?.id ?? '' %>">
       <div class="overflow-x-auto rounded-lg border border-gray-200">
-        <table class="<%= inputTableClass %>">
+        <table class="<%= inputTableClass %>" id="cavityTable">
           <thead>
             <tr>
               <th>Cavity</th>
@@ -476,6 +479,7 @@
               <input class="block w-full rounded-base border border-default-medium bg-neutral-secondary-medium py-2 pe-3 ps-9 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" type="date" id="pressureRunDue" value="<%= runs[0]?.due_at || '' %>" data-ui-datepicker datepicker-autohide datepicker-format="yyyy-mm-dd" data-ui-control-exempt>
             </div>
           </div>
+          <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" data-copy-table="#pressurePointsTable" data-copy-icon title="Copy table as TSV" aria-label="Copy table as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button>
           <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" id="addPressurePoint" title="Add point">
             <span class="material-symbols-rounded" aria-hidden="true">add</span>
           </button>
@@ -518,7 +522,7 @@
       <% const runValues3 = run ? (runValueMap[String(run.id)] || {}) : {}; %>
       <input type="hidden" id="pressureRunId" value="<%= run?.id ?? '' %>">
       <div class="overflow-x-auto rounded-lg border border-gray-200">
-        <table class="<%= inputTableClass %>">
+        <table class="<%= inputTableClass %>" id="pressurePointsTable">
           <thead>
             <tr>
               <th>Section</th>
@@ -638,9 +642,9 @@
     <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
         <h2 class="text-lg font-semibold tracking-tight text-gray-900">Cosmetic process window</h2>
-        <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" id="cpwAddRun" title="Add run">
+        <div class="flex items-center gap-2"><button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" data-copy-table="#cosmeticRunsTable" data-copy-exclude-columns="due date,date,responsible,owner" data-copy-icon title="Copy runs as TSV" aria-label="Copy runs as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button><button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" id="cpwAddRun" title="Add run">
           <span class="material-symbols-rounded" aria-hidden="true">add</span>
-        </button>
+        </button></div>
       </div>
       <% const fieldByCode4 = new Map(); fields.forEach((field) => fieldByCode4.set(field.code, field)); %>
       <% const tempField = fieldByCode4.get('melt_temp_c'); %>
@@ -655,7 +659,7 @@
         data-short="<%= shortField?.id ?? '' %>"
         data-flash="<%= flashField?.id ?? '' %>">
       <div class="overflow-x-auto rounded-lg border border-gray-200">
-        <table class="<%= inputTableClass %>">
+        <table class="<%= inputTableClass %>" id="cosmeticRunsTable">
           <thead>
             <tr>
               <th>Run</th>
@@ -835,9 +839,9 @@
     <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
         <h2 class="text-lg font-semibold tracking-tight text-gray-900">Gate seal study</h2>
-        <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" id="gateSealAddRun" title="Add run">
+        <div class="flex items-center gap-2"><button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" data-copy-table="#gateSealTable" data-copy-exclude-columns="due date,date,responsible,owner" data-copy-icon title="Copy runs as TSV" aria-label="Copy runs as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button><button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" id="gateSealAddRun" title="Add run">
           <span class="material-symbols-rounded" aria-hidden="true">add</span>
-        </button>
+        </button></div>
       </div>
       <% const fieldByCode5 = new Map(); fields.forEach((field) => fieldByCode5.set(field.code, field)); %>
       <% const holdField = fieldByCode5.get('hold_time_s'); %>
@@ -1000,9 +1004,9 @@
     <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
         <h2 class="text-lg font-semibold tracking-tight text-gray-900">Cooling time optimization</h2>
-        <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" id="coolingAddRun" title="Add run">
+        <div class="flex items-center gap-2"><button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" data-copy-table="#coolingTable" data-copy-exclude-columns="due date,date,responsible,owner" data-copy-icon title="Copy runs as TSV" aria-label="Copy runs as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button><button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" id="coolingAddRun" title="Add run">
           <span class="material-symbols-rounded" aria-hidden="true">add</span>
-        </button>
+        </button></div>
       </div>
       <% const fieldByCode6 = new Map(); fields.forEach((field) => fieldByCode6.set(field.code, field)); %>
       <% const coolingField = fieldByCode6.get('cooling_time_s'); %>
@@ -1144,8 +1148,8 @@
     </dialog>
   <% } else { %>
     <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-      <h2 class="text-lg font-semibold tracking-tight text-gray-900">Runs</h2>
-      <table class="<%= inputTableClass %>">
+      <div class="flex items-center justify-between gap-3"><h2 class="text-lg font-semibold tracking-tight text-gray-900">Runs</h2><button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" data-copy-table="#qualificationRunsTable" data-copy-exclude-columns="due date,date,responsible,owner" data-copy-icon title="Copy runs as TSV" aria-label="Copy runs as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button></div>
+      <table class="<%= inputTableClass %>" id="qualificationRunsTable">
         <thead>
           <tr>
             <th>Run</th>

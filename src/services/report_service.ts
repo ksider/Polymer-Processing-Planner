@@ -93,16 +93,21 @@ type ReportWorkspaceSourceRow = { label: string; value: string };
 
 type ReportWorkspaceSource = {
   id: string;
-  kind: "value" | "recipe" | "branch" | "results" | "run" | "chart" | "doe-analysis" | "doe-analysis-v2" | "doe-runs";
+  kind: "value" | "recipe" | "branch" | "results" | "run" | "run-table" | "chart" | "chart-builder" | "doe-analysis" | "doe-analysis-v2" | "doe-runs";
   label: string;
   value?: string | null;
   description?: string | null;
   components?: Array<{ component_name: string; phr: number }>;
   rows?: ReportWorkspaceSourceRow[];
+  table?: { columns: string[]; rows: string[][] };
   children?: ReportWorkspaceSource[];
   runUrl?: string;
-  chartType?: "rheology" | "process-window" | "run-series";
-  chartData?: { categories: string[]; values: Array<number | null>; unit: string | null };
+  chartType?: "rheology" | "process-window";
+  chartBuilder?: {
+    stepLabel: string;
+    fields: Array<{ key: string; label: string; unit: string | null; groupLabel: string | null }>;
+    runs: Array<{ code: string; excluded: boolean; values: Record<string, number | null> }>;
+  };
   studyId?: number;
   runCount?: number;
 };
@@ -367,51 +372,88 @@ export function buildReportWorkspaceSources(db: Db, report: ReportData): ReportW
     }
 
     const runs = listQualRuns(db, step.id)
-      .filter((run) => run.done || listQualRunValues(db, run.id).length > 0)
-      .slice(0, 30);
+      .filter((run) => run.done || listQualRunValues(db, run.id).length > 0);
     if (runs.length) {
+      const runSources = runs.map((run) => {
+        const values = new Map(listQualRunValues(db, run.id).map((value) => [value.field_id, value]));
+        const rows = fields.flatMap((field) => {
+          const value = values.get(field.id);
+          const raw = value?.value_text ?? value?.value_real ?? value?.value_tags_json;
+          if (raw == null || raw === "") return [];
+          return [{ label: field.label, value: `${raw}${field.unit ? ` ${field.unit}` : ""}` }];
+        });
+        return {
+          id: `qualification-run-${run.id}`,
+          kind: "run" as const,
+          label: run.run_code,
+          rows,
+          runUrl: `/qual-runs/${run.id}`
+        };
+      });
       children.push({
         id: `qualification-step-${step.step_number}-runs`,
         kind: "branch",
         label: `Runs (${runs.length})`,
-        children: runs.map((run) => {
-          const values = new Map(listQualRunValues(db, run.id).map((value) => [value.field_id, value]));
-          const rows = fields.flatMap((field) => {
-            const value = values.get(field.id);
-            const raw = value?.value_text ?? value?.value_real ?? value?.value_tags_json;
-            if (raw == null || raw === "") return [];
-            return [{ label: field.label, value: `${raw}${field.unit ? ` ${field.unit}` : ""}` }];
-          });
-          return {
-            id: `qualification-run-${run.id}`,
-            kind: "run",
-            label: run.run_code,
-            rows,
-            runUrl: `/qual-runs/${run.id}`
-          };
-        })
+        children: [
+          {
+            id: `qualification-step-${step.step_number}-runs-table`,
+            kind: "run-table",
+            label: "Insert run table",
+            table: {
+              columns: ["Run", ...fields.map((field) => `${field.label}${field.unit ? ` (${field.unit})` : ""}`)],
+              rows: runs.map((run) => {
+                const values = new Map(listQualRunValues(db, run.id).map((value) => [value.field_id, value]));
+                return [run.run_code, ...fields.map((field) => {
+                  const value = values.get(field.id);
+                  return String(value?.value_text ?? value?.value_real ?? value?.value_tags_json ?? "–");
+                })];
+              })
+            }
+          },
+          ...runSources
+        ]
       });
     }
 
-    // Every step can expose its measured numeric fields as a run-series chart.
-    // This keeps the catalogue useful beyond the specialised rheology/window
-    // figures without assuming that fields from different units are comparable.
-    const numericFields = fields.filter((field) => field.field_type === "number").slice(0, 4);
-    numericFields.forEach((field) => {
-      const categories = runs.map((run) => run.run_code);
-      const values = runs.map((run) => listQualRunValues(db, run.id)
-        .find((value) => value.field_id === field.id)?.value_real ?? null);
-      if (values.some((value) => value != null)) {
+    const chartFields = fields.filter((field) => field.field_type === "number");
+    if (runs.length >= 2 && chartFields.length >= 2) {
+      const chartRuns = runs.map((run) => {
+        const values = new Map(listQualRunValues(db, run.id).map((value) => [value.field_id, value.value_real]));
+        return {
+          code: run.run_code,
+          excluded: Boolean(run.exclude_from_analysis),
+          values: Object.fromEntries(chartFields.map((field) => [String(field.id), values.get(field.id) ?? null]))
+        };
+      });
+      const populatedFields = chartFields.filter((field) => chartRuns.some((run) => Number.isFinite(run.values[String(field.id)])));
+      const hasPairedValues = populatedFields.some((field, index) => populatedFields
+        .slice(index + 1)
+        .some((otherField) => chartRuns.some((run) =>
+          Number.isFinite(run.values[String(field.id)]) && Number.isFinite(run.values[String(otherField.id)])
+        )));
+      if (hasPairedValues) {
         children.push({
-          id: `qualification-step-${step.step_number}-field-${field.id}-chart`,
-          kind: "chart",
-          label: `${field.label} by run`,
-          chartType: "run-series",
-          chartData: { categories, values, unit: field.unit }
+          id: `qualification-step-${step.step_number}-chart-builder`,
+          kind: "chart-builder",
+          label: "Build chart",
+          description: "Choose X and Y axes from measured run data",
+          chartBuilder: {
+            stepLabel: step.title,
+            fields: populatedFields.map((field) => ({
+              key: String(field.id),
+              label: field.label,
+              unit: field.unit,
+              groupLabel: field.group_label
+            })),
+            runs: chartRuns
+          }
         });
       }
-    });
+    }
 
+    // Do not turn a run identifier into an x-axis: its order carries no
+    // mathematical meaning. Only offer figures native to the qualification
+    // step, whose axes and data model are explicitly defined.
     if (step.step_number === 1 && report.qualification?.charts.rheology.some(Boolean)) {
       children.push({ id: "qualification-rheology-chart", kind: "chart", label: "Rheology curve", chartType: "rheology" });
     }
