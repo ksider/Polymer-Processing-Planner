@@ -658,7 +658,7 @@
               <h3 class="text-sm font-medium text-gray-900">Qualification</h3>
               <span class="inline-flex rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700"><%= (qualificationCards || []).length %></span>
             </div>
-            <div class="mt-2 grid gap-1">
+            <div class="mt-2 grid max-h-64 gap-1 overflow-y-auto pe-1">
               <% if (!qualificationCards || qualificationCards.length === 0) { %>
                 <div class="text-sm text-gray-500">No qualification steps configured.</div>
               <% } else { %>
@@ -676,7 +676,7 @@
               <h3 class="text-sm font-medium text-gray-900">DOE studies</h3>
               <span class="inline-flex rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700"><%= (doeStudies || []).length %></span>
             </div>
-            <div class="mt-2 grid gap-1">
+            <div class="mt-2 grid max-h-64 gap-1 overflow-y-auto pe-1">
               <% if (!doeStudies || doeStudies.length === 0) { %>
                 <div class="text-sm text-gray-500">No DOE studies yet.</div>
               <% } else { %>
@@ -930,6 +930,11 @@
   const openTaskEdit = document.getElementById('openTaskEdit');
   const taskDeleteBtn = document.getElementById('taskDeleteBtn');
   const taskCreateDialog = document.getElementById('taskCreateDialog');
+  const closeTaskCreateDialog = () => {
+    const dueDatepicker = document.getElementById('taskDueInput')?.datepicker;
+    dueDatepicker?.hide?.();
+    taskCreateDialog?.close();
+  };
   document.getElementById('openTaskCreate')?.addEventListener('click', () => taskCreateDialog?.showModal());
   document.querySelectorAll('[data-close]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -939,7 +944,7 @@
       reportDialog?.close();
       taskDetailDialog?.close();
       taskEditDialog?.close();
-      taskCreateDialog?.close();
+      closeTaskCreateDialog();
     });
   });
 
@@ -2182,7 +2187,7 @@
     }
     taskCreateForm.reset();
     document.getElementById('taskDueInput')?.datepicker?.setDate({ clear: true });
-    taskCreateDialog?.close();
+    closeTaskCreateDialog();
     loadTasks();
   });
 

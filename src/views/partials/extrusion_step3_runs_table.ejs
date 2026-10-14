@@ -1,6 +1,7 @@
 <% const displayedFields = tableFields || activeFields; %>
 <% const hasMeasurementSeries = typeof measurementSeriesCode !== 'undefined' && Boolean(measurementSeriesCode); %>
 <% const readonlyCodes = typeof readonlyFieldCodes !== 'undefined' ? readonlyFieldCodes : []; %>
+<% const tooltipPrefix = String(tableDataAttribute).replace(/[^a-z0-9_-]/gi, ''); %>
 <section class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm" <%- tableDataAttribute %> data-run-table>
   <div class="border-b border-gray-100 px-5 py-4">
     <h2 class="text-lg font-semibold tracking-tight text-gray-900"><%= title %></h2>
@@ -8,7 +9,7 @@
   </div>
   <div class="overflow-x-auto p-4">
     <table class="<%= inputTableClass %> min-w-[1100px] text-xs">
-      <thead><tr><th class="whitespace-nowrap">Run</th><th>Date</th><th>Responsible</th><% displayedFields.forEach((field) => { %><th class="whitespace-nowrap text-xs"><%= compactLabelByCode[field.code] || field.label %><% if (field.unit) { %> <span class="normal-case text-body">(<%= field.unit %>)</span><% } %></th><% }); %><% if (hasMeasurementSeries) { %><th class="whitespace-nowrap text-xs">RTD samples</th><% } %><th>Done</th><th>Exclude</th><th></th></tr></thead>
+      <thead><tr><th class="whitespace-nowrap">Run</th><th>Date</th><th>Responsible</th><% displayedFields.forEach((field) => { const tooltipId = `${tooltipPrefix}-field-tip-${field.id}`; %><th class="whitespace-nowrap text-xs"><span class="cursor-help hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand" tabindex="0" data-tooltip-target="<%= tooltipId %>" aria-label="<%= field.label %><%= field.unit ? ` (${field.unit})` : '' %>"><%= compactLabelByCode[field.code] || field.label %><% if (field.unit) { %> <span class="normal-case text-body">(<%= field.unit %>)</span><% } %></span><div id="<%= tooltipId %>" role="tooltip" class="tooltip invisible absolute z-10 inline-block max-w-56 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity"><%= field.label %><%= field.unit ? ` (${field.unit})` : '' %><div class="tooltip-arrow" data-popper-arrow></div></div></th><% }); %><% if (hasMeasurementSeries) { %><th class="whitespace-nowrap text-xs">RTD samples</th><% } %><th>Done</th><th>Exclude</th><th></th></tr></thead>
       <tbody>
         <% if (!runs.length) { %>
           <tr><td colspan="<%= displayedFields.length + 6 + (hasMeasurementSeries ? 1 : 0) %>" class="py-6 text-center text-sm text-body"><%= emptyMessage %></td></tr>

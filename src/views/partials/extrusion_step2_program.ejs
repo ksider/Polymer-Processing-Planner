@@ -38,8 +38,8 @@
       <thead>
         <tr>
           <th>Run</th><th>Date</th><th>Responsible</th>
-          <% fieldsInOrder.forEach((field) => { %>
-            <th><%= field.label %><% if (field.unit) { %> <span class="normal-case text-body">(<%= field.unit %>)</span><% } %></th>
+          <% fieldsInOrder.forEach((field) => { const tooltipId = `extrusion-feeder-field-tip-${field.id}`; %>
+            <th class="whitespace-nowrap"><span class="cursor-help hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand" tabindex="0" data-tooltip-target="<%= tooltipId %>" aria-label="<%= field.label %><%= field.unit ? ` (${field.unit})` : '' %>"><%= field.label %><% if (field.unit) { %> <span class="normal-case text-body">(<%= field.unit %>)</span><% } %></span><div id="<%= tooltipId %>" role="tooltip" class="tooltip invisible absolute z-10 inline-block max-w-56 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white opacity-0 shadow-sm transition-opacity"><%= field.label %><%= field.unit ? ` (${field.unit})` : '' %><div class="tooltip-arrow" data-popper-arrow></div></div></th>
           <% }); %>
           <th>Done</th><th>Exclude</th><th></th>
         </tr>
