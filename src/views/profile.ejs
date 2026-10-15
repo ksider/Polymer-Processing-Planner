@@ -19,6 +19,12 @@
       </button>
   </section>
 
+  <%- include('partials/profile_section_nav', { activeProfileSection: profileSection }) %>
+
+  <% if (profileSection === 'files') { %>
+    <%- include('partials/profile_files_tab') %>
+  <% } else { %>
+
   <dialog class="m-auto w-[min(96vw,58rem)] rounded-xl border border-default-medium bg-neutral-primary p-0 text-heading shadow-2xl backdrop:bg-black/40" id="profileDialog">
     <div class="flex items-center justify-between gap-4 border-b border-default px-5 py-4">
       <strong>Profile settings</strong>
@@ -382,6 +388,7 @@
     <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="AI token totals"><div class="rounded-base border border-default-medium bg-neutral-secondary p-3"><span class="text-xs text-body">Input</span><strong class="mt-1 block text-lg text-heading"><%= Number(llmUsageTotals?.inputTokens || 0).toLocaleString() %></strong></div><div class="rounded-base border border-default-medium bg-neutral-secondary p-3"><span class="text-xs text-body">Output</span><strong class="mt-1 block text-lg text-heading"><%= Number(llmUsageTotals?.outputTokens || 0).toLocaleString() %></strong></div><div class="rounded-base border border-default-medium bg-neutral-secondary p-3"><span class="text-xs text-body">Total</span><strong class="mt-1 block text-lg text-heading"><%= Number(llmUsageTotals?.totalTokens || 0).toLocaleString() %></strong></div><div class="rounded-base border border-default-medium bg-neutral-secondary p-3"><span class="text-xs text-body">Requests</span><strong class="mt-1 block text-lg text-heading"><%= Number(llmUsageTotals?.requestCount || 0).toLocaleString() %></strong></div></div>
     <% if (llmUsageBreakdown && llmUsageBreakdown.length) { %><div class="mt-4 overflow-x-auto"><table class="min-w-full text-left text-sm text-body"><thead class="border-b border-default text-xs uppercase"><tr><th class="px-3 py-2">Provider</th><th class="px-3 py-2">Model</th><th class="px-3 py-2">Input</th><th class="px-3 py-2">Output</th><th class="px-3 py-2">Total</th><th class="px-3 py-2">Requests</th></tr></thead><tbody class="divide-y divide-default"><% llmUsageBreakdown.forEach((item) => { %><tr><td class="px-3 py-2"><%= item.providerName %></td><td class="px-3 py-2"><code><%= item.model %></code></td><td class="px-3 py-2"><%= Number(item.inputTokens).toLocaleString() %></td><td class="px-3 py-2"><%= Number(item.outputTokens).toLocaleString() %></td><td class="px-3 py-2 font-medium text-heading"><%= Number(item.totalTokens).toLocaleString() %></td><td class="px-3 py-2"><%= item.requestCount %><% if (item.failedRequestCount) { %><small> · <%= item.failedRequestCount %> failed</small><% } %></td></tr><% }) %></tbody></table></div><% } else { %><p class="mt-4 text-sm text-body">No AI requests have been made from this account yet.</p><% } %>
   </section>
+  <% } %>
 </div></main>
 <%- include('partials/foot', { uiKit: true }) %>
 <script nonce="<%= cspNonce %>" src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>

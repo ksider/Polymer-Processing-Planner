@@ -166,6 +166,32 @@ function initDb(db: Db) {
       FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL,
       FOREIGN KEY (target_user_id) REFERENCES users(id) ON DELETE SET NULL
     );
+    CREATE TABLE IF NOT EXISTS stored_files (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      owner_user_id INTEGER NOT NULL,
+      storage_key TEXT NOT NULL UNIQUE,
+      original_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      sha256 TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      deleted_at TEXT,
+      FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE RESTRICT
+    );
+    CREATE INDEX IF NOT EXISTS idx_stored_files_owner_created
+      ON stored_files(owner_user_id, created_at DESC);
+    CREATE TABLE IF NOT EXISTS file_links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      file_id INTEGER NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id INTEGER NOT NULL,
+      placement TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (file_id) REFERENCES stored_files(id) ON DELETE CASCADE,
+      UNIQUE(file_id, entity_type, entity_id, placement)
+    );
+    CREATE INDEX IF NOT EXISTS idx_file_links_registry
+      ON file_links(entity_type, placement, entity_id, file_id);
     CREATE TABLE IF NOT EXISTS tasks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       experiment_id INTEGER NOT NULL,

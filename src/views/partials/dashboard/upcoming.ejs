@@ -1,0 +1,6 @@
+<section class="overflow-hidden rounded-lg border border-cyan-200 bg-white shadow-sm" aria-labelledby="upcomingTitle">
+  <div class="flex items-center justify-between gap-3 border-b border-cyan-200 bg-cyan-50 px-5 py-4"><div><div class="flex items-center gap-2"><span class="material-symbols-rounded text-cyan-700" aria-hidden="true">event</span><h2 class="text-base font-semibold text-cyan-950" id="upcomingTitle"><%= title %></h2></div><p class="mt-1 text-sm text-cyan-800"><%= description %></p></div><a class="text-sm font-medium text-cyan-700 no-underline hover:underline" href="/calendar">Calendar</a></div>
+  <% if (!upcoming.length) { %><p class="px-5 py-8 text-center text-sm text-gray-500">No scheduled work in the next seven days.</p><% } else { %>
+    <ul class="divide-y divide-gray-100" role="list"><% upcoming.forEach((event) => { %><li><a class="flex gap-3 px-5 py-3 no-underline hover:bg-gray-50" href="<%= event.url %>"><time class="w-12 shrink-0 text-center text-xs font-semibold uppercase text-blue-700" datetime="<%= event.start %>"><%= formatDashboardDate(event.start) %></time><span class="min-w-0 flex-1 truncate text-sm text-gray-700"><%- formatInline(event.title) %></span></a></li><% }) %></ul>
+  <% } %>
+</section>

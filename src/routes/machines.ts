@@ -13,6 +13,9 @@ import {
   listMachineParams,
   updateMachineParam
 } from "../repos/machine_params_repo.js";
+import { getStoredFileForOwner, linkStoredFile, listStoredFilesForOwner, unlinkStoredFilesForEntityPlacement } from "../repos/files_repo.js";
+import { storeUserFiles } from "../services/file_storage_service.js";
+import { insertAudit } from "../repos/audit_repo.js";
 
 type MachineSettings = Record<string, unknown>;
 
@@ -211,6 +214,40 @@ export function createMachinesRouter(db: Db) {
   const router = express.Router();
   const canManageMachines = (req: express.Request) =>
     ["admin", "manager", "engineer"].includes(req.user?.role ?? "");
+  const linkMachineImage = (machineId: number, fileId: number) => {
+    unlinkStoredFilesForEntityPlacement(db, { entityType: "machine", entityId: machineId, placement: "cover_image" });
+    linkStoredFile(db, { fileId, entityType: "machine", entityId: machineId, placement: "cover_image" });
+    updateMachine(db, machineId, { image_url: `/files/${fileId}/download` });
+  };
+  const attachMachineImage = async (req: express.Request, machineId: number) => {
+    const image = req.file as Express.Multer.File | undefined;
+    if (!image) return null;
+    if (!req.user?.id) throw new Error("A signed-in uploader is required.");
+    const [stored] = await storeUserFiles(db, req.user.id, [image], { imagesOnly: true });
+    linkMachineImage(machineId, stored.id);
+    insertAudit(db, {
+      actorUserId: req.user.id,
+      action: "machine.image.upload",
+      targetUserId: req.user.id,
+      detailsJson: JSON.stringify({ machine_id: machineId, file_id: stored.id })
+    });
+    return `/files/${stored.id}/download`;
+  };
+  const selectMachineImage = (req: express.Request, machineId: number) => {
+    const selectedFileId = Number(req.body.selected_file_id || 0);
+    if (!Number.isInteger(selectedFileId) || selectedFileId <= 0) return null;
+    if (!req.user?.id) throw new Error("A signed-in uploader is required.");
+    const selected = getStoredFileForOwner(db, selectedFileId, req.user.id);
+    if (!selected || !selected.mime_type.startsWith("image/")) throw new Error("Choose an image from your file library.");
+    linkMachineImage(machineId, selected.id);
+    insertAudit(db, {
+      actorUserId: req.user.id,
+      action: "machine.image.select",
+      targetUserId: req.user.id,
+      detailsJson: JSON.stringify({ machine_id: machineId, file_id: selected.id })
+    });
+    return `/files/${selected.id}/download`;
+  };
 
   router.get("/machines", (req, res) => {
     const machines = listMachinesForLibrary(db);
@@ -224,7 +261,8 @@ export function createMachinesRouter(db: Db) {
       machine: null,
       settings: {},
       machineParams: [],
-      machineParamByCode: {}
+      machineParamByCode: {},
+      myImageFiles: req.user?.id ? listStoredFilesForOwner(db, req.user.id).filter((file) => file.mime_type.startsWith("image/")) : []
     });
   });
 
@@ -271,11 +309,12 @@ export function createMachinesRouter(db: Db) {
       machine,
       settings,
       machineParams,
-      machineParamByCode
+      machineParamByCode,
+      myImageFiles: req.user?.id ? listStoredFilesForOwner(db, req.user.id).filter((file) => file.mime_type.startsWith("image/")) : []
     });
   });
 
-  router.post("/machines", (req, res) => {
+  router.post("/machines", async (req, res) => {
     if (!canManageMachines(req)) return res.status(403).send("Forbidden");
     const name = String(req.body.name || "").trim();
     if (!name) return res.status(400).send("Name required");
@@ -288,14 +327,21 @@ export function createMachinesRouter(db: Db) {
       settings_json: JSON.stringify(settings),
       notes: req.body.notes ? String(req.body.notes).trim() : null
     });
-    const customRaw = req.body.custom_fields_json ? String(req.body.custom_fields_json) : "";
-    const customParams = parseCustomParamInputs(customRaw);
-    const mergedParams = buildMachineParamsFromSettings(settings, customParams);
-    syncMachineParams(db, machineId, mergedParams);
+    try {
+      if (req.file) await attachMachineImage(req, machineId);
+      else selectMachineImage(req, machineId);
+      const customRaw = req.body.custom_fields_json ? String(req.body.custom_fields_json) : "";
+      const customParams = parseCustomParamInputs(customRaw);
+      const mergedParams = buildMachineParamsFromSettings(settings, customParams);
+      syncMachineParams(db, machineId, mergedParams);
+    } catch (error) {
+      deleteMachine(db, machineId);
+      return res.status(400).send(error instanceof Error ? error.message : "Machine image could not be uploaded");
+    }
     res.redirect("/machines");
   });
 
-  router.post("/machines/:id", (req, res) => {
+  router.post("/machines/:id", async (req, res) => {
     if (!canManageMachines(req)) return res.status(403).send("Forbidden");
     const id = Number(req.params.id);
     const machine = getMachine(db, id);
@@ -305,16 +351,22 @@ export function createMachinesRouter(db: Db) {
     const settings = buildSettings(req.body);
     updateMachine(db, id, {
       name,
-      image_url: req.body.image_url ? String(req.body.image_url).trim() : null,
+      image_url: req.body.image_url ? String(req.body.image_url).trim() : machine.image_url,
       vendor: req.body.vendor ? String(req.body.vendor).trim() : null,
       model: req.body.model ? String(req.body.model).trim() : null,
       settings_json: JSON.stringify(settings),
       notes: req.body.notes ? String(req.body.notes).trim() : null
     });
-    const customRaw = req.body.custom_fields_json ? String(req.body.custom_fields_json) : "";
-    const customParams = parseCustomParamInputs(customRaw);
-    const mergedParams = buildMachineParamsFromSettings(settings, customParams);
-    syncMachineParams(db, id, mergedParams);
+    try {
+      if (req.file) await attachMachineImage(req, id);
+      else selectMachineImage(req, id);
+      const customRaw = req.body.custom_fields_json ? String(req.body.custom_fields_json) : "";
+      const customParams = parseCustomParamInputs(customRaw);
+      const mergedParams = buildMachineParamsFromSettings(settings, customParams);
+      syncMachineParams(db, id, mergedParams);
+    } catch (error) {
+      return res.status(400).send(error instanceof Error ? error.message : "Machine image could not be uploaded");
+    }
     res.redirect("/machines");
   });
 

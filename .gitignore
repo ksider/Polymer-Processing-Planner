@@ -41,6 +41,7 @@ im_doe.sqlite-wal
 /info
 .ai
 /docs/*
+/storage/
 
 # Local planning documents are working notes, not release documentation.
 plan.md

@@ -34,6 +34,7 @@ import {
   getLlmUsageBreakdownForUser,
   getLlmUsageTotalsForUser
 } from "../modules/llm/provider_profiles_repo.js";
+import { listStoredFileUsageLinks, listStoredFilesForOwner, type StoredFileUsageLink } from "../repos/files_repo.js";
 
 export function createProfileRouter(db: Db) {
   const router = express.Router();
@@ -49,6 +50,12 @@ export function createProfileRouter(db: Db) {
     email: String(user.email ?? ""),
     avatar_style_json: user.avatar_style_json ?? null
   });
+
+  const fileAttachmentHref = (link: StoredFileUsageLink) => {
+    if (link.entity_type === "machine") return `/machines/${link.entity_id}`;
+    if (link.entity_type === "user") return `/users/${link.entity_id}`;
+    return null;
+  };
 
   const enrich = (experiments: ExperimentListRow[]) =>
     experiments.map((exp) => {
@@ -194,6 +201,7 @@ export function createProfileRouter(db: Db) {
 
   router.get("/me", (req, res) => {
     if (!req.user?.id) return res.redirect("/auth/login");
+    const profileSection = req.query.tab === "files" ? "files" : "overview";
     const data = buildProfilePayload(req.user.id, aiUsagePeriodFromQuery(req.query.ai_usage_period));
     res.render("profile", {
       title: "Profile",
@@ -201,6 +209,15 @@ export function createProfileRouter(db: Db) {
       ...data,
       currentAvatarStyle: getAvatarStyle(avatarUserFromRequest(req.user)),
       avatarStyleOptions: AVATAR_STYLE_OPTIONS,
+      profileSection,
+      files: profileSection === "files"
+        ? listStoredFilesForOwner(db, req.user.id).map((file) => ({
+            ...file,
+            usageLinks: listStoredFileUsageLinks(db, file.id, req.user!.id).map((link) => ({ ...link, href: fileAttachmentHref(link) }))
+          }))
+        : [],
+      fileNotice: profileSection === "files" && typeof req.query.notice === "string" ? req.query.notice : null,
+      fileError: profileSection === "files" && typeof req.query.error === "string" ? req.query.error : null,
       error: null,
       notice: null
     });

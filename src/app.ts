@@ -19,6 +19,7 @@ import { createProfileRouter } from "./routes/profile.js";
 import { createTasksRouter } from "./routes/tasks.js";
 import { createMessagesRouter } from "./routes/messages.js";
 import { createHomeRouter } from "./routes/home.js";
+import { createDashboardRouter } from "./routes/dashboard.js";
 import { createRecipesRouter } from "./routes/recipes.js";
 import { createExperimentsRouter } from "./routes/experiments.js";
 import { createRunsRouter } from "./routes/runs.js";
@@ -30,6 +31,8 @@ import { createNotesRouter } from "./routes/notes.js";
 import { createCalendarRouter } from "./routes/calendar.js";
 import { createSystemHealthRouter } from "./routes/system_health.js";
 import { createDemoRouter } from "./routes/demo.js";
+import { createFilesRouter, fileUploadMiddleware, machineImageUploadMiddleware } from "./routes/files.js";
+import { FILE_UPLOAD_LIMITER } from "./middleware/rate_limit.js";
 import { buildBreadcrumbs } from "./services/breadcrumbs.js";
 import { isDemoModeEnabled, isDemoUser } from "./services/demo_mode.js";
 import { countUnreadMessageBoxes } from "./repos/messages_repo.js";
@@ -115,10 +118,10 @@ app.locals.experimentPath = (value: unknown) => {
 
 app.locals.processPath = (value: unknown) => {
   const processId = Number(value);
-  if (!Number.isFinite(processId)) return "/";
+  if (!Number.isFinite(processId)) return "/processes";
   const process = getProcessById(db, processId);
   const processCode = getProcessRouteCode(process);
-  return processCode ? `/${processCode}` : `/?process_id=${processId}`;
+  return processCode ? `/${processCode}` : `/processes?process_id=${processId}`;
 };
 
 app.locals.avatarUrl = (userId: unknown) => {
@@ -239,7 +242,7 @@ app.use((req, res, next) => {
   res.locals.currentUser = req.user ?? null;
   res.locals.demoModeEnabled = isDemoModeEnabled();
   res.locals.isDemoUser = isDemoUser(req.user);
-  res.locals.activeAdminPath = ["/machines", "/param-library", "/audit", "/system-health"].includes(req.path)
+  res.locals.activeAdminPath = ["/machines", "/param-library", "/audit", "/system-health", "/admin/files"].includes(req.path)
     ? req.path
     : "";
   const wantsHtml = req.accepts(["html", "json"]) === "html";
@@ -264,6 +267,9 @@ app.use((req, res, next) => {
   return next();
 });
 
+app.use("/files/upload", ensureAuthenticated, FILE_UPLOAD_LIMITER, fileUploadMiddleware);
+app.post("/machines", ensureAuthenticated, FILE_UPLOAD_LIMITER, machineImageUploadMiddleware);
+app.post("/machines/:id", ensureAuthenticated, FILE_UPLOAD_LIMITER, machineImageUploadMiddleware);
 app.use(requireCsrf);
 app.use("/auth", createAuthRouter(db));
 app.use(createDemoRouter(db));
@@ -287,9 +293,11 @@ app.use("/admin", ensureAdmin, createAdminRouter(db));
 app.use("/system-health", ensureAdmin, createSystemHealthRouter(db));
 app.use("/audit", createAuditRouter(db));
 app.use(createProfileRouter(db));
+app.use(createFilesRouter(db));
 app.use(createCalendarRouter(db));
 app.use(createTasksRouter(db));
 app.use(createMessagesRouter(db));
+app.use(createDashboardRouter(db));
 app.use(createHomeRouter(db));
 app.use(createRecipesRouter(db));
 app.use(createDoeAnalysisRouter(db));

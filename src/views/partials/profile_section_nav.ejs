@@ -1,0 +1,7 @@
+<% const profileSection = typeof activeProfileSection === 'string' ? activeProfileSection : 'overview'; %>
+<nav class="border-b border-gray-200" aria-label="Profile sections">
+  <ul class="flex flex-wrap -mb-px text-sm font-medium text-center" role="tablist">
+    <li class="me-2" role="presentation"><a class="inline-flex items-center gap-2 rounded-t-lg border-b-2 px-4 py-3 <%= profileSection === 'overview' ? 'border-blue-700 text-blue-700' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-600' %>" href="/me" role="tab" aria-selected="<%= profileSection === 'overview' ? 'true' : 'false' %>"><span class="material-symbols-rounded text-[19px]" aria-hidden="true">person</span>Profile</a></li>
+    <li role="presentation"><a class="inline-flex items-center gap-2 rounded-t-lg border-b-2 px-4 py-3 <%= profileSection === 'files' ? 'border-blue-700 text-blue-700' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-600' %>" href="/me?tab=files" role="tab" aria-selected="<%= profileSection === 'files' ? 'true' : 'false' %>"><span class="material-symbols-rounded text-[19px]" aria-hidden="true">folder</span>My files</a></li>
+  </ul>
+</nav>

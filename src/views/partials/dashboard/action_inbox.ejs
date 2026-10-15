@@ -1,0 +1,16 @@
+<section class="overflow-hidden rounded-lg border border-blue-200 bg-white shadow-sm" aria-labelledby="actionInboxTitle">
+  <div class="flex items-start justify-between gap-4 border-b border-blue-200 bg-blue-50 px-5 py-4">
+    <div><div class="flex items-center gap-2"><span class="material-symbols-rounded text-blue-700" aria-hidden="true">priority_high</span><h2 class="text-base font-semibold text-blue-950" id="actionInboxTitle">Action inbox</h2></div><p class="mt-1 text-sm text-blue-800">Work that needs your attention, ordered by urgency.</p></div>
+    <% if (actions.length) { %><span class="inline-flex min-w-6 items-center justify-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-800"><%= actions.length %></span><% } %>
+  </div>
+  <% if (!actions.length) { %>
+    <div class="px-5 py-10 text-center"><span class="material-symbols-rounded text-3xl text-emerald-600" aria-hidden="true">task_alt</span><p class="mt-2 text-sm font-medium text-gray-900">Nothing requires action right now.</p><p class="mt-1 text-sm text-gray-500">Assigned tasks, approvals, and qualification work will appear here.</p></div>
+  <% } else { %>
+    <ul class="divide-y divide-gray-100" role="list">
+      <% actions.forEach((item) => { %>
+        <% const urgency = item.urgency === 'overdue' ? 'bg-red-100 text-red-800' : item.urgency === 'today' ? 'bg-amber-100 text-amber-800' : item.urgency === 'attention' ? 'bg-violet-100 text-violet-800' : 'bg-blue-100 text-blue-800'; %>
+        <li><a class="block px-5 py-4 no-underline hover:bg-blue-50/40 focus:bg-blue-50/40 focus:outline-none" href="<%= item.href %>"><div class="flex items-start gap-3"><span class="material-symbols-rounded mt-0.5 text-blue-500" aria-hidden="true"><%= item.entityType === 'Report' ? 'description' : item.entityType === 'Qualification' ? 'science' : item.entityType === 'DOE' ? 'analytics' : 'check_circle' %></span><div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-gray-900"><%- formatInline(item.title) %></span><span class="rounded-full px-2 py-0.5 text-xs font-medium <%= urgency %>"><%= item.urgency === 'overdue' ? 'Overdue' : item.urgency === 'today' ? 'Due today' : item.urgency === 'attention' ? 'Needs attention' : item.status %></span></div><p class="mt-1 truncate text-sm text-gray-500"><%- formatInline(item.experimentName) %><% if (item.processName) { %> · <%- formatInline(item.processName) %><% } %> · <%= item.entityType %><% if (item.dueAt) { %> · due <%= formatDashboardDate(item.dueAt) %><% } %></p></div><span class="material-symbols-rounded text-blue-400" aria-hidden="true">chevron_right</span></div></a></li>
+      <% }) %>
+    </ul>
+  <% } %>
+</section>

@@ -57,9 +57,16 @@ import {
 import { hasLlmSettingsEncryptionKey, LlmSettingsEncryptionError } from "../modules/llm/settings_crypto.js";
 import { listReportConfigsForAdmin } from "../repos/reports_repo.js";
 import { getSystemHealthOverview } from "../services/system_health_service.js";
+import { listFileRegistryFilterValues, listStoredFileLinks, listStoredFilesForAdmin } from "../repos/files_repo.js";
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+function formatBytes(size: number) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function isSafeEmail(value: string): boolean {
@@ -105,6 +112,31 @@ function groupAiUsageByUser(rows: LlmUsageAdminBreakdownRow[]): AiUsageUserGroup
 
 export function createAdminRouter(db: Db) {
   const router = express.Router();
+
+  router.get("/files", (req, res) => {
+    const ownerUserId = Number(req.query.owner_user_id || 0);
+    const entityType = String(req.query.entity_type || "").trim();
+    const placement = String(req.query.placement || "").trim();
+    const mimeGroup = ["image", "document", "other"].includes(String(req.query.type || ""))
+      ? String(req.query.type) as "image" | "document" | "other"
+      : null;
+    const sort = ["newest", "oldest", "name", "size"].includes(String(req.query.sort || ""))
+      ? String(req.query.sort) as "newest" | "oldest" | "name" | "size"
+      : "newest";
+    const filters = { ownerUserId: Number.isInteger(ownerUserId) && ownerUserId > 0 ? ownerUserId : null, entityType: entityType || null, placement: placement || null, mimeGroup, sort };
+    res.render("admin_files", {
+      title: "Administration · Files", uiKit: true,
+      files: listStoredFilesForAdmin(db, filters).map((file) => ({
+        ...file,
+        links: listStoredFileLinks(db, file.id).map((link) => ({
+          ...link,
+          href: link.entity_type === "machine" ? `/machines/${link.entity_id}` : link.entity_type === "user" ? `/users/${link.entity_id}` : null
+        }))
+      })),
+      users: listUsers(db).filter((user) => user.status === "ACTIVE"),
+      filterValues: listFileRegistryFilterValues(db), filters, formatBytes
+    });
+  });
 
   router.get("/ai-usage", (req, res) => {
     const aiUsagePeriod = aiUsagePeriodFromQuery(req.query.period);

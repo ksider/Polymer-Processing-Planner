@@ -188,7 +188,7 @@ export function createHomeRouter(db: Db) {
     });
   };
 
-  router.get("/", renderProcesses);
+  router.get("/processes", renderProcesses);
 
   router.get("/:processCode", (req, res, next) => {
     const rawProcessCode = String(req.params.processCode || "");
@@ -200,17 +200,13 @@ export function createHomeRouter(db: Db) {
     return renderProcessPage(req, res, process.id);
   });
 
-  router.get("/processes", (_req, res) => {
-    res.redirect("/");
-  });
-
   router.get("/processes/:id", (req, res) => {
     const processId = Number(req.params.id);
     if (!Number.isFinite(processId)) return res.status(404).send("Process not found");
     const process = getProcessById(db, processId);
     if (!process) return res.status(404).send("Process not found");
     const processCode = getProcessRouteCode(process);
-    return res.redirect(processCode ? `/${processCode}` : `/?process_id=${processId}`);
+    return res.redirect(processCode ? `/${processCode}` : `/processes?process_id=${processId}`);
   });
 
   router.post("/processes/:id/settings", (req, res) => {
@@ -231,7 +227,7 @@ export function createHomeRouter(db: Db) {
     }
     const updatedProcess = getProcessById(db, processId);
     const processCode = getProcessRouteCode(updatedProcess);
-    return res.redirect(processCode ? `/${processCode}` : `/?process_id=${processId}`);
+    return res.redirect(processCode ? `/${processCode}` : `/processes?process_id=${processId}`);
   });
 
   router.get("/my-experiments", (req, res) => {

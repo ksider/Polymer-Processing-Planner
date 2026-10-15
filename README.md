@@ -111,6 +111,22 @@ The migration has introduced:
 - a first System Health page for database, analytics, email configuration and
   DOE background-job status.
 
+## R&D Dashboard
+
+`/` is the role-aware R&D Dashboard. It is a server-rendered Tailwind CSS 4
+and Flowbite workspace that prioritizes the current user's actionable tasks,
+qualification and DOE assignments, report signatures, and upcoming calendar
+work. It also provides access-scoped experiment, qualification, report, team
+workload, recent DOE-analysis activity, and administrator system-health
+summaries. The Dashboard is read-only for viewers and does not run analytics
+calculations or system diagnostics while rendering.
+
+The previous process directory is available at `/processes`; process-specific
+and experiment-specific URLs remain unchanged. Dashboard scope is enforced on
+the server using the existing experiment owner, process owner, and entity
+assignment rules. A stale DOE-analysis indicator is intentionally omitted
+until the current dataset revision can be read without rebuilding analysis data.
+
 ### Resend email delivery
 
 Email delivery is configured in **Admin → Settings** through Resend. The
