@@ -202,9 +202,10 @@ user experiments.
 | Demo chats and notifications | `npm run seed:messages -- --reset` | not included in the production image |
 
 The complete-workspace seed creates or updates the two marked qualification
-experiments, an 11-run extrusion DOE and one editable unsigned report. Its DOE
-responses and report text are synthetic and must not be used for technical
-decisions. A signed report is never overwritten by the seed.
+experiments, an 11-run extrusion DOE, an 8-run SLA/DLP DOE, and one editable
+unsigned report. Its DOE responses and report text are synthetic and must not
+be used for technical decisions. A signed report is never overwritten by the
+seed.
 
 ### Extrusion qualification details
 
