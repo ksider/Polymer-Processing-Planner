@@ -294,19 +294,22 @@ function findOrCreateReport(db: Db, experimentId: number, doeId: number, authorU
   return reportId;
 }
 
+export function seedExtrusionDemoDeliverables(db: Db, experimentId: number) {
+  const owner = db.prepare("SELECT owner_user_id FROM experiments WHERE id = ?").get(experimentId) as { owner_user_id: number | null } | undefined;
+  const doeId = findOrCreateDoe(db, experimentId);
+  generateRuns(db, experimentId, doeId);
+  seedDoeResponses(db, doeId);
+  const reportId = findOrCreateReport(db, experimentId, doeId, owner?.owner_user_id ?? null);
+  return { doeId, reportId };
+}
+
 export function seedDemoWorkspace(db: Db): DemoWorkspace {
   const extrusionExperimentId = seedExtrusionDemo(db);
   const slaDlpExperimentId = seedSlaDlpDemo(db);
-  const owner = db.prepare(
-    "SELECT owner_user_id FROM experiments WHERE id = ?"
-  ).get(extrusionExperimentId) as { owner_user_id: number | null } | undefined;
-  const doeId = findOrCreateDoe(db, extrusionExperimentId);
-  generateRuns(db, extrusionExperimentId, doeId);
-  seedDoeResponses(db, doeId);
+  const { doeId, reportId } = seedExtrusionDemoDeliverables(db, extrusionExperimentId);
   const slaDlpDoeId = findOrCreateSlaDlpDoe(db, slaDlpExperimentId);
   generateRuns(db, slaDlpExperimentId, slaDlpDoeId);
   seedSlaDlpDoeResponses(db, slaDlpDoeId);
-  const reportId = findOrCreateReport(db, extrusionExperimentId, doeId, owner?.owner_user_id ?? null);
   return { extrusionExperimentId, slaDlpExperimentId, doeId, slaDlpDoeId, reportId };
 }
 

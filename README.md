@@ -199,6 +199,7 @@ user experiments.
 | Complete workspace: extrusion + SLA/DLP qualification, DOE and draft report | `npm run seed:demo -- --upsert` | `node dist/tools/seed_demo_workspace.js --upsert` |
 | Extrusion qualification only | `npm run seed:extrusion-demo -- --upsert` | `node dist/tools/seed_extrusion_demo.js --upsert` |
 | SLA/DLP photopolymer qualification and its print-window DOE | `npm run seed:sla-dlp-demo -- --upsert` | `node dist/tools/seed_sla_dlp_demo.js --upsert` |
+| Injection-moulding copy from an existing experiment | `npm run seed:injection-demo -- --upsert --source-experiment=10` | `node dist/tools/seed_injection_demo.js --upsert --source-experiment=10` |
 | Demo chats and notifications | `npm run seed:messages -- --reset` | not included in the production image |
 
 The complete-workspace seed creates or updates the two marked qualification
@@ -206,6 +207,12 @@ experiments, an 11-run extrusion DOE, an 8-run SLA/DLP DOE, and one editable
 unsigned report. Its DOE responses and report text are synthetic and must not
 be used for technical decisions. A signed report is never overwritten by the
 seed.
+
+The injection-moulding seed does not generate values. It copies the selected
+source experiment's visible qualification, DOE, runs, measured responses,
+saved analyses, reports and recipe links into its own marked demo experiment.
+The source ID is explicit in the command; the generated demo experiment is
+found by its marker and therefore has no fixed ID requirement.
 
 ### Extrusion qualification details
 

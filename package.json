@@ -16,7 +16,8 @@
     "seed:messages": "tsx src/tools/seed_messages_debug.ts",
     "seed:extrusion-demo": "tsx src/tools/seed_extrusion_demo.ts",
     "seed:sla-dlp-demo": "tsx src/tools/seed_sla_dlp_demo.ts",
-    "seed:demo": "tsx src/tools/seed_demo_workspace.ts"
+    "seed:demo": "tsx src/tools/seed_demo_workspace.ts",
+    "seed:injection-demo": "tsx src/tools/seed_injection_demo.ts"
   },
   "dependencies": {
     "@editorjs/delimiter": "^1.4.2",

@@ -26,6 +26,7 @@ import {
   type QualRun
 } from "../repos/qual_repo.js";
 import { calculateExtrusionScaleUpRecommendation } from "../services/extrusion_scale_up_service.js";
+import { seedExtrusionDemoDeliverables } from "./seed_demo_workspace.js";
 
 const DEMO_MARKER = "demo-seed:extrusion-v1";
 const DEMO_NAME = "Extrusion demo · PP mineral-filled compound";
@@ -523,6 +524,7 @@ export function seedExtrusionDemo(db: Db) {
     seedDisabledOptionalStudies(db, experimentId, ownerId);
     seedStepTen(db, experimentId, ownerId);
   })();
+  seedExtrusionDemoDeliverables(db, experimentId);
   return experimentId;
 }
 
