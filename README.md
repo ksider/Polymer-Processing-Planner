@@ -186,7 +186,27 @@ the deployment means pulling the new images and recreating both services; the
 named volumes `planner_data` and `planner_uploads` preserve the database and
 uploads.
 
-### Extrusion demonstration data (Portainer)
+### Demo data scripts
+
+All qualification and workspace seeds are idempotent: use `--upsert` to
+create the marked demo record on first run or refresh it on subsequent runs.
+They are intended for a local, demo, or staging database. Take a volume backup
+before running them on a shared instance; the scripts do not delete ordinary
+user experiments.
+
+| Demo scope | Development checkout | Production container / Portainer console |
+| --- | --- | --- |
+| Complete workspace: extrusion + SLA/DLP qualification, DOE and draft report | `npm run seed:demo -- --upsert` | `node dist/tools/seed_demo_workspace.js --upsert` |
+| Extrusion qualification only | `npm run seed:extrusion-demo -- --upsert` | `node dist/tools/seed_extrusion_demo.js --upsert` |
+| SLA/DLP photopolymer qualification only | `npm run seed:sla-dlp-demo -- --upsert` | `node dist/tools/seed_sla_dlp_demo.js --upsert` |
+| Demo chats and notifications | `npm run seed:messages -- --reset` | not included in the production image |
+
+The complete-workspace seed creates or updates the two marked qualification
+experiments, an 11-run extrusion DOE and one editable unsigned report. Its DOE
+responses and report text are synthetic and must not be used for technical
+decisions. A signed report is never overwritten by the seed.
+
+### Extrusion qualification details
 
 The image contains an idempotent extrusion demo seed. It creates or updates
 only the experiment carrying the internal marker `demo-seed:extrusion-v1`; it
@@ -212,20 +232,6 @@ The seed fills the full extrusion qualification catalogue:
 - conditional steps 6–9 with illustrative completed runs and their confirmed
   handoff results, while leaving those studies disabled in the workspace;
 - scale-up step 10, enabled with a D³ throughput target and SME-parity runs.
-
-### Complete demonstration workspace
-
-For a complete local or staging demonstration, use the aggregate seed. It
-updates the marked extrusion and SLA/DLP qualification experiments, creates an
-11-run extrusion DOE within the qualified limits, and creates one editable,
-unsigned combined report. DOE responses and report text are explicitly
-synthetic and must not be used for technical decisions.
-
-```sh
-node dist/tools/seed_demo_workspace.js --upsert
-```
-
-In a development checkout the equivalent command is `npm run seed:demo -- --upsert`.
 
 The experiment cards show the confirmed transferable result fields defined by
 each study instruction. Re-running `--upsert` refreshes this one demo
