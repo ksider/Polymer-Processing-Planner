@@ -156,6 +156,14 @@ function initDb(db: Db) {
       data TEXT,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+    CREATE TABLE IF NOT EXISTS workspace_preferences (
+      user_id INTEGER PRIMARY KEY,
+      default_view TEXT NOT NULL DEFAULT 'table',
+      last_scope TEXT NOT NULL DEFAULT 'mine',
+      density TEXT NOT NULL DEFAULT 'comfortable',
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
     CREATE TABLE IF NOT EXISTS audit_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       actor_user_id INTEGER,

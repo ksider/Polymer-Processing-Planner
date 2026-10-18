@@ -9,8 +9,10 @@ import {
   listExperimentCalendarEvents,
   listMyCalendarEvents,
   listProcessCalendarEvents,
+  listWorkspaceCalendarEvents,
   moveCalendarEventDate
 } from "../services/calendar_service.js";
+import { listWorkspaceExperimentScope, narrowWorkspaceScope } from "../services/workspace_scope_service.js";
 
 function hasPrivilegedRole(role: string | undefined): boolean {
   return role === "admin" || role === "manager";
@@ -78,6 +80,17 @@ export function createCalendarRouter(db: Db) {
     if (!req.user?.id) return res.status(401).json({ error: "Unauthorized" });
 
     const scope = String(req.query.scope || "my").toLowerCase();
+    if (scope === "workspace") {
+      const numberOrNull = (value: unknown) => {
+        const parsed = Number(value);
+        return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+      };
+      const visible = narrowWorkspaceScope(listWorkspaceExperimentScope(db, req.user), {
+        processId: numberOrNull(req.query.process_id),
+        experimentId: numberOrNull(req.query.experiment_id)
+      });
+      return res.json({ events: listWorkspaceCalendarEvents(db, visible.experimentIds) });
+    }
     if (scope === "experiment") {
       const experimentId = Number(req.query.experiment_id || 0);
       if (!Number.isFinite(experimentId) || experimentId <= 0) {

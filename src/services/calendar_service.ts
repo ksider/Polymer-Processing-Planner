@@ -420,6 +420,23 @@ export function listExperimentCalendarEvents(db: Db, experimentId: number): Cale
   return [...taskEvents, ...runEvents, ...qualRunEvents];
 }
 
+/** Access scoping is resolved by the caller; this function only narrows it. */
+export function listWorkspaceCalendarEvents(db: Db, experimentIds: number[]): CalendarEvent[] {
+  const ids = experimentIds.filter((id) => Number.isInteger(id) && id > 0);
+  if (!ids.length) return [];
+  const marks = ids.map(() => "?").join(",");
+  const where = `
+    WHERE e.archived_at IS NULL
+      AND e.id IN (${marks})
+      AND %DUE% IS NOT NULL
+  `;
+  return [
+    ...loadTaskEventsByWhere(db, where.replace("%DUE%", "t.due_at"), ids),
+    ...loadRunEventsByWhere(db, where.replace("%DUE%", "r.due_at"), ids),
+    ...loadQualRunEventsByWhere(db, where.replace("%DUE%", "qr.due_at"), ids)
+  ];
+}
+
 export function decodeCalendarEventToken(token: string): { entityType: "task" | "run" | "qual-run"; entityId: number } | null {
   const value = String(token || "").trim();
   const match = value.match(/^(task|run|qual-run)-(\d+)$/);
