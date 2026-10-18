@@ -83,6 +83,15 @@ export function createTasksRouter(db: Db) {
     return false;
   };
 
+  const getTaskEntityHref = (experimentId: number, entityType: TaskEntityRow["entity_type"], entityId: number) => {
+    if (entityType === "qualification_step") {
+      const step = resolveQualificationStage(experimentId, entityId);
+      return `/experiments/${experimentId}/qualification/${step?.step_number ?? entityId}`;
+    }
+    if (entityType === "doe") return `/experiments/${experimentId}/doe/${entityId}?tab=design`;
+    return `/reports/${entityId}`;
+  };
+
   router.use("/tasks/:id", ensureTaskAccess);
 
   // List tasks for experiment.
@@ -120,10 +129,11 @@ export function createTasksRouter(db: Db) {
     if (!task) return res.status(404).json({ error: "Task not found" });
     const entities = listTaskEntities(db, taskId).map((entity) => ({
       ...entity,
-      display_label: getEntityLabel(db, task.experiment_id, entity.entity_type, entity.entity_id)
+      display_label: getEntityLabel(db, task.experiment_id, entity.entity_type, entity.entity_id),
+      href: getTaskEntityHref(task.experiment_id, entity.entity_type, entity.entity_id)
     }));
     const summarySteps = new Set(listQualSummarySteps(db, task.experiment_id));
-    const hydrated: TaskEntityRow[] = entities.map((entity) => {
+    const hydrated = entities.map((entity) => {
       if (entity.entity_type === "qualification_step") {
         const stage = resolveQualificationStage(task.experiment_id, entity.entity_id);
         if (stage && summarySteps.has(stage.step_number)) {

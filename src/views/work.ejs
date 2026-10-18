@@ -21,12 +21,13 @@
       <% const columns = [['init', 'To do', 'border-blue-300 bg-blue-50'], ['in_progress', 'In progress', 'border-cyan-300 bg-cyan-50'], ['failed', 'Failed / blocked', 'border-red-300 bg-red-50'], ['done', 'Completed', 'border-emerald-300 bg-emerald-50']]; const boardColumn = (item) => item.boardStatus; %>
       <div class="hidden overflow-x-auto p-4" data-work-board><div class="grid min-w-[1000px] grid-cols-4 gap-4"><% columns.forEach(([key, label, color]) => { const columnItems = queue.items.filter((item) => boardColumn(item) === key); %><section class="rounded-lg border-t-4 <%= color %> p-3"><div class="mb-3 flex items-center justify-between"><h2 class="text-sm font-semibold text-gray-900"><%= label %></h2><span class="rounded-full bg-white px-2 py-0.5 text-xs font-bold text-gray-700"><%= columnItems.length %></span></div><div class="space-y-3"><% columnItems.forEach((item) => { %><article class="rounded-lg border <%= item.urgency === 'overdue' ? 'border-red-400 bg-red-50 shadow-sm' : item.urgency === 'soon' ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-white' %> p-3"><div class="flex items-start justify-between gap-2"><span class="rounded-full px-2 py-0.5 text-[11px] font-medium <%= item.entityType === 'task' ? 'bg-blue-100 text-blue-800' : item.entityType === 'qualification' ? 'bg-violet-100 text-violet-800' : item.entityType === 'doe' ? 'bg-cyan-100 text-cyan-800' : 'bg-amber-100 text-amber-800' %>"><%= item.entityType %></span><% if (item.urgency === 'overdue') { %><span class="text-xs font-extrabold text-red-700">OVERDUE</span><% } else if (item.urgency === 'soon') { %><span class="text-xs font-extrabold text-amber-800">DUE SOON</span><% } %></div><% if (item.entityType === 'task') { %><button class="mt-2 text-left text-sm font-semibold text-gray-900 hover:text-blue-700 hover:underline" type="button" data-work-task-id="<%= item.sourceId %>"><%- formatInline(item.title) %></button><% } else { %><a class="mt-2 block text-sm font-semibold text-gray-900 no-underline hover:text-blue-700 hover:underline" href="<%= item.href %>"><%- formatInline(item.title) %></a><% } %><p class="mt-1 text-xs text-gray-600"><%= item.experimentName %> · <%= item.responsible %></p><p class="mt-2 text-xs font-medium text-gray-700"><%= item.execution %></p><% if (item.dueAt) { %><p class="mt-1 text-xs <%= item.urgency === 'normal' ? 'text-gray-500' : 'font-bold text-red-700' %>">Due <%= item.dueAt %></p><% } %><% if (item.blocker) { %><p class="mt-2 rounded bg-red-100 px-2 py-1 text-xs font-bold text-red-800"><%= item.blocker %></p><% } %></article><% }) %><% if (!columnItems.length) { %><p class="rounded-lg border border-dashed border-gray-300 bg-white/60 p-3 text-xs text-gray-500">No items</p><% } %></div></section><% }) %></div></div>
       <script type="application/json" data-work-capabilities><%- JSON.stringify(queue.items.filter((item) => item.entityType === 'task').map((item) => ({ id: item.sourceId, changeStatus: item.actions.changeStatus }))) %></script>
-      <div class="hidden p-4" data-work-calendar><div class="rounded-lg border border-gray-200 bg-white p-3"><div data-work-calendar-host></div></div></div>
+      <div class="hidden p-4" data-work-calendar><div class="rounded-lg border border-gray-200 bg-white p-3"><div data-work-calendar-host class="calendar-host min-h-96"></div></div></div>
     </div>
   </section>
-  <dialog id="workTaskDialog" class="w-full max-w-xl rounded-xl border border-gray-200 p-0 shadow-xl backdrop:bg-gray-900/40"><div class="border-b border-gray-200 bg-blue-700 px-5 py-4 text-white"><div class="flex items-center justify-between gap-4"><h2 class="text-lg font-semibold">Task details</h2><button class="rounded-lg px-2 py-1 hover:bg-blue-800" type="button" data-work-task-close aria-label="Close">×</button></div></div><div class="p-5" data-work-task-body>Loading…</div></dialog>
+  <dialog id="workTaskDialog" class="m-auto max-h-[calc(100dvh-2rem)] w-[min(96vw,38rem)] overflow-y-auto rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" aria-labelledby="workTaskDialogTitle"><div class="flex items-center justify-between gap-4 border-b border-gray-200 bg-blue-700 px-5 py-4 text-white"><h2 class="text-lg font-semibold" id="workTaskDialogTitle">Task details</h2><button class="inline-flex size-9 items-center justify-center rounded-lg text-blue-100 hover:bg-blue-800 hover:text-white" type="button" data-work-task-close aria-label="Close task details"><span class="material-symbols-rounded" aria-hidden="true">close</span></button></div><div class="p-5" data-work-task-body>Loading…</div></dialog>
 </div></main>
 <script nonce="<%= cspNonce %>" src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script nonce="<%= cspNonce %>" src="/workspace_calendar.js"></script>
 <script nonce="<%= cspNonce %>">
   (() => {
     let searchTimer;
@@ -36,13 +37,79 @@
       let view = new URLSearchParams(location.search).get('view') || '<%= initialView || 'table' %>'; if (!['table', 'board', 'calendar'].includes(view)) view = 'table';
       const savePreferences = (changes) => fetch('/work/preferences', { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(changes) });
       const setDensity = (density, persist = false) => { shell.dataset.workDensity = density; shell.querySelectorAll('[data-work-table] th, [data-work-table] td').forEach((cell) => { cell.classList.toggle('py-2', density === 'compact'); cell.classList.toggle('py-3', density !== 'compact'); }); if (densityButton) densityButton.textContent = density === 'compact' ? 'Comfortable density' : 'Compact density'; if (persist) savePreferences({ density }); };
-      const initCalendar = () => { const host = shell.querySelector('[data-work-calendar-host]'); if (calendar || !host || !window.FullCalendar) return; calendar = new window.FullCalendar.Calendar(host, { initialView: 'dayGridMonth', height: 'auto', firstDay: 1, headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,listWeek' }, events: async (_info, success, failure) => { try { const data = new URLSearchParams(new FormData(form)); const personal = data.get('scope') === 'mine'; data.set('scope', personal ? 'my' : 'workspace'); const response = await fetch(`/calendar/events?${data}`); if (!response.ok) throw new Error('Calendar unavailable'); const payload = await response.json(); const processId = data.get('process_id'); const experimentId = data.get('experiment_id'); const events = (Array.isArray(payload.events) ? payload.events : []).filter((event) => (!processId || String(event.processId) === processId) && (!experimentId || String(event.experimentId) === experimentId)); success(events); } catch (error) { failure(error); } }, eventClick: (info) => { if (info.event.url) { info.jsEvent.preventDefault(); location.href = info.event.url; } } }); calendar.render(); };
+      const initCalendar = () => { const host = shell.querySelector('[data-work-calendar-host]'); if (calendar || !host || !window.IMPlannerWorkspaceCalendar) return; calendar = window.IMPlannerWorkspaceCalendar.create({ host, loadEvents: async () => { const data = new URLSearchParams(new FormData(form)); const personal = data.get('scope') === 'mine'; data.set('scope', personal ? 'my' : 'workspace'); const response = await fetch(`/calendar/events?${data}`, { headers: { Accept: 'application/json' } }); if (!response.ok) throw new Error('Calendar unavailable'); const payload = await response.json(); const processId = data.get('process_id'); const experimentId = data.get('experiment_id'); return (Array.isArray(payload.events) ? payload.events : []).filter((event) => (!processId || String(event.processId) === processId) && (!experimentId || String(event.experimentId) === experimentId)); } }); calendar?.render(); };
       const setView = (next, persist = false) => { view = next; if (viewInput) viewInput.value = next; table?.classList.toggle('hidden', next !== 'table'); board?.classList.toggle('hidden', next !== 'board'); calendarPanel?.classList.toggle('hidden', next !== 'calendar'); if (next === 'calendar') initCalendar(); shell.querySelectorAll('[data-work-view]').forEach((button) => { const active = button.dataset.workView === next; button.className = active ? 'rounded-md bg-blue-700 px-3 py-1.5 text-sm font-medium text-white' : 'rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100'; }); if (persist) savePreferences({ default_view: next }); };
       const load = async () => { if (!form) return; const params = new URLSearchParams(new FormData(form)); params.set('view', view); const url = `/work?${params}`; const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }); if (!response.ok) return; const page = new DOMParser().parseFromString(await response.text(), 'text/html'); const nextShell = page.querySelector('[data-work-shell]'); if (!nextShell) return; shell.replaceWith(nextShell); history.replaceState({}, '', url); init(nextShell); };
       setDensity(shell.dataset.workDensity || 'comfortable'); setView(view); shell.querySelectorAll('[data-work-view]').forEach((button) => button.addEventListener('click', () => { setView(button.dataset.workView, true); const url = new URL(location.href); url.searchParams.set('view', button.dataset.workView); history.replaceState({}, '', url); })); densityButton?.addEventListener('click', () => setDensity(shell.dataset.workDensity === 'compact' ? 'comfortable' : 'compact', true));
       form?.querySelectorAll('select').forEach((control) => control.addEventListener('change', () => { if (control.name === 'scope') savePreferences({ last_scope: control.value }); load(); })); form?.querySelector('input[name="q"]')?.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(load, 250); }); form?.addEventListener('submit', (event) => { event.preventDefault(); load(); });
       const capabilityNode = shell.querySelector('[data-work-capabilities]'); let capabilities = []; try { capabilities = JSON.parse(capabilityNode?.textContent || '[]'); } catch { capabilities = []; } const movableTaskIds = new Set(capabilities.filter((item) => item.changeStatus).map((item) => String(item.id))); let draggedTaskId = ''; const boardStatuses = ['init', 'in_progress', 'failed', 'done']; board?.querySelectorAll('section').forEach((column, index) => { const status = boardStatuses[index]; if (!status) return; column.addEventListener('dragover', (event) => { if (!draggedTaskId) return; event.preventDefault(); column.classList.add('ring-2', 'ring-blue-400'); }); column.addEventListener('dragleave', () => column.classList.remove('ring-2', 'ring-blue-400')); column.addEventListener('drop', async (event) => { event.preventDefault(); column.classList.remove('ring-2', 'ring-blue-400'); const taskId = draggedTaskId; draggedTaskId = ''; if (!taskId) return; const response = await fetch(`/tasks/${taskId}/status`, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }); if (response.ok) load(); }); }); board?.querySelectorAll('[data-work-task-id]').forEach((button) => { const taskId = String(button.dataset.workTaskId || ''); if (!movableTaskIds.has(taskId)) return; const card = button.closest('article'); if (!card || card.dataset.workDragReady) return; card.dataset.workDragReady = 'true'; card.draggable = true; card.classList.add('cursor-grab'); card.title = 'Drag to change status'; card.addEventListener('dragstart', (event) => { draggedTaskId = taskId; event.dataTransfer?.setData('text/plain', taskId); card.classList.add('opacity-50'); }); card.addEventListener('dragend', () => { draggedTaskId = ''; card.classList.remove('opacity-50'); }); });
-      const dialog = shell.querySelector('#workTaskDialog'); const body = dialog?.querySelector('[data-work-task-body]'); shell.querySelectorAll('[data-work-task-id]').forEach((button) => button.addEventListener('click', async () => { if (!dialog || !body) return; body.textContent = 'Loading…'; dialog.showModal(); try { const response = await fetch(`/tasks/${button.dataset.workTaskId}`); if (!response.ok) throw new Error('Task is unavailable'); const task = await response.json(); const details = document.createElement('div'); details.className = 'space-y-3 text-sm text-gray-700'; [['Title', task.task.title], ['Status', String(task.task.status || '').replaceAll('_', ' ')], ['Responsible', task.owner_name || task.owner_email || 'Unassigned'], ['Due', task.task.due_at ? String(task.task.due_at).slice(0, 10) : '—'], ['Description', task.task.description || 'No description.']].forEach(([label, value]) => { const row = document.createElement('p'); row.textContent = `${label}: ${value}`; details.append(row); }); body.replaceChildren(details); } catch (error) { body.textContent = error instanceof Error ? error.message : 'Could not load task details.'; } })); dialog?.querySelector('[data-work-task-close]')?.addEventListener('click', () => dialog.close());
+      const dialog = shell.querySelector('#workTaskDialog');
+      const body = dialog?.querySelector('[data-work-task-body]');
+      const statusLabel = (value) => String(value || '—').replaceAll('_', ' ');
+      const entityType = (value) => ({ qualification_step: 'Qualification', doe: 'DOE', report: 'Report' }[value] || 'Linked entity');
+      const entityTone = (value) => ({ qualification_step: 'bg-blue-100 text-blue-800', doe: 'bg-violet-100 text-violet-800', report: 'bg-emerald-100 text-emerald-800' }[value] || 'bg-gray-100 text-gray-700');
+      shell.querySelectorAll('[data-work-task-id]').forEach((button) => button.addEventListener('click', async () => {
+        if (!dialog || !body) return;
+        body.textContent = 'Loading…';
+        dialog.showModal();
+        try {
+          const response = await fetch(`/tasks/${button.dataset.workTaskId}`);
+          if (!response.ok) throw new Error('Task is unavailable');
+          const task = await response.json();
+          const details = document.createElement('div');
+          details.className = 'space-y-5 text-sm text-gray-700';
+          const summary = document.createElement('dl');
+          summary.className = 'grid gap-3 sm:grid-cols-2';
+          [['Title', task.task.title], ['Status', statusLabel(task.task.status)], ['Responsible', task.owner_name || task.owner_email || 'Unassigned'], ['Due', task.task.due_at ? String(task.task.due_at).slice(0, 10) : '—'], ['Progress', `${Math.round((task.progress?.percent || 0) * 100)}%`], ['Suggested action', statusLabel(task.suggestedStatus)]].forEach(([label, value]) => {
+            const row = document.createElement('div');
+            row.className = 'min-w-0 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2';
+            const term = document.createElement('dt'); term.className = 'text-xs font-medium uppercase tracking-wide text-gray-500'; term.textContent = label;
+            const description = document.createElement('dd'); description.className = 'mt-1 break-words font-medium text-gray-900'; description.textContent = value || '—';
+            row.append(term, description); summary.append(row);
+          });
+          details.append(summary);
+          const description = document.createElement('p');
+          description.className = 'whitespace-pre-wrap text-sm leading-6 text-gray-600';
+          description.textContent = task.task.description || 'No description.';
+          details.append(description);
+          const entitySection = document.createElement('section');
+          const entities = Array.isArray(task.entities) ? task.entities : [];
+          const heading = document.createElement('h3');
+          heading.className = 'text-base font-semibold text-gray-900';
+          heading.textContent = `Attached entities (${entities.length})`;
+          entitySection.append(heading);
+          if (!entities.length) {
+            const empty = document.createElement('p');
+            empty.className = 'mt-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-3 text-sm text-gray-500';
+            empty.textContent = 'No entities are attached to this task.';
+            entitySection.append(empty);
+          } else {
+            const list = document.createElement('div');
+            list.className = 'mt-2 space-y-2';
+            entities.forEach((entity) => {
+              const row = document.createElement('article');
+              row.className = 'flex min-w-0 items-start justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-3';
+              const info = document.createElement('div'); info.className = 'min-w-0';
+              const title = document.createElement('a'); title.className = 'block truncate font-medium text-blue-700 no-underline hover:text-blue-900 hover:underline'; title.href = entity.href || '#'; title.textContent = entity.display_label || `#${entity.entity_id}`;
+              const meta = document.createElement('div'); meta.className = 'mt-1 flex flex-wrap items-center gap-1.5';
+              const badge = document.createElement('span'); badge.className = `rounded-full px-2 py-0.5 text-xs font-medium ${entityTone(entity.entity_type)}`; badge.textContent = entityType(entity.entity_type);
+              const state = document.createElement('span'); state.className = 'text-xs text-gray-500'; state.textContent = `${statusLabel(entity.status)} · weight ${entity.weight}`;
+              meta.append(badge, state); info.append(title, meta);
+              const actions = document.createElement('div'); actions.className = 'flex shrink-0 flex-col items-end gap-2';
+              if (entity.signature_at || entity.signature_required) { const signature = document.createElement('span'); signature.className = 'text-xs text-gray-500'; signature.textContent = entity.signature_at ? 'Signed' : 'Signature required'; actions.append(signature); }
+              const open = document.createElement('a'); open.className = 'inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-blue-700 no-underline shadow-sm hover:bg-blue-50'; open.href = entity.href || '#'; open.innerHTML = '<span class="material-symbols-rounded text-[15px]" aria-hidden="true">open_in_new</span>Open'; actions.append(open);
+              row.append(info, actions); list.append(row);
+            });
+            entitySection.append(list);
+          }
+          details.append(entitySection);
+          body.replaceChildren(details);
+        } catch (error) {
+          body.textContent = error instanceof Error ? error.message : 'Could not load task details.';
+        }
+      }));
+      dialog?.querySelector('[data-work-task-close]')?.addEventListener('click', () => dialog.close());
+      dialog?.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
     };
     init();
   })();
