@@ -1,13 +1,10 @@
 import type { Db } from "../db.js";
-import {
-  listExperimentsForUserWithMeta,
-  listExperimentsWithMeta,
-  type ExperimentListRow
-} from "../repos/experiments_repo.js";
+import { type ExperimentListRow } from "../repos/experiments_repo.js";
 import { listMyCalendarEvents, type CalendarEvent } from "./calendar_service.js";
 import { isDemoUser } from "./demo_mode.js";
 import { getSystemHealthOverview, type SystemHealthOverview } from "./system_health_service.js";
 import { listProcessesForOwner } from "../repos/processes_repo.js";
+import { listWorkspaceExperimentScope } from "./workspace_scope_service.js";
 
 export type DashboardAction = {
   id: string;
@@ -92,9 +89,7 @@ function actionRank(item: DashboardAction): number {
 }
 
 function selectedScope(db: Db, user: Express.User, selectedProcessId: number | null): Scope {
-  const all = hasPortfolioScope(user)
-    ? listExperimentsWithMeta(db, false)
-    : listExperimentsForUserWithMeta(db, user.id, false);
+  const all = listWorkspaceExperimentScope(db, user).experiments;
   const experiments = selectedProcessId
     ? all.filter((experiment) => Number(experiment.process_id) === selectedProcessId)
     : all;

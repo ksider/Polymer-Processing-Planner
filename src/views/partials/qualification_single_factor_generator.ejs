@@ -1,0 +1,64 @@
+<% if (generator?.type === 'single_factor_sweep') { %>
+  <% const selectedVariable = generator.variable_fields.find((field) => field.code === stepSettings?.jacobs_variable_code) || generator.variable_fields.find((field) => field.code === generator.default_variable_code) || generator.variable_fields[0]; %>
+  <section class="mb-6 overflow-hidden rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs" aria-labelledby="singleFactorSetupTitle">
+    <div class="mb-5 border-b border-default pb-4">
+      <h2 class="text-lg font-semibold tracking-tight text-heading" id="singleFactorSetupTitle">Experiment setup</h2>
+      <p class="mt-1 text-sm text-body">These are common conditions for the complete Jacobs series. They are saved once and are not repeated in the run table.</p>
+    </div>
+    <form action="/experiments/<%= experimentId %>/qualification/<%= step.step_number %>/single-factor-sweep/setup" data-single-factor-setup data-generator-blocked="<%= step.is_blocked === 1 ? '1' : '0' %>">
+      <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <label class="block text-sm font-medium text-heading">Changing parameter
+          <select class="mt-1 block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" name="variable_code" data-setup-variable <%= step.is_blocked === 1 ? 'disabled' : '' %>>
+            <% generator.variable_fields.forEach((field) => { %>
+              <option value="<%= field.code %>" <%= field.code === selectedVariable.code ? 'selected' : '' %>><%= field.label %> (<%= field.unit %>)</option>
+            <% }); %>
+          </select>
+        </label>
+        <% generator.setup_fields.forEach((field) => { %>
+          <label class="block text-sm font-medium text-heading"><%= field.label %>
+            <span class="mt-1 block text-xs font-normal text-body">Common condition<%= field.unit ? ` · ${field.unit}` : '' %></span>
+            <input class="mt-2 block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" name="<%= field.code %>" value="<%= stepSettings?.[field.code] ?? '' %>" type="number" step="any" <%= field.minimum != null ? `min="${field.minimum}"` : '' %> required <%= step.is_blocked === 1 ? 'disabled' : '' %>>
+          </label>
+        <% }); %>
+        <% generator.variable_fields.forEach((field) => { const isSelected = field.code === selectedVariable.code; %>
+          <label class="block text-sm font-medium text-heading" data-setup-fixed-field data-variable-code="<%= field.code %>" <%= isSelected ? 'hidden' : '' %>><%= field.fixed_setup_label %>
+            <span class="mt-1 block text-xs font-normal text-body">Common condition while <%= field.label.toLowerCase() %> varies · <%= field.unit %></span>
+            <input class="mt-2 block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" name="<%= field.fixed_setup_code %>" value="<%= stepSettings?.[field.fixed_setup_code] ?? '' %>" type="number" step="any" <%= field.minimum != null ? `min="${field.minimum}"` : '' %> required data-setup-fixed-input <%= isSelected || step.is_blocked === 1 ? 'disabled' : '' %>>
+          </label>
+        <% }); %>
+      </div>
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50" type="submit" data-setup-submit <%= step.is_blocked === 1 ? 'disabled' : '' %>>Save setup</button>
+        <span class="text-xs text-body" data-setup-status>Changing the parameter updates the visible run-table column.</span>
+      </div>
+    </form>
+  </section>
+
+  <section class="mb-6 overflow-hidden rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs" aria-labelledby="singleFactorGeneratorTitle">
+    <div class="mb-5 border-b border-default pb-4">
+      <h2 class="text-lg font-semibold tracking-tight text-heading" id="singleFactorGeneratorTitle"><%= generator.title %></h2>
+      <p class="mt-1 text-sm text-body"><%= generator.description %></p>
+    </div>
+    <form action="/experiments/<%= experimentId %>/qualification/<%= step.step_number %>/single-factor-sweep" data-single-factor-generator data-generator-blocked="<%= step.is_blocked === 1 ? '1' : '0' %>">
+      <input name="variable_code" type="hidden" value="<%= selectedVariable.code %>">
+      <div class="grid gap-4 lg:grid-cols-3">
+        <label class="block text-sm font-medium text-heading">Levels: <%= selectedVariable.label %> (<%= selectedVariable.unit %>)
+          <input class="mt-1 block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" name="levels" type="text" required placeholder="<%= selectedVariable.example_levels %>" <%= step.is_blocked === 1 ? 'disabled' : '' %>>
+          <span class="mt-1 block text-xs font-normal text-body">Separate levels with semicolons, commas or spaces.</span>
+        </label>
+        <div class="rounded-base bg-neutral-secondary p-3 text-xs text-body">
+          <strong class="text-heading">Saved setup</strong><br>
+          The fixed optical condition is read from Experiment setup; it is not copied into each run.
+        </div>
+        <div class="rounded-base bg-neutral-secondary p-3 text-xs text-body">
+          <strong class="text-heading">Safe update</strong><br>
+          The generator fills blank rows first and creates more if needed. It never overwrites a run with recorded evidence.
+        </div>
+      </div>
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50" type="submit" data-generator-submit <%= step.is_blocked === 1 ? 'disabled' : '' %>>Generate runs</button>
+        <span class="text-xs text-body" data-generator-status>Generated dose remains derived; measure cured depth after each exposure.</span>
+      </div>
+    </form>
+  </section>
+<% } %>

@@ -1,10 +1,12 @@
 import express from "express";
+import multer from "multer";
 import type { Db } from "../db.js";
 import {
   ensureQualificationDefaults,
   getStepDefinitionForExperiment,
   getQualificationSeriesDefinitionsForExperiment,
   getQualificationOutputDefinitionsForExperiment,
+  getQualificationCompactLabelsForExperiment,
   recomputeDerivedAndSummary,
   updateExtrusionRtdMetricsFromSeries,
   saveQualRunValue,
@@ -55,6 +57,31 @@ import { insertAudit } from "../repos/audit_repo.js";
 import { buildExperimentWorkspace } from "../services/experiment_workspace_service.js";
 import { getQualificationStudyGuide } from "../services/qualification_guides.js";
 import { calculateExtrusionScaleUpRecommendation } from "../services/extrusion_scale_up_service.js";
+import { getQualificationArtifactPreset } from "../services/qualification_artifacts.js";
+import { getStoredFileForEntityPlacement, linkStoredFile, unlinkStoredFilesForEntityPlacement } from "../repos/files_repo.js";
+import { MAX_UPLOAD_BYTES, storeUserFiles } from "../services/file_storage_service.js";
+
+const qualificationSeriesUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 2 }
+});
+
+const qualificationSeriesFilePlacement = (seriesCode: string) => `source_file:${seriesCode}`;
+
+function parseTwoColumnInstrumentExport(buffer: Buffer) {
+  const lines = buffer.toString("utf8").replace(/^\uFEFF/, "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (!lines.length) return [] as Array<{ x: number; y: number }>;
+  const sample = lines[0];
+  const delimiter = sample.includes("\t") ? "\t" : sample.includes(";") ? ";" : sample.includes(",") ? "," : null;
+  const numeric = (cell: string) => Number((delimiter === "," ? cell : cell.replace(",", ".")).trim().replace(/^"|"$/g, ""));
+  return lines.flatMap((line) => {
+    const cells = delimiter ? line.split(delimiter) : line.split(/\s+/);
+    if (cells.length < 2) return [];
+    const x = numeric(cells[0]);
+    const y = numeric(cells[1]);
+    return Number.isFinite(x) && Number.isFinite(y) ? [{ x, y }] : [];
+  });
+}
 
 function hasRole(req: express.Request, roles: string[]) {
   return roles.includes(req.user?.role ?? "");
@@ -165,6 +192,84 @@ export function createQualificationRouter(db: Db) {
         stepSettings = {};
       }
     }
+    const dimensionalArtifact = processTypeCode === "sla_dlp" && stepNumber === 4
+      ? getQualificationArtifactPreset(stepSettings.dimensional_artifact_preset)
+      : null;
+    const dimensionalReference = (() => {
+      if (processTypeCode !== "sla_dlp" || stepNumber !== 4) return null;
+      const sourceStep = getQualStep(db, experimentId, 3);
+      const outputs = new Map((sourceStep ? listQualStepOutputs(db, sourceStep.id) : [])
+        .map((output) => [output.output_code, output.value_real]));
+      const number = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : null;
+      return {
+        href: `/experiments/${experimentId}/qualification/3`,
+        layerHeightUm: number(outputs.get("qualified_layer_height_um")),
+        exposureTimeS: number(outputs.get("nominal_exposure_s"))
+      };
+    })();
+    const peelForceReference = (() => {
+      if (processTypeCode !== "sla_dlp" || stepNumber !== 5) return null;
+      const sourceStep = getQualStep(db, experimentId, 3);
+      const outputs = new Map((sourceStep ? listQualStepOutputs(db, sourceStep.id) : [])
+        .map((output) => [output.output_code, output.value_real]));
+      const number = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : null;
+      return {
+        href: `/experiments/${experimentId}/qualification/3`,
+        layerHeightUm: number(outputs.get("qualified_layer_height_um")),
+        exposureTimeS: number(outputs.get("nominal_exposure_s"))
+      };
+    })();
+    const postCureReference = (() => {
+      if (processTypeCode !== "sla_dlp" || stepNumber !== 6) return null;
+      const sourceStep = getQualStep(db, experimentId, 3);
+      const outputs = new Map((sourceStep ? listQualStepOutputs(db, sourceStep.id) : [])
+        .map((output) => [output.output_code, output.value_real]));
+      const number = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : null;
+      return {
+        href: `/experiments/${experimentId}/qualification/3`,
+        layerHeightUm: number(outputs.get("qualified_layer_height_um")),
+        exposureTimeS: number(outputs.get("nominal_exposure_s"))
+      };
+    })();
+    const finalMechanicalReference = (() => {
+      if (processTypeCode !== "sla_dlp" || stepNumber !== 7) return null;
+      const sourceStep = getQualStep(db, experimentId, 6);
+      const materialStep = getQualStep(db, experimentId, 1);
+      const outputs = new Map((sourceStep ? listQualStepOutputs(db, sourceStep.id) : [])
+        .map((output) => [output.output_code, output.value_real]));
+      const materialId = (() => {
+        if (!materialStep) return null;
+        const batchField = listQualFields(db, materialStep.id).find((field) => field.code === "resin_batch");
+        if (!batchField) return null;
+        for (const sourceRun of listQualRuns(db, materialStep.id)) {
+          const value = listQualRunValues(db, sourceRun.id).find((item) => item.field_id === batchField.id)?.value_text?.trim();
+          if (value) return value;
+        }
+        return null;
+      })();
+      const number = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : null;
+      return {
+        href: `/experiments/${experimentId}/qualification/6`,
+        materialHref: `/experiments/${experimentId}/qualification/1`,
+        materialId,
+        postCureTimeMin: number(outputs.get("post_cure_time_min")),
+        postCureTempC: number(outputs.get("post_cure_temp_c")),
+        postCureIrradianceMwCm2: number(outputs.get("post_cure_irradiance_mw_cm2")),
+        finalTgC: number(outputs.get("final_tg_c"))
+      };
+    })();
+    const rheologyReference = (() => {
+      if (processTypeCode !== "sla_dlp" || stepNumber !== 8) return null;
+      const materialStep = getQualStep(db, experimentId, 1);
+      if (!materialStep) return { materialHref: `/experiments/${experimentId}/qualification/1`, materialId: null };
+      const batchField = listQualFields(db, materialStep.id).find((field) => field.code === "resin_batch");
+      const materialId = batchField
+        ? listQualRuns(db, materialStep.id)
+          .map((run) => listQualRunValues(db, run.id).find((value) => value.field_id === batchField.id)?.value_text?.trim())
+          .find(Boolean) || null
+        : null;
+      return { materialHref: `/experiments/${experimentId}/qualification/1`, materialId };
+    })();
     const canAssignEntities = canAssignEntityResponsibility(req.user, experiment);
     const assignableUsers = canAssignEntities
       ? listUsers(db).filter((user) => user.status === "ACTIVE")
@@ -193,8 +298,68 @@ export function createQualificationRouter(db: Db) {
       stepNumber
     );
     const runSeries = seriesDefinitions.length ? listQualRunSeries(db, step.id) : [];
+    const finalMechanicalCurveFiles = processTypeCode === "sla_dlp" && stepNumber === 7
+      ? Object.fromEntries(runs.map((run) => {
+          const file = getStoredFileForEntityPlacement(db, {
+            entityType: "qualification_run",
+            entityId: run.id,
+            placement: qualificationSeriesFilePlacement("stress_strain_curve")
+          });
+          return [String(run.id), file ? {
+            id: file.id,
+            originalName: file.original_name,
+            sizeBytes: file.size_bytes,
+            downloadUrl: `/files/${file.id}/download`
+          } : null];
+        }))
+      : {};
+    const rheologyCurveFiles = processTypeCode === "sla_dlp" && stepNumber === 8
+      ? Object.fromEntries(runs.map((run) => {
+          const file = getStoredFileForEntityPlacement(db, {
+            entityType: "qualification_run",
+            entityId: run.id,
+            placement: qualificationSeriesFilePlacement("resin_flow_curve")
+          });
+          return [String(run.id), file ? {
+            id: file.id,
+            originalName: file.original_name,
+            sizeBytes: file.size_bytes,
+            downloadUrl: `/files/${file.id}/download`
+          } : null];
+        }))
+      : {};
     const outputDefinitions = getQualificationOutputDefinitionsForExperiment(db, experimentId, stepNumber);
     const stepOutputs = outputDefinitions.length ? listQualStepOutputs(db, step.id) : [];
+    const jacobsReference = (() => {
+      if (processTypeCode !== "sla_dlp" || stepNumber !== 3) return null;
+      const sourceStep = getQualStep(db, experimentId, 2);
+      if (!sourceStep) return null;
+      const outputs = new Map(listQualStepOutputs(db, sourceStep.id).map((output) => [output.output_code, output.value_real]));
+      const sourceSummaryRow = listQualSummaries(db, experimentId).find((row) => row.step_number === 2);
+      let sourceSummary: Record<string, unknown> = {};
+      let sourceSettings: Record<string, unknown> = {};
+      try { sourceSummary = JSON.parse(sourceSummaryRow?.summary_json || "{}") as Record<string, unknown>; } catch {}
+      try { sourceSettings = JSON.parse(getQualStepSettings(db, experimentId, 2) || "{}") as Record<string, unknown>; } catch {}
+      const curve = sourceSummary.jacobs_working_curve as Record<string, unknown> | undefined;
+      const number = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : null;
+      const variableCode = String(sourceSettings.jacobs_variable_code || "exposure_time_s");
+      return {
+        href: `/experiments/${experimentId}/qualification/2`,
+        fitValid: curve?.fit_valid === true,
+        pointCount: number(curve?.point_count) ?? 0,
+        ec: number(outputs.get("critical_exposure_ec_mj_cm2")),
+        dp: number(outputs.get("penetration_depth_dp_um")),
+        rSquared: number(outputs.get("working_curve_r_squared")),
+        wavelengthNm: number(sourceSettings.jacobs_wavelength_nm),
+        resinTempC: number(sourceSettings.jacobs_resin_temp_c),
+        variableLabel: variableCode === "irradiance_mw_cm2" ? "Measured irradiance" : "Exposure time",
+        fixedLabel: variableCode === "irradiance_mw_cm2" ? "Fixed exposure time" : "Fixed measured irradiance",
+        fixedValue: number(variableCode === "irradiance_mw_cm2"
+          ? sourceSettings.jacobs_fixed_exposure_time_s
+          : sourceSettings.jacobs_fixed_irradiance_mw_cm2),
+        fixedUnit: variableCode === "irradiance_mw_cm2" ? "s" : "mW/cm²"
+      };
+    })();
     const feederStep = processTypeCode === "extrusion_v1" && stepNumber === 3
       ? getQualStep(db, experimentId, 2)
       : null;
@@ -319,6 +484,16 @@ export function createQualificationRouter(db: Db) {
         runSeries,
         outputDefinitions,
         stepOutputs,
+        jacobsReference,
+        dimensionalArtifact,
+        dimensionalReference,
+        peelForceReference,
+        postCureReference,
+        finalMechanicalReference,
+        finalMechanicalCurveFiles,
+        rheologyReference,
+        rheologyCurveFiles,
+        compactFieldLabels: getQualificationCompactLabelsForExperiment(db, experimentId),
         feederThroughputLevels,
         rheologyReferenceViscosity,
         thermalSuggestedSpeeds: thermalSuggestions.speeds,
@@ -562,6 +737,9 @@ export function createQualificationRouter(db: Db) {
       step.step_number
     ).find((item) => item.code === seriesCode);
     if (!definition) return res.status(404).json({ error: "Series is not declared for this stage" });
+    if (definition.source === "run_fields") {
+      return res.status(409).json({ error: "This chart is generated from the qualification runs and cannot accept an imported series" });
+    }
     const rawPoints = Array.isArray(req.body?.points) ? req.body.points : [];
     if (rawPoints.length < definition.minimum_points) {
       return res.status(400).json({ error: `At least ${definition.minimum_points} points are required` });
@@ -600,6 +778,107 @@ export function createQualificationRouter(db: Db) {
     return res.json({ ok: true, point_count: points.length, rtd_metrics: rtdMetrics });
   });
 
+  // Instrument exports are both evidence and portable files. The parsed
+  // points live in the series tables for plotting; the untouched TXT/CSV/TSV
+  // source is linked into the shared file repository for traceability.
+  router.post(
+    "/qual-runs/:id/series/:seriesCode/file",
+    ensureQualRunAccess,
+    qualificationSeriesUpload.single("file"),
+    async (req, res) => {
+      if (!hasRole(req, ["admin", "manager", "engineer", "operator"])) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const runId = Number(req.params.id);
+      const run = getQualRun(db, runId);
+      if (!run) return res.status(404).json({ error: "Run not found" });
+      const step = getQualStepById(db, run.step_id);
+      if (!step) return res.status(404).json({ error: "Step not found" });
+      if (rejectBlockedStep(res, step)) return;
+      const seriesCode = String(req.params.seriesCode || "").trim();
+      const definition = getQualificationSeriesDefinitionsForExperiment(
+        db,
+        run.experiment_id,
+        step.step_number
+      ).find((item) => item.code === seriesCode);
+      if (!definition || definition.source === "run_fields") {
+        return res.status(404).json({ error: "An imported instrument series is not declared for this run" });
+      }
+      const file = req.file as Express.Multer.File | undefined;
+      if (!file) return res.status(400).json({ error: "Choose a TXT, CSV or TSV instrument export" });
+      if (!/\.(csv|tsv|txt)$/i.test(file.originalname)) {
+        return res.status(400).json({ error: "Use a TXT, CSV or TSV instrument export" });
+      }
+      const points = parseTwoColumnInstrumentExport(file.buffer);
+      if (points.length < definition.minimum_points) {
+        return res.status(400).json({ error: `The file must contain at least ${definition.minimum_points} numeric strain/stress rows` });
+      }
+      if (points.length > 50_000) return res.status(400).json({ error: "A series cannot contain more than 50000 points" });
+      if (!req.user?.id) return res.status(401).json({ error: "A signed-in uploader is required" });
+      try {
+        const [stored] = await storeUserFiles(db, req.user.id, [file]);
+        const placement = qualificationSeriesFilePlacement(seriesCode);
+        unlinkStoredFilesForEntityPlacement(db, { entityType: "qualification_run", entityId: runId, placement });
+        linkStoredFile(db, { fileId: stored.id, entityType: "qualification_run", entityId: runId, placement });
+        replaceQualRunSeries(db, {
+          experimentId: run.experiment_id,
+          stepId: step.id,
+          runId,
+          seriesCode,
+          contractVersion: definition.contract_version,
+          sourceName: stored.original_name,
+          points
+        });
+        recomputeDerivedAndSummary(db, run.experiment_id, step.id, step.step_number);
+        insertAudit(db, {
+          actorUserId: req.user.id,
+          action: "qualification.series_source.upload",
+          targetUserId: req.user.id,
+          detailsJson: JSON.stringify({ experiment_id: run.experiment_id, qualification_run_id: runId, series_code: seriesCode, file_id: stored.id, point_count: points.length })
+        });
+        return res.status(201).json({
+          ok: true,
+          point_count: points.length,
+          file: { id: stored.id, name: stored.original_name, download_url: `/files/${stored.id}/download` }
+        });
+      } catch (error) {
+        return res.status(400).json({ error: error instanceof Error ? error.message : "Instrument export could not be stored" });
+      }
+    }
+  );
+
+  router.delete("/qual-runs/:id/series/:seriesCode/source", ensureQualRunAccess, (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer", "operator"])) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const runId = Number(req.params.id);
+    const run = getQualRun(db, runId);
+    if (!run) return res.status(404).json({ error: "Run not found" });
+    const step = getQualStepById(db, run.step_id);
+    if (!step) return res.status(404).json({ error: "Step not found" });
+    if (rejectBlockedStep(res, step)) return;
+    const seriesCode = String(req.params.seriesCode || "").trim();
+    const definition = getQualificationSeriesDefinitionsForExperiment(db, run.experiment_id, step.step_number)
+      .find((item) => item.code === seriesCode);
+    if (!definition || definition.source === "run_fields") {
+      return res.status(404).json({ error: "An imported instrument series is not declared for this run" });
+    }
+    deleteQualRunSeries(db, runId, seriesCode);
+    unlinkStoredFilesForEntityPlacement(db, {
+      entityType: "qualification_run",
+      entityId: runId,
+      placement: qualificationSeriesFilePlacement(seriesCode)
+    });
+    recomputeDerivedAndSummary(db, run.experiment_id, step.id, step.step_number);
+    insertAudit(db, {
+      actorUserId: req.user?.id ?? null,
+      action: "qualification.series_source.unlink",
+      targetUserId: req.user?.id ?? null,
+      detailsJson: JSON.stringify({ experiment_id: run.experiment_id, qualification_run_id: runId, series_code: seriesCode })
+    });
+    return res.json({ ok: true });
+  });
+
   router.delete("/qual-runs/:id/series/:seriesCode", ensureQualRunAccess, (req, res) => {
     if (!hasRole(req, ["admin", "manager", "engineer", "operator"])) {
       return res.status(403).json({ error: "Forbidden" });
@@ -611,13 +890,21 @@ export function createQualificationRouter(db: Db) {
     if (!step) return res.status(404).json({ error: "Step not found" });
     if (rejectBlockedStep(res, step)) return;
     const seriesCode = String(req.params.seriesCode || "").trim();
-    const isDeclared = getQualificationSeriesDefinitionsForExperiment(
+    const definition = getQualificationSeriesDefinitionsForExperiment(
       db,
       run.experiment_id,
       step.step_number
-    ).some((item) => item.code === seriesCode);
-    if (!isDeclared) return res.status(404).json({ error: "Series is not declared for this stage" });
+    ).find((item) => item.code === seriesCode);
+    if (!definition) return res.status(404).json({ error: "Series is not declared for this stage" });
+    if (definition.source === "run_fields") {
+      return res.status(409).json({ error: "This chart is generated from the qualification runs and has no imported series to clear" });
+    }
     deleteQualRunSeries(db, runId, seriesCode);
+    unlinkStoredFilesForEntityPlacement(db, {
+      entityType: "qualification_run",
+      entityId: runId,
+      placement: qualificationSeriesFilePlacement(seriesCode)
+    });
     if (step.step_number === 5 && seriesCode === "tracer_concentration_response") {
       updateExtrusionRtdMetricsFromSeries(db, step.id, runId);
     }
@@ -642,7 +929,10 @@ export function createQualificationRouter(db: Db) {
     updateQualRunFlags(db, runId, done, exclude);
     updateQualRunDueAt(db, runId, dueAt);
     recomputeDerivedAndSummary(db, run.experiment_id, run.step_id, step.step_number);
-    return res.json({ ok: true });
+    const summaryRow = listQualSummaries(db, run.experiment_id).find((item) => item.step_number === step.step_number);
+    let summary: Record<string, unknown> = {};
+    try { summary = JSON.parse(summaryRow?.summary_json || "{}"); } catch {}
+    return res.json({ ok: true, summary });
   });
 
   router.post("/qual-runs/:id/due-at", ensureQualRunAccess, (req, res) => {
@@ -695,10 +985,16 @@ export function createQualificationRouter(db: Db) {
     const definition = getQualificationOutputDefinitionsForExperiment(db, experimentId, stepNumber)
       .find((item) => item.code === outputCode);
     if (!definition) return res.status(404).json({ error: "Output is not declared for this stage" });
+    if (definition.value_source === "summary") {
+      return res.status(409).json({ error: "This output is calculated from the run evidence and cannot be edited manually" });
+    }
     const rawValue = String(req.body?.value ?? "").trim();
     const valueReal = definition.field_type === "number" && rawValue !== "" ? Number(rawValue) : null;
     if (definition.field_type === "number" && rawValue !== "" && !Number.isFinite(valueReal)) {
       return res.status(400).json({ error: "A finite numeric value is required" });
+    }
+    if (rawValue && definition.allowed_values?.length && !definition.allowed_values.some((option) => option.value === rawValue)) {
+      return res.status(400).json({ error: "Choose a declared output value" });
     }
     upsertQualStepOutput(db, {
       experiment_id: experimentId,
@@ -711,6 +1007,744 @@ export function createQualificationRouter(db: Db) {
     });
     recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
     return res.json({ ok: true });
+  });
+
+  router.post("/experiments/:id/qualification/:step/single-factor-sweep/setup", (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer"])) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    const step = getQualStep(db, experimentId, stepNumber);
+    const generator = getStepDefinitionForExperiment(db, experimentId, stepNumber)?.run_generator;
+    if (!step || !generator || generator.type !== "single_factor_sweep") {
+      return res.status(404).json({ error: "A single-factor setup is not declared for this stage" });
+    }
+    if (rejectBlockedStep(res, step)) return;
+
+    const variableCode = String(req.body?.variable_code || "").trim();
+    const variableField = generator.variable_fields.find((field) => field.code === variableCode);
+    if (!variableField) return res.status(400).json({ error: "Choose a declared varying parameter" });
+    const parseNumber = (value: unknown) => {
+      const parsed = Number(String(value ?? "").trim().replace(",", "."));
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    const values: Record<string, number> = {};
+    for (const field of generator.setup_fields) {
+      const value = parseNumber(req.body?.[field.code]);
+      if (value == null || (field.minimum != null && value < field.minimum)) {
+        return res.status(400).json({ error: `Enter a valid setup value for ${field.label}` });
+      }
+      values[field.code] = value;
+    }
+    const fixedValue = parseNumber(req.body?.[variableField.fixed_setup_code]);
+    if (fixedValue == null || (variableField.minimum != null && fixedValue < variableField.minimum)) {
+      return res.status(400).json({ error: `Enter a valid setup value for ${variableField.fixed_setup_label}` });
+    }
+    values[variableField.fixed_setup_code] = fixedValue;
+
+    let existingSettings: Record<string, unknown> = {};
+    const existingRaw = getQualStepSettings(db, experimentId, stepNumber);
+    if (existingRaw) {
+      try {
+        existingSettings = JSON.parse(existingRaw) as Record<string, unknown>;
+      } catch {
+        existingSettings = {};
+      }
+    }
+    const nextSettings = {
+      ...existingSettings,
+      ...values,
+      jacobs_variable_code: variableCode
+    };
+    upsertQualStepSettings(db, experimentId, stepNumber, JSON.stringify(nextSettings));
+    // A Jacobs setup is the source of the fixed optical/material conditions
+    // for the following exposure/layer matrix. Hand off only empty Step 3
+    // fields: a user may deliberately refine them there without Step 2 later
+    // overwriting that decision.
+    const followingGenerator = getStepDefinitionForExperiment(db, experimentId, stepNumber + 1)?.run_generator;
+    const followingStep = getQualStep(db, experimentId, stepNumber + 1);
+    if (followingStep && followingGenerator?.type === "exposure_layer_matrix") {
+      let followingSettings: Record<string, unknown> = {};
+      const followingRaw = getQualStepSettings(db, experimentId, stepNumber + 1);
+      if (followingRaw) {
+        try {
+          followingSettings = JSON.parse(followingRaw) as Record<string, unknown>;
+        } catch {
+          followingSettings = {};
+        }
+      }
+      const nextFollowingSettings = {
+        ...followingSettings,
+        exposure_window_wavelength_nm: followingSettings.exposure_window_wavelength_nm ?? values.jacobs_wavelength_nm ?? null,
+        exposure_window_resin_temp_c: followingSettings.exposure_window_resin_temp_c ?? values.jacobs_resin_temp_c ?? null,
+        exposure_window_irradiance_mw_cm2: followingSettings.exposure_window_irradiance_mw_cm2 ?? (
+          variableCode === "exposure_time_s" ? fixedValue : null
+        ),
+        exposure_window_bottom_exposure_s: followingSettings.exposure_window_bottom_exposure_s ?? null
+      };
+      if (JSON.stringify(nextFollowingSettings) !== followingRaw) {
+        upsertQualStepSettings(db, experimentId, stepNumber + 1, JSON.stringify(nextFollowingSettings));
+      }
+    }
+    listQualFields(db, step.id).forEach((field) => {
+      if (["irradiance_mw_cm2", "exposure_time_s"].includes(field.code)) {
+        const isEnabled = field.code === variableCode ? 1 : 0;
+        if (field.is_enabled !== isEnabled) updateQualField(db, field.id, { is_enabled: isEnabled });
+      }
+    });
+    recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
+    return res.json({ ok: true, settings: nextSettings, variable_code: variableCode });
+  });
+
+  router.post("/experiments/:id/qualification/:step/single-factor-sweep", (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer"])) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    const step = getQualStep(db, experimentId, stepNumber);
+    const generator = getStepDefinitionForExperiment(db, experimentId, stepNumber)?.run_generator;
+    if (!step || !generator || generator.type !== "single_factor_sweep") {
+      return res.status(404).json({ error: "A single-factor run generator is not declared for this stage" });
+    }
+    if (rejectBlockedStep(res, step)) return;
+
+    const variableCode = String(req.body?.variable_code || "").trim();
+    const variableField = generator.variable_fields.find((field) => field.code === variableCode);
+    if (!variableField) return res.status(400).json({ error: "Choose a declared varying parameter" });
+    const parseNumber = (value: unknown) => {
+      const parsed = Number(String(value ?? "").trim().replace(",", "."));
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    const levels = [...new Set(String(req.body?.levels || "").split(/[;,\s]+/)
+      .map((value) => Number(value.replace(",", ".")))
+      .filter((value) => Number.isFinite(value) && (variableField.minimum == null || value >= variableField.minimum)))]
+      .sort((left, right) => left - right);
+    if (!levels.length) {
+      return res.status(400).json({ error: `Enter one or more valid ${variableField.label.toLowerCase()} levels` });
+    }
+    if (levels.length > 100) return res.status(400).json({ error: "A generator may create at most 100 runs at once" });
+
+    let setup: Record<string, unknown> = {};
+    const setupRaw = getQualStepSettings(db, experimentId, stepNumber);
+    if (setupRaw) {
+      try {
+        setup = JSON.parse(setupRaw) as Record<string, unknown>;
+      } catch {
+        setup = {};
+      }
+    }
+    if (String(setup.jacobs_variable_code || generator.default_variable_code) !== variableCode) {
+      return res.status(400).json({ error: "Save the experiment setup before generating this run series" });
+    }
+    for (const field of generator.setup_fields) {
+      const value = parseNumber(setup[field.code]);
+      if (value == null || (field.minimum != null && value < field.minimum)) {
+        return res.status(400).json({ error: `Complete Experiment setup: ${field.label}` });
+      }
+    }
+    const configuredFixedValue = parseNumber(setup[variableField.fixed_setup_code]);
+    if (configuredFixedValue == null || (variableField.minimum != null && configuredFixedValue < variableField.minimum)) {
+      return res.status(400).json({ error: `Complete Experiment setup: ${variableField.fixed_setup_label}` });
+    }
+
+    const fieldsByCode = new Map(listQualFields(db, step.id)
+      .filter((field) => field.is_enabled === 1)
+      .map((field) => [field.code, field]));
+    const missingField = !fieldsByCode.has(variableCode) ? variableCode : null;
+    if (missingField) return res.status(400).json({ error: `Generator field is unavailable: ${missingField}` });
+
+    const hasRecordedValue = (runId: number) => listQualRunValues(db, runId).some((value) => (
+      value.value_real != null || value.value_text != null || value.value_tags_json != null
+    ));
+    let blankRuns = listQualRuns(db, step.id)
+      .filter((run) => run.run_group === "default" && !hasRecordedValue(run.id));
+    const created = Math.max(0, levels.length - blankRuns.length);
+    if (created) {
+      createQualRuns(db, experimentId, step.id, created);
+      blankRuns = listQualRuns(db, step.id)
+        .filter((run) => run.run_group === "default" && !hasRecordedValue(run.id));
+    }
+    const generatedRuns = blankRuns.slice(0, levels.length);
+    generatedRuns.forEach((run, index) => {
+      const field = fieldsByCode.get(variableCode)!;
+      saveQualRunValue(db, run.id, field.id, field.field_type, levels[index]);
+    });
+    recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
+    return res.json({
+      ok: true,
+      variable_code: variableCode,
+      levels,
+      generated_run_codes: generatedRuns.map((run) => run.run_code),
+      created
+    });
+  });
+
+  router.post("/experiments/:id/qualification/:step/exposure-layer-matrix/setup", (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer"])) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    const step = getQualStep(db, experimentId, stepNumber);
+    const generator = getStepDefinitionForExperiment(db, experimentId, stepNumber)?.run_generator;
+    if (!step || !generator || generator.type !== "exposure_layer_matrix") {
+      return res.status(404).json({ error: "An exposure-layer matrix setup is not declared for this stage" });
+    }
+    if (rejectBlockedStep(res, step)) return;
+    const parseNumber = (value: unknown) => {
+      const parsed = Number(String(value ?? "").trim().replace(",", "."));
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    const values: Record<string, number | null> = {};
+    for (const field of generator.setup_fields) {
+      const raw = String(req.body?.[field.code] ?? "").trim();
+      const value = raw ? parseNumber(raw) : null;
+      if (field.required && value == null) {
+        return res.status(400).json({ error: `Enter a setup value for ${field.label}` });
+      }
+      if (value != null && field.minimum != null && value < field.minimum) {
+        return res.status(400).json({ error: `Enter a valid setup value for ${field.label}` });
+      }
+      values[field.code] = value;
+    }
+    let existingSettings: Record<string, unknown> = {};
+    const existingRaw = getQualStepSettings(db, experimentId, stepNumber);
+    if (existingRaw) {
+      try {
+        existingSettings = JSON.parse(existingRaw) as Record<string, unknown>;
+      } catch {
+        existingSettings = {};
+      }
+    }
+    const settings = { ...existingSettings, ...values };
+    upsertQualStepSettings(db, experimentId, stepNumber, JSON.stringify(settings));
+    recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
+    return res.json({ ok: true, settings });
+  });
+
+  router.post("/experiments/:id/qualification/:step/exposure-layer-matrix", (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer"])) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    const step = getQualStep(db, experimentId, stepNumber);
+    const generator = getStepDefinitionForExperiment(db, experimentId, stepNumber)?.run_generator;
+    if (!step || !generator || generator.type !== "exposure_layer_matrix") {
+      return res.status(404).json({ error: "An exposure-layer matrix generator is not declared for this stage" });
+    }
+    if (rejectBlockedStep(res, step)) return;
+    const parseLevels = (value: unknown, minimum: number) => [...new Set(String(value ?? "").split(/[;,\s]+/)
+      .map((item) => Number(item.replace(",", ".")))
+      .filter((item) => Number.isFinite(item) && item >= minimum))]
+      .sort((left, right) => left - right);
+    const layerField = generator.variable_fields[0];
+    const overcureField = generator.variable_fields[1];
+    const layerHeights = parseLevels(req.body?.layer_height_levels, layerField.minimum ?? 0);
+    const overcureTargets = parseLevels(req.body?.target_overcure_levels, overcureField.minimum ?? -99.999);
+    if (!layerHeights.length || !overcureTargets.length) {
+      return res.status(400).json({ error: "Enter at least one layer height and one target overcure level" });
+    }
+    const cellCount = layerHeights.length * overcureTargets.length;
+    if (cellCount > 100) return res.status(400).json({ error: "A generator may create at most 100 runs at once" });
+
+    let setup: Record<string, unknown> = {};
+    const setupRaw = getQualStepSettings(db, experimentId, stepNumber);
+    if (setupRaw) {
+      try {
+        setup = JSON.parse(setupRaw) as Record<string, unknown>;
+      } catch {
+        setup = {};
+      }
+    }
+    const numericSetting = (value: unknown) => {
+      const parsed = Number(String(value ?? "").trim().replace(",", "."));
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    for (const field of generator.setup_fields.filter((item) => item.required)) {
+      const value = numericSetting(setup[field.code]);
+      if (value == null || (field.minimum != null && value < field.minimum)) {
+        return res.status(400).json({ error: `Complete Experiment setup: ${field.label}` });
+      }
+    }
+    const irradiance = numericSetting(setup.exposure_window_irradiance_mw_cm2);
+    if (irradiance == null || irradiance <= 0) {
+      return res.status(400).json({ error: "Complete Experiment setup: Measured irradiance" });
+    }
+    const jacobsStep = getQualStep(db, experimentId, 2);
+    const jacobsOutputs = new Map((jacobsStep ? listQualStepOutputs(db, jacobsStep.id) : [])
+      .map((output) => [output.output_code, output.value_real]));
+    const ec = jacobsOutputs.get("critical_exposure_ec_mj_cm2");
+    const dp = jacobsOutputs.get("penetration_depth_dp_um");
+    if (!Number.isFinite(ec) || (ec as number) <= 0 || !Number.isFinite(dp) || (dp as number) <= 0) {
+      return res.status(400).json({ error: "A valid Step 2 Jacobs fit (Ec and Dp) is required before generating this matrix" });
+    }
+
+    const fields = new Map(listQualFields(db, step.id).map((field) => [field.code, field]));
+    const layerHeightField = fields.get("layer_height_um");
+    const targetOvercureField = fields.get("target_overcure_pct");
+    const exposureTimeField = fields.get("exposure_time_s");
+    if (!layerHeightField || !targetOvercureField || !exposureTimeField || layerHeightField.is_enabled !== 1 || targetOvercureField.is_enabled !== 1 || exposureTimeField.is_enabled !== 1) {
+      return res.status(400).json({ error: "The matrix run fields are unavailable" });
+    }
+    const matrix = layerHeights.flatMap((layerHeight) => overcureTargets.map((targetOvercure) => {
+      const targetCureDepth = layerHeight * (1 + targetOvercure / 100);
+      const dose = (ec as number) * Math.exp(targetCureDepth / (dp as number));
+      return { layerHeight, targetOvercure, exposureTime: dose / irradiance };
+    }));
+    if (matrix.some((cell) => !Number.isFinite(cell.exposureTime) || cell.exposureTime <= 0)) {
+      return res.status(400).json({ error: "The Step 2 curve cannot produce a finite positive exposure time for this matrix" });
+    }
+    const hasRecordedValue = (runId: number) => listQualRunValues(db, runId).some((value) => (
+      value.value_real != null || value.value_text != null || value.value_tags_json != null
+    ));
+    let blankRuns = listQualRuns(db, step.id)
+      .filter((run) => run.run_group === "default" && !hasRecordedValue(run.id));
+    const created = Math.max(0, matrix.length - blankRuns.length);
+    if (created) {
+      createQualRuns(db, experimentId, step.id, created);
+      blankRuns = listQualRuns(db, step.id)
+        .filter((run) => run.run_group === "default" && !hasRecordedValue(run.id));
+    }
+    const generatedRuns = blankRuns.slice(0, matrix.length);
+    generatedRuns.forEach((run, index) => {
+      const cell = matrix[index];
+      saveQualRunValue(db, run.id, layerHeightField.id, layerHeightField.field_type, cell.layerHeight);
+      saveQualRunValue(db, run.id, targetOvercureField.id, targetOvercureField.field_type, cell.targetOvercure);
+      saveQualRunValue(db, run.id, exposureTimeField.id, exposureTimeField.field_type, cell.exposureTime);
+    });
+    upsertQualStepSettings(db, experimentId, stepNumber, JSON.stringify({
+      ...setup,
+      exposure_window_layer_height_levels: layerHeights.join("; "),
+      exposure_window_target_overcure_levels: overcureTargets.join("; ")
+    }));
+    recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
+    return res.json({
+      ok: true,
+      matrix_cell_count: matrix.length,
+      generated_run_codes: generatedRuns.map((run) => run.run_code),
+      created
+    });
+  });
+
+  router.post("/experiments/:id/qualification/:step/peel-force-matrix/setup", (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer"])) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    const step = getQualStep(db, experimentId, stepNumber);
+    const generator = getStepDefinitionForExperiment(db, experimentId, stepNumber)?.run_generator;
+    if (!step || !generator || generator.type !== "peel_force_matrix") {
+      return res.status(404).json({ error: "A peel-force matrix setup is not declared for this stage" });
+    }
+    if (rejectBlockedStep(res, step)) return;
+    const positiveNumber = (value: unknown) => {
+      const parsed = Number(String(value ?? "").trim().replace(",", "."));
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    };
+    const vatFilm = String(req.body?.peel_vat_film_type ?? "").trim();
+    const vatFilmField = listQualFields(db, step.id).find((field) => field.code === "vat_film_type");
+    let allowedFilms: string[] = [];
+    try { allowedFilms = JSON.parse(vatFilmField?.allowed_values_json || "[]") as string[]; } catch {}
+    if (!vatFilm || (allowedFilms.length && !allowedFilms.includes(vatFilm))) {
+      return res.status(400).json({ error: "Choose a declared vat-film type" });
+    }
+    const supportNeck = positiveNumber(req.body?.peel_support_neck_diameter_mm);
+    const layerHeight = positiveNumber(req.body?.peel_layer_height_um);
+    const supportGeometry = String(req.body?.peel_support_geometry_note ?? "").trim();
+    if (supportNeck == null) return res.status(400).json({ error: "Enter a positive support-neck diameter" });
+    if (layerHeight == null) return res.status(400).json({ error: "Enter a positive qualified layer height" });
+    if (!supportGeometry) return res.status(400).json({ error: "Describe the fixed support geometry" });
+
+    let existingSettings: Record<string, unknown> = {};
+    const existingRaw = getQualStepSettings(db, experimentId, stepNumber);
+    try { existingSettings = JSON.parse(existingRaw || "{}") as Record<string, unknown>; } catch {}
+    const settings = {
+      ...existingSettings,
+      peel_vat_film_type: vatFilm,
+      peel_support_neck_diameter_mm: supportNeck,
+      peel_support_geometry_note: supportGeometry,
+      peel_layer_height_um: layerHeight
+    };
+    upsertQualStepSettings(db, experimentId, stepNumber, JSON.stringify(settings));
+    recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
+    return res.json({ ok: true, settings });
+  });
+
+  router.post("/experiments/:id/qualification/:step/peel-force-matrix", (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer"])) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    const step = getQualStep(db, experimentId, stepNumber);
+    const generator = getStepDefinitionForExperiment(db, experimentId, stepNumber)?.run_generator;
+    if (!step || !generator || generator.type !== "peel_force_matrix") {
+      return res.status(404).json({ error: "A peel-force matrix generator is not declared for this stage" });
+    }
+    if (rejectBlockedStep(res, step)) return;
+    const parseLevels = (value: unknown, minimum: number) => [...new Set(String(value ?? "").split(/[;,\s]+/)
+      .map((item) => Number(item.replace(",", ".")))
+      .filter((item) => Number.isFinite(item) && item >= minimum))]
+      .sort((left, right) => left - right);
+    const liftField = generator.variable_fields[0];
+    const areaField = generator.variable_fields[1];
+    const exposureField = generator.variable_fields[2];
+    const liftSpeeds = parseLevels(req.body?.lift_speed_levels, liftField.minimum ?? 0);
+    const layerAreas = parseLevels(req.body?.layer_area_levels, areaField.minimum ?? 0);
+    const exposureTimes = parseLevels(req.body?.exposure_time_levels, exposureField.minimum ?? 0);
+    if (!liftSpeeds.length || !layerAreas.length || !exposureTimes.length) {
+      return res.status(400).json({ error: "Enter at least one lift speed, representative layer area and exposure" });
+    }
+    const cellCount = liftSpeeds.length * layerAreas.length * exposureTimes.length;
+    if (cellCount > 100) return res.status(400).json({ error: "A generator may create at most 100 runs at once" });
+
+    let setup: Record<string, unknown> = {};
+    const setupRaw = getQualStepSettings(db, experimentId, stepNumber);
+    try { setup = JSON.parse(setupRaw || "{}") as Record<string, unknown>; } catch {}
+    const numberSetting = (value: unknown) => {
+      const text = String(value ?? "").trim();
+      if (!text) return null;
+      const parsed = Number(text.replace(",", "."));
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    const setupComplete = (
+      String(setup.peel_vat_film_type || "").trim() &&
+      String(setup.peel_support_geometry_note || "").trim() &&
+      ["peel_support_neck_diameter_mm", "peel_layer_height_um"]
+        .every((code) => (numberSetting(setup[code]) ?? 0) > 0)
+    );
+    if (!setupComplete) return res.status(400).json({ error: "Complete the fixed experiment setup before generating runs" });
+
+    const fields = new Map(listQualFields(db, step.id).map((field) => [field.code, field]));
+    const liftSpeedField = fields.get(liftField.code);
+    const layerAreaField = fields.get(areaField.code);
+    const exposureTimeField = fields.get(exposureField.code);
+    if (!liftSpeedField || !layerAreaField || !exposureTimeField || liftSpeedField.is_enabled !== 1 || layerAreaField.is_enabled !== 1 || exposureTimeField.is_enabled !== 1) {
+      return res.status(400).json({ error: "The matrix run fields are unavailable" });
+    }
+    const matrix = liftSpeeds.flatMap((liftSpeed) => layerAreas.flatMap((layerArea) => exposureTimes.map((exposureTime) => ({ liftSpeed, layerArea, exposureTime }))));
+    const hasRecordedValue = (runId: number) => listQualRunValues(db, runId).some((value) => (
+      value.value_real != null || value.value_text != null || value.value_tags_json != null
+    ));
+    let blankRuns = listQualRuns(db, step.id)
+      .filter((run) => run.run_group === "default" && !hasRecordedValue(run.id));
+    const created = Math.max(0, matrix.length - blankRuns.length);
+    if (created) {
+      createQualRuns(db, experimentId, step.id, created);
+      blankRuns = listQualRuns(db, step.id)
+        .filter((run) => run.run_group === "default" && !hasRecordedValue(run.id));
+    }
+    const generatedRuns = blankRuns.slice(0, matrix.length);
+    generatedRuns.forEach((run, index) => {
+      const cell = matrix[index];
+      saveQualRunValue(db, run.id, liftSpeedField.id, liftSpeedField.field_type, cell.liftSpeed);
+      saveQualRunValue(db, run.id, layerAreaField.id, layerAreaField.field_type, cell.layerArea);
+      saveQualRunValue(db, run.id, exposureTimeField.id, exposureTimeField.field_type, cell.exposureTime);
+    });
+    upsertQualStepSettings(db, experimentId, stepNumber, JSON.stringify({
+      ...setup,
+      peel_lift_speed_levels: liftSpeeds.join("; "),
+      peel_layer_area_levels: layerAreas.join("; "),
+      peel_exposure_time_levels: exposureTimes.join("; ")
+    }));
+    recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
+    return res.json({
+      ok: true,
+      matrix_cell_count: matrix.length,
+      generated_run_codes: generatedRuns.map((run) => run.run_code),
+      created
+    });
+  });
+
+  router.post("/experiments/:id/qualification/:step/post-cure-matrix/setup", (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer"])) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    const step = getQualStep(db, experimentId, stepNumber);
+    const generator = getStepDefinitionForExperiment(db, experimentId, stepNumber)?.run_generator;
+    if (!step || !generator || generator.type !== "post_cure_matrix") {
+      return res.status(404).json({ error: "A post-cure matrix setup is not declared for this stage" });
+    }
+    if (rejectBlockedStep(res, step)) return;
+    const numberAtLeast = (value: unknown, minimum: number) => {
+      const parsed = Number(String(value ?? "").trim().replace(",", "."));
+      return Number.isFinite(parsed) && parsed >= minimum ? parsed : null;
+    };
+    const positiveNumber = (value: unknown) => numberAtLeast(value, Number.EPSILON);
+    const washMethod = String(req.body?.post_cure_wash_method ?? "").trim();
+    const washMethodField = listQualFields(db, step.id).find((field) => field.code === "wash_method");
+    let allowedWashMethods: string[] = [];
+    try { allowedWashMethods = JSON.parse(washMethodField?.allowed_values_json || "[]") as string[]; } catch {}
+    if (!washMethod || (allowedWashMethods.length && !allowedWashMethods.includes(washMethod))) {
+      return res.status(400).json({ error: "Choose a declared wash method" });
+    }
+    const washTime = numberAtLeast(req.body?.post_cure_wash_time_min, 0);
+    const layerHeight = positiveNumber(req.body?.post_cure_layer_height_um);
+    const exposureTime = positiveNumber(req.body?.post_cure_exposure_time_s);
+    const baselineTgRaw = String(req.body?.post_cure_baseline_tg_c ?? "").trim();
+    const baselineTg = baselineTgRaw ? Number(baselineTgRaw.replace(",", ".")) : NaN;
+    const sourceNote = String(req.body?.post_cure_source_note ?? "").trim();
+    if (washTime == null) return res.status(400).json({ error: "Enter a non-negative wash time" });
+    if (layerHeight == null) return res.status(400).json({ error: "Enter a positive baseline layer height" });
+    if (exposureTime == null) return res.status(400).json({ error: "Enter a positive baseline layer exposure" });
+    if (!Number.isFinite(baselineTg)) return res.status(400).json({ error: "Enter the baseline Tg used to calculate ΔTg" });
+    if (!sourceNote) return res.status(400).json({ error: "Describe the fixed post-cure source" });
+
+    let existingSettings: Record<string, unknown> = {};
+    const existingRaw = getQualStepSettings(db, experimentId, stepNumber);
+    try { existingSettings = JSON.parse(existingRaw || "{}") as Record<string, unknown>; } catch {}
+    const settings = {
+      ...existingSettings,
+      post_cure_wash_method: washMethod,
+      post_cure_wash_time_min: washTime,
+      post_cure_source_note: sourceNote,
+      post_cure_layer_height_um: layerHeight,
+      post_cure_exposure_time_s: exposureTime,
+      post_cure_baseline_tg_c: baselineTg
+    };
+    upsertQualStepSettings(db, experimentId, stepNumber, JSON.stringify(settings));
+    recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
+    return res.json({ ok: true, settings });
+  });
+
+  router.post("/experiments/:id/qualification/:step/post-cure-matrix", (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer"])) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    const step = getQualStep(db, experimentId, stepNumber);
+    const generator = getStepDefinitionForExperiment(db, experimentId, stepNumber)?.run_generator;
+    if (!step || !generator || generator.type !== "post_cure_matrix") {
+      return res.status(404).json({ error: "A post-cure matrix generator is not declared for this stage" });
+    }
+    if (rejectBlockedStep(res, step)) return;
+    const parseLevels = (value: unknown, minimum: number) => [...new Set(String(value ?? "").split(/[;,\s]+/)
+      .map((item) => Number(item.replace(",", ".")))
+      .filter((item) => Number.isFinite(item) && item >= minimum))]
+      .sort((left, right) => left - right);
+    const timeField = generator.variable_fields[0];
+    const temperatureField = generator.variable_fields[1];
+    const irradianceField = generator.variable_fields[2];
+    const times = parseLevels(req.body?.post_cure_time_levels, timeField.minimum ?? 0);
+    const temperatures = parseLevels(req.body?.post_cure_temp_levels, temperatureField.minimum ?? 0);
+    const irradiances = parseLevels(req.body?.post_cure_irradiance_levels, irradianceField.minimum ?? 0);
+    if (!times.length || !temperatures.length || !irradiances.length) {
+      return res.status(400).json({ error: "Enter at least one post-cure time, temperature and irradiance" });
+    }
+    const cellCount = times.length * temperatures.length * irradiances.length;
+    if (cellCount > 100) return res.status(400).json({ error: "A generator may create at most 100 runs at once" });
+
+    let setup: Record<string, unknown> = {};
+    const setupRaw = getQualStepSettings(db, experimentId, stepNumber);
+    try { setup = JSON.parse(setupRaw || "{}") as Record<string, unknown>; } catch {}
+    const numberSetting = (value: unknown) => {
+      const text = String(value ?? "").trim();
+      if (!text) return null;
+      const parsed = Number(text.replace(",", "."));
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    const setupComplete = (
+      String(setup.post_cure_wash_method || "").trim() &&
+      String(setup.post_cure_source_note || "").trim() &&
+      (numberSetting(setup.post_cure_wash_time_min) ?? -1) >= 0 &&
+      ["post_cure_layer_height_um", "post_cure_exposure_time_s"].every((code) => (numberSetting(setup[code]) ?? 0) > 0) &&
+      numberSetting(setup.post_cure_baseline_tg_c) != null
+    );
+    if (!setupComplete) return res.status(400).json({ error: "Complete the fixed experiment setup before generating runs" });
+
+    const fields = new Map(listQualFields(db, step.id).map((field) => [field.code, field]));
+    const timeRunField = fields.get(timeField.code);
+    const temperatureRunField = fields.get(temperatureField.code);
+    const irradianceRunField = fields.get(irradianceField.code);
+    if (!timeRunField || !temperatureRunField || !irradianceRunField || timeRunField.is_enabled !== 1 || temperatureRunField.is_enabled !== 1 || irradianceRunField.is_enabled !== 1) {
+      return res.status(400).json({ error: "The matrix run fields are unavailable" });
+    }
+    const matrix = times.flatMap((time) => temperatures.flatMap((temperature) => irradiances.map((irradiance) => ({ time, temperature, irradiance }))));
+    const hasRecordedValue = (runId: number) => listQualRunValues(db, runId).some((value) => (
+      value.value_real != null || value.value_text != null || value.value_tags_json != null
+    ));
+    let blankRuns = listQualRuns(db, step.id)
+      .filter((run) => run.run_group === "post_cure_condition" && !hasRecordedValue(run.id));
+    const created = Math.max(0, matrix.length - blankRuns.length);
+    if (created) {
+      createQualRuns(db, experimentId, step.id, created, "post_cure_condition");
+      blankRuns = listQualRuns(db, step.id)
+        .filter((run) => run.run_group === "post_cure_condition" && !hasRecordedValue(run.id));
+    }
+    const generatedRuns = blankRuns.slice(0, matrix.length);
+    generatedRuns.forEach((run, index) => {
+      const cell = matrix[index];
+      saveQualRunValue(db, run.id, timeRunField.id, timeRunField.field_type, cell.time);
+      saveQualRunValue(db, run.id, temperatureRunField.id, temperatureRunField.field_type, cell.temperature);
+      saveQualRunValue(db, run.id, irradianceRunField.id, irradianceRunField.field_type, cell.irradiance);
+    });
+    upsertQualStepSettings(db, experimentId, stepNumber, JSON.stringify({
+      ...setup,
+      post_cure_time_levels: times.join("; "),
+      post_cure_temp_levels: temperatures.join("; "),
+      post_cure_irradiance_levels: irradiances.join("; ")
+    }));
+    recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
+    return res.json({
+      ok: true,
+      matrix_cell_count: matrix.length,
+      generated_run_codes: generatedRuns.map((run) => run.run_code),
+      created
+    });
+  });
+
+  router.post("/experiments/:id/qualification/:step/mechanical-qualification/setup", (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer"])) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    const experiment = getExperiment(db, experimentId);
+    const process = experiment?.process_id ? getProcessById(db, experiment.process_id) : null;
+    const step = getQualStep(db, experimentId, stepNumber);
+    if (!step || stepNumber !== 7 || String(process?.process_type_code || "").toLowerCase() !== "sla_dlp") {
+      return res.status(404).json({ error: "A final mechanical qualification setup is not declared for this stage" });
+    }
+    if (rejectBlockedStep(res, step)) return;
+    const numberAtLeast = (value: unknown, minimum: number) => {
+      const parsed = Number(String(value ?? "").trim().replace(",", "."));
+      return Number.isFinite(parsed) && parsed >= minimum ? parsed : null;
+    };
+    const conditioningTemperature = numberAtLeast(req.body?.mechanical_conditioning_temp_c, -273.15);
+    const conditioningTime = numberAtLeast(req.body?.mechanical_conditioning_time_h, 0);
+    const conditioningRhRaw = String(req.body?.mechanical_conditioning_rh_pct ?? "").trim();
+    const conditioningRh = conditioningRhRaw ? numberAtLeast(conditioningRhRaw, 0) : null;
+    const tensileMethod = String(req.body?.mechanical_tensile_method ?? "").trim();
+    const additionalMethods = String(req.body?.mechanical_additional_methods ?? "").trim();
+    // The material identifier originates in Step 1. Retaining a submitted
+    // value as a legacy fallback keeps older API clients usable, but the UI
+    // always shows the Step 1 provenance rather than creating a new batch ID.
+    const sourceMaterialStep = getQualStep(db, experimentId, 1);
+    const sourceBatchField = sourceMaterialStep
+      ? listQualFields(db, sourceMaterialStep.id).find((field) => field.code === "resin_batch")
+      : null;
+    const sourceBatch = sourceMaterialStep && sourceBatchField
+      ? listQualRuns(db, sourceMaterialStep.id)
+        .map((run) => listQualRunValues(db, run.id).find((value) => value.field_id === sourceBatchField.id)?.value_text?.trim())
+        .find(Boolean)
+      : null;
+    const resinBatch = String(sourceBatch || req.body?.mechanical_resin_batch || "").trim();
+    if (conditioningTemperature == null) return res.status(400).json({ error: "Enter the conditioning temperature" });
+    if (conditioningTime == null) return res.status(400).json({ error: "Enter a non-negative conditioning duration" });
+    if (conditioningRhRaw && (conditioningRh == null || conditioningRh > 100)) return res.status(400).json({ error: "Relative humidity must be between 0 and 100" });
+    if (!tensileMethod) return res.status(400).json({ error: "Declare the tensile test method" });
+    if (!resinBatch) return res.status(400).json({ error: "Record the material ID in Step 1 before saving the mechanical setup" });
+    let existing: Record<string, unknown> = {};
+    try { existing = JSON.parse(getQualStepSettings(db, experimentId, stepNumber) || "{}") as Record<string, unknown>; } catch {}
+    const settings = {
+      ...existing,
+      mechanical_conditioning_temp_c: conditioningTemperature,
+      mechanical_conditioning_time_h: conditioningTime,
+      mechanical_conditioning_rh_pct: conditioningRh,
+      mechanical_tensile_method: tensileMethod,
+      mechanical_additional_methods: additionalMethods || null,
+      mechanical_resin_batch: resinBatch
+    };
+    upsertQualStepSettings(db, experimentId, stepNumber, JSON.stringify(settings));
+    recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
+    return res.json({ ok: true, settings });
+  });
+
+  router.post("/experiments/:id/qualification/:step/rheology/setup", (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer"])) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    const experiment = getExperiment(db, experimentId);
+    const process = experiment?.process_id ? getProcessById(db, experiment.process_id) : null;
+    const step = getQualStep(db, experimentId, stepNumber);
+    if (!step || stepNumber !== 8 || String(process?.process_type_code || "").toLowerCase() !== "sla_dlp") {
+      return res.status(404).json({ error: "A resin-flow setup is not declared for this stage" });
+    }
+    if (rejectBlockedStep(res, step)) return;
+    const program = String(req.body?.rheology_program || "").trim();
+    if (!["steady_shear", "three_interval_thixotropy", "other"].includes(program)) {
+      return res.status(400).json({ error: "Choose a declared rheology programme" });
+    }
+    const referenceShearRate = Number(String(req.body?.rheology_reference_shear_rate_s_inv ?? "").trim().replace(",", "."));
+    if (!Number.isFinite(referenceShearRate) || referenceShearRate <= 0) {
+      return res.status(400).json({ error: "Enter a positive reference shear rate" });
+    }
+    const materialStep = getQualStep(db, experimentId, 1);
+    const batchField = materialStep ? listQualFields(db, materialStep.id).find((field) => field.code === "resin_batch") : null;
+    const materialId = materialStep && batchField
+      ? listQualRuns(db, materialStep.id)
+        .map((run) => listQualRunValues(db, run.id).find((value) => value.field_id === batchField.id)?.value_text?.trim())
+        .find(Boolean)
+      : null;
+    if (!materialId) return res.status(400).json({ error: "Record the material ID in Step 1 before saving the rheology setup" });
+    let existing: Record<string, unknown> = {};
+    try { existing = JSON.parse(getQualStepSettings(db, experimentId, stepNumber) || "{}") as Record<string, unknown>; } catch {}
+    const settings = {
+      ...existing,
+      rheology_material_batch: materialId,
+      rheology_program: program,
+      rheology_reference_shear_rate_s_inv: referenceShearRate
+    };
+    upsertQualStepSettings(db, experimentId, stepNumber, JSON.stringify(settings));
+    recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
+    return res.json({ ok: true, settings });
+  });
+
+  router.post("/experiments/:id/qualification/:step/dimensional-artifact/setup", (req, res) => {
+    if (!hasRole(req, ["admin", "manager", "engineer"])) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    const experiment = getExperiment(db, experimentId);
+    const process = experiment?.process_id ? getProcessById(db, experiment.process_id) : null;
+    const step = getQualStep(db, experimentId, stepNumber);
+    if (!step || stepNumber !== 4 || String(process?.process_type_code || "").toLowerCase() !== "sla_dlp") {
+      return res.status(404).json({ error: "A dimensional-artifact setup is not declared for this stage" });
+    }
+    if (rejectBlockedStep(res, step)) return;
+    const parsePositiveNumber = (value: unknown) => {
+      const parsed = Number(String(value ?? "").trim().replace(",", "."));
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    };
+    const layerHeightUm = parsePositiveNumber(req.body?.dimensional_layer_height_um);
+    const exposureTimeS = parsePositiveNumber(req.body?.dimensional_exposure_time_s);
+    if (layerHeightUm == null) return res.status(400).json({ error: "Enter a positive qualified layer height" });
+    if (exposureTimeS == null) return res.status(400).json({ error: "Enter a positive qualified layer exposure" });
+
+    const preset = getQualificationArtifactPreset("nist_am_test_artifact");
+    if (!preset) return res.status(500).json({ error: "NIST dimensional artifact preset is unavailable" });
+
+    let existingSettings: Record<string, unknown> = {};
+    const existingRaw = getQualStepSettings(db, experimentId, stepNumber);
+    if (existingRaw) {
+      try {
+        existingSettings = JSON.parse(existingRaw) as Record<string, unknown>;
+      } catch {
+        existingSettings = {};
+      }
+    }
+    const settings = {
+      ...existingSettings,
+      dimensional_layer_height_um: layerHeightUm,
+      dimensional_exposure_time_s: exposureTimeS,
+      dimensional_artifact_preset: preset.code,
+      dimensional_artifact_name: preset.name,
+      dimensional_artifact_reference_url: preset.source_url,
+      dimensional_artifact_revision: "NIST public test artifact"
+    };
+    upsertQualStepSettings(db, experimentId, stepNumber, JSON.stringify(settings));
+    recomputeDerivedAndSummary(db, experimentId, step.id, stepNumber);
+    return res.json({ ok: true, settings });
   });
 
   router.post("/experiments/:id/qualification/:step/runs", (req, res) => {

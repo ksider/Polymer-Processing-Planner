@@ -1,6 +1,6 @@
 import type { Db } from "../db.js";
 import { getExperiment, getExperimentRecipes } from "../repos/experiments_repo.js";
-import { listQualSummaries, listQualRuns, listQualRunValues, listQualFields, listQualSteps, getQualStep } from "../repos/qual_repo.js";
+import { listQualSummaries, listQualRuns, listQualRunValues, listQualFields, listQualSteps, getQualStep, getQualStepSettings } from "../repos/qual_repo.js";
 import { getDoeStudy, listDoeStudies } from "../repos/doe_repo.js";
 import { listRuns, listRunValues } from "../repos/runs_repo.js";
 import { listParamConfigs, listParamDefinitions, listParamDefinitionsByKind } from "../repos/params_repo.js";
@@ -19,6 +19,7 @@ import {
 import { mean, sd } from "../domain/stats.js";
 import { findUserById } from "../repos/users_repo.js";
 import { getLatestSuccessfulDoeAnalysisRevision, listDoeAnalyses } from "../modules/doe_analysis/analysis_repo.js";
+import { getQualificationArtifactFeature } from "./qualification_artifacts.js";
 
 type ReportOptions = {
   includeQualification: boolean;
@@ -355,12 +356,13 @@ export function buildReportWorkspaceSources(db: Db, report: ReportData): ReportW
     .filter((step) => step.is_active === 1)
     .flatMap((step) => {
     const fields = listQualFields(db, step.id).filter((field) => field.is_enabled === 1);
+    let isNistDimensionalMeasurementPlan = false;
     const summary = listQualSummaries(db, report.experiment.id).find((item) => item.step_number === step.step_number);
     const children: ReportWorkspaceSource[] = [];
     const parsedSummary = parseSummary(summary?.summary_json ?? null);
     if (parsedSummary) {
       const rows = Object.entries(parsedSummary)
-        .filter(([key, value]) => !["experiment_id", "step_number"].includes(key) && value != null)
+        .filter(([key, value]) => !["experiment_id", "step_number"].includes(key) && value != null && typeof value !== "object")
         .slice(0, 16)
         .map(([key, value]) => ({ label: key.replace(/_/g, " "), value: String(value) }));
       if (rows.length) children.push({
@@ -370,22 +372,84 @@ export function buildReportWorkspaceSources(db: Db, report: ReportData): ReportW
         rows
       });
     }
+    if (step.step_number === 4) {
+      let settings: Record<string, unknown> = {};
+      try {
+        settings = JSON.parse(getQualStepSettings(db, report.experiment.id, step.step_number) || "{}") as Record<string, unknown>;
+      } catch {
+        settings = {};
+      }
+      isNistDimensionalMeasurementPlan = settings.dimensional_artifact_preset === "nist_am_test_artifact";
+      const setupEntries: Array<[string, unknown]> = [
+        ["Test artifact", settings.dimensional_artifact_name],
+        ["Artifact revision", settings.dimensional_artifact_revision],
+        ["Artifact reference", settings.dimensional_artifact_reference_url],
+        ["Qualified layer height", settings.dimensional_layer_height_um == null ? null : `${settings.dimensional_layer_height_um} µm`],
+        ["Qualified layer exposure", settings.dimensional_exposure_time_s == null ? null : `${settings.dimensional_exposure_time_s} s`]
+      ];
+      const rows: ReportWorkspaceSourceRow[] = setupEntries
+        .flatMap(([label, value]) => value == null || value === "" ? [] : [{ label, value: String(value) }]);
+      if (rows.length) children.push({
+        id: `qualification-step-${step.step_number}-setup`,
+        kind: "results",
+        label: "Fixed setup",
+        rows
+      });
+      const dimensionalSummary = parsedSummary?.dimensional_measurement;
+      if (isNistDimensionalMeasurementPlan && dimensionalSummary && typeof dimensionalSummary === "object") {
+        const values = dimensionalSummary as Record<string, unknown>;
+        const resultRows: ReportWorkspaceSourceRow[] = [
+          ["Minimum reproduced feature", values.minimum_reproduced_feature_um, "µm"],
+          ["Suggested XY boundary offset", values.suggested_xy_boundary_offset_mm, "mm"],
+          ["Suggested XY scale correction", values.suggested_xy_scale_compensation_pct, "%"]
+        ].flatMap(([label, value, unit]) => typeof value === "number" && Number.isFinite(value)
+          ? [{ label: String(label), value: `${value} ${unit}` }]
+          : []);
+        if (resultRows.length) children.push({
+          id: `qualification-step-${step.step_number}-calculated-dimensional-results`,
+          kind: "results",
+          label: "Calculated dimensional results",
+          rows: resultRows
+        });
+      }
+    }
 
     const runs = listQualRuns(db, step.id)
       .filter((run) => run.done || listQualRunValues(db, run.id).length > 0);
     if (runs.length) {
+      const visibleFields = isNistDimensionalMeasurementPlan
+        ? fields.filter((field) => field.code !== "artifact_feature_code")
+        : fields;
+      const featureField = isNistDimensionalMeasurementPlan
+        ? fields.find((field) => field.code === "artifact_feature_code")
+        : null;
+      const featureForRun = (run: typeof runs[number]) => {
+        const featureCode = featureField
+          ? listQualRunValues(db, run.id).find((value) => value.field_id === featureField.id)?.value_text
+          : null;
+        return featureCode ? getQualificationArtifactFeature("nist_am_test_artifact", featureCode) : null;
+      };
       const runSources = runs.map((run) => {
         const values = new Map(listQualRunValues(db, run.id).map((value) => [value.field_id, value]));
-        const rows = fields.flatMap((field) => {
+        const rows = visibleFields.flatMap((field) => {
           const value = values.get(field.id);
           const raw = value?.value_text ?? value?.value_real ?? value?.value_tags_json;
           if (raw == null || raw === "") return [];
-          return [{ label: field.label, value: `${raw}${field.unit ? ` ${field.unit}` : ""}` }];
+          const dimensionalValueInMillimetres = isNistDimensionalMeasurementPlan && [
+            "measured_feature_size_um",
+            "dimensional_error_um",
+            "absolute_dimensional_error_um"
+          ].includes(field.code);
+          const displayed = dimensionalValueInMillimetres && typeof value?.value_real === "number"
+            ? value.value_real / 1000
+            : raw;
+          const unit = dimensionalValueInMillimetres ? "mm" : field.unit;
+          return [{ label: field.label, value: `${displayed}${unit ? ` ${unit}` : ""}` }];
         });
         return {
           id: `qualification-run-${run.id}`,
           kind: "run" as const,
-          label: run.run_code,
+          label: featureForRun(run)?.label ?? run.run_code,
           rows,
           runUrl: `/qual-runs/${run.id}`
         };
@@ -393,18 +457,32 @@ export function buildReportWorkspaceSources(db: Db, report: ReportData): ReportW
       children.push({
         id: `qualification-step-${step.step_number}-runs`,
         kind: "branch",
-        label: `Runs (${runs.length})`,
+        label: isNistDimensionalMeasurementPlan ? `Model elements (${runs.length})` : `Runs (${runs.length})`,
         children: [
           {
             id: `qualification-step-${step.step_number}-runs-table`,
             kind: "run-table",
-            label: "Insert run table",
+            label: isNistDimensionalMeasurementPlan ? "Insert measurement table" : "Insert run table",
             table: {
-              columns: ["Run", ...fields.map((field) => `${field.label}${field.unit ? ` (${field.unit})` : ""}`)],
+              columns: [isNistDimensionalMeasurementPlan ? "Model element" : "Run", ...visibleFields.map((field) => {
+                const unit = isNistDimensionalMeasurementPlan && [
+                  "measured_feature_size_um",
+                  "dimensional_error_um",
+                  "absolute_dimensional_error_um"
+                ].includes(field.code) ? "mm" : field.unit;
+                return `${field.label}${unit ? ` (${unit})` : ""}`;
+              })],
               rows: runs.map((run) => {
                 const values = new Map(listQualRunValues(db, run.id).map((value) => [value.field_id, value]));
-                return [run.run_code, ...fields.map((field) => {
+                return [featureForRun(run)?.label ?? run.run_code, ...visibleFields.map((field) => {
                   const value = values.get(field.id);
+                  if (isNistDimensionalMeasurementPlan && [
+                    "measured_feature_size_um",
+                    "dimensional_error_um",
+                    "absolute_dimensional_error_um"
+                  ].includes(field.code) && typeof value?.value_real === "number") {
+                    return String(value.value_real / 1000);
+                  }
                   return String(value?.value_text ?? value?.value_real ?? value?.value_tags_json ?? "–");
                 })];
               })
@@ -417,10 +495,16 @@ export function buildReportWorkspaceSources(db: Db, report: ReportData): ReportW
 
     const chartFields = fields.filter((field) => field.field_type === "number");
     if (runs.length >= 2 && chartFields.length >= 2) {
+      const chartFeatureField = isNistDimensionalMeasurementPlan
+        ? fields.find((field) => field.code === "artifact_feature_code")
+        : null;
       const chartRuns = runs.map((run) => {
         const values = new Map(listQualRunValues(db, run.id).map((value) => [value.field_id, value.value_real]));
+        const featureCode = chartFeatureField
+          ? listQualRunValues(db, run.id).find((value) => value.field_id === chartFeatureField.id)?.value_text
+          : null;
         return {
-          code: run.run_code,
+          code: featureCode ? getQualificationArtifactFeature("nist_am_test_artifact", featureCode)?.label ?? run.run_code : run.run_code,
           excluded: Boolean(run.exclude_from_analysis),
           values: Object.fromEntries(chartFields.map((field) => [String(field.id), values.get(field.id) ?? null]))
         };

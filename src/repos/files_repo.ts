@@ -76,6 +76,26 @@ export function getStoredFileForOwner(db: Db, fileId: number, ownerUserId: numbe
   ).get(fileId, ownerUserId) as StoredFile | undefined;
 }
 
+/** Returns the current source file attached to a specific entity slot.
+ * A slot is deliberately single-valued: replacing an instrument export must
+ * not leave a hidden second source attached to the same measurement. */
+export function getStoredFileForEntityPlacement(
+  db: Db,
+  input: { entityType: string; entityId: number; placement: string }
+): StoredFile | undefined {
+  return db.prepare(
+    `SELECT file.*
+     FROM stored_files file
+     JOIN file_links link ON link.file_id = file.id
+     WHERE link.entity_type = ?
+       AND link.entity_id = ?
+       AND link.placement = ?
+       AND file.deleted_at IS NULL
+     ORDER BY datetime(link.created_at) DESC, link.id DESC
+     LIMIT 1`
+  ).get(input.entityType, input.entityId, input.placement) as StoredFile | undefined;
+}
+
 // The personal-library link records ownership and must not prevent the owner
 // from deleting an otherwise unused upload. Every other link is an in-product
 // use of the file and must be removed by that feature first.

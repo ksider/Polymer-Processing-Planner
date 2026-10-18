@@ -17,41 +17,23 @@ import {
   getQualStepSettings,
   upsertQualStepSettings,
   listQualStepOutputs,
+  upsertQualStepOutput,
   setQualStepActive
 } from "../repos/qual_repo.js";
 import type { QualField } from "../repos/qual_repo.js";
 import { listMachineParams } from "../repos/machine_params_repo.js";
 import { findGlobalParamByCode, upsertCanonicalParamDefinition } from "../repos/params_repo.js";
+import {
+  slaDlpTemplate,
+  type QualificationOutputDefinition,
+  type QualificationProcessTemplate,
+  type QualificationSeriesDefinition,
+  type QualificationStepDefinition
+} from "./qualification_templates.js";
+import { nistAmTestArtifactPreset } from "./qualification_artifacts.js";
 
-type StepDefinition = {
-  step_number: number;
-  name: string;
-  default_runs: number;
-  is_optional?: boolean;
-  activation_description?: string;
-  fields: Array<{
-    code: string;
-    label: string;
-    field_type: "number" | "text" | "tag" | "boolean";
-    unit?: string | null;
-    group_label?: string | null;
-    required?: number;
-    is_enabled?: number;
-    is_derived?: number;
-    allowed_values_json?: string | null;
-    derived_formula_code?: string | null;
-  }>;
-};
-
-export type QualificationSeriesDefinition = {
-  code: string;
-  label: string;
-  description: string;
-  contract_version: number;
-  x: { code: string; label: string; unit: string };
-  y: { code: string; label: string; unit: string };
-  minimum_points: number;
-};
+type StepDefinition = QualificationStepDefinition;
+export type { QualificationOutputDefinition, QualificationSeriesDefinition } from "./qualification_templates.js";
 
 const extrusionStep1SeriesDefinitions: QualificationSeriesDefinition[] = [
   {
@@ -85,15 +67,6 @@ const extrusionStep5SeriesDefinitions: QualificationSeriesDefinition[] = [
     minimum_points: 5
   }
 ];
-
-export type QualificationOutputDefinition = {
-  group: string;
-  code: string;
-  label: string;
-  unit: string | null;
-  field_type: "number" | "text";
-  description: string;
-};
 
 export const extrusionStep1OutputDefinitions: QualificationOutputDefinition[] = [
   { group: "rheology", code: "rheology_reference_viscosity_pa_s", label: "Reference viscosity", unit: "Pa·s", field_type: "number", description: "Manual baseline selected from the flow curve." },
@@ -791,6 +764,213 @@ export function ensureInjectionParameterCatalogue(db: Db) {
   }
 }
 
+/** Registers the SLA/DLP template in the canonical parameter repository.
+ * The template owns stage behaviour; param_definitions owns parameter identity. */
+export function ensureSlaDlpParameterCatalogue(db: Db) {
+  const factorCodes = new Set([
+    "resin_temp_c",
+    "wait_before_exposure_s",
+    "exposure_time_s",
+    "irradiance_mw_cm2",
+    "layer_height_um",
+    "bottom_exposure_s",
+    "lift_speed_mm_s",
+    "wash_time_min",
+    "post_cure_time_min",
+    "post_cure_temp_c",
+    "post_cure_irradiance_mw_cm2",
+    "build_orientation"
+  ]);
+  const responseCodes = new Set([
+    "recoat_delay_s",
+    "layer_uniformity_ok",
+    "actual_layer_thickness_um",
+    "xy_bleed_um",
+    "minimum_open_channel_um",
+    "dimensional_error_um",
+    "peel_force_n",
+    "green_tensile_strength_mpa",
+    "final_conversion_pct",
+    "final_tg_c",
+    "post_cure_delta_tg_c",
+    "tensile_strength_mpa",
+    "elastic_modulus_mpa",
+    "elongation_break_pct",
+    "flexural_strength_mpa",
+    "hdt_c"
+  ]);
+  const purposeByStep: Record<number, string> = {
+    1: "recoat-window",
+    2: "working-curve",
+    3: "exposure-window",
+    4: "resolution",
+    5: "peel",
+    6: "post-cure",
+    7: "final-qualification",
+    8: "material-evidence"
+  };
+  const outputConstraintCodes = new Set([
+    "resin_temp_target_c",
+    "resin_temp_window_min_c",
+    "resin_temp_window_max_c",
+    "minimum_recoat_delay_s",
+    "critical_exposure_ec_mj_cm2",
+    "penetration_depth_dp_um",
+    "qualified_layer_height_um",
+    "exposure_window_min_s",
+    "exposure_window_max_s",
+    "nominal_exposure_s",
+    "minimum_feature_size_um",
+    "xy_compensation_mm",
+    "shrinkage_compensation_pct",
+    "validated_lift_speed_mm_s",
+    "maximum_average_peel_stress_mpa",
+    "green_strength_mpa",
+    "support_geometry_constraints",
+    "post_cure_time_min",
+    "post_cure_temp_c",
+    "post_cure_irradiance_mw_cm2"
+  ]);
+  const evidenceOnlyOutputCodes = new Set([
+    "working_curve_r_squared",
+    "sla_rheology_reference_viscosity_pa_s",
+    "sla_flow_behavior_index_n",
+    "sla_rheology_assessment"
+  ]);
+  for (const step of slaDlpTemplate.steps) {
+    const tags = ["additive", "sla", "dlp", "photopolymer", `step-${step.step_number}`, purposeByStep[step.step_number]];
+    for (const field of step.fields) {
+      const derived = field.is_derived === 1;
+      const controlled = String(field.group_label || "").toLowerCase() === "inputs";
+      upsertCanonicalParamDefinition(db, {
+        code: field.code,
+        label: field.label,
+        unit: field.unit ?? null,
+        field_kind: controlled ? "INPUT" : "OUTPUT",
+        field_type: field.field_type,
+        group_label: "SLA/DLP qualification",
+        allowed_values_json: field.allowed_values_json ?? null,
+        semantic_role: derived ? "derived" : controlled ? "controlled" : "measurement",
+        doe_role: factorCodes.has(field.code) ? "factor" : responseCodes.has(field.code) || derived ? "response" : "none",
+        is_code_owned: 1,
+        process_type_codes: ["sla_dlp"],
+        tags
+      });
+    }
+    for (const output of slaDlpTemplate.outputsByStep?.[step.step_number] ?? []) {
+      const isConstraint = outputConstraintCodes.has(output.code);
+      const isEvidenceOnly = evidenceOnlyOutputCodes.has(output.code);
+      upsertCanonicalParamDefinition(db, {
+        code: output.code,
+        label: output.label,
+        unit: output.unit,
+        field_kind: "OUTPUT",
+        field_type: output.field_type,
+        group_label: "SLA/DLP handoff",
+        allowed_values_json: output.allowed_values?.length
+          ? JSON.stringify(output.allowed_values.map((option) => option.value))
+          : null,
+        semantic_role: isConstraint ? "constraint" : "response",
+        doe_role: isConstraint ? "constraint" : isEvidenceOnly ? "none" : "response",
+        is_code_owned: 1,
+        process_type_codes: ["sla_dlp"],
+        tags: [...tags, "handoff"]
+      });
+    }
+  }
+
+  db.exec(`
+    UPDATE qual_fields AS field
+    SET param_def_id = (
+      SELECT parameter.id FROM param_definitions parameter
+      WHERE parameter.scope = 'GLOBAL' AND parameter.code = field.code
+      LIMIT 1
+    )
+    WHERE field.param_def_id IS NULL
+      AND EXISTS (
+        SELECT 1
+        FROM experiments experiment
+        JOIN processes process ON process.id = experiment.process_id
+        JOIN process_types process_type ON process_type.id = process.process_type_id
+        WHERE experiment.id = field.experiment_id AND lower(process_type.code) = 'sla_dlp'
+      )
+      AND EXISTS (
+        SELECT 1 FROM param_definitions parameter
+        WHERE parameter.scope = 'GLOBAL' AND parameter.code = field.code
+      );
+
+    UPDATE qual_step_outputs AS output
+    SET param_def_id = (
+      SELECT parameter.id FROM param_definitions parameter
+      WHERE parameter.scope = 'GLOBAL' AND parameter.code = output.output_code
+      LIMIT 1
+    )
+    WHERE output.param_def_id IS NULL
+      AND EXISTS (
+        SELECT 1
+        FROM experiments experiment
+        JOIN processes process ON process.id = experiment.process_id
+        JOIN process_types process_type ON process_type.id = process.process_type_id
+        WHERE experiment.id = output.experiment_id AND lower(process_type.code) = 'sla_dlp'
+      )
+      AND EXISTS (
+        SELECT 1 FROM param_definitions parameter
+        WHERE parameter.scope = 'GLOBAL' AND parameter.code = output.output_code
+      );
+  `);
+}
+
+/**
+ * A Step 6 run denotes one post-cure programme and its resulting specimen set.
+ * DSC, dimensional and mechanical results belong to that same record. This
+ * folds the short-lived split-table model back into the condition matrix.
+ */
+export function normalizeSlaDlpPostCureRuns(db: Db, experimentId: number, stepId: number) {
+  const stepNumber = (db.prepare("SELECT step_number FROM qual_steps WHERE id = ?").get(stepId) as { step_number?: number } | undefined)?.step_number ?? 6;
+  db.prepare(
+    "UPDATE qual_runs SET run_group = 'post_cure_condition' WHERE step_id = ? AND run_group = 'default'"
+  ).run(stepId);
+  const fieldsByCode = new Map(listQualFields(db, stepId).map((field) => [field.code, field]));
+  const runs = listQualRuns(db, stepId);
+  const conditionRuns = runs.filter((run) => run.run_group === "post_cure_condition");
+  conditionRuns.forEach((run, index) => {
+    if (!/-R\d+$/.test(run.run_code)) return;
+    db.prepare("UPDATE qual_runs SET run_code = ? WHERE id = ?")
+      .run(`E${experimentId}-Q${stepNumber}-PC${String(index + 1).padStart(3, "0")}`, run.id);
+  });
+  let migrated = false;
+  const conditionById = new Map(conditionRuns.map((run) => [run.id, run]));
+  const childFieldCodes: Record<string, string[]> = {
+    post_cure_dsc: ["residual_enthalpy_j_g", "final_tg_c"],
+    post_cure_dimensional: ["post_cure_shrinkage_pct"],
+    post_cure_mechanical: ["tensile_strength_mpa"]
+  };
+  runs.filter((run) => Object.hasOwn(childFieldCodes, run.run_group)).forEach((childRun) => {
+    const conditionRun = childRun.source_run_id ? conditionById.get(childRun.source_run_id) : null;
+    if (!conditionRun) return;
+    const destination = new Map(listQualRunValues(db, conditionRun.id).map((value) => [value.field_id, value]));
+    const source = new Map(listQualRunValues(db, childRun.id).map((value) => [value.field_id, value]));
+    childFieldCodes[childRun.run_group].forEach((code) => {
+      const field = fieldsByCode.get(code);
+      const value = field ? source.get(field.id) : null;
+      if (!field || !value || destination.get(field.id)?.value_real != null) return;
+      upsertQualRunValue(db, {
+        run_id: conditionRun.id,
+        field_id: field.id,
+        value_real: value.value_real,
+        value_text: value.value_text,
+        value_tags_json: value.value_tags_json
+      });
+      migrated = true;
+    });
+    // These were generated duplicates from the previous implementation. Their
+    // values have been retained on the single post-cure condition record.
+    db.prepare("DELETE FROM qual_runs WHERE id = ?").run(childRun.id);
+    migrated = true;
+  });
+  return { conditionRuns, migrated };
+}
+
 function getExtrusionOutputDefinitions(stepNumber: number) {
   if (stepNumber === 1) return extrusionStep1OutputDefinitions;
   if (stepNumber === 2) return extrusionStep2OutputDefinitions;
@@ -798,6 +978,24 @@ function getExtrusionOutputDefinitions(stepNumber: number) {
   if (stepNumber === 5) return extrusionStep5OutputDefinitions;
   return extrusionOptionalOutputDefinitions[stepNumber] ?? [];
 }
+
+const qualificationTemplateRegistry: Record<string, QualificationProcessTemplate> = {
+  injection: { processTypeCode: "injection", steps: injectionStepDefinitions },
+  compounding: { processTypeCode: "compounding", steps: compoundingStepDefinitions },
+  coating: { processTypeCode: "coating", steps: coatingStepDefinitions },
+  extrusion_v1: {
+    processTypeCode: "extrusion_v1",
+    steps: extrusionStepDefinitions,
+    seriesByStep: {
+      1: extrusionStep1SeriesDefinitions,
+      5: extrusionStep5SeriesDefinitions
+    },
+    outputsByStep: Object.fromEntries(
+      extrusionStepDefinitions.map((step) => [step.step_number, getExtrusionOutputDefinitions(step.step_number)])
+    )
+  },
+  [slaDlpTemplate.processTypeCode]: slaDlpTemplate
+};
 
 function getProcessTypeCodeForExperiment(db: Db, experimentId: number): string {
   const experiment = getExperiment(db, experimentId);
@@ -807,10 +1005,7 @@ function getProcessTypeCodeForExperiment(db: Db, experimentId: number): string {
 }
 
 function getStepDefinitionsForProcessType(processTypeCode: string): StepDefinition[] {
-  if (processTypeCode === "compounding") return compoundingStepDefinitions;
-  if (processTypeCode === "coating") return coatingStepDefinitions;
-  if (processTypeCode === "extrusion_v1") return extrusionStepDefinitions;
-  return injectionStepDefinitions;
+  return qualificationTemplateRegistry[processTypeCode]?.steps ?? [];
 }
 
 function getCatalogueStageCode(processTypeCode: string, stepNumber: number) {
@@ -870,13 +1065,15 @@ export function getQualificationSeriesDefinitionsForExperiment(
   stepNumber: number
 ) {
   const processTypeCode = getProcessTypeCodeForExperiment(db, experimentId);
-  if (processTypeCode === "extrusion_v1" && stepNumber === 1) {
-    return extrusionStep1SeriesDefinitions;
-  }
-  if (processTypeCode === "extrusion_v1" && stepNumber === 5) {
-    return extrusionStep5SeriesDefinitions;
-  }
-  return [];
+  return qualificationTemplateRegistry[processTypeCode]?.seriesByStep?.[stepNumber] ?? [];
+}
+
+export function getQualificationCompactLabelsForExperiment(
+  db: Db,
+  experimentId: number
+): Record<string, string> {
+  const processTypeCode = getProcessTypeCodeForExperiment(db, experimentId);
+  return qualificationTemplateRegistry[processTypeCode]?.compactLabelsByCode ?? {};
 }
 
 export function getQualificationOutputDefinitionsForExperiment(
@@ -885,26 +1082,49 @@ export function getQualificationOutputDefinitionsForExperiment(
   stepNumber: number
 ) {
   const processTypeCode = getProcessTypeCodeForExperiment(db, experimentId);
-  if (processTypeCode === "extrusion_v1" && stepNumber === 1) {
-    return extrusionStep1OutputDefinitions;
-  }
-  if (processTypeCode === "extrusion_v1" && stepNumber === 2) {
-    return extrusionStep2OutputDefinitions;
-  }
-  if (processTypeCode === "extrusion_v1" && stepNumber === 3) {
-    return extrusionStep3OutputDefinitions;
-  }
-  if (processTypeCode === "extrusion_v1" && stepNumber === 5) {
-    return extrusionStep5OutputDefinitions;
-  }
-  if (processTypeCode === "extrusion_v1" && extrusionOptionalOutputDefinitions[stepNumber]) {
-    return extrusionOptionalOutputDefinitions[stepNumber];
-  }
-  return [];
+  return qualificationTemplateRegistry[processTypeCode]?.outputsByStep?.[stepNumber] ?? [];
 }
 
 export function getQualificationStepName(db: Db, experimentId: number, stepNumber: number): string {
   return getStepDefinitionForExperiment(db, experimentId, stepNumber)?.name ?? `Step ${stepNumber}`;
+}
+
+/**
+ * Step 4 is a fixed NIST inspection plan, not a DOE.  The common run-value
+ * store remains the portable evidence layer, while this helper makes exactly
+ * one record for every declared physical feature and keeps its key immutable
+ * in the Step 4 UI.
+ */
+function ensureSlaDlpNistDimensionalMeasurementPlan(db: Db, experimentId: number, stepId: number) {
+  const featureField = listQualFields(db, stepId).find((field) => field.code === "artifact_feature_code");
+  if (!featureField) return;
+
+  let runs = listQualRuns(db, stepId);
+  const assigned = new Set<string>();
+  const assignedRunIds = new Set<number>();
+  const availableRuns: typeof runs = [];
+  for (const run of runs) {
+    const featureCode = listQualRunValues(db, run.id)
+      .find((value) => value.field_id === featureField.id)?.value_text?.trim() || "";
+    if (nistAmTestArtifactPreset.features.some((feature) => feature.code === featureCode) && !assigned.has(featureCode)) {
+      assigned.add(featureCode);
+      assignedRunIds.add(run.id);
+    } else {
+      availableRuns.push(run);
+    }
+  }
+
+  const missing = nistAmTestArtifactPreset.features.filter((feature) => !assigned.has(feature.code));
+  if (availableRuns.length < missing.length) {
+    createQualRuns(db, experimentId, stepId, missing.length - availableRuns.length);
+    runs = listQualRuns(db, stepId);
+    availableRuns.splice(0, availableRuns.length, ...runs.filter((run) => !assignedRunIds.has(run.id)));
+  }
+
+  missing.forEach((feature, index) => {
+    const run = availableRuns[index];
+    if (run) saveQualRunValue(db, run.id, featureField.id, "text", feature.code);
+  });
 }
 
 export function ensureQualificationDefaults(db: Db, experimentId: number) {
@@ -934,6 +1154,112 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
       const legacySampleField = fields.find((field) => field.code === "chemical_sample_id");
       if (legacySampleField?.is_enabled) updateQualField(db, legacySampleField.id, { is_enabled: 0 });
     }
+    if (processTypeCode === "sla_dlp" && step.step_number === 1) {
+      const retiredRheometerCodes = new Set([
+        "shear_rate_s_inv",
+        "rest_time_s",
+        "viscosity_pa_s",
+        "shear_stress_pa"
+      ]);
+      fields.forEach((field) => {
+        if (retiredRheometerCodes.has(field.code) && field.is_enabled !== 0) {
+          updateQualField(db, field.id, { is_enabled: 0 });
+        }
+      });
+    }
+    if (processTypeCode === "sla_dlp" && step.step_number === 2) {
+      // Ec, Dp and R² describe the whole fitted set of dose/depth runs. They
+      // were once repeated in every row; retain historical values but hide
+      // those misleading row-level columns.
+      const retiredJacobsFitCodes = new Set([
+        "critical_exposure_ec_mj_cm2",
+        "penetration_depth_dp_um",
+        "working_curve_r_squared"
+      ]);
+      fields.forEach((field) => {
+        if (retiredJacobsFitCodes.has(field.code) && field.is_enabled !== 0) {
+          updateQualField(db, field.id, { is_enabled: 0 });
+        }
+      });
+      // Jacobs conditions apply to the complete exposure series. Historical
+      // per-run copies remain in the database but must not widen the run table.
+      const retiredJacobsConditionCodes = new Set(["wavelength_nm", "resin_temp_c"]);
+      fields.forEach((field) => {
+        if (retiredJacobsConditionCodes.has(field.code) && field.is_enabled !== 0) {
+          updateQualField(db, field.id, { is_enabled: 0 });
+        }
+      });
+    }
+    if (processTypeCode === "sla_dlp" && step.step_number === 7) {
+      // The material lot is common provenance for this qualification set. It
+      // used to be repeated on every tensile specimen, despite being constant
+      // in normal use. Preserve the first legacy value in setup, then hide the
+      // obsolete row-level field.
+      const legacyBatchField = fields.find((field) => field.code === "resin_batch");
+      if (legacyBatchField) {
+        let currentSettings: Record<string, unknown> = {};
+        try {
+          currentSettings = JSON.parse(getQualStepSettings(db, experimentId, step.step_number) || "{}") as Record<string, unknown>;
+        } catch {}
+        const legacyBatch = db.prepare(
+          "SELECT value_text FROM qual_run_values WHERE field_id = ? AND trim(coalesce(value_text, '')) <> '' ORDER BY run_id LIMIT 1"
+        ).get(legacyBatchField.id) as { value_text?: string } | undefined;
+        if (!String(currentSettings.mechanical_resin_batch || "").trim() && legacyBatch?.value_text) {
+          upsertQualStepSettings(db, experimentId, step.step_number, JSON.stringify({
+            ...currentSettings,
+            mechanical_resin_batch: legacyBatch.value_text
+          }));
+        }
+        db.prepare("DELETE FROM qual_run_values WHERE field_id = ?").run(legacyBatchField.id);
+        if (legacyBatchField.is_enabled !== 0) updateQualField(db, legacyBatchField.id, { is_enabled: 0 });
+      }
+    }
+    if (processTypeCode === "sla_dlp" && step.step_number === 8) {
+      // A flow comparison varies the resin temperature per curve. Batch
+      // provenance, programme and reference shear rate apply to the whole
+      // measurement set and must not be copied into every curve row.
+      let currentSettings: Record<string, unknown> = {};
+      try {
+        currentSettings = JSON.parse(getQualStepSettings(db, experimentId, step.step_number) || "{}") as Record<string, unknown>;
+      } catch {}
+      const legacyText = (code: string) => {
+        const field = fields.find((item) => item.code === code);
+        if (!field) return null;
+        return (db.prepare(
+          "SELECT value_text, value_tags_json FROM qual_run_values WHERE field_id = ? ORDER BY run_id LIMIT 1"
+        ).get(field.id) as { value_text?: string | null; value_tags_json?: string | null } | undefined) ?? null;
+      };
+      const legacyRateField = fields.find((field) => field.code === "sla_reference_shear_rate_s_inv");
+      const legacyRate = legacyRateField
+        ? (db.prepare("SELECT value_real FROM qual_run_values WHERE field_id = ? AND value_real IS NOT NULL ORDER BY run_id LIMIT 1")
+          .get(legacyRateField.id) as { value_real?: number } | undefined)?.value_real
+        : null;
+      const legacyProgram = (() => {
+        const value = legacyText("rheology_program")?.value_tags_json;
+        try {
+          const parsed = JSON.parse(value || "[]");
+          return Array.isArray(parsed) && parsed[0] ? String(parsed[0]) : null;
+        } catch {
+          return null;
+        }
+      })();
+      const legacyBatch = legacyText("resin_batch")?.value_text?.trim() || null;
+      const nextSettings = {
+        ...currentSettings,
+        rheology_material_batch: currentSettings.rheology_material_batch || legacyBatch || null,
+        rheology_program: currentSettings.rheology_program || legacyProgram || "steady_shear",
+        rheology_reference_shear_rate_s_inv: currentSettings.rheology_reference_shear_rate_s_inv ?? legacyRate ?? null
+      };
+      if (JSON.stringify(nextSettings) !== JSON.stringify(currentSettings)) {
+        upsertQualStepSettings(db, experimentId, step.step_number, JSON.stringify(nextSettings));
+      }
+      ["resin_batch", "rheology_program", "sla_reference_shear_rate_s_inv"].forEach((code) => {
+        const field = fields.find((item) => item.code === code);
+        if (!field) return;
+        db.prepare("DELETE FROM qual_run_values WHERE field_id = ?").run(field.id);
+        if (field.is_enabled !== 0) updateQualField(db, field.id, { is_enabled: 0 });
+      });
+    }
     const hasCavityWeights =
       step.step_number === 2 &&
       fields.some((field) => /^cavity\d+_weight_g$/.test(field.code));
@@ -945,7 +1271,7 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
         continue;
       }
       if (fieldCodes.has(field.code)) continue;
-      const canonical = ["extrusion_v1", "injection"].includes(processTypeCode)
+      const canonical = ["extrusion_v1", "injection", "sla_dlp"].includes(processTypeCode)
         ? findGlobalParamByCode(db, field.code)
         : undefined;
       insertQualField(db, {
@@ -978,13 +1304,14 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
         param_def_id: number | null;
       }> = {};
       const shouldRefreshLabel =
-        processTypeCode === "extrusion_v1" &&
-        ((step.step_number === 2 && field.code === "target_throughput_kg_h" && existingField.label === "Target throughput") ||
-          (step.step_number === 3 && field.code === "throughput_kg_h" && ["Throughput", "Feeder throughput (from Step 2)"].includes(existingField.label)) ||
-          step.step_number === 5 ||
-          step.step_number === 7 ||
-          step.step_number === 8 ||
-          step.step_number === 9);
+        (processTypeCode === "extrusion_v1" &&
+          ((step.step_number === 2 && field.code === "target_throughput_kg_h" && existingField.label === "Target throughput") ||
+            (step.step_number === 3 && field.code === "throughput_kg_h" && ["Throughput", "Feeder throughput (from Step 2)"].includes(existingField.label)) ||
+            step.step_number === 5 ||
+            step.step_number === 7 ||
+            step.step_number === 8 ||
+            step.step_number === 9)) ||
+        (processTypeCode === "sla_dlp" && step.step_number === 1);
       if (shouldRefreshLabel) {
         updatePatch.label = field.label;
         updatePatch.unit = field.unit ?? null;
@@ -1006,6 +1333,21 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
       }
       if (Object.keys(updatePatch).length) {
         updateQualField(db, existingField.id, updatePatch);
+      }
+    }
+    if (processTypeCode === "sla_dlp" && step.step_number === 8) {
+      // On first activation the field rows are created above, so apply the
+      // shared-condition layout in the same pass rather than waiting for the
+      // first page refresh.
+      listQualFields(db, step.id)
+        .filter((field) => ["resin_batch", "rheology_program", "sla_reference_shear_rate_s_inv"].includes(field.code) && field.is_enabled !== 0)
+        .forEach((field) => updateQualField(db, field.id, { is_enabled: 0 }));
+      if (!getQualStepSettings(db, experimentId, step.step_number)) {
+        upsertQualStepSettings(db, experimentId, step.step_number, JSON.stringify({
+          rheology_material_batch: null,
+          rheology_program: "steady_shear",
+          rheology_reference_shear_rate_s_inv: null
+        }));
       }
     }
     if (processTypeCode === "injection" && step.step_number === 1) {
@@ -1141,6 +1483,211 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
         updateQualField(db, pressureField.id, { is_enabled: 0 });
       }
     }
+    if (processTypeCode === "sla_dlp" && step.step_number === 5) {
+      // Film and support geometry describe the whole peel study. They remain
+      // available in the canonical catalogue, but must not be repeated in
+      // each generated matrix row. Exposure is an explicit Step 5 factor.
+      const staticConditionCodes = new Set([
+        "vat_film_type",
+        "support_neck_diameter_mm"
+      ]);
+      listQualFields(db, step.id).forEach((field) => {
+        if (staticConditionCodes.has(field.code) && field.is_enabled !== 0) {
+          updateQualField(db, field.id, { is_enabled: 0 });
+        }
+      });
+      const exposureField = listQualFields(db, step.id).find((field) => field.code === "exposure_time_s");
+      if (exposureField && exposureField.is_enabled !== 1) {
+        updateQualField(db, exposureField.id, { is_enabled: 1 });
+      }
+      const existingSettings = getQualStepSettings(db, experimentId, step.step_number);
+      let peelSettings: Record<string, unknown> = {};
+      try { peelSettings = JSON.parse(existingSettings || "{}") as Record<string, unknown>; } catch {}
+      const { peel_exposure_time_s: legacyExposureTime, ...currentPeelSettings } = peelSettings;
+      const nextPeelSettings = {
+        ...currentPeelSettings,
+        peel_vat_film_type: currentPeelSettings.peel_vat_film_type ?? null,
+        peel_support_neck_diameter_mm: currentPeelSettings.peel_support_neck_diameter_mm ?? null,
+        peel_support_geometry_note: currentPeelSettings.peel_support_geometry_note ?? null,
+        peel_layer_height_um: currentPeelSettings.peel_layer_height_um ?? null,
+        peel_lift_speed_levels: currentPeelSettings.peel_lift_speed_levels ?? null,
+        peel_layer_area_levels: currentPeelSettings.peel_layer_area_levels ?? null,
+        peel_exposure_time_levels: currentPeelSettings.peel_exposure_time_levels ?? legacyExposureTime ?? null
+      };
+      if (JSON.stringify(nextPeelSettings) !== existingSettings) {
+        upsertQualStepSettings(db, experimentId, step.step_number, JSON.stringify(nextPeelSettings));
+      }
+    }
+    if (processTypeCode === "sla_dlp" && step.step_number === 6) {
+      // Washing, baseline FTIR readings and the source define the common conditioning procedure.
+      // Post-cure time, temperature and irradiance are the matrix factors.
+      const staticConditionCodes = new Set([
+        "wash_method",
+        "wash_time_min",
+        "reaction_band_uncured",
+        "reference_band_uncured"
+      ]);
+      const stepFields = listQualFields(db, step.id);
+      stepFields.forEach((field) => {
+        if (staticConditionCodes.has(field.code) && field.is_enabled !== 0) {
+          updateQualField(db, field.id, { is_enabled: 0 });
+        }
+      });
+      const existingSettings = getQualStepSettings(db, experimentId, step.step_number);
+      let postCureSettings: Record<string, unknown> = {};
+      try { postCureSettings = JSON.parse(existingSettings || "{}") as Record<string, unknown>; } catch {}
+      const legacyBaselineArea = (code: "reaction_band_uncured" | "reference_band_uncured") => {
+        const field = stepFields.find((item) => item.code === code);
+        if (!field) return null;
+        for (const run of listQualRuns(db, step.id)) {
+          const value = listQualRunValues(db, run.id).find((item) => item.field_id === field.id)?.value_real;
+          if (value != null && Number.isFinite(value)) return value;
+        }
+        return null;
+      };
+      const nextPostCureSettings = {
+        ...postCureSettings,
+        post_cure_wash_method: postCureSettings.post_cure_wash_method ?? null,
+        post_cure_wash_time_min: postCureSettings.post_cure_wash_time_min ?? null,
+        post_cure_source_note: postCureSettings.post_cure_source_note ?? null,
+        post_cure_layer_height_um: postCureSettings.post_cure_layer_height_um ?? null,
+        post_cure_exposure_time_s: postCureSettings.post_cure_exposure_time_s ?? null,
+        post_cure_baseline_tg_c: postCureSettings.post_cure_baseline_tg_c ?? null,
+        post_cure_reaction_band_uncured: postCureSettings.post_cure_reaction_band_uncured ?? legacyBaselineArea("reaction_band_uncured"),
+        post_cure_reference_band_uncured: postCureSettings.post_cure_reference_band_uncured ?? legacyBaselineArea("reference_band_uncured"),
+        post_cure_time_levels: postCureSettings.post_cure_time_levels ?? null,
+        post_cure_temp_levels: postCureSettings.post_cure_temp_levels ?? null,
+        post_cure_irradiance_levels: postCureSettings.post_cure_irradiance_levels ?? null
+      };
+      if (JSON.stringify(nextPostCureSettings) !== existingSettings) {
+        upsertQualStepSettings(db, experimentId, step.step_number, JSON.stringify(nextPostCureSettings));
+      }
+    }
+    if (processTypeCode === "sla_dlp" && step.step_number === 2) {
+      const generator = def.run_generator;
+      if (!generator || generator.type !== "single_factor_sweep") continue;
+      const allowedVariableCodes = new Set(generator?.variable_fields.map((field) => field.code) ?? []);
+      let jacobsSettings: Record<string, unknown> = {};
+      const rawSettings = getQualStepSettings(db, experimentId, step.step_number);
+      if (rawSettings) {
+        try {
+          jacobsSettings = JSON.parse(rawSettings) as Record<string, unknown>;
+        } catch {
+          jacobsSettings = {};
+        }
+      }
+      const selectedVariable = allowedVariableCodes.has(String(jacobsSettings.jacobs_variable_code || ""))
+        ? String(jacobsSettings.jacobs_variable_code)
+        : generator?.default_variable_code;
+      const nextSettings = {
+        ...jacobsSettings,
+        jacobs_variable_code: selectedVariable,
+        jacobs_wavelength_nm: jacobsSettings.jacobs_wavelength_nm ?? null,
+        jacobs_resin_temp_c: jacobsSettings.jacobs_resin_temp_c ?? null,
+        jacobs_fixed_irradiance_mw_cm2: jacobsSettings.jacobs_fixed_irradiance_mw_cm2 ?? null,
+        jacobs_fixed_exposure_time_s: jacobsSettings.jacobs_fixed_exposure_time_s ?? null
+      };
+      if (JSON.stringify(nextSettings) !== rawSettings) {
+        upsertQualStepSettings(db, experimentId, step.step_number, JSON.stringify(nextSettings));
+      }
+      // Re-read after template fields have been inserted. The inactive optical
+      // factor remains stored for reproducibility but is not a table column.
+      const jacobsFields = listQualFields(db, step.id);
+      jacobsFields.forEach((field) => {
+        if (["irradiance_mw_cm2", "exposure_time_s"].includes(field.code)) {
+          const isEnabled = field.code === selectedVariable ? 1 : 0;
+          if (field.is_enabled !== isEnabled) updateQualField(db, field.id, { is_enabled: isEnabled });
+        }
+      });
+    }
+    if (processTypeCode === "sla_dlp" && step.step_number === 3) {
+      // Irradiance and bottom exposure apply to the whole matrix. Existing
+      // per-run values are retained as history, but the columns must not
+      // suggest that they varied independently within this study.
+      fields.forEach((field) => {
+        if (["irradiance_mw_cm2", "bottom_exposure_s"].includes(field.code) && field.is_enabled !== 0) {
+          updateQualField(db, field.id, { is_enabled: 0 });
+        }
+      });
+      let windowSettings: Record<string, unknown> = {};
+      const rawWindowSettings = getQualStepSettings(db, experimentId, step.step_number);
+      if (rawWindowSettings) {
+        try {
+          windowSettings = JSON.parse(rawWindowSettings) as Record<string, unknown>;
+        } catch {
+          windowSettings = {};
+        }
+      }
+      let jacobsSettings: Record<string, unknown> = {};
+      const rawJacobsSettings = getQualStepSettings(db, experimentId, 2);
+      if (rawJacobsSettings) {
+        try {
+          jacobsSettings = JSON.parse(rawJacobsSettings) as Record<string, unknown>;
+        } catch {
+          jacobsSettings = {};
+        }
+      }
+      const canInheritIrradiance = String(jacobsSettings.jacobs_variable_code || "exposure_time_s") === "exposure_time_s";
+      const nextWindowSettings = {
+        ...windowSettings,
+        exposure_window_wavelength_nm: windowSettings.exposure_window_wavelength_nm ?? jacobsSettings.jacobs_wavelength_nm ?? null,
+        exposure_window_resin_temp_c: windowSettings.exposure_window_resin_temp_c ?? jacobsSettings.jacobs_resin_temp_c ?? null,
+        exposure_window_irradiance_mw_cm2: windowSettings.exposure_window_irradiance_mw_cm2 ?? (
+          canInheritIrradiance ? jacobsSettings.jacobs_fixed_irradiance_mw_cm2 ?? null : null
+        ),
+        exposure_window_bottom_exposure_s: windowSettings.exposure_window_bottom_exposure_s ?? null
+      };
+      if (JSON.stringify(nextWindowSettings) !== rawWindowSettings) {
+        upsertQualStepSettings(db, experimentId, step.step_number, JSON.stringify(nextWindowSettings));
+      }
+    }
+    if (processTypeCode === "sla_dlp" && step.step_number === 4) {
+      // Resolution is one fixed-artifact inspection, not a DOE. Layer height
+      // and exposure are setup provenance from Step 3, not factors to repeat
+      // in each measured model element. Retain legacy values as history, but
+      // hide the columns that made nominal CAD and compensation inputs look
+      // like independent per-row conditions.
+      const retiredDimensionalCodes = new Set([
+        "layer_height_um",
+        "exposure_time_s",
+        "xy_compensation_mm",
+        "shrinkage_compensation_pct",
+        "cad_feature_size_um",
+        "x_deviation_um",
+        "y_deviation_um",
+        "z_deviation_um"
+      ]);
+      fields.forEach((field) => {
+        if (retiredDimensionalCodes.has(field.code) && field.is_enabled !== 0) {
+          updateQualField(db, field.id, { is_enabled: 0 });
+        }
+      });
+      let dimensionalSettings: Record<string, unknown> = {};
+      const rawDimensionalSettings = getQualStepSettings(db, experimentId, step.step_number);
+      if (rawDimensionalSettings) {
+        try {
+          dimensionalSettings = JSON.parse(rawDimensionalSettings) as Record<string, unknown>;
+        } catch {
+          dimensionalSettings = {};
+        }
+      }
+      const sourceStep = getQualStep(db, experimentId, 3);
+      const sourceOutputs = new Map((sourceStep ? listQualStepOutputs(db, sourceStep.id) : [])
+        .map((output) => [output.output_code, output.value_real]));
+      const number = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : null;
+      const nextDimensionalSettings = {
+        ...dimensionalSettings,
+        dimensional_layer_height_um: dimensionalSettings.dimensional_layer_height_um ?? number(sourceOutputs.get("qualified_layer_height_um")),
+        dimensional_exposure_time_s: dimensionalSettings.dimensional_exposure_time_s ?? number(sourceOutputs.get("nominal_exposure_s")),
+        dimensional_artifact_preset: nistAmTestArtifactPreset.code,
+        dimensional_artifact_name: nistAmTestArtifactPreset.name,
+        dimensional_artifact_reference_url: nistAmTestArtifactPreset.source_url,
+        dimensional_artifact_revision: "NIST public test artifact"
+      };
+      if (JSON.stringify(nextDimensionalSettings) !== rawDimensionalSettings) {
+        upsertQualStepSettings(db, experimentId, step.step_number, JSON.stringify(nextDimensionalSettings));
+      }
+    }
     const runs = listQualRuns(db, step.id);
     if (processTypeCode === "extrusion_v1" && step.step_number === 1) {
       // Step 1 is a material-characterisation programme, not one nine-row
@@ -1152,6 +1699,13 @@ export function ensureQualificationDefaults(db: Db, experimentId: number) {
       if (!grouped.has("thermal_hold")) createQualRuns(db, experimentId, step.id, 1, "thermal_hold");
       if (!grouped.has("dsc")) createQualRuns(db, experimentId, step.id, 1, "dsc");
       if (!grouped.has("tga")) createQualRuns(db, experimentId, step.id, 1, "tga");
+    } else if (processTypeCode === "sla_dlp" && step.step_number === 4) {
+      ensureSlaDlpNistDimensionalMeasurementPlan(db, experimentId, step.id);
+    } else if (processTypeCode === "sla_dlp" && step.step_number === 6) {
+      // New studies start without placeholder rows: the condition generator is
+      // the source of truth. Existing default rows are migrated below so their
+      // recorded evidence is retained.
+      if (listQualRuns(db, step.id).length) normalizeSlaDlpPostCureRuns(db, experimentId, step.id);
     } else if (!(processTypeCode === "extrusion_v1" && step.step_number === 3) && runs.length === 0) {
       createQualRuns(db, experimentId, step.id, def.default_runs);
     }
@@ -1399,6 +1953,35 @@ function getExtrusionFeederCalibration(db: Db, experimentId: number) {
   };
 }
 
+export function calculateJacobsWorkingCurve(
+  points: Array<{ x_value: number; y_value: number }>
+): { criticalExposureEcMjCm2: number; penetrationDepthDpUm: number; rSquared: number } | null {
+  const valid = points
+    .filter((point) => Number.isFinite(point.x_value) && point.x_value > 0 && Number.isFinite(point.y_value))
+    .map((point) => ({ x: Math.log(point.x_value), y: point.y_value }));
+  if (valid.length < 3) return null;
+  const meanX = valid.reduce((sum, point) => sum + point.x, 0) / valid.length;
+  const meanY = valid.reduce((sum, point) => sum + point.y, 0) / valid.length;
+  const denominator = valid.reduce((sum, point) => sum + (point.x - meanX) ** 2, 0);
+  if (denominator <= 0) return null;
+  const slope = valid.reduce((sum, point) => sum + (point.x - meanX) * (point.y - meanY), 0) / denominator;
+  if (!Number.isFinite(slope) || slope <= 0) return null;
+  const intercept = meanY - slope * meanX;
+  const total = valid.reduce((sum, point) => sum + (point.y - meanY) ** 2, 0);
+  if (total <= 0) return null;
+  const residual = valid.reduce((sum, point) => sum + (point.y - (slope * point.x + intercept)) ** 2, 0);
+  const criticalExposureEcMjCm2 = Math.exp(-intercept / slope);
+  const rSquared = 1 - residual / total;
+  if (!Number.isFinite(criticalExposureEcMjCm2) || criticalExposureEcMjCm2 <= 0 || !Number.isFinite(rSquared)) {
+    return null;
+  }
+  return {
+    criticalExposureEcMjCm2,
+    penetrationDepthDpUm: slope,
+    rSquared
+  };
+}
+
 export function recomputeDerivedAndSummary(
   db: Db,
   experimentId: number,
@@ -1612,6 +2195,74 @@ export function recomputeDerivedAndSummary(
         // SME proxy supports either torque% or motor current, whichever is available.
         const smeProxy = (driveSignal * rpm) / throughput * 0.01;
         setDerived("SME_kJ_kg", smeProxy);
+      }
+    }
+    if (processTypeCode === "sla_dlp") {
+      if (stepNumber === 2) {
+        const variableCode = String(stepSettings.jacobs_variable_code || "exposure_time_s");
+        const irradiance = variableCode === "irradiance_mw_cm2"
+          ? getNumber("irradiance_mw_cm2")
+          : resolveSettingNumber(stepSettings.jacobs_fixed_irradiance_mw_cm2);
+        const exposureTime = variableCode === "exposure_time_s"
+          ? getNumber("exposure_time_s")
+          : resolveSettingNumber(stepSettings.jacobs_fixed_exposure_time_s);
+        if (irradiance != null && irradiance >= 0 && exposureTime != null && exposureTime >= 0) {
+          setDerived("exposure_dose_mj_cm2", irradiance * exposureTime);
+        }
+      }
+      if (stepNumber === 3) {
+        const exposureTime = getNumber("exposure_time_s");
+        const irradiance = resolveSettingNumber(stepSettings.exposure_window_irradiance_mw_cm2);
+        if (irradiance != null && irradiance >= 0 && exposureTime != null && exposureTime >= 0) {
+          setDerived("exposure_dose_mj_cm2", irradiance * exposureTime);
+        }
+        const cureDepth = getNumber("cure_depth_um");
+        const layerHeight = getNumber("layer_height_um");
+        setDerived(
+          "overcure_pct",
+          cureDepth != null && layerHeight != null && layerHeight > 0
+            ? ((cureDepth - layerHeight) / layerHeight) * 100
+            : null
+        );
+      }
+      if (stepNumber === 4) {
+        const featureField = fieldByCode.get("artifact_feature_code");
+        const featureCode = featureField ? valueMap.get(featureField.id)?.value_text || "" : "";
+        const feature = nistAmTestArtifactPreset.features.find((item) => item.code === featureCode);
+        const measuredSize = getNumber("measured_feature_size_um");
+        const dimensionalError = feature && measuredSize != null
+          ? measuredSize - feature.nominal_size_um
+          : null;
+        setDerived(
+          "dimensional_error_um",
+          dimensionalError
+        );
+        setDerived(
+          "absolute_dimensional_error_um",
+          dimensionalError != null ? Math.abs(dimensionalError) : null
+        );
+        setDerived(
+          "relative_dimensional_error_pct",
+          dimensionalError != null && feature && feature.nominal_size_um > 0
+            ? dimensionalError / feature.nominal_size_um * 100
+            : null
+        );
+      }
+      if (stepNumber === 5) {
+        const peelForce = getNumber("peel_force_n");
+        const layerArea = getNumber("layer_area_mm2");
+        setDerived(
+          "average_peel_stress_mpa",
+          peelForce != null && layerArea != null && layerArea > 0 ? peelForce / layerArea : null
+        );
+      }
+      if (stepNumber === 6) {
+        const baselineTg = resolveSettingNumber(stepSettings.post_cure_baseline_tg_c);
+        const finalTg = getNumber("final_tg_c");
+        setDerived(
+          "post_cure_delta_tg_c",
+          Number.isFinite(baselineTg) && finalTg != null ? finalTg - baselineTg : null
+        );
       }
     }
     if (processTypeCode === "extrusion_v1") {
@@ -1857,7 +2508,40 @@ export function recomputeDerivedAndSummary(
       // ignore
     }
   }
+  syncCalculatedStepOutputs(db, experimentId, stepId, stepNumber, processTypeCode, summary);
   upsertQualSummary(db, experimentId, stepNumber, JSON.stringify(summary));
+}
+
+/**
+ * Computed stage outputs are materialized so reports, stage cards and later
+ * studies can use the canonical parameter identity without an operator
+ * retyping a value already implied by the run evidence.
+ */
+function syncCalculatedStepOutputs(
+  db: Db,
+  experimentId: number,
+  stepId: number,
+  stepNumber: number,
+  processTypeCode: string,
+  summary: Record<string, unknown>
+) {
+  const definitions = qualificationTemplateRegistry[processTypeCode]?.outputsByStep?.[stepNumber] ?? [];
+  for (const definition of definitions) {
+    if (definition.value_source !== "summary" || !definition.summary_key) continue;
+    const value = definition.summary_key.split(".").reduce<unknown>((current, key) => (
+      current && typeof current === "object" ? (current as Record<string, unknown>)[key] : undefined
+    ), summary);
+    const numericValue = typeof value === "number" && Number.isFinite(value) ? value : null;
+    upsertQualStepOutput(db, {
+      experiment_id: experimentId,
+      step_id: stepId,
+      output_group: definition.group,
+      output_code: definition.code,
+      param_def_id: findGlobalParamByCode(db, definition.code)?.id ?? null,
+      value_real: numericValue,
+      value_text: null
+    });
+  }
 }
 
 function buildStepSummary(
@@ -1898,6 +2582,161 @@ function buildStepSummary(
     if (value == null) return null;
     return value === 1;
   };
+
+  if (processTypeCode === "sla_dlp" && stepNumber === 2) {
+    const points = runValues
+      .filter((row) => row.run.exclude_from_analysis !== 1)
+      .map((row) => ({
+        x_value: numberFor(row.values, "exposure_dose_mj_cm2"),
+        y_value: numberFor(row.values, "cure_depth_um")
+      }))
+      .filter((point): point is { x_value: number; y_value: number } =>
+        Number.isFinite(point.x_value) && Number.isFinite(point.y_value)
+      );
+    const fit = calculateJacobsWorkingCurve(points);
+    summaries.jacobs_working_curve = {
+      point_count: points.length,
+      fit_valid: fit != null,
+      critical_exposure_ec_mj_cm2: fit?.criticalExposureEcMjCm2 ?? null,
+      penetration_depth_dp_um: fit?.penetrationDepthDpUm ?? null,
+      r_squared: fit?.rSquared ?? null
+    };
+  }
+
+  if (processTypeCode === "sla_dlp" && stepNumber === 4) {
+    const featureField = fieldByCode.get("artifact_feature_code");
+    const inspected = runValues.flatMap((row) => {
+      const featureCode = featureField ? row.values.get(featureField.id)?.value_text?.trim() || "" : "";
+      const feature = nistAmTestArtifactPreset.features.find((item) => item.code === featureCode);
+      if (!feature) return [];
+      const measured = numberFor(row.values, "measured_feature_size_um");
+      return [{
+        feature,
+        measured,
+        reproduced: boolOrNullFor(row.values, "feature_reproduced"),
+        dimensionalError: measured != null ? measured - feature.nominal_size_um : null
+      }];
+    });
+    const measured = inspected.filter((row) => Number.isFinite(row.measured));
+    const reproducedFineFeatureSizes = inspected
+      .filter((row) => row.reproduced === true && /fine/i.test(row.feature.category))
+      .map((row) => row.feature.nominal_size_um);
+    const xyErrors = inspected
+      .filter((row) => row.feature.analysis_role === "xy_boundary" && row.reproduced === true && Number.isFinite(row.dimensionalError))
+      .map((row) => row.dimensionalError as number)
+      .sort((left, right) => left - right);
+    const medianXyError = xyErrors.length
+      ? xyErrors.length % 2
+        ? xyErrors[(xyErrors.length - 1) / 2]
+        : (xyErrors[xyErrors.length / 2 - 1] + xyErrors[xyErrors.length / 2]) / 2
+      : null;
+    const scaleReference = inspected.find((row) =>
+      row.feature.analysis_role === "scale_reference" && Number.isFinite(row.measured) && (row.measured as number) > 0
+    );
+
+    summaries.dimensional_measurement = {
+      planned_element_count: nistAmTestArtifactPreset.features.length,
+      measured_element_count: measured.length,
+      minimum_reproduced_feature_um: reproducedFineFeatureSizes.length ? Math.min(...reproducedFineFeatureSizes) : null,
+      suggested_xy_boundary_offset_mm: medianXyError == null ? null : -medianXyError / 2000,
+      suggested_xy_boundary_sample_count: xyErrors.length,
+      suggested_xy_scale_compensation_pct: scaleReference
+        ? (scaleReference.feature.nominal_size_um / (scaleReference.measured as number) - 1) * 100
+        : null,
+      scale_reference_feature_code: scaleReference?.feature.code ?? null
+    };
+  }
+
+  if (processTypeCode === "sla_dlp" && stepNumber === 5) {
+    const points = runValues
+      .filter((row) => row.run.exclude_from_analysis !== 1)
+      .map((row) => {
+        const peelForce = numberFor(row.values, "peel_force_n");
+        const layerArea = numberFor(row.values, "layer_area_mm2");
+        return {
+          peelStress: peelForce != null && layerArea != null && layerArea > 0 ? peelForce / layerArea : null,
+          greenStrength: numberFor(row.values, "green_tensile_strength_mpa"),
+          printFailure: boolOrNullFor(row.values, "print_failure")
+        };
+      });
+    const peelStresses = points
+      .map((point) => point.peelStress)
+      .filter((value): value is number => Number.isFinite(value));
+    const validGreenStrengths = points
+      .filter((point) => point.printFailure === false)
+      .map((point) => point.greenStrength)
+      .filter((value): value is number => Number.isFinite(value))
+      .sort((left, right) => left - right);
+    const medianGreenStrength = validGreenStrengths.length
+      ? validGreenStrengths.length % 2
+        ? validGreenStrengths[(validGreenStrengths.length - 1) / 2]
+        : (validGreenStrengths[validGreenStrengths.length / 2 - 1] + validGreenStrengths[validGreenStrengths.length / 2]) / 2
+      : null;
+    summaries.peel_force = {
+      measured_peel_run_count: peelStresses.length,
+      print_failure_count: points.filter((point) => point.printFailure === true).length,
+      maximum_average_peel_stress_mpa: peelStresses.length ? Math.max(...peelStresses) : null,
+      median_green_tensile_strength_mpa: medianGreenStrength,
+      green_strength_sample_count: validGreenStrengths.length
+    };
+  }
+
+  if (processTypeCode === "sla_dlp" && stepNumber === 7) {
+    const orientationField = fieldByCode.get("build_orientation");
+    const byOrientation = new Map<string, { tensile: number[]; modulus: number[] }>();
+    const valuesFor = (row: (typeof runValues)[number]) => {
+      if (!orientationField) return [] as string[];
+      const raw = row.values.get(orientationField.id)?.value_tags_json;
+      if (!raw) return [] as string[];
+      try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [] as string[];
+      } catch {
+        return [] as string[];
+      }
+    };
+    runValues.filter((row) => row.run.exclude_from_analysis !== 1).forEach((row) => {
+      const orientation = valuesFor(row)[0];
+      if (!orientation) return;
+      const group = byOrientation.get(orientation) ?? { tensile: [], modulus: [] };
+      const tensile = numberFor(row.values, "tensile_strength_mpa");
+      const modulus = numberFor(row.values, "elastic_modulus_mpa");
+      if (tensile != null && Number.isFinite(tensile)) group.tensile.push(tensile);
+      if (modulus != null && Number.isFinite(modulus)) group.modulus.push(modulus);
+      byOrientation.set(orientation, group);
+    });
+    const statistics = (values: number[]) => {
+      if (!values.length) return { n: 0, mean: null, sd: null, cv_pct: null, median: null };
+      const sorted = [...values].sort((left, right) => left - right);
+      const mean = sorted.reduce((total, value) => total + value, 0) / sorted.length;
+      const variance = sorted.length > 1
+        ? sorted.reduce((total, value) => total + (value - mean) ** 2, 0) / (sorted.length - 1)
+        : 0;
+      const sd = Math.sqrt(variance);
+      const median = sorted.length % 2
+        ? sorted[(sorted.length - 1) / 2]
+        : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
+      return { n: sorted.length, mean, sd, cv_pct: mean === 0 ? null : sd / mean * 100, median };
+    };
+    const orientations = Object.fromEntries([...byOrientation.entries()].map(([orientation, values]) => [orientation, {
+      tensile_mpa: statistics(values.tensile),
+      elastic_modulus_mpa: statistics(values.modulus)
+    }]));
+    const xy = byOrientation.get("XY");
+    const z = byOrientation.get("Z");
+    const xyTensile = statistics(xy?.tensile ?? []);
+    const xyModulus = statistics(xy?.modulus ?? []);
+    const zTensile = statistics(z?.tensile ?? []);
+    summaries.final_mechanical = {
+      orientation_count: byOrientation.size,
+      orientations,
+      xy_tensile_median_mpa: xyTensile.median,
+      xy_modulus_median_mpa: xyModulus.median,
+      z_to_xy_tensile_ratio: xyTensile.median != null && xyTensile.median !== 0 && zTensile.median != null
+        ? zTensile.median / xyTensile.median
+        : null
+    };
+  }
 
   if (processTypeCode === "injection" && stepNumber === 1) {
     let best: { inj: number; viscosity: number } | null = null;

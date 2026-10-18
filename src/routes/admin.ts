@@ -58,6 +58,7 @@ import { hasLlmSettingsEncryptionKey, LlmSettingsEncryptionError } from "../modu
 import { listReportConfigsForAdmin } from "../repos/reports_repo.js";
 import { getSystemHealthOverview } from "../services/system_health_service.js";
 import { listFileRegistryFilterValues, listStoredFileLinks, listStoredFilesForAdmin } from "../repos/files_repo.js";
+import { getQualRun, getQualStepById } from "../repos/qual_repo.js";
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -128,10 +129,20 @@ export function createAdminRouter(db: Db) {
       title: "Administration · Files", uiKit: true,
       files: listStoredFilesForAdmin(db, filters).map((file) => ({
         ...file,
-        links: listStoredFileLinks(db, file.id).map((link) => ({
-          ...link,
-          href: link.entity_type === "machine" ? `/machines/${link.entity_id}` : link.entity_type === "user" ? `/users/${link.entity_id}` : null
-        }))
+        links: listStoredFileLinks(db, file.id).map((link) => {
+          const run = link.entity_type === "qualification_run" ? getQualRun(db, link.entity_id) : null;
+          const step = run ? getQualStepById(db, run.step_id) : null;
+          return {
+            ...link,
+            href: link.entity_type === "machine"
+              ? `/machines/${link.entity_id}`
+              : link.entity_type === "user"
+                ? `/users/${link.entity_id}`
+                : run && step
+                  ? `/experiments/${run.experiment_id}/qualification/${step.step_number}#finalMechanicalCurves`
+                  : null
+          };
+        })
       })),
       users: listUsers(db).filter((user) => user.status === "ACTIVE"),
       filterValues: listFileRegistryFilterValues(db), filters, formatBytes

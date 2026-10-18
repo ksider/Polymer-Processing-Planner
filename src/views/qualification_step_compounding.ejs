@@ -62,11 +62,6 @@
         Reason: <strong><%= step.blocked_reason || '-' %></strong>
       </p>
     <% } %>
-    <% if (processTypeCode !== 'extrusion_v1') { %>
-      <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-default pt-3">
-        <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong focus:outline-none focus:ring-4 focus:ring-brand disabled:cursor-not-allowed disabled:opacity-50" type="button" id="addRunBtn" <%= step.is_blocked === 1 ? 'disabled' : '' %>>Add run</button>
-      </div>
-    <% } %>
   </section>
 
   <% let summaryData = null; %>
@@ -179,6 +174,48 @@
   <% const isExtrusionStepFive = processTypeCode === 'extrusion_v1' && step.step_number === 5; %>
   <% const isExtrusionOptionalStudy = processTypeCode === 'extrusion_v1' && [6, 7, 8, 9, 10].includes(step.step_number); %>
   <% if (studyGuide) { %><%- include('partials/qualification_study_guide', { studyGuide }) %><% } %>
+  <% if (processTypeCode === 'sla_dlp' && step.step_number === 3 && jacobsReference) { %>
+    <section class="mb-6 overflow-hidden rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs" aria-labelledby="jacobsReferenceTitle">
+      <div class="flex flex-wrap items-start justify-between gap-3 border-b border-default pb-4">
+        <div>
+          <h2 class="text-lg font-semibold tracking-tight text-heading" id="jacobsReferenceTitle">Reference from Step 2: Jacobs working curve</h2>
+          <p class="mt-1 text-sm text-body">Calculated source data is prefilled into the Step 3 generator; it is never silently written into run evidence.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="inline-flex size-9 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" data-copy-table="#jacobsReferenceValues" data-copy-icon title="Copy Jacobs reference as TSV" aria-label="Copy Jacobs reference as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button>
+          <a class="inline-flex items-center gap-1 rounded-base border border-default-medium bg-neutral-secondary px-3 py-2 text-sm font-medium text-heading no-underline shadow-xs hover:bg-neutral-tertiary" href="<%= jacobsReference.href %>">Open Step 2 <span class="material-symbols-rounded text-[18px]" aria-hidden="true">arrow_forward</span></a>
+        </div>
+      </div>
+      <table class="sr-only" id="jacobsReferenceValues">
+        <thead><tr><th>Reference value</th><th>Value</th><th>Unit</th></tr></thead>
+        <tbody>
+          <tr><td>Fit status</td><td><%= jacobsReference.fitValid ? 'Calculated' : 'Not available' %></td><td></td></tr>
+          <tr><td>Ec</td><td><%= jacobsReference.ec == null ? '–' : formatNumber(jacobsReference.ec, 3) %></td><td>mJ/cm²</td></tr>
+          <tr><td>Dp</td><td><%= jacobsReference.dp == null ? '–' : formatNumber(jacobsReference.dp, 2) %></td><td>µm</td></tr>
+          <tr><td>R²</td><td><%= jacobsReference.rSquared == null ? '–' : formatNumber(jacobsReference.rSquared, 4) %></td><td></td></tr>
+          <tr><td>Wavelength</td><td><%= jacobsReference.wavelengthNm ?? '–' %></td><td>nm</td></tr>
+          <tr><td>Resin temperature</td><td><%= jacobsReference.resinTempC ?? '–' %></td><td>°C</td></tr>
+          <tr><td>Varied</td><td><%= jacobsReference.variableLabel %></td><td></td></tr>
+          <tr><td><%= jacobsReference.fixedLabel %></td><td><%= jacobsReference.fixedValue ?? '–' %></td><td><%= jacobsReference.fixedUnit %></td></tr>
+          <tr><td>Non-excluded points</td><td><%= jacobsReference.pointCount %></td><td></td></tr>
+        </tbody>
+      </table>
+      <% if (jacobsReference.fitValid && jacobsReference.ec != null && jacobsReference.dp != null) { %>
+        <dl class="mt-4 grid gap-4 text-sm sm:grid-cols-3">
+          <div><dt class="text-xs text-body">Ec</dt><dd class="mt-1 font-medium text-heading"><%= formatNumber(jacobsReference.ec, 3) %> mJ/cm²</dd></div>
+          <div><dt class="text-xs text-body">Dp</dt><dd class="mt-1 font-medium text-heading"><%= formatNumber(jacobsReference.dp, 2) %> µm</dd></div>
+          <div><dt class="text-xs text-body">R²</dt><dd class="mt-1 font-medium text-heading"><%= formatNumber(jacobsReference.rSquared, 4) %></dd></div>
+        </dl>
+        <p class="mt-4 rounded-base bg-neutral-secondary p-3 text-sm text-body">Use Ec and Dp to select a sensible initial range, then confirm the usable window here with actual layer thickness, XY bleed, open channels and delamination. R² does not choose a setting.</p>
+        <p class="mt-3 text-xs text-body">Source conditions: <%= jacobsReference.wavelengthNm ?? '-' %> nm; <%= jacobsReference.resinTempC ?? '-' %> °C; varied <%= jacobsReference.variableLabel %>; <%= jacobsReference.fixedLabel.toLowerCase() %> <%= jacobsReference.fixedValue ?? '-' %> <%= jacobsReference.fixedUnit %>; <%= jacobsReference.pointCount %> non-excluded points.</p>
+      <% } else { %>
+        <p class="mt-4 rounded-base bg-warning-soft p-3 text-sm text-body">No valid Jacobs fit is available yet. Record at least three non-excluded dose/depth points in Step 2 before using it as a reference.</p>
+      <% } %>
+    </section>
+  <% } %>
+  <% if (processTypeCode === 'sla_dlp' && step.step_number === 4) { %>
+    <%- include('partials/qualification_dimensional_artifact_setup', { experimentId, step, stepSettings, dimensionalArtifact, dimensionalReference }) %>
+  <% } %>
   <% if (isExtrusionStepOne) { %>
     <%- include('partials/extrusion_step1_program', { fields, runs, runValueMap, seriesDefinitions, runSeries, outputDefinitions, stepOutputs, assignableUsers, inputTableClass, formatNumber, step }) %>
   <% } else if (isExtrusionStepTwo) { %>
@@ -191,10 +228,43 @@
     <%- include('partials/extrusion_step5_program', { fields, runs, runValueMap, seriesDefinitions, runSeries, outputDefinitions, stepOutputs, assignableUsers, inputTableClass, formatNumber, step, stepSettings, stepSummary, rtdAcceptedPointCount }) %>
   <% } else if (isExtrusionOptionalStudy) { %>
     <%- include('partials/extrusion_optional_study_program', { fields, runs, runValueMap, outputDefinitions, stepOutputs, assignableUsers, inputTableClass, formatNumber, step, stepSettings }) %>
+  <% } else if (processTypeCode === 'sla_dlp' && step.step_number === 4 && dimensionalArtifact) { %>
+    <%- include('partials/qualification_dimensional_measurement_plan', { fields, runs, runValueMap, dimensionalArtifact, formatNumber, step }) %>
+    <section class="mb-6 overflow-hidden rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs" aria-labelledby="slaDimensionalAccuracyTitle">
+      <div class="border-b border-default pb-4">
+        <h2 class="text-lg font-semibold tracking-tight text-heading" id="slaDimensionalAccuracyTitle">Dimensional error by model element</h2>
+        <p class="mt-1 text-sm text-body">Each bar is one measured NIST element. The zero line is its fixed nominal; no compensation value is varied or entered in this step.</p>
+      </div>
+      <div class="mt-4 h-96 w-full" id="slaDimensionalAccuracyChart"></div>
+    </section>
+    <%- include('partials/qualification_outputs', { outputDefinitions, stepOutputs, step, stepSummary, stepSettings }) %>
+  <% } else if (processTypeCode === 'sla_dlp' && step.step_number === 5 && stepDef?.run_generator?.type === 'peel_force_matrix') { %>
+    <%- include('partials/qualification_peel_force_matrix', { experimentId, step, fields, runs, runValueMap, stepSettings, peelForceReference, generator: stepDef.run_generator, formatNumber }) %>
+    <%- include('partials/qualification_outputs', { outputDefinitions, stepOutputs, step, stepSummary, stepSettings }) %>
+  <% } else if (processTypeCode === 'sla_dlp' && step.step_number === 6 && stepDef?.run_generator?.type === 'post_cure_matrix') { %>
+    <%- include('partials/qualification_post_cure_matrix', { experimentId, step, fields, runs, runValueMap, stepSettings, postCureReference, generator: stepDef.run_generator, formatNumber }) %>
+    <%- include('partials/qualification_outputs', { outputDefinitions, stepOutputs, step, stepSummary, stepSettings }) %>
+  <% } else if (processTypeCode === 'sla_dlp' && step.step_number === 7) { %>
+    <%- include('partials/qualification_final_mechanical_program', { experimentId, step, fields, runs, runValueMap, stepSettings, finalMechanicalReference, finalMechanicalCurveFiles, runSeries, stepSummary, formatNumber }) %>
+    <%- include('partials/qualification_outputs', { outputDefinitions, stepOutputs, step, stepSummary, stepSettings }) %>
+  <% } else if (processTypeCode === 'sla_dlp' && step.step_number === 8) { %>
+    <%- include('partials/qualification_rheology_program', { experimentId, step, fields, runs, runValueMap, stepSettings, rheologyReference, rheologyCurveFiles, runSeries, formatNumber }) %>
+    <%- include('partials/qualification_outputs', { outputDefinitions, stepOutputs, step, stepSummary, stepSettings }) %>
   <% } else { %>
+  <% if (stepDef?.run_generator?.type === 'exposure_layer_matrix') { %>
+    <%- include('partials/qualification_exposure_layer_generator', { generator: stepDef.run_generator, experimentId, step, stepSettings, jacobsReference, formatNumber }) %>
+  <% } else { %>
+    <%- include('partials/qualification_single_factor_generator', { generator: stepDef?.run_generator, experimentId, step, stepSettings }) %>
+  <% } %>
   <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
     <div class="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
       <h2 class="text-lg font-semibold tracking-tight text-gray-900">Runs</h2>
+      <div class="flex items-center gap-2">
+        <button class="inline-flex size-9 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" data-copy-table="#compoundingRunsTable" data-copy-exclude-columns="date,responsible" data-copy-icon title="Copy runs as TSV" aria-label="Copy runs as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button>
+        <% if (!stepDef?.run_generator) { %>
+          <button class="inline-flex size-9 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft disabled:cursor-not-allowed disabled:opacity-50" type="button" id="addRunBtn" title="Add run" aria-label="Add run" <%= step.is_blocked === 1 ? 'disabled' : '' %>><span class="material-symbols-rounded" aria-hidden="true">add</span></button>
+        <% } %>
+      </div>
     </div>
     <% const activeFields = fields.filter((field) => field.is_enabled === 1); %>
     <% const inputFields = activeFields.filter((field) => String(field.group_label || '').toLowerCase() === 'inputs'); %>
@@ -208,10 +278,12 @@
             <th>Run</th>
             <th>Date</th>
             <th>Responsible</th>
-            <% orderedFields.forEach((field) => { %>
-              <th>
-                <%- formatInline(field.label) %>
-                <% if (field.unit) { %><span class="text-sm text-gray-500"> <%= field.unit %></span><% } %>
+            <% orderedFields.forEach((field) => { const tooltipId = `qualification-field-tip-${step.id}-${field.id}`; const tooltipText = `${field.label}${field.unit ? ` (${field.unit})` : ''}`; %>
+              <th class="whitespace-nowrap text-xs">
+                <span class="cursor-help hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand" tabindex="0" data-tooltip-target="<%= tooltipId %>" aria-label="<%= tooltipText %>">
+                  <%= compactFieldLabels?.[field.code] || field.label %><% if (field.unit) { %> <span class="normal-case text-body">(<%= field.unit %>)</span><% } %>
+                </span>
+                <div id="<%= tooltipId %>" role="tooltip" class="tooltip invisible absolute z-10 inline-block max-w-56 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium normal-case text-white opacity-0 shadow-sm transition-opacity"><%= tooltipText %><div class="tooltip-arrow" data-popper-arrow></div></div>
               </th>
             <% }); %>
             <th>Done</th>
@@ -221,7 +293,7 @@
         </thead>
         <tbody>
           <% if (runs.length === 0) { %>
-            <tr><td colspan="<%= orderedFields.length + 6 %>">No runs yet.</td></tr>
+            <tr data-copy-exclude="true"><td colspan="<%= orderedFields.length + 6 %>">No runs yet.</td></tr>
           <% } %>
           <% runs.forEach((run) => { %>
             <% const values = runValueMap[String(run.id)] || {}; %>
@@ -252,7 +324,7 @@
                   <% } else if (field.field_type === 'boolean') { %>
                     <input type="checkbox" data-field-id="<%= field.id %>" data-field-type="boolean" <%= value?.value_real === 1 ? 'checked' : '' %>>
                   <% } else if (field.field_type === 'number') { %>
-                    <input type="number" step="any" data-field-id="<%= field.id %>" data-field-type="number" value="<%= value?.value_real ?? '' %>">
+                    <input class="w-20 min-w-20" type="number" step="any" data-field-id="<%= field.id %>" data-field-type="number" value="<%= value?.value_real ?? '' %>">
                   <% } else if (field.field_type === 'tag') { %>
                     <% let selected = []; %>
                     <% if (value?.value_tags_json) { try { const parsed = JSON.parse(value.value_tags_json); if (Array.isArray(parsed)) selected = parsed.map(String); } catch {} } %>
@@ -275,6 +347,29 @@
       </table>
     </div>
   </div>
+
+  <% if (processTypeCode === 'sla_dlp' && step.step_number === 3) { %>
+    <section class="mb-6 overflow-hidden rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs" aria-labelledby="slaExposureLayerMapTitle">
+      <div class="border-b border-default pb-4">
+        <h2 class="text-lg font-semibold tracking-tight text-heading" id="slaExposureLayerMapTitle">Exposure × layer-height map</h2>
+        <p class="mt-1 text-sm text-body">Cell colour is measured overcure U<sub>z</sub>. Hover for cure depth, XY bleed, open-channel and delamination evidence.</p>
+      </div>
+      <div class="mt-4 h-96 w-full" id="slaExposureLayerHeatmap"></div>
+    </section>
+  <% } %>
+
+  <% if (processTypeCode === 'sla_dlp' && step.step_number === 4) { %>
+    <section class="mb-6 overflow-hidden rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs" aria-labelledby="slaDimensionalAccuracyTitle">
+      <div class="border-b border-default pb-4">
+        <h2 class="text-lg font-semibold tracking-tight text-heading" id="slaDimensionalAccuracyTitle">Dimensional error by model element</h2>
+        <p class="mt-1 text-sm text-body">Each bar is one measured NIST element. The zero line is its fixed nominal; no compensation value is varied or entered in this step.</p>
+      </div>
+      <div class="mt-4 h-96 w-full" id="slaDimensionalAccuracyChart"></div>
+    </section>
+  <% } %>
+
+  <%- include('partials/qualification_series_program', { seriesDefinitions, runs, step }) %>
+  <%- include('partials/qualification_outputs', { outputDefinitions, stepOutputs, step, stepSummary, stepSettings }) %>
 
   <% if (processTypeCode === 'extrusion_v1' && step.step_number === 1) { %>
     <section class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm" aria-labelledby="extrusionStep1SeriesTitle">
@@ -546,6 +641,7 @@
     const runTables = Array.from(document.querySelectorAll('[data-run-table]'));
     if (!runTables.length && table) runTables.push(table);
     const fieldIdByCode = <%- jsonForScript(Object.fromEntries(fields.map((field) => [field.code, field.id]))) %>;
+    const qualificationStepSettings = <%- jsonForScript(stepSettings || {}) %>;
     const qualificationSeriesDefinitions = <%- jsonForScript(seriesDefinitions || []) %>;
     let qualificationRunSeries = <%- jsonForScript(runSeries || []) %>;
     const qualSettingsDialog = document.getElementById('qualSettingsDialog');
@@ -585,8 +681,10 @@
       const fieldId = fieldIdByCode?.[code];
       if (!fieldId) return null;
       const input = row.querySelector(`[data-field-id="${fieldId}"]`);
-      if (!input) return null;
-      return parseNumber(input.value);
+      const derived = row.querySelector(`[data-derived-code="${code}"]`);
+      const source = input || derived;
+      if (!source) return null;
+      return parseNumber('value' in source ? source.value : source.textContent);
     };
     const fmtLive = (value, digits = 2) => {
       if (!Number.isFinite(value)) return '-';
@@ -627,6 +725,21 @@
       root.querySelector('[data-pump-b]').textContent = scientificLive(summary.screw_pumping_b_m3);
       root.querySelector('[data-pump-r-squared]').textContent = fmtLive(summary.screw_pumping_r_squared, 3);
       root.querySelector('[data-pump-point-count]').textContent = String(summary.pump_characteristic_point_count ?? 0);
+    };
+    const updateJacobsFit = (summary) => {
+      const root = document.querySelector('[data-jacobs-fit]');
+      const fit = summary?.jacobs_working_curve;
+      if (!root || !fit) return;
+      const valid = fit.fit_valid === true;
+      root.classList.toggle('border-success-medium', valid);
+      root.classList.toggle('bg-success-soft', valid);
+      root.classList.toggle('border-warning-medium', !valid);
+      root.classList.toggle('bg-warning-soft', !valid);
+      root.querySelector('[data-jacobs-fit-state]').textContent = valid ? 'Calculated' : 'Need at least 3 valid run points';
+      root.querySelector('[data-jacobs-fit-point-count]').textContent = String(fit.point_count ?? 0);
+      root.querySelector('[data-jacobs-fit-ec]').textContent = fmtLive(fit.critical_exposure_ec_mj_cm2, 3);
+      root.querySelector('[data-jacobs-fit-dp]').textContent = fmtLive(fit.penetration_depth_dp_um, 2);
+      root.querySelector('[data-jacobs-fit-r-squared]').textContent = fmtLive(fit.r_squared, 4);
     };
     const setReasonText = (text) => {
       const node = document.getElementById('step2RecommendationReason');
@@ -1033,6 +1146,461 @@
     const seriesFor = (runId, seriesCode) => qualificationRunSeries.find((series) => (
       Number(series.run_id) === Number(runId) && series.series_code === seriesCode
     ));
+    const valueForRunSeriesAxis = (row, axis) => {
+      if (!axis?.code) return null;
+      if (axis.derived_formula_code === 'sla_exposure_dose') {
+        const variableCode = String(qualificationStepSettings.jacobs_variable_code || 'exposure_time_s');
+        const configuredNumber = (code) => {
+          const value = Number(String(qualificationStepSettings[code] ?? '').replace(',', '.'));
+          return Number.isFinite(value) ? value : null;
+        };
+        const irradiance = variableCode === 'irradiance_mw_cm2'
+          ? numFromRow(row, 'irradiance_mw_cm2')
+          : configuredNumber('jacobs_fixed_irradiance_mw_cm2');
+        const exposureTime = variableCode === 'exposure_time_s'
+          ? numFromRow(row, 'exposure_time_s')
+          : configuredNumber('jacobs_fixed_exposure_time_s');
+        return irradiance != null && irradiance >= 0 && exposureTime != null && exposureTime >= 0
+          ? irradiance * exposureTime
+          : null;
+      }
+      return numFromRow(row, axis.code);
+    };
+    const renderRunFieldSeriesCard = (card) => {
+      if (!window.echarts) return;
+      const code = card.dataset.seriesCode;
+      const definition = qualificationSeriesDefinitions.find((item) => item.code === code);
+      const status = card.querySelector('[data-series-status]');
+      const container = card.querySelector('[data-series-chart]');
+      if (!definition || definition.source !== 'run_fields' || !container) return;
+      const points = getActiveRows()
+        .map((row) => ({
+          x: valueForRunSeriesAxis(row, definition.x),
+          y: valueForRunSeriesAxis(row, definition.y),
+          run: row.querySelector('strong')?.textContent || 'Run'
+        }))
+        .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+        .sort((left, right) => left.x - right.x);
+      const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+      if (status) status.textContent = `${points.length} run point${points.length === 1 ? '' : 's'} · at least ${definition.minimum_points} required`;
+      if (!points.length) {
+        chart.clear();
+        chart.setOption({
+          title: { text: 'Enter exposure and cured depth in the run table', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } }
+        });
+        return;
+      }
+      chart.setOption({
+        tooltip: {
+          trigger: 'item',
+          formatter: (item) => `${item.data.run}<br>${definition.x.label}: ${fmtLive(item.value[0], 3)} ${definition.x.unit}<br>${definition.y.label}: ${fmtLive(item.value[1], 2)} ${definition.y.unit}`
+        },
+        grid: { left: 64, right: 18, top: 18, bottom: 52 },
+        xAxis: { type: definition.x.scale === 'log' ? 'log' : 'value', name: `${definition.x.label} (${definition.x.unit})`, nameLocation: 'middle', nameGap: 34, scale: true },
+        yAxis: { type: 'value', name: `${definition.y.label} (${definition.y.unit})`, nameLocation: 'middle', nameGap: 46, scale: true },
+        series: [{
+          type: 'line',
+          showSymbol: true,
+          symbolSize: 7,
+          data: points.map((point) => ({ value: [point.x, point.y], run: point.run }))
+        }]
+      }, { notMerge: true });
+    };
+    const renderRunFieldSeriesCards = () => {
+      document.querySelectorAll('[data-qual-series-card][data-series-source="run_fields"]').forEach((card) => renderRunFieldSeriesCard(card));
+    };
+    const updateSlaExposureLayerDerived = () => {
+      if (processTypeCode !== 'sla_dlp' || stepNumber !== 3) return;
+      const irradiance = parseNumber(qualificationStepSettings.exposure_window_irradiance_mw_cm2);
+      getActiveRows().forEach((row) => {
+        const exposureTime = numFromRow(row, 'exposure_time_s');
+        const layerHeight = numFromRow(row, 'layer_height_um');
+        const cureDepth = numFromRow(row, 'cure_depth_um');
+        const dose = Number.isFinite(irradiance) && Number.isFinite(exposureTime) ? irradiance * exposureTime : null;
+        const overcure = Number.isFinite(cureDepth) && Number.isFinite(layerHeight) && layerHeight > 0
+          ? ((cureDepth - layerHeight) / layerHeight) * 100
+          : null;
+        const update = (code, value, digits) => {
+          const cell = row.querySelector(`[data-derived-code="${code}"]`);
+          if (cell) cell.textContent = Number.isFinite(value) ? fmtLive(value, digits) : '-';
+        };
+        update('exposure_dose_mj_cm2', dose, 3);
+        update('overcure_pct', overcure, 1);
+      });
+    };
+    const updateSlaDimensionalDerived = () => {
+      if (processTypeCode !== 'sla_dlp' || stepNumber !== 4) return;
+      getActiveRows().forEach((row) => {
+        const measuredMm = numFromRow(row, 'measured_feature_size_um');
+        const nominalUm = parseNumber(row.dataset.artifactFeatureNominalSizeUm);
+        const errorUm = Number.isFinite(measuredMm) && Number.isFinite(nominalUm)
+          ? measuredMm * 1000 - nominalUm
+          : null;
+        const errorMm = Number.isFinite(errorUm) ? errorUm / 1000 : null;
+        const update = (code, value, digits) => {
+          const cell = row.querySelector(`[data-derived-code="${code}"]`);
+          if (cell) cell.textContent = Number.isFinite(value) ? fmtLive(value, digits) : '-';
+        };
+        update('dimensional_error_um', errorMm, 3);
+        update('absolute_dimensional_error_um', Number.isFinite(errorMm) ? Math.abs(errorMm) : null, 3);
+        update('relative_dimensional_error_pct', Number.isFinite(errorUm) && nominalUm > 0 ? errorUm / nominalUm * 100 : null, 2);
+      });
+    };
+    const renderSlaExposureLayerHeatmap = () => {
+      if (processTypeCode !== 'sla_dlp' || stepNumber !== 3 || !window.echarts) return;
+      const container = document.getElementById('slaExposureLayerHeatmap');
+      if (!container) return;
+      const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+      const points = getActiveRows().map((row) => {
+        const exposureTime = numFromRow(row, 'exposure_time_s');
+        const layerHeight = numFromRow(row, 'layer_height_um');
+        const overcure = numFromRow(row, 'overcure_pct');
+        return {
+          run: row.querySelector('strong')?.textContent?.trim() || 'Run',
+          exposureTime,
+          dose: numFromRow(row, 'exposure_dose_mj_cm2'),
+          layerHeight,
+          targetOvercure: numFromRow(row, 'target_overcure_pct'),
+          overcure,
+          cureDepth: numFromRow(row, 'cure_depth_um'),
+          xyBleed: numFromRow(row, 'xy_bleed_um'),
+          openChannel: numFromRow(row, 'minimum_open_channel_um'),
+          delamination: row.querySelector(`[data-field-id="${fieldIdByCode?.delamination_present}"]`)?.checked === true
+        };
+      }).filter((point) => Number.isFinite(point.exposureTime) && Number.isFinite(point.layerHeight) && Number.isFinite(point.overcure));
+      if (!points.length) {
+        chart.clear();
+        chart.setOption({
+          title: { text: 'Enter cure depth for generated exposure/layer runs', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } }
+        });
+        return;
+      }
+      const exposureTimes = [...new Set(points.map((point) => point.exposureTime))].sort((left, right) => left - right);
+      const layerHeights = [...new Set(points.map((point) => point.layerHeight))].sort((left, right) => left - right);
+      const exposureIndex = new Map(exposureTimes.map((value, index) => [value, index]));
+      const layerIndex = new Map(layerHeights.map((value, index) => [value, index]));
+      const overcures = points.map((point) => point.overcure);
+      const minimum = Math.min(...overcures);
+      const maximum = Math.max(...overcures);
+      chart.setOption({
+        tooltip: {
+          position: 'top',
+          formatter: (params) => {
+            const value = params.value;
+            const line = (label, number, unit = '') => Number.isFinite(number) ? `<br>${label}: ${fmtLive(number, 2)}${unit}` : '';
+            return `<strong>${value[7]}</strong>${line('Layer exposure', value[8], ' s')}${line('Exposure dose', value[9], ' mJ/cm²')}${line('Layer height', value[10], ' µm')}${line('Target overcure', value[11], ' %')}${line('Measured overcure', value[2], ' %')}${line('Cure depth', value[3], ' µm')}${line('XY bleed', value[4], ' µm')}${line('Min. open channel', value[5], ' µm')}<br>Delamination: ${value[6] ? 'yes' : 'no'}`;
+          }
+        },
+        grid: { left: 80, right: 104, top: 22, bottom: 58 },
+        xAxis: { type: 'category', data: exposureTimes.map((value) => fmtLive(value, 3)), name: 'Layer exposure (s)', nameLocation: 'middle', nameGap: 34, splitArea: { show: true } },
+        yAxis: { type: 'category', data: layerHeights.map((value) => fmtLive(value, 0)), name: 'Layer height (µm)', nameLocation: 'middle', nameGap: 52, splitArea: { show: true } },
+        visualMap: { min: minimum, max: maximum === minimum ? minimum + 1 : maximum, calculable: true, orient: 'vertical', right: 8, top: 'center', text: ['Higher U_z', 'Lower U_z'], inRange: { color: ['#2563eb', '#38bdf8', '#fbbf24', '#dc2626'] }, formatter: (value) => `${fmtLive(value, 0)}%` },
+        series: [{
+          name: 'Measured overcure', type: 'heatmap', label: { show: true, formatter: (params) => `${fmtLive(params.value[2], 0)}%`, color: '#111827' },
+          data: points.map((point) => [
+            exposureIndex.get(point.exposureTime), layerIndex.get(point.layerHeight), point.overcure,
+            point.cureDepth, point.xyBleed, point.openChannel, point.delamination ? 1 : 0, point.run,
+            point.exposureTime, point.dose, point.layerHeight, point.targetOvercure
+          ])
+        }]
+      }, { notMerge: true });
+    };
+    const renderSlaDimensionalAccuracyChart = () => {
+      if (processTypeCode !== 'sla_dlp' || stepNumber !== 4 || !window.echarts) return;
+      const container = document.getElementById('slaDimensionalAccuracyChart');
+      if (!container) return;
+      const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+      const reproducedFieldId = fieldIdByCode?.feature_reproduced;
+      const points = getActiveRows().map((row) => {
+        return {
+          feature: row.dataset.artifactFeatureLabel || 'Model element',
+          zone: row.dataset.artifactFeatureZone || 'other',
+          measured: numFromRow(row, 'measured_feature_size_um'),
+          error: numFromRow(row, 'dimensional_error_um'),
+          relative: numFromRow(row, 'relative_dimensional_error_pct'),
+          reproduced: reproducedFieldId ? row.querySelector(`[data-field-id="${reproducedFieldId}"]`)?.checked === true : null
+        };
+      }).filter((point) => Number.isFinite(point.error));
+      if (!points.length) {
+        chart.clear();
+        chart.setOption({
+          title: { text: 'Enter a measured size to plot its dimensional error', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } }
+        });
+        return;
+      }
+      const colors = { fine: '#d97706', xy: '#7c3aed', lateral: '#059669', baseline: '#2563eb', other: '#64748b' };
+      chart.setOption({
+        tooltip: {
+          trigger: 'item',
+          formatter: (item) => `<strong>${item.data.feature}</strong>${Number.isFinite(item.data.measured) ? `<br>Measured: ${fmtLive(item.data.measured, 3)} mm` : ''}<br>Δdim: ${fmtLive(item.value, 3)} mm${Number.isFinite(item.data.relative) ? `<br>Relative Δ: ${fmtLive(item.data.relative, 2)}%` : ''}${item.data.reproduced == null ? '' : `<br>Reproduced: ${item.data.reproduced ? 'yes' : 'no'}`}`
+        },
+        grid: { left: 72, right: 24, top: 24, bottom: 112 },
+        xAxis: { type: 'category', data: points.map((point) => point.feature), axisLabel: { interval: 0, rotate: 35, width: 120, overflow: 'truncate' } },
+        yAxis: { type: 'value', name: 'Measured − fixed NIST nominal (mm)', nameLocation: 'middle', nameGap: 54, scale: true },
+        series: [{
+          name: 'Dimensional error',
+          type: 'bar',
+          data: points.map((point) => ({ value: point.error, feature: point.feature, measured: point.measured, relative: point.relative, reproduced: point.reproduced, itemStyle: { color: point.reproduced === false ? '#dc2626' : colors[point.zone] || colors.other } })),
+          markLine: { symbol: 'none', lineStyle: { type: 'dashed', color: '#64748b' }, label: { formatter: 'Fixed nominal' }, data: [{ yAxis: 0 }] }
+        }]
+      }, { notMerge: true });
+    };
+    const updateSlaPeelForceDerived = () => {
+      if (processTypeCode !== 'sla_dlp' || stepNumber !== 5) return;
+      document.querySelectorAll('[data-peel-force-table] tr[data-run-row]').forEach((row) => {
+        const peelForce = numFromRow(row, 'peel_force_n');
+        const layerArea = numFromRow(row, 'layer_area_mm2');
+        const target = row.querySelector('[data-derived-code="average_peel_stress_mpa"]');
+        if (target) target.textContent = Number.isFinite(peelForce) && Number.isFinite(layerArea) && layerArea > 0
+          ? fmtLive(peelForce / layerArea, 4)
+          : '–';
+      });
+    };
+    const renderSlaPeelForceChart = () => {
+      if (processTypeCode !== 'sla_dlp' || stepNumber !== 5 || !window.echarts) return;
+      const container = document.getElementById('slaPeelForceChart');
+      if (!container) return;
+      const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+      const failureFieldId = fieldIdByCode?.print_failure;
+      const points = Array.from(document.querySelectorAll('[data-peel-force-table] tr[data-run-row]')).map((row) => {
+        const speed = numFromRow(row, 'lift_speed_mm_s');
+        const area = numFromRow(row, 'layer_area_mm2');
+        const exposure = numFromRow(row, 'exposure_time_s');
+        const force = numFromRow(row, 'peel_force_n');
+        const greenStrength = numFromRow(row, 'green_tensile_strength_mpa');
+        const failure = failureFieldId ? row.querySelector(`[data-field-id="${failureFieldId}"]`)?.checked === true : false;
+        return {
+          run: row.querySelector('td')?.textContent?.trim() || 'Run', speed, area, exposure, force, greenStrength, failure,
+          peelStress: Number.isFinite(force) && Number.isFinite(area) && area > 0 ? force / area : null
+        };
+      }).filter((point) => Number.isFinite(point.speed) && Number.isFinite(point.area) && Number.isFinite(point.exposure) && Number.isFinite(point.force));
+      if (!points.length) {
+        chart.clear();
+        chart.setOption({ title: { text: 'Enter exposure, layer area and peak peel force to plot the matrix.', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } } });
+        return;
+      }
+      const colors = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#0891b2', '#be185d'];
+      const conditions = [...new Map(points.filter((point) => !point.failure).map((point) => [
+        `${point.speed}|${point.exposure}`,
+        { speed: point.speed, exposure: point.exposure }
+      ])).values()].sort((left, right) => left.speed - right.speed || left.exposure - right.exposure);
+      const details = (point) => `<strong>${point.run}</strong><br>Lift speed: ${fmtLive(point.speed, 3)} mm/s<br>Layer area: ${fmtLive(point.area, 1)} mm²<br>Exposure: ${fmtLive(point.exposure, 3)} s<br>Peak peel force: ${fmtLive(point.force, 3)} N<br>Average peel stress: ${fmtLive(point.peelStress, 4)} MPa${Number.isFinite(point.greenStrength) ? `<br>Green tensile strength: ${fmtLive(point.greenStrength, 3)} MPa` : ''}${point.failure ? '<br><strong>Print/support failure observed</strong>' : ''}`;
+      chart.setOption({
+        tooltip: { trigger: 'item', formatter: (item) => details(item.data) },
+        legend: { type: 'scroll', top: 0 },
+        grid: { left: 72, right: 24, top: 42, bottom: 58 },
+        xAxis: { type: 'value', name: 'Representative layer area (mm²)', nameLocation: 'middle', nameGap: 34, min: 0, scale: true },
+        yAxis: { type: 'value', name: 'Peak peel force (N)', nameLocation: 'middle', nameGap: 48, min: 0, scale: true },
+        series: [
+          ...conditions.map((condition, index) => ({
+            name: `${fmtLive(condition.speed, 3)} mm/s · ${fmtLive(condition.exposure, 3)} s`, type: 'line', showSymbol: true, symbolSize: 9,
+            itemStyle: { color: colors[index % colors.length] }, lineStyle: { color: colors[index % colors.length] },
+            data: points.filter((point) => !point.failure && point.speed === condition.speed && point.exposure === condition.exposure).sort((left, right) => left.area - right.area).map((point) => ({ ...point, value: [point.area, point.force] }))
+          })),
+          {
+            name: 'Print/support failure', type: 'scatter', symbol: 'path://M0,-8L8,0L0,8L-8,0Z', symbolSize: 12,
+            itemStyle: { color: '#dc2626' }, data: points.filter((point) => point.failure).map((point) => ({ ...point, value: [point.area, point.force] }))
+          }
+        ]
+      }, { notMerge: true });
+    };
+    const updateSlaPostCureDerived = () => {
+      if (processTypeCode !== 'sla_dlp' || stepNumber !== 6) return;
+      const baselineTg = parseNumber(qualificationStepSettings.post_cure_baseline_tg_c);
+      document.querySelectorAll('[data-post-cure-table] tr[data-run-row]').forEach((row) => {
+        const finalTg = numFromRow(row, 'final_tg_c');
+        const deltaTgTarget = row.querySelector('[data-derived-code="post_cure_delta_tg_c"]');
+        if (deltaTgTarget) deltaTgTarget.textContent = Number.isFinite(finalTg) && Number.isFinite(baselineTg) ? fmtLive(finalTg - baselineTg, 2) : '–';
+      });
+    };
+    const renderSlaPostCureCharts = () => {
+      if (processTypeCode !== 'sla_dlp' || stepNumber !== 6 || !window.echarts) return;
+      const colors = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#0891b2', '#be185d'];
+      const pointsFor = (valueCode) => Array.from(document.querySelectorAll('[data-post-cure-table] tr[data-run-row]'))
+        .filter((row) => row.querySelector('[data-flag="exclude"]')?.checked !== true)
+        .map((row) => ({
+          run: row.querySelector('td')?.textContent?.trim() || 'Run',
+          time: numFromRow(row, 'post_cure_time_min'),
+          temperature: numFromRow(row, 'post_cure_temp_c'),
+          irradiance: numFromRow(row, 'post_cure_irradiance_mw_cm2'),
+          value: numFromRow(row, valueCode)
+        }))
+        .filter((point) => Number.isFinite(point.time) && Number.isFinite(point.temperature) && Number.isFinite(point.irradiance) && Number.isFinite(point.value));
+      const render = (id, valueCode, label, unit, digits) => {
+        const container = document.getElementById(id);
+        if (!container) return;
+        const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+        const chartPoints = pointsFor(valueCode);
+        if (!chartPoints.length) {
+          chart.clear();
+          chart.setOption({ title: { text: `Enter ${label.toLowerCase()} measurements to plot the response.`, left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } } });
+          return;
+        }
+        const conditions = [...new Map(chartPoints.map((point) => [
+          `${point.temperature}|${point.irradiance}`,
+          { temperature: point.temperature, irradiance: point.irradiance }
+        ])).values()].sort((left, right) => left.temperature - right.temperature || left.irradiance - right.irradiance);
+        chart.setOption({
+          tooltip: {
+            trigger: 'item',
+            formatter: (item) => `<strong>${item.data.run}</strong><br>Post-cure time: ${fmtLive(item.data.time, 2)} min<br>Temperature: ${fmtLive(item.data.temperature, 1)} °C<br>Irradiance: ${fmtLive(item.data.irradiance, 2)} mW/cm²<br>${label}: ${fmtLive(item.data.value, digits)} ${unit}`
+          },
+          legend: { type: 'scroll', top: 0 },
+          grid: { left: 72, right: 24, top: 42, bottom: 58 },
+          xAxis: { type: 'value', name: 'Post-cure time (min)', nameLocation: 'middle', nameGap: 34, min: 0, scale: true },
+          yAxis: { type: 'value', name: `${label} (${unit})`, nameLocation: 'middle', nameGap: 52, scale: true },
+          series: conditions.map((condition, index) => ({
+            name: `${fmtLive(condition.temperature, 1)} °C · ${fmtLive(condition.irradiance, 2)} mW/cm²`,
+            type: 'line', showSymbol: true, symbolSize: 9,
+            itemStyle: { color: colors[index % colors.length] }, lineStyle: { color: colors[index % colors.length] },
+            data: chartPoints
+              .filter((point) => point.temperature === condition.temperature && point.irradiance === condition.irradiance)
+              .sort((left, right) => left.time - right.time)
+              .map((point) => ({ ...point, value: [point.time, point.value] }))
+          }))
+        }, { notMerge: true });
+      };
+      render('slaPostCureTgChart', 'final_tg_c', 'Tg', '°C', 2);
+      render('slaPostCureShrinkageChart', 'post_cure_shrinkage_pct', 'Shrinkage', '%', 3);
+      render('slaPostCureStrengthChart', 'tensile_strength_mpa', 'Tensile strength', 'MPa', 2);
+    };
+    const renderSlaFinalMechanicalChart = () => {
+      if (processTypeCode !== 'sla_dlp' || stepNumber !== 7 || !window.echarts) return;
+      const container = document.getElementById('slaFinalMechanicalTensileChart');
+      if (!container) return;
+      const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+      const points = Array.from(document.querySelectorAll('[data-final-mechanical-table] tr[data-run-row]'))
+        .filter((row) => row.querySelector('[data-flag="exclude"]')?.checked !== true)
+        .map((row) => {
+          const orientationSelect = row.querySelector(`[data-field-id="${fieldIdByCode?.build_orientation}"]`);
+          const orientation = orientationSelect instanceof HTMLSelectElement
+            ? orientationSelect.selectedOptions[0]?.textContent?.trim()
+            : '';
+          return {
+            run: row.querySelector('td')?.textContent?.trim() || 'Run',
+            orientation,
+            tensile: numFromRow(row, 'tensile_strength_mpa')
+          };
+        })
+        .filter((point) => point.orientation && Number.isFinite(point.tensile));
+      if (!points.length) {
+        chart.clear();
+        chart.setOption({
+          title: { text: 'Enter non-excluded tensile results to compare build orientations.', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } }
+        });
+        return;
+      }
+      const rank = new Map([['XY', 0], ['XZ', 1], ['YZ', 2], ['45°', 3], ['Z', 4], ['other', 5]]);
+      const orientations = [...new Set(points.map((point) => point.orientation))]
+        .sort((left, right) => (rank.get(left) ?? 99) - (rank.get(right) ?? 99) || left.localeCompare(right));
+      const meanByOrientation = new Map(orientations.map((orientation) => {
+        const values = points.filter((point) => point.orientation === orientation).map((point) => point.tensile);
+        return [orientation, values.reduce((total, value) => total + value, 0) / values.length];
+      }));
+      chart.setOption({
+        tooltip: {
+          trigger: 'item',
+          formatter: (item) => item.seriesName === 'Orientation mean'
+            ? `<strong>${item.name}</strong><br>Mean tensile strength: ${fmtLive(item.value, 2)} MPa<br>n: ${item.data.n}`
+            : `<strong>${item.data.run}</strong><br>Orientation: ${item.data.orientation}<br>Tensile strength: ${fmtLive(item.value[1], 2)} MPa`
+        },
+        legend: { top: 0 },
+        grid: { left: 70, right: 24, top: 42, bottom: 54 },
+        xAxis: { type: 'category', data: orientations, name: 'Build orientation', nameLocation: 'middle', nameGap: 34 },
+        yAxis: { type: 'value', name: 'Tensile strength (MPa)', nameLocation: 'middle', nameGap: 50, scale: true },
+        series: [
+          {
+            name: 'Orientation mean', type: 'bar', barMaxWidth: 48, itemStyle: { color: '#93c5fd' },
+            data: orientations.map((orientation) => ({ value: meanByOrientation.get(orientation), n: points.filter((point) => point.orientation === orientation).length }))
+          },
+          {
+            name: 'Individual specimen', type: 'scatter', symbolSize: 10, itemStyle: { color: '#1d4ed8' },
+            data: points.map((point) => ({ value: [point.orientation, point.tensile], ...point }))
+          }
+        ]
+      }, { notMerge: true });
+    };
+    const renderSlaFinalMechanicalStressStrainChart = () => {
+      if (processTypeCode !== 'sla_dlp' || stepNumber !== 7 || !window.echarts) return;
+      const container = document.getElementById('slaFinalMechanicalStressStrainChart');
+      if (!container) return;
+      const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+      const labels = new Map(Array.from(document.querySelectorAll('[data-final-mechanical-table] tr[data-run-row]')).map((row) => {
+        const runId = Number(row.getAttribute('data-run-id') || 0);
+        const runCode = row.querySelector('td')?.textContent?.trim() || `Run ${runId}`;
+        const orientationSelect = row.querySelector(`[data-field-id="${fieldIdByCode?.build_orientation}"]`);
+        const orientation = orientationSelect instanceof HTMLSelectElement ? orientationSelect.selectedOptions[0]?.textContent?.trim() : '';
+        return [runId, `${runCode}${orientation ? ` · ${orientation}` : ''}`];
+      }));
+      const curves = qualificationRunSeries
+        .filter((series) => series.series_code === 'stress_strain_curve' && Array.isArray(series.points) && series.points.length)
+        .map((series) => ({
+          runId: Number(series.run_id),
+          name: labels.get(Number(series.run_id)) || `Run ${series.run_id}`,
+          sourceName: series.source_name || null,
+          points: series.points
+        }));
+      if (!curves.length) {
+        chart.clear();
+        chart.setOption({ title: { text: 'Upload a stress–strain export for one or more specimens to compare their measured curves.', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } } });
+        return;
+      }
+      const colors = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#0891b2', '#be185d', '#dc2626', '#4f46e5'];
+      chart.setOption({
+        tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+        legend: { type: 'scroll', top: 0 },
+        grid: { left: 68, right: 24, top: 44, bottom: 54 },
+        xAxis: { type: 'value', name: 'Engineering strain (%)', nameLocation: 'middle', nameGap: 34, min: 0, scale: true },
+        yAxis: { type: 'value', name: 'Engineering stress (MPa)', nameLocation: 'middle', nameGap: 48, min: 0, scale: true },
+        series: curves.map((curve, index) => ({
+          name: curve.name,
+          type: 'line',
+          showSymbol: curve.points.length <= 250,
+          symbolSize: 4,
+          itemStyle: { color: colors[index % colors.length] },
+          lineStyle: { color: colors[index % colors.length], width: 2 },
+          data: curve.points.map((point) => [point.x_value, point.y_value])
+        }))
+      }, { notMerge: true });
+    };
+    const renderSlaRheologyFlowChart = () => {
+      if (processTypeCode !== 'sla_dlp' || stepNumber !== 8 || !window.echarts) return;
+      const container = document.getElementById('slaRheologyFlowChart');
+      if (!container) return;
+      const chart = echarts.getInstanceByDom(container) || echarts.init(container);
+      const labels = new Map(Array.from(document.querySelectorAll('[data-rheology-table] tr[data-run-row]')).map((row) => {
+        const runId = Number(row.getAttribute('data-run-id') || 0);
+        const runCode = row.querySelector('td')?.textContent?.trim() || `Run ${runId}`;
+        const temperature = numFromRow(row, 'resin_temp_c');
+        return [runId, `${runCode}${Number.isFinite(temperature) ? ` · ${fmtLive(temperature, 1)} °C` : ''}`];
+      }));
+      const curves = qualificationRunSeries
+        .filter((series) => series.series_code === 'resin_flow_curve' && Array.isArray(series.points) && series.points.length)
+        .map((series) => ({
+          runId: Number(series.run_id),
+          name: labels.get(Number(series.run_id)) || `Run ${series.run_id}`,
+          points: series.points.filter((point) => Number(point.x_value) > 0 && Number(point.y_value) > 0)
+        }))
+        .filter((curve) => curve.points.length);
+      if (!curves.length) {
+        chart.clear();
+        chart.setOption({ title: { text: 'Upload one or more flow-curve exports to compare viscosity against shear rate.', left: 'center', top: 'middle', textStyle: { fontSize: 12, color: '#6b7280', fontWeight: 'normal' } } });
+        return;
+      }
+      const colors = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#0891b2', '#be185d', '#dc2626', '#4f46e5'];
+      chart.setOption({
+        tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+        legend: { type: 'scroll', top: 0 },
+        grid: { left: 76, right: 24, top: 44, bottom: 58 },
+        xAxis: { type: 'log', name: 'Shear rate (s⁻¹)', nameLocation: 'middle', nameGap: 36 },
+        yAxis: { type: 'log', name: 'Viscosity (Pa·s)', nameLocation: 'middle', nameGap: 58 },
+        series: curves.map((curve, index) => ({
+          name: curve.name, type: 'line', showSymbol: curve.points.length <= 250, symbolSize: 4,
+          itemStyle: { color: colors[index % colors.length] }, lineStyle: { color: colors[index % colors.length], width: 2 },
+          data: curve.points.map((point) => [point.x_value, point.y_value])
+        }))
+      }, { notMerge: true });
+    };
     const renderMeasurementSeriesCard = (card) => {
       if (!window.echarts) return;
       const code = card.dataset.seriesCode;
@@ -1093,6 +1661,10 @@
     };
     const setupExtrusionSeries = () => {
       document.querySelectorAll('[data-qual-series-card]').forEach((card) => {
+        if (card.dataset.seriesSource === 'run_fields') {
+          renderRunFieldSeriesCard(card);
+          return;
+        }
         const runSelect = card.querySelector('[data-series-run]');
         const fileInput = card.querySelector('[data-series-file]');
         const status = card.querySelector('[data-series-status]');
@@ -1740,7 +2312,19 @@
       ], '1 / T (K⁻¹)', 'ln(kapp)', 'Add REX RTD and conversion; this chart is descriptive, not a fitted kinetic model.');
     };
     const safeRecomputeCharts = () => {
+      try { renderRunFieldSeriesCards(); } catch {}
       try { updateStep2DerivedCells(); } catch {}
+      try { updateSlaExposureLayerDerived(); } catch {}
+      try { updateSlaDimensionalDerived(); } catch {}
+      try { updateSlaPeelForceDerived(); } catch {}
+      try { updateSlaPostCureDerived(); } catch {}
+      try { renderSlaExposureLayerHeatmap(); } catch {}
+      try { renderSlaDimensionalAccuracyChart(); } catch {}
+      try { renderSlaPeelForceChart(); } catch {}
+      try { renderSlaPostCureCharts(); } catch {}
+      try { renderSlaFinalMechanicalChart(); } catch {}
+      try { renderSlaFinalMechanicalStressStrainChart(); } catch {}
+      try { renderSlaRheologyFlowChart(); } catch {}
       try { recomputeStep1Chart(); } catch {}
       try { recomputeStep2Chart(); } catch {}
       try { renderExtrusionFeederCharts(); } catch {}
@@ -1946,7 +2530,7 @@
     const bindRunTable = (runTable) => {
     runTable.addEventListener('input', (event) => {
       const target = event.target;
-      if (!(target instanceof HTMLInputElement)) return;
+      if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) return;
       const row = target.closest('tr[data-run-row]');
       const runId = row?.getAttribute('data-run-id');
       const fieldId = target.getAttribute('data-field-id');
@@ -1963,26 +2547,38 @@
             .map((item) => item.trim())
             .filter(Boolean);
         }
+        const storageMultiplier = parseNumber(target.getAttribute('data-storage-multiplier'));
+        if (fieldType === 'number' && storageMultiplier != null && storageMultiplier !== 1) {
+          const numericValue = parseNumber(target.value);
+          value = numericValue == null ? '' : numericValue * storageMultiplier;
+        }
         const form = new FormData();
         form.append('field_id', fieldId);
         form.append('value', fieldType === 'tag' ? JSON.stringify(value) : String(value));
         const response = await post(`/qual-runs/${runId}/value`, form);
         updatePumpCharacteristicResult(response?.summary);
+        updateJacobsFit(response?.summary);
       });
     });
 
     runTable.addEventListener('change', async (event) => {
       const target = event.target;
-      if (!(target instanceof HTMLInputElement)) return;
+      if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) return;
       const row = target.closest('tr[data-run-row]');
       const runId = row?.getAttribute('data-run-id');
       if (!runId) return;
+
+      if (target instanceof HTMLSelectElement && target.hasAttribute('data-artifact-feature-choice')) return;
+      if (target instanceof HTMLSelectElement && target.hasAttribute('data-field-id')) {
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+      }
 
       if (target.hasAttribute('data-field-id') && target.getAttribute('data-field-type') === 'boolean') {
         const form = new FormData();
         form.append('field_id', target.getAttribute('data-field-id') || '');
         form.append('value', target.checked ? '1' : '0');
-        try { const response = await post(`/qual-runs/${runId}/value`, form); updatePumpCharacteristicResult(response?.summary); } catch {}
+        try { const response = await post(`/qual-runs/${runId}/value`, form); updatePumpCharacteristicResult(response?.summary); updateJacobsFit(response?.summary); } catch {}
         safeRecomputeCharts();
         return;
       }
@@ -1994,7 +2590,7 @@
         const form = new FormData();
         form.append('done', done);
         form.append('exclude', exclude);
-        try { await post(`/qual-runs/${runId}/flags`, form); } catch {}
+        try { const response = await post(`/qual-runs/${runId}/flags`, form); updateJacobsFit(response?.summary); } catch {}
         safeRecomputeCharts();
         return;
       }
@@ -2048,6 +2644,406 @@
       } catch {}
     });
 
+    document.querySelectorAll('[data-single-factor-setup]').forEach((form) => {
+      const variableSelect = form.querySelector('[data-setup-variable]');
+      const status = form.querySelector('[data-setup-status]');
+      const submit = form.querySelector('[data-setup-submit]');
+      const blocked = form.dataset.generatorBlocked === '1';
+      const syncSetup = () => {
+        const selected = variableSelect?.value || '';
+        form.querySelectorAll('[data-setup-fixed-field]').forEach((field) => {
+          const isVariable = field.dataset.variableCode === selected;
+          field.hidden = isVariable;
+          field.querySelectorAll('[data-setup-fixed-input]').forEach((input) => {
+            input.disabled = isVariable || blocked;
+          });
+        });
+      };
+      variableSelect?.addEventListener('change', syncSetup);
+      syncSetup();
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (blocked || !form.reportValidity()) return;
+        try {
+          submit?.setAttribute('disabled', 'disabled');
+          if (status) status.textContent = 'Saving setup…';
+          await post(form.action, new FormData(form));
+          location.reload();
+        } catch (error) {
+          if (status) status.textContent = error instanceof Error ? error.message : 'Unable to save setup.';
+          submit?.removeAttribute('disabled');
+        }
+      });
+    });
+
+    document.querySelectorAll('[data-single-factor-generator]').forEach((form) => {
+      const status = form.querySelector('[data-generator-status]');
+      const submit = form.querySelector('[data-generator-submit]');
+      const blocked = form.dataset.generatorBlocked === '1';
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (blocked || !form.reportValidity()) return;
+        try {
+          submit?.setAttribute('disabled', 'disabled');
+          if (status) status.textContent = 'Generating runs…';
+          const result = await post(form.action, new FormData(form));
+          if (status) status.textContent = `${result?.generated_run_codes?.length || 0} runs generated.`;
+          location.reload();
+        } catch (error) {
+          if (status) status.textContent = error instanceof Error ? error.message : 'Unable to generate runs.';
+          submit?.removeAttribute('disabled');
+        }
+      });
+    });
+
+    document.querySelectorAll('[data-exposure-layer-setup]').forEach((form) => {
+      const status = form.querySelector('[data-exposure-layer-setup-status]');
+      const submit = form.querySelector('[data-exposure-layer-setup-submit]');
+      const blocked = form.dataset.generatorBlocked === '1';
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (blocked || !form.reportValidity()) return;
+        try {
+          submit?.setAttribute('disabled', 'disabled');
+          if (status) status.textContent = 'Saving setup…';
+          await post(form.action, new FormData(form));
+          location.reload();
+        } catch (error) {
+          if (status) status.textContent = error instanceof Error ? error.message : 'Unable to save setup.';
+          submit?.removeAttribute('disabled');
+        }
+      });
+    });
+
+    document.querySelectorAll('[data-exposure-layer-generator]').forEach((form) => {
+      const status = form.querySelector('[data-exposure-layer-generator-status]');
+      const submit = form.querySelector('[data-exposure-layer-generator-submit]');
+      const blocked = form.dataset.generatorBlocked === '1';
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (blocked || !form.reportValidity()) return;
+        try {
+          submit?.setAttribute('disabled', 'disabled');
+          if (status) status.textContent = 'Generating matrix runs…';
+          const result = await post(form.action, new FormData(form));
+          if (status) status.textContent = `${result?.matrix_cell_count || 0} matrix runs generated.`;
+          location.reload();
+        } catch (error) {
+          if (status) status.textContent = error instanceof Error ? error.message : 'Unable to generate matrix runs.';
+          submit?.removeAttribute('disabled');
+        }
+      });
+    });
+
+    document.querySelectorAll('[data-peel-force-setup]').forEach((form) => {
+      const status = form.querySelector('[data-peel-force-setup-status]');
+      const submit = form.querySelector('[data-peel-force-setup-submit]');
+      const blocked = form.dataset.generatorBlocked === '1';
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (blocked || !form.reportValidity()) return;
+        try {
+          submit?.setAttribute('disabled', 'disabled');
+          if (status) status.textContent = 'Saving fixed conditions…';
+          await post(form.action, new FormData(form));
+          location.reload();
+        } catch (error) {
+          if (status) status.textContent = error instanceof Error ? error.message : 'Unable to save peel-test setup.';
+          submit?.removeAttribute('disabled');
+        }
+      });
+    });
+
+    document.querySelectorAll('[data-peel-force-generator]').forEach((form) => {
+      const status = form.querySelector('[data-peel-force-generator-status]');
+      const submit = form.querySelector('[data-peel-force-generator-submit]');
+      const blocked = form.dataset.generatorBlocked === '1';
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (blocked || !form.reportValidity()) return;
+        try {
+          submit?.setAttribute('disabled', 'disabled');
+          if (status) status.textContent = 'Generating matrix runs…';
+          const result = await post(form.action, new FormData(form));
+          if (status) status.textContent = `${result?.matrix_cell_count || 0} matrix runs generated.`;
+          location.reload();
+        } catch (error) {
+          if (status) status.textContent = error instanceof Error ? error.message : 'Unable to generate peel-test matrix.';
+          submit?.removeAttribute('disabled');
+        }
+      });
+    });
+
+    document.querySelectorAll('[data-post-cure-setup]').forEach((form) => {
+      const status = form.querySelector('[data-post-cure-setup-status]');
+      const submit = form.querySelector('[data-post-cure-setup-submit]');
+      const blocked = form.dataset.generatorBlocked === '1';
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (blocked || !form.reportValidity()) return;
+        try {
+          submit?.setAttribute('disabled', 'disabled');
+          if (status) status.textContent = 'Saving fixed conditions…';
+          await post(form.action, new FormData(form));
+          location.reload();
+        } catch (error) {
+          if (status) status.textContent = error instanceof Error ? error.message : 'Unable to save post-cure setup.';
+          submit?.removeAttribute('disabled');
+        }
+      });
+    });
+
+    document.querySelectorAll('[data-post-cure-generator]').forEach((form) => {
+      const status = form.querySelector('[data-post-cure-generator-status]');
+      const submit = form.querySelector('[data-post-cure-generator-submit]');
+      const blocked = form.dataset.generatorBlocked === '1';
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (blocked || !form.reportValidity()) return;
+        try {
+          submit?.setAttribute('disabled', 'disabled');
+          if (status) status.textContent = 'Generating matrix runs…';
+          const result = await post(form.action, new FormData(form));
+          if (status) status.textContent = `${result?.matrix_cell_count || 0} matrix runs generated.`;
+          location.reload();
+        } catch (error) {
+          if (status) status.textContent = error instanceof Error ? error.message : 'Unable to generate post-cure matrix.';
+          submit?.removeAttribute('disabled');
+        }
+      });
+    });
+
+    document.querySelectorAll('[data-final-mechanical-setup]').forEach((form) => {
+      const status = form.querySelector('[data-final-mechanical-setup-status]');
+      const submit = form.querySelector('[data-final-mechanical-setup-submit]');
+      const blocked = form.dataset.generatorBlocked === '1';
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (blocked || !form.reportValidity()) return;
+        try {
+          submit?.setAttribute('disabled', 'disabled');
+          if (status) status.textContent = 'Saving common specimen conditions…';
+          await post(form.action, new FormData(form));
+          location.reload();
+        } catch (error) {
+          if (status) status.textContent = error instanceof Error ? error.message : 'Unable to save mechanical-test setup.';
+          submit?.removeAttribute('disabled');
+        }
+      });
+    });
+
+    const finalMechanicalCurveDialog = document.getElementById('finalMechanicalCurveDialog');
+    const finalMechanicalCurveForm = finalMechanicalCurveDialog?.querySelector('[data-final-mechanical-curve-upload]');
+    if (finalMechanicalCurveDialog instanceof HTMLDialogElement && finalMechanicalCurveForm) {
+      const choices = Array.from(finalMechanicalCurveDialog.querySelectorAll('[data-mechanical-curve-choice]'));
+      const selectedLabel = finalMechanicalCurveDialog.querySelector('[data-mechanical-curve-selected]');
+      const sourceStatus = finalMechanicalCurveDialog.querySelector('[data-mechanical-curve-source-status]');
+      const fileInput = finalMechanicalCurveDialog.querySelector('[data-mechanical-curve-file]');
+      const uploadStatus = finalMechanicalCurveDialog.querySelector('[data-mechanical-curve-upload-status]');
+      const uploadSubmit = finalMechanicalCurveDialog.querySelector('[data-mechanical-curve-upload-submit]');
+      const removeButton = finalMechanicalCurveDialog.querySelector('[data-mechanical-curve-remove]');
+      const blocked = finalMechanicalCurveForm.dataset.blocked === '1';
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+      const chooseCurveSpecimen = (choice) => {
+        if (!(choice instanceof HTMLElement)) return;
+        choices.forEach((item) => {
+          item.removeAttribute('aria-current');
+          item.classList.remove('border-brand', 'bg-brand-soft');
+        });
+        choice.setAttribute('aria-current', 'true');
+        choice.classList.add('border-brand', 'bg-brand-soft');
+        const runId = choice.dataset.runId || '';
+        const runCode = choice.dataset.runCode || 'specimen';
+        const orientation = choice.dataset.orientation || '';
+        const sourceFileId = choice.dataset.sourceFileId || '';
+        const sourceName = choice.dataset.sourceName || '';
+        const hasSeries = choice.dataset.hasSeries === '1';
+        finalMechanicalCurveForm.dataset.selectedRunId = runId;
+        if (selectedLabel) selectedLabel.textContent = `${runCode}${orientation ? ` · ${orientation}` : ''}`;
+        if (sourceStatus) {
+          sourceStatus.textContent = sourceFileId
+            ? `Repository file attached: ${sourceName}. Upload a replacement to detach this source from the specimen.`
+            : hasSeries
+              ? `A legacy imported trace is present${sourceName ? ` (${sourceName})` : ''}, but no repository file is linked. A replacement will add a traceable source file.`
+              : 'No source file or stress–strain trace is attached to this specimen.';
+        }
+        if (removeButton) {
+          removeButton.disabled = blocked || (!sourceFileId && !hasSeries);
+          removeButton.textContent = sourceFileId || hasSeries ? 'Remove source' : 'No source to remove';
+        }
+        if (uploadStatus) uploadStatus.textContent = '';
+        if (fileInput instanceof HTMLInputElement) fileInput.value = '';
+      };
+      const openCurveDialog = (runId = '') => {
+        const choice = choices.find((item) => item.dataset.runId === String(runId)) || choices[0];
+        chooseCurveSpecimen(choice);
+        if (!finalMechanicalCurveDialog.open) finalMechanicalCurveDialog.showModal();
+      };
+      document.querySelectorAll('[data-open-mechanical-curve-dialog]').forEach((button) => {
+        button.addEventListener('click', () => openCurveDialog(button.getAttribute('data-mechanical-curve-run-id') || ''));
+      });
+      finalMechanicalCurveDialog.querySelectorAll('[data-close-mechanical-curve-dialog]').forEach((button) => {
+        button.addEventListener('click', () => finalMechanicalCurveDialog.close());
+      });
+      choices.forEach((choice) => choice.addEventListener('click', () => chooseCurveSpecimen(choice)));
+      finalMechanicalCurveForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const runId = finalMechanicalCurveForm.dataset.selectedRunId || '';
+        const code = finalMechanicalCurveForm.dataset.seriesCode || '';
+        const file = fileInput instanceof HTMLInputElement ? fileInput.files?.[0] : null;
+        if (blocked || !runId || !code || !file) {
+          if (uploadStatus) uploadStatus.textContent = 'Choose a specimen and TXT, CSV or TSV export first.';
+          return;
+        }
+        try {
+          uploadSubmit?.setAttribute('disabled', 'disabled');
+          if (uploadStatus) uploadStatus.textContent = 'Storing source file and importing points…';
+          const body = new FormData();
+          body.append('file', file);
+          const response = await fetch(`/qual-runs/${runId}/series/${encodeURIComponent(code)}/file`, {
+            method: 'POST', body, headers: { Accept: 'application/json', 'X-CSRF-Token': csrfToken }
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.error || `Upload failed (${response.status})`);
+          location.reload();
+        } catch (error) {
+          if (uploadStatus) uploadStatus.textContent = error instanceof Error ? error.message : 'Instrument export could not be uploaded.';
+          uploadSubmit?.removeAttribute('disabled');
+        }
+      });
+      removeButton?.addEventListener('click', async () => {
+        const runId = finalMechanicalCurveForm.dataset.selectedRunId || '';
+        const code = finalMechanicalCurveForm.dataset.seriesCode || '';
+        if (blocked || !runId || !code || removeButton.disabled) return;
+        if (!window.confirm('Remove this source file and stress–strain trace from the selected specimen? The repository file itself remains available in My files.')) return;
+        try {
+          removeButton.setAttribute('disabled', 'disabled');
+          if (uploadStatus) uploadStatus.textContent = 'Removing source from specimen…';
+          const response = await fetch(`/qual-runs/${runId}/series/${encodeURIComponent(code)}/source`, {
+            method: 'DELETE', headers: { Accept: 'application/json', 'X-CSRF-Token': csrfToken }
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.error || `Removal failed (${response.status})`);
+          location.reload();
+        } catch (error) {
+          if (uploadStatus) uploadStatus.textContent = error instanceof Error ? error.message : 'Source file could not be removed.';
+          removeButton.removeAttribute('disabled');
+        }
+      });
+    }
+
+    document.querySelectorAll('[data-rheology-setup]').forEach((form) => {
+      const status = form.querySelector('[data-rheology-setup-status]');
+      const submit = form.querySelector('[data-rheology-setup-submit]');
+      const blocked = form.dataset.generatorBlocked === '1';
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (blocked || !form.reportValidity()) return;
+        try {
+          submit?.setAttribute('disabled', 'disabled');
+          if (status) status.textContent = 'Saving flow-comparison conditions…';
+          await post(form.action, new FormData(form));
+          location.reload();
+        } catch (error) {
+          if (status) status.textContent = error instanceof Error ? error.message : 'Unable to save rheology setup.';
+          submit?.removeAttribute('disabled');
+        }
+      });
+    });
+
+    const rheologyCurveDialog = document.getElementById('rheologyCurveDialog');
+    const rheologyCurveForm = rheologyCurveDialog?.querySelector('[data-rheology-curve-upload]');
+    if (rheologyCurveDialog instanceof HTMLDialogElement && rheologyCurveForm) {
+      const choices = Array.from(rheologyCurveDialog.querySelectorAll('[data-rheology-choice]'));
+      const selectedLabel = rheologyCurveDialog.querySelector('[data-rheology-selected]');
+      const sourceStatus = rheologyCurveDialog.querySelector('[data-rheology-source-status]');
+      const fileInput = rheologyCurveDialog.querySelector('[data-rheology-file]');
+      const uploadStatus = rheologyCurveDialog.querySelector('[data-rheology-upload-status]');
+      const uploadSubmit = rheologyCurveDialog.querySelector('[data-rheology-upload-submit]');
+      const removeButton = rheologyCurveDialog.querySelector('[data-rheology-remove]');
+      const blocked = rheologyCurveForm.dataset.blocked === '1';
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+      const chooseRheologyRun = (choice) => {
+        if (!(choice instanceof HTMLElement)) return;
+        choices.forEach((item) => { item.removeAttribute('aria-current'); item.classList.remove('border-brand', 'bg-brand-soft'); });
+        choice.setAttribute('aria-current', 'true');
+        choice.classList.add('border-brand', 'bg-brand-soft');
+        const runId = choice.dataset.runId || '';
+        const runCode = choice.dataset.runCode || 'run';
+        const temperature = choice.dataset.temperature || '';
+        const sourceFileId = choice.dataset.sourceFileId || '';
+        const sourceName = choice.dataset.sourceName || '';
+        const hasSeries = choice.dataset.hasSeries === '1';
+        rheologyCurveForm.dataset.selectedRunId = runId;
+        if (selectedLabel) selectedLabel.textContent = `${runCode}${temperature ? ` · ${temperature} °C` : ''}`;
+        if (sourceStatus) sourceStatus.textContent = sourceFileId
+          ? `Repository file attached: ${sourceName}. Uploading a replacement detaches it from this run.`
+          : hasSeries
+            ? `An imported trace is present${sourceName ? ` (${sourceName})` : ''}, but no repository file is linked. A replacement adds traceable source evidence.`
+            : 'No source file or flow curve is attached to this run.';
+        if (removeButton) { removeButton.disabled = blocked || (!sourceFileId && !hasSeries); removeButton.textContent = sourceFileId || hasSeries ? 'Remove source' : 'No source to remove'; }
+        if (uploadStatus) uploadStatus.textContent = '';
+        if (fileInput instanceof HTMLInputElement) fileInput.value = '';
+      };
+      const openRheologyDialog = (runId = '') => {
+        const choice = choices.find((item) => item.dataset.runId === String(runId)) || choices[0];
+        chooseRheologyRun(choice);
+        if (!rheologyCurveDialog.open) rheologyCurveDialog.showModal();
+      };
+      document.querySelectorAll('[data-open-rheology-dialog]').forEach((button) => button.addEventListener('click', () => openRheologyDialog(button.getAttribute('data-rheology-run-id') || '')));
+      rheologyCurveDialog.querySelectorAll('[data-close-rheology-dialog]').forEach((button) => button.addEventListener('click', () => rheologyCurveDialog.close()));
+      choices.forEach((choice) => choice.addEventListener('click', () => chooseRheologyRun(choice)));
+      rheologyCurveForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const runId = rheologyCurveForm.dataset.selectedRunId || '';
+        const code = rheologyCurveForm.dataset.seriesCode || '';
+        const file = fileInput instanceof HTMLInputElement ? fileInput.files?.[0] : null;
+        if (blocked || !runId || !code || !file) { if (uploadStatus) uploadStatus.textContent = 'Choose a temperature run and TXT, CSV or TSV export first.'; return; }
+        try {
+          uploadSubmit?.setAttribute('disabled', 'disabled');
+          if (uploadStatus) uploadStatus.textContent = 'Storing source file and importing points…';
+          const body = new FormData(); body.append('file', file);
+          const response = await fetch(`/qual-runs/${runId}/series/${encodeURIComponent(code)}/file`, { method: 'POST', body, headers: { Accept: 'application/json', 'X-CSRF-Token': csrfToken } });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.error || `Upload failed (${response.status})`);
+          location.reload();
+        } catch (error) { if (uploadStatus) uploadStatus.textContent = error instanceof Error ? error.message : 'Flow curve could not be uploaded.'; uploadSubmit?.removeAttribute('disabled'); }
+      });
+      removeButton?.addEventListener('click', async () => {
+        const runId = rheologyCurveForm.dataset.selectedRunId || '';
+        const code = rheologyCurveForm.dataset.seriesCode || '';
+        if (blocked || !runId || !code || removeButton.disabled) return;
+        if (!window.confirm('Remove this source file and flow curve from the selected temperature run? The repository file itself remains available in My files.')) return;
+        try {
+          removeButton.setAttribute('disabled', 'disabled');
+          if (uploadStatus) uploadStatus.textContent = 'Removing source from temperature run…';
+          const response = await fetch(`/qual-runs/${runId}/series/${encodeURIComponent(code)}/source`, { method: 'DELETE', headers: { Accept: 'application/json', 'X-CSRF-Token': csrfToken } });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.error || `Removal failed (${response.status})`);
+          location.reload();
+        } catch (error) { if (uploadStatus) uploadStatus.textContent = error instanceof Error ? error.message : 'Source file could not be removed.'; removeButton.removeAttribute('disabled'); }
+      });
+    }
+
+    document.querySelectorAll('[data-dimensional-artifact-setup]').forEach((form) => {
+      const status = form.querySelector('[data-dimensional-artifact-status]');
+      const submit = form.querySelector('[data-dimensional-artifact-submit]');
+      const blocked = form.dataset.generatorBlocked === '1';
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (blocked || !form.reportValidity()) return;
+        try {
+          submit?.setAttribute('disabled', 'disabled');
+          if (status) status.textContent = 'Saving artifact and fixed conditions…';
+          await post(form.action, new FormData(form));
+          location.reload();
+        } catch (error) {
+          if (status) status.textContent = error instanceof Error ? error.message : 'Unable to save dimensional setup.';
+          submit?.removeAttribute('disabled');
+        }
+      });
+    });
+
     document.querySelectorAll('[data-add-group-run]').forEach((button) => {
       button.addEventListener('click', async () => {
         const group = button.getAttribute('data-add-group-run');
@@ -2078,7 +3074,7 @@
     });
 
     document.querySelectorAll('[data-step-output]').forEach((input) => {
-      input.addEventListener('input', () => {
+      const saveOutput = () => {
         const code = input.getAttribute('data-step-output');
         if (!code) return;
         queueSave(`step-output:${code}`, async () => {
@@ -2086,7 +3082,9 @@
           form.append('value', input.value);
           await post(`/experiments/${experimentId}/qualification/${stepNumber}/outputs/${encodeURIComponent(code)}`, form);
         });
-      });
+      };
+      input.addEventListener('input', saveOutput);
+      if (input instanceof HTMLSelectElement) input.addEventListener('change', saveOutput);
     });
 
     document.querySelectorAll('[data-rheology-shared-field]').forEach((input) => {
@@ -2512,6 +3510,18 @@
         const container = document.getElementById(id);
         if (container && window.echarts) echarts.getInstanceByDom(container)?.resize();
       });
+      const exposureLayerHeatmap = document.getElementById('slaExposureLayerHeatmap');
+      if (exposureLayerHeatmap && window.echarts) echarts.getInstanceByDom(exposureLayerHeatmap)?.resize();
+      ['slaPostCureTgChart', 'slaPostCureShrinkageChart', 'slaPostCureStrengthChart'].forEach((id) => {
+        const container = document.getElementById(id);
+        if (container && window.echarts) echarts.getInstanceByDom(container)?.resize();
+      });
+      const finalMechanicalTensile = document.getElementById('slaFinalMechanicalTensileChart');
+      if (finalMechanicalTensile && window.echarts) echarts.getInstanceByDom(finalMechanicalTensile)?.resize();
+      const finalMechanicalStressStrain = document.getElementById('slaFinalMechanicalStressStrainChart');
+      if (finalMechanicalStressStrain && window.echarts) echarts.getInstanceByDom(finalMechanicalStressStrain)?.resize();
+      const rheologyFlow = document.getElementById('slaRheologyFlowChart');
+      if (rheologyFlow && window.echarts) echarts.getInstanceByDom(rheologyFlow)?.resize();
       const scaleUpMorphology = document.getElementById('scaleUpMorphologyChart');
       if (scaleUpMorphology && window.echarts) echarts.getInstanceByDom(scaleUpMorphology)?.resize();
       document.querySelectorAll('[data-series-chart]').forEach((container) => {

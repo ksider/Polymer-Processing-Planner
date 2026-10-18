@@ -1,0 +1,74 @@
+<% const featureField = fields.find((field) => field.code === 'artifact_feature_code'); %>
+<% const measuredField = fields.find((field) => field.code === 'measured_feature_size_um'); %>
+<% const reproducedField = fields.find((field) => field.code === 'feature_reproduced'); %>
+<% const dimensionalErrorField = fields.find((field) => field.code === 'dimensional_error_um'); %>
+<% const absoluteErrorField = fields.find((field) => field.code === 'absolute_dimensional_error_um'); %>
+<% const relativeErrorField = fields.find((field) => field.code === 'relative_dimensional_error_pct'); %>
+<% const runForFeature = (featureCode) => runs.find((run) => runValueMap[String(run.id)]?.[String(featureField?.id)]?.value_text === featureCode); %>
+<% const measurementGroups = [
+  { zone: 'fine', number: '1', title: 'Fine features', location: 'Diagonal banks at the upper-right of the top view', description: 'Positive pins and negative gaps, 0.25–2.00 mm.', thumbnailSize: '280%', thumbnailPosition: '34% 28%' },
+  { zone: 'xy', number: '2', title: 'X/Y pins and holes', location: 'Ø4 mm features on the top face', description: 'Use these observations for the XY boundary estimate.', thumbnailSize: '250%', thumbnailPosition: '25% 50%' },
+  { zone: 'lateral', number: '3', title: 'Lateral holes and squares', location: 'Side walls in the perspective view', description: 'Circular and square side features, 3 mm and 6 mm.', thumbnailSize: '250%', thumbnailPosition: '88% 63%' },
+  { zone: 'baseline', number: '4', title: 'H → opposite side', location: 'Full H-to-opposite-side baseline on the top view', description: '100 mm global reference used only for XY scale correction.', thumbnailSize: '150%', thumbnailPosition: '19% 50%' }
+]; %>
+
+<section class="mb-6 overflow-visible rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs" aria-labelledby="dimensionalMeasurementPlanTitle">
+  <div class="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-default pb-4">
+    <div>
+      <h2 class="text-lg font-semibold tracking-tight text-heading" id="dimensionalMeasurementPlanTitle">NIST model-element measurements</h2>
+      <p class="mt-1 text-sm text-body">One printed artifact, one row per prescribed element. Enter only what was measured; size deviation, absolute error and relative error are calculated against the fixed NIST nominal.</p>
+    </div>
+    <button class="inline-flex size-9 shrink-0 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" data-copy-table="#compoundingRunsTable" data-copy-icon title="Copy measurements as TSV" aria-label="Copy measurements as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button>
+  </div>
+  <div class="overflow-x-auto rounded-base border border-default md:overflow-visible" aria-label="Dimensional measurement table">
+    <table class="min-w-full border-separate border-spacing-y-1 text-left text-sm text-body" id="compoundingRunsTable" data-run-table>
+      <thead class="[&_th]:sticky [&_th]:top-16 [&_th]:z-30 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-default [&_th]:bg-neutral-secondary [&_th]:px-3 [&_th]:py-2 [&_th]:text-xs [&_th]:font-medium [&_th]:uppercase [&_th]:text-body">
+        <tr>
+          <th class="min-w-80">Element / measurement location</th>
+          <th><span class="cursor-help" title="Measured size in millimetres. It is stored internally in micrometres so existing formulas and traceability remain unchanged.">Measured (mm)</span></th>
+          <th><span class="cursor-help" title="Mark only after the feature is visibly reproduced or open">Reprod.</span></th>
+          <th><span class="cursor-help" title="Calculated: measured size minus fixed NIST nominal, displayed in millimetres">Δdim (mm)</span></th>
+          <th><span class="cursor-help" title="Calculated absolute dimensional error, displayed in millimetres">|Δ| (mm)</span></th>
+          <th><span class="cursor-help" title="Calculated: Δdim divided by fixed NIST nominal">Rel. Δ (%)</span></th>
+        </tr>
+      </thead>
+      <tbody class="[&_td]:border-y [&_td]:border-default-medium [&_td]:bg-neutral-primary [&_td]:px-3 [&_td]:py-2 [&_td:first-child]:border-s [&_td:last-child]:border-e">
+        <% measurementGroups.forEach((group) => { const groupFeatures = dimensionalArtifact.features.filter((feature) => feature.map_zone === group.zone); %>
+          <tr data-artifact-map-zone="<%= group.zone %>" data-copy-exclude="true">
+            <td class="!bg-neutral-secondary" colspan="6">
+              <div class="flex flex-wrap items-center gap-3">
+                <div class="relative h-16 w-28 shrink-0 overflow-hidden rounded-base border border-default bg-white bg-no-repeat" role="img" aria-label="Sketch detail for <%= group.title %>" style="background-image: url('/illustrations/nist_artifact_map.svg'), url('/illustrations/nist_artifact_render.png'); background-size: <%= group.thumbnailSize %> auto, <%= group.thumbnailSize %> auto; background-position: <%= group.thumbnailPosition %>, <%= group.thumbnailPosition %>;">
+                  <span class="absolute left-1 top-1 inline-flex size-5 items-center justify-center rounded-full bg-brand text-[11px] font-semibold text-white shadow-xs"><%= group.number %></span>
+                </div>
+                <div>
+                  <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span class="font-semibold text-heading"><%= group.number %> · <%= group.title %></span>
+                    <span class="text-xs font-medium text-brand">Find it on the sketch →</span>
+                  </div>
+                  <p class="mt-1 text-xs text-body"><%= group.location %></p>
+                  <p class="mt-1 text-xs text-body"><%= group.description %></p>
+                </div>
+              </div>
+            </td>
+          </tr>
+          <% groupFeatures.forEach((feature) => { const run = runForFeature(feature.code); const values = run ? runValueMap[String(run.id)] || {} : {}; const measured = measuredField ? values[String(measuredField.id)] : null; const reproduced = reproducedField ? values[String(reproducedField.id)] : null; const error = dimensionalErrorField ? values[String(dimensionalErrorField.id)] : null; const absolute = absoluteErrorField ? values[String(absoluteErrorField.id)] : null; const relative = relativeErrorField ? values[String(relativeErrorField.id)] : null; %>
+            <% if (run) { %>
+              <tr data-run-row data-run-id="<%= run.id %>" data-artifact-feature-label="<%= feature.label %>" data-artifact-feature-zone="<%= feature.map_zone %>" data-artifact-feature-nominal-size-um="<%= feature.nominal_size_um %>">
+                <td class="rounded-s-base align-top">
+                  <div class="font-medium text-heading"><%= feature.label %></div>
+                  <div class="mt-1 text-xs text-body"><span class="cursor-help" title="<%= feature.inspection_hint %>"><span class="font-medium text-heading">Method:</span> <%= feature.measurement %></span></div>
+                </td>
+                <td><input class="w-24 min-w-24 rounded-base border border-default-medium bg-neutral-secondary-medium px-2 py-1.5 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" type="number" min="0" step="0.001" data-field-id="<%= measuredField?.id %>" data-field-type="number" data-storage-multiplier="1000" value="<%= measured?.value_real == null ? '' : measured.value_real / 1000 %>" <%= step.is_blocked === 1 ? 'disabled' : '' %>></td>
+                <td class="text-center"><input type="checkbox" data-field-id="<%= reproducedField?.id %>" data-field-type="boolean" <%= reproduced?.value_real === 1 ? 'checked' : '' %> <%= step.is_blocked === 1 ? 'disabled' : '' %>></td>
+                <td><span class="whitespace-nowrap text-sm text-body" data-derived-code="dimensional_error_um"><%= error?.value_real == null ? '-' : formatNumber(error.value_real / 1000, 3) %></span></td>
+                <td><span class="whitespace-nowrap text-sm text-body" data-derived-code="absolute_dimensional_error_um"><%= absolute?.value_real == null ? '-' : formatNumber(absolute.value_real / 1000, 3) %></span></td>
+                <td class="rounded-e-base"><span class="whitespace-nowrap text-sm text-body" data-derived-code="relative_dimensional_error_pct"><%= formatNumber(relative?.value_real) %></span></td>
+              </tr>
+            <% } %>
+          <% }); %>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+  <p class="mt-3 text-xs text-body">The H-to-opposite-side row is deliberately included: it supplies the calculated global XY scale correction. The suggested boundary offset uses the median error of reproduced external positive features and needs one confirmatory reprint before it becomes a released slicer setting.</p>
+</section>

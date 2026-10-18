@@ -142,17 +142,21 @@ function getQualificationCardSummaryItems(
   processTypeCode: string,
   summaryData: Record<string, unknown> | null
 ): QualificationCardSummaryItem[] {
-  if (processTypeCode === "extrusion_v1") {
-    const outputsByCode = new Map(listQualStepOutputs(db, step.id).map((output) => [output.output_code, output]));
-    const confirmedOutputs = getQualificationOutputDefinitionsForExperiment(db, experimentId, step.step_number)
-      .flatMap((definition) => {
-        const value = outputsByCode.get(definition.code)?.value_real;
-        return value != null && Number.isFinite(value)
-          ? [{ label: definition.label, value: formatQualificationCardValue(value, definition.unit) }]
-          : [];
-      });
-    if (confirmedOutputs.length) return confirmedOutputs;
+  const outputsByCode = new Map(listQualStepOutputs(db, step.id).map((output) => [output.output_code, output]));
+  const confirmedOutputs = getQualificationOutputDefinitionsForExperiment(db, experimentId, step.step_number)
+    .flatMap((definition) => {
+      const output = outputsByCode.get(definition.code);
+      if (output?.value_real != null && Number.isFinite(output.value_real)) {
+        return [{ label: definition.label, value: formatQualificationCardValue(output.value_real, definition.unit) }];
+      }
+      if (output?.value_text) {
+        return [{ label: definition.label, value: output.value_text }];
+      }
+      return [];
+    });
+  if (confirmedOutputs.length) return confirmedOutputs;
 
+  if (processTypeCode === "extrusion_v1") {
     if (step.step_number === 4 && summaryData) {
       const range = (label: string, minKey: string, maxKey: string, unit: string) => {
         const min = summaryData[minKey];
@@ -854,10 +858,12 @@ export function createExperimentsRouter(db: Db) {
         ["scale-up", "Scale-up"]
       ].filter(([tag]) => catalogueParams.some((param) => param.tags.includes(tag)))
       : [];
-    const inputParams = listParamDefinitionsByKindForProcess(db, experimentId, "INPUT", processTypeCode).map((param) => ({
-      ...param,
-      tags: tagsByParamId.get(param.id) ?? []
-    }));
+    const inputParams = listParamDefinitionsByKindForProcess(db, experimentId, "INPUT", processTypeCode)
+      .filter((param) => processTypeCode !== "sla_dlp" || param.doe_role === "factor")
+      .map((param) => ({
+        ...param,
+        tags: tagsByParamId.get(param.id) ?? []
+      }));
     const configs = listParamConfigs(db, experimentId, doeId);
     const designMeta = parseDesignMetadata(getDesignMetadata(db, experimentId, doeId));
     const extrusionQualificationConstraints = getExtrusionQualificationConstraintSnapshot(designMeta);

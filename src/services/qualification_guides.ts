@@ -163,8 +163,84 @@ const injectionGuides: Record<number, QualificationStudyGuide> = {
   }
 };
 
+const slaDlpGuides: Record<number, QualificationStudyGuide> = {
+  1: {
+    title: "Resin conditioning & recoating window",
+    goal: "Find resin-temperature and wait-time settings that repeatedly produce a uniform, bubble-free layer on the target printer.",
+    theory: "Resin flow and recovery affect levelling, but this stage qualifies the printer setting rather than characterising the material on a rheometer. Any external rheology belongs to material evidence and is not entered as run points here.",
+    procedure: ["Identify and condition the resin batch and printer/vat setup.", "Run a planned temperature × wait-before-exposure matrix at the selected layer height.", "Record observed levelling time, layer uniformity and bubbles for every condition."],
+    interpretation: ["Treat a condition as usable only when the layer is uniform and bubble-free.", "Confirm only the measured temperature/wait region; do not infer a universal viscosity limit."],
+    handoff: "Pass the validated resin-temperature window, target temperature and minimum wait before exposure to the following exposure studies.",
+    references: "Reviewed SLA/DLP qualification methodology"
+  },
+  2: {
+    title: "Photocure working curve",
+    goal: "Determine critical exposure Ec and penetration depth Dp from measured cured-depth data.",
+    theory: "The Jacobs relation Cd = Dp ln(E/Ec) is fitted against calibrated exposure dose. Wavelength, irradiance method, resin temperature and fit quality are part of the result.",
+    procedure: ["Set wavelength, resin temperature and the fixed optical condition once in Experiment setup.", "Choose either exposure time or measured irradiance as the varying parameter; each run records only that level and its measured cured depth.", "Review the run-derived graph and calculated Ec, Dp and R², then confirm the outputs."],
+    interpretation: ["Reject a fit with non-positive Dp/Ec or fewer than three valid, non-excluded runs. Record a reviewed working-curve decision separately; R² alone cannot accept the curve.", "This is not a photo-rheology test: viscosity in the LVE region or activation time under irradiation requires a separate oscillatory photo-rheology study. Photo-DSC may support kinetics but does not replace measured cure depth."],
+    handoff: "Pass reviewed Ec, Dp and fit quality as provenance for the layer-exposure window.",
+    references: "Jacobs working curve; reviewed SLA/DLP qualification methodology"
+  },
+  3: {
+    title: "Exposure & layer window",
+    goal: "Measure a usable exposure region for each qualified layer height without undercure, bleed, blocked channels or delamination.",
+    theory: "Exposure dose and layer height interact. The overcure ratio is a model diagnostic and cannot by itself prove layer adhesion.",
+    procedure: ["Keep resin temperature and optical configuration fixed.", "Run the planned exposure × layer-height combinations and measure the printed features.", "Repeat candidate boundaries before confirming a validated range."],
+    interpretation: ["Treat pass/fail as the intersection of all declared quality responses.", "Retain explored and validated ranges separately."],
+    handoff: "Pass the layer-specific exposure range and nominal point to resolution work and DOE.",
+    references: "Jacobs working curve; reviewed SLA/DLP qualification methodology"
+  },
+  4: {
+    title: "Resolution & dimensional accuracy",
+    goal: "Measure the fixed NIST artifact at the qualified optical/exposure condition and derive a repeatable starting point for dimensional correction.",
+    theory: "Optical spread and cure shrinkage create a difference between the fixed NIST nominal and measured geometry. A long baseline is needed for global scale; small features describe resolution rather than global shrinkage.",
+    procedure: ["Use the fixed NIST AM Test Artifact and one declared conditioning method.", "Measure the prescribed fine features, X/Y pins or holes, lateral elements and H-to-opposite-side baseline with the location-specific hint.", "Enter only measured size and reproduction status; do not enter nominal size or compensation into an element row."],
+    interpretation: ["A feature not reproduced is evidence, not a numeric zero.", "The calculated XY boundary offset and scale correction are starting estimates; confirm them with one reprinted artifact before releasing a slicer profile."],
+    handoff: "Pass the minimum reproduced feature plus the calculated, reprint-confirmed correction to the print profile and DOE.",
+    references: "Reviewed SLA/DLP qualification methodology"
+  },
+  5: {
+    title: "Green strength & peel force",
+    goal: "Verify that lift and support conditions do not cause separation or green-part failure.",
+    theory: "Average peel force divided by layer area is a comparison metric, not a local stress model. Green modulus must not be used as a failure-strength criterion.",
+    procedure: ["Record the vat film, support geometry and fixed layer height.", "Select exposure levels inside the Step 3 working window, then measure peak peel force across the selected lift speeds and representative layer areas.", "Record green tensile strength and print/support failures separately."],
+    interpretation: ["Reject observed separation regardless of the average-stress value.", "Do not transfer a lift result to a different vat film, support geometry, exposure or unsupported area range."],
+    handoff: "Pass validated lift speed and its layer-area/exposure/support scope as a constraint; pass green strength as measured evidence.",
+    references: "Reviewed SLA/DLP qualification methodology"
+  },
+  6: {
+    title: "Wash, post-cure & conversion",
+    goal: "Select wash and post-cure conditions that achieve the required conversion and properties without excess shrinkage or embrittlement.",
+    theory: "FTIR conversion requires chemistry-appropriate reaction and reference bands. Tg, ΔTg from the declared baseline, residual enthalpy, shrinkage and strength provide independent supporting responses.",
+    procedure: ["Record the fixed wash method, wash duration, post-cure source, baseline print condition, baseline Tg and baseline FTIR band areas.", "Generate the declared post-cure time × temperature × irradiance conditions.", "Use the same reviewed FTIR/DSC method across the series; qualify a changed wash procedure as a separate study rather than mixing it into this matrix."],
+    interpretation: ["Do not compare conversion values calculated with different band definitions.", "Choose a measured plateau or requirement-compliant region rather than the longest cure by default."],
+    handoff: "Pass the confirmed wash/post-cure programme, conversion and Tg to final qualification.",
+    references: "FTIR/DSC methods applicable to the resin chemistry"
+  },
+  7: {
+    title: "Final mechanical & thermal qualification",
+    goal: "Confirm released part properties and their applicability across declared orientations and resin batches.",
+    theory: "Final properties belong to the complete material, printer, exposure, wash, post-cure and conditioning chain.",
+    procedure: ["Print specimens using the selected profile in every required orientation.", "Test tensile, flexural, HDT/Tg and dimensional responses required by the application.", "Repeat boundary or batch checks defined by the release specification."],
+    interpretation: ["Report orientation effects and variation rather than collapsing unlike specimens into one mean.", "Release only properties supported by the linked runs and methods."],
+    handoff: "Publish the versioned SLA/DLP print profile and material-property evidence with its application scope.",
+    references: "ISO 527; ISO 178; ISO 75; reviewed SLA/DLP qualification methodology"
+  },
+  8: {
+    title: "Additional resin-flow characterisation",
+    goal: "Compare the flow of a declared resin batch or vat-temperature condition without turning it into a printer-setting qualification.",
+    theory: "A steady-shear curve records viscosity against shear rate before exposure. It does not measure tan δ, gel point or cure kinetics, and it does not prove that the printer formed a uniform layer.",
+    procedure: ["Use the same resin batch and conditioning state for every compared curve.", "Record a separate curve for each declared temperature; select and record one reference shear rate for like-for-like comparison.", "Import every curve directly and only report a flow index when the reviewed fit is valid for the measured range."],
+    interpretation: ["Compare viscosity at the same temperature and shear rate; do not compare arbitrary points from different curves.", "Use the result to investigate batch, formulation or vat-heating changes. Confirm recoating time and layer uniformity only in Step 1 on the printer."],
+    handoff: "Keep the curves and reviewed material assessment as provenance. They do not create a process window, DOE factor range or exposure setting.",
+    references: "Steady-shear rheometry; material-specific test method"
+  }
+};
+
 export function getQualificationStudyGuide(processTypeCode: string, stepNumber: number) {
   if (processTypeCode === "extrusion_v1") return extrusionGuides[stepNumber] ?? null;
   if (processTypeCode === "injection") return injectionGuides[stepNumber] ?? null;
+  if (processTypeCode === "sla_dlp") return slaDlpGuides[stepNumber] ?? null;
   return null;
 }

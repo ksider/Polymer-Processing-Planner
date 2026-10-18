@@ -92,6 +92,22 @@ function selectUniqueParamsByCode(
 }
 
 function getDefaultActiveOutputCodes(processTypeCode = "injection"): Set<string> {
+  if (processTypeCode === "sla_dlp") {
+    return new Set([
+      "layer_uniformity_ok",
+      "actual_layer_thickness_um",
+      "xy_bleed_um",
+      "minimum_open_channel_um",
+      "dimensional_error_um",
+      "peel_force_n",
+      "green_tensile_strength_mpa",
+      "final_conversion_pct",
+      "final_tg_c",
+      "tensile_strength_mpa",
+      "flexural_strength_mpa",
+      "hdt_c"
+    ]);
+  }
   if (processTypeCode === "compounding") {
     return new Set([
       "torque_pct",
@@ -129,6 +145,9 @@ function getDefaultActiveOutputCodes(processTypeCode = "injection"): Set<string>
 }
 
 export function getDefaultActiveFactors(designType: string, processTypeCode = "injection"): DefaultFactorConfig[] {
+  // SLA/DLP factor ranges are material/printer/profile-specific. Expose the
+  // canonical factor catalogue, but do not invent active numeric defaults.
+  if (processTypeCode === "sla_dlp") return [];
   if (processTypeCode === "compounding") {
     if (designType === "BBD") {
       return [
@@ -324,7 +343,8 @@ export function createDoeWithDefaults(
     }
   }
   const outputParams = selectUniqueParamsByCode(
-    listParamDefinitionsByKindForProcess(db, input.experimentId, "OUTPUT", processTypeCode),
+    listParamDefinitionsByKindForProcess(db, input.experimentId, "OUTPUT", processTypeCode)
+      .filter((param) => processTypeCode !== "sla_dlp" || param.doe_role === "response"),
     processTypeCode
   );
   const defaultActiveOutputCodes = getDefaultActiveOutputCodes(processTypeCode);

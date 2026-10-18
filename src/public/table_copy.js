@@ -4,14 +4,18 @@
   const tsvCell = (value) => /[\t\n\r"]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 
   const cellText = (cell) => {
-    const control = cell.querySelector("input, select, textarea");
+    const source = cell.dataset.copyFrom ? document.querySelector(cell.dataset.copyFrom) : cell;
+    if (!source) return "";
+    const control = source instanceof HTMLInputElement || source instanceof HTMLSelectElement || source instanceof HTMLTextAreaElement
+      ? source
+      : source.querySelector("input, select, textarea");
     if (control instanceof HTMLInputElement) {
       if (control.type === "checkbox") return control.checked ? "Yes" : "No";
       return control.value.trim();
     }
     if (control instanceof HTMLSelectElement) return control.selectedOptions[0]?.textContent?.trim() || "";
     if (control instanceof HTMLTextAreaElement) return control.value.trim();
-    return (cell.innerText || cell.textContent || "").replace(/\s+/g, " ").trim();
+    return (source.innerText || source.textContent || "").replace(/\s+/g, " ").trim();
   };
 
   const excludedColumnIndexes = (table, rawExcluded) => {
@@ -27,6 +31,7 @@
   const tableToTsv = (table, rawExcluded) => {
     const excluded = excludedColumnIndexes(table, rawExcluded);
     return [...table.rows]
+      .filter((row) => row.dataset.copyExclude !== "true")
       .map((row) => [...row.cells]
         .filter((cell, index) => !excluded.has(index) && cell.dataset.copyExclude !== "true")
         .map((cell) => tsvCell(cellText(cell)))

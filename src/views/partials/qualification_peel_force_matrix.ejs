@@ -1,0 +1,129 @@
+<% const liftSpeedField = fields.find((field) => field.code === 'lift_speed_mm_s'); %>
+<% const layerAreaField = fields.find((field) => field.code === 'layer_area_mm2'); %>
+<% const exposureTimeField = fields.find((field) => field.code === 'exposure_time_s'); %>
+<% const peelForceField = fields.find((field) => field.code === 'peel_force_n'); %>
+<% const greenStrengthField = fields.find((field) => field.code === 'green_tensile_strength_mpa'); %>
+<% const printFailureField = fields.find((field) => field.code === 'print_failure'); %>
+<% const peelStressField = fields.find((field) => field.code === 'average_peel_stress_mpa'); %>
+<% const vatFilmField = fields.find((field) => field.code === 'vat_film_type'); %>
+<% let vatFilmOptions = []; try { vatFilmOptions = JSON.parse(vatFilmField?.allowed_values_json || '[]'); } catch {} %>
+<% const runValue = (run, field) => field ? runValueMap[String(run.id)]?.[String(field.id)] : null; %>
+
+<section class="mb-6 overflow-hidden rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs" aria-labelledby="peelForceSetupTitle">
+  <div class="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-default pb-4">
+    <div>
+      <h2 class="text-lg font-semibold tracking-tight text-heading" id="peelForceSetupTitle">Experiment setup</h2>
+      <p class="mt-1 text-sm text-body">Vat film, support geometry and layer height apply to the whole peel study. They are stored once and are not repeated in every run.</p>
+    </div>
+    <% if (peelForceReference) { %>
+      <a class="inline-flex items-center gap-1 rounded-base border border-default-medium bg-neutral-secondary px-3 py-2 text-sm font-medium text-heading no-underline shadow-xs hover:bg-neutral-tertiary" href="<%= peelForceReference.href %>">Open Step 3 <span class="material-symbols-rounded text-[18px]" aria-hidden="true">arrow_forward</span></a>
+    <% } %>
+  </div>
+  <form action="/experiments/<%= experimentId %>/qualification/<%= step.step_number %>/peel-force-matrix/setup" data-peel-force-setup data-generator-blocked="<%= step.is_blocked === 1 ? '1' : '0' %>">
+    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <label class="block text-sm font-medium text-heading">Vat film
+        <span class="mt-1 block text-xs font-normal text-body">Fixed for the complete study</span>
+        <select class="mt-2 block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" name="peel_vat_film_type" required <%= step.is_blocked === 1 ? 'disabled' : '' %>>
+          <option value="">Choose film</option>
+          <% vatFilmOptions.forEach((film) => { %><option value="<%= film %>" <%= stepSettings?.peel_vat_film_type === film ? 'selected' : '' %>><%= film %></option><% }); %>
+        </select>
+      </label>
+      <label class="block text-sm font-medium text-heading">Support neck Ø
+        <span class="mt-1 block text-xs font-normal text-body">Fixed support geometry · mm</span>
+        <input class="mt-2 block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" name="peel_support_neck_diameter_mm" type="number" min="0.000001" step="any" required value="<%= stepSettings?.peel_support_neck_diameter_mm ?? '' %>" <%= step.is_blocked === 1 ? 'disabled' : '' %>>
+      </label>
+      <label class="block text-sm font-medium text-heading">Qualified layer height
+        <span class="mt-1 block text-xs font-normal text-body">Step 3 reference · µm</span>
+        <input class="mt-2 block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" name="peel_layer_height_um" type="number" min="0.000001" step="any" required value="<%= stepSettings?.peel_layer_height_um ?? peelForceReference?.layerHeightUm ?? '' %>" <%= step.is_blocked === 1 ? 'disabled' : '' %>>
+      </label>
+      <label class="block text-sm font-medium text-heading sm:col-span-2 xl:col-span-3">Support geometry note
+        <span class="mt-1 block text-xs font-normal text-body">Fixed support type, density/orientation and any relevant attachment details. This defines the scope of a later lift-speed decision.</span>
+        <input class="mt-2 block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" name="peel_support_geometry_note" type="text" maxlength="500" required value="<%= stepSettings?.peel_support_geometry_note ?? '' %>" placeholder="Example: 0.6 mm cylindrical necks, 1.5 mm tips, 45° build orientation" <%= step.is_blocked === 1 ? 'disabled' : '' %>>
+      </label>
+    </div>
+    <div class="mt-4 flex flex-wrap items-center gap-3">
+      <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50" type="submit" data-peel-force-setup-submit <%= step.is_blocked === 1 ? 'disabled' : '' %>>Save setup</button>
+      <span class="text-xs text-body" data-peel-force-setup-status>Layer height is prefilled from Step 3 when available. Exposure levels are set in the matrix below.</span>
+    </div>
+  </form>
+</section>
+
+<section class="mb-6 overflow-hidden rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs" aria-labelledby="peelForceGeneratorTitle">
+  <div class="mb-5 border-b border-default pb-4">
+    <h2 class="text-lg font-semibold tracking-tight text-heading" id="peelForceGeneratorTitle"><%= generator.title %></h2>
+    <p class="mt-1 text-sm text-body"><%= generator.description %></p>
+  </div>
+  <form action="/experiments/<%= experimentId %>/qualification/<%= step.step_number %>/peel-force-matrix" data-peel-force-generator data-generator-blocked="<%= step.is_blocked === 1 ? '1' : '0' %>">
+    <div class="grid gap-4 lg:grid-cols-4">
+      <label class="block text-sm font-medium text-heading">Lift-speed levels (mm/s)
+        <input class="mt-2 block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" name="lift_speed_levels" type="text" required placeholder="<%= generator.variable_fields[0].example_levels %>" value="<%= stepSettings?.peel_lift_speed_levels ?? '' %>" <%= step.is_blocked === 1 ? 'disabled' : '' %>>
+        <span class="mt-1 block text-xs font-normal text-body">Separate values with semicolons, commas or spaces.</span>
+      </label>
+      <label class="block text-sm font-medium text-heading">Layer-area levels (mm²)
+        <input class="mt-2 block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" name="layer_area_levels" type="text" required placeholder="<%= generator.variable_fields[1].example_levels %>" value="<%= stepSettings?.peel_layer_area_levels ?? '' %>" <%= step.is_blocked === 1 ? 'disabled' : '' %>>
+        <span class="mt-1 block text-xs font-normal text-body">Representative projected area for the chosen test geometry.</span>
+      </label>
+      <label class="block text-sm font-medium text-heading">Exposure levels (s)
+        <input class="mt-2 block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" name="exposure_time_levels" type="text" required placeholder="<%= generator.variable_fields[2].example_levels %>" value="<%= stepSettings?.peel_exposure_time_levels ?? peelForceReference?.exposureTimeS ?? '' %>" <%= step.is_blocked === 1 ? 'disabled' : '' %>>
+        <span class="mt-1 block text-xs font-normal text-body">Starts from the Step 3 nominal exposure; record the intended explored range explicitly.</span>
+      </label>
+      <div class="rounded-base bg-neutral-secondary p-3 text-xs text-body"><strong class="text-heading">One row = one condition</strong><br>The generator creates the full speed × area × exposure matrix and fills only blank rows. It never overwrites recorded evidence.</div>
+    </div>
+    <div class="mt-4 flex flex-wrap items-center gap-3">
+      <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50" type="submit" data-peel-force-generator-submit <%= step.is_blocked === 1 ? 'disabled' : '' %>>Generate matrix runs</button>
+      <span class="text-xs text-body" data-peel-force-generator-status>Hold film, support geometry and layer height fixed while comparing lift, area and exposure.</span>
+    </div>
+  </form>
+</section>
+
+<section class="mb-6 overflow-visible rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs" aria-labelledby="peelForceMeasurementsTitle">
+  <div class="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-default pb-4">
+    <div>
+      <h2 class="text-lg font-semibold tracking-tight text-heading" id="peelForceMeasurementsTitle">Peel-force measurements</h2>
+      <p class="mt-1 text-sm text-body">Changed factors are on the left; measured responses follow. Average peel stress is calculated as F<sub>peel</sub> / A<sub>layer</sub> and is only a comparison metric.</p>
+    </div>
+    <button class="inline-flex size-9 shrink-0 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" data-copy-table="#peelForceMeasurementsTable" data-copy-exclude-columns="run status" data-copy-icon title="Copy measurements as TSV" aria-label="Copy measurements as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button>
+  </div>
+  <div class="overflow-x-auto rounded-base border border-default md:overflow-visible" aria-label="Peel-force measurement table">
+    <table class="min-w-full border-separate border-spacing-y-1 text-left text-sm text-body" id="peelForceMeasurementsTable" data-run-table data-peel-force-table>
+      <thead class="[&_th]:sticky [&_th]:top-16 [&_th]:z-30 [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-default [&_th]:bg-neutral-secondary [&_th]:px-3 [&_th]:py-2 [&_th]:text-xs [&_th]:font-medium [&_th]:uppercase [&_th]:text-body">
+        <tr>
+          <th>Run</th>
+          <th><span class="cursor-help" title="Varied lifting speed">v lift<br><span class="normal-case font-normal">mm/s</span></span></th>
+          <th><span class="cursor-help" title="Varied representative projected layer area">A layer<br><span class="normal-case font-normal">mm²</span></span></th>
+          <th><span class="cursor-help" title="Varied layer exposure, selected inside the Step 3 working window">t exp<br><span class="normal-case font-normal">s</span></span></th>
+          <th><span class="cursor-help" title="Measured peak separation force">F peel<br><span class="normal-case font-normal">N</span></span></th>
+          <th><span class="cursor-help" title="Measured tensile strength of the uncured green specimen">σ green<br><span class="normal-case font-normal">MPa</span></span></th>
+          <th><span class="cursor-help" title="Observed print or support separation">Failure</span></th>
+          <th><span class="cursor-help" title="Calculated F peel divided by layer area; comparison metric, not local stress">σ peel avg<br><span class="normal-case font-normal">MPa</span></span></th>
+          <th><span class="sr-only">Run status</span></th>
+        </tr>
+      </thead>
+      <tbody class="[&_td]:border-y [&_td]:border-default-medium [&_td]:bg-neutral-primary [&_td]:px-3 [&_td]:py-2 [&_td:first-child]:border-s [&_td:last-child]:border-e">
+        <% if (!runs.length) { %><tr data-copy-exclude="true"><td class="py-8 text-center" colspan="9">Save the setup, then generate a lift speed × layer-area × exposure matrix.</td></tr><% } %>
+        <% runs.forEach((run) => { const liftSpeed = runValue(run, liftSpeedField); const layerArea = runValue(run, layerAreaField); const exposureTime = runValue(run, exposureTimeField); const peelForce = runValue(run, peelForceField); const greenStrength = runValue(run, greenStrengthField); const printFailure = runValue(run, printFailureField); const peelStress = runValue(run, peelStressField); %>
+          <tr data-run-row data-run-id="<%= run.id %>">
+            <td class="rounded-s-base font-medium text-heading"><%= run.run_code %></td>
+            <td><input class="w-20 min-w-20 rounded-base border border-default-medium bg-neutral-secondary-medium px-2 py-1.5 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" type="number" min="0" step="any" data-field-id="<%= liftSpeedField?.id %>" data-field-type="number" value="<%= liftSpeed?.value_real ?? '' %>" <%= step.is_blocked === 1 ? 'disabled' : '' %>></td>
+            <td><input class="w-24 min-w-24 rounded-base border border-default-medium bg-neutral-secondary-medium px-2 py-1.5 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" type="number" min="0" step="any" data-field-id="<%= layerAreaField?.id %>" data-field-type="number" value="<%= layerArea?.value_real ?? '' %>" <%= step.is_blocked === 1 ? 'disabled' : '' %>></td>
+            <td><input class="w-20 min-w-20 rounded-base border border-default-medium bg-neutral-secondary-medium px-2 py-1.5 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" type="number" min="0" step="any" data-field-id="<%= exposureTimeField?.id %>" data-field-type="number" value="<%= exposureTime?.value_real ?? '' %>" <%= step.is_blocked === 1 ? 'disabled' : '' %>></td>
+            <td><input class="w-20 min-w-20 rounded-base border border-default-medium bg-neutral-secondary-medium px-2 py-1.5 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" type="number" min="0" step="any" data-field-id="<%= peelForceField?.id %>" data-field-type="number" value="<%= peelForce?.value_real ?? '' %>" <%= step.is_blocked === 1 ? 'disabled' : '' %>></td>
+            <td><input class="w-20 min-w-20 rounded-base border border-default-medium bg-neutral-secondary-medium px-2 py-1.5 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" type="number" min="0" step="any" data-field-id="<%= greenStrengthField?.id %>" data-field-type="number" value="<%= greenStrength?.value_real ?? '' %>" <%= step.is_blocked === 1 ? 'disabled' : '' %>></td>
+            <td class="text-center"><input type="checkbox" data-field-id="<%= printFailureField?.id %>" data-field-type="boolean" <%= printFailure?.value_real === 1 ? 'checked' : '' %> <%= step.is_blocked === 1 ? 'disabled' : '' %>></td>
+            <td><span class="whitespace-nowrap" data-derived-code="average_peel_stress_mpa"><%= peelStress?.value_real == null ? '–' : formatNumber(peelStress.value_real, 4) %></span></td>
+            <td class="rounded-e-base text-center"><input type="checkbox" title="Exclude from calculated evidence" data-flag="exclude" <%= run.exclude_from_analysis === 1 ? 'checked' : '' %> <%= step.is_blocked === 1 ? 'disabled' : '' %>></td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+  <p class="mt-3 text-xs text-body">Any observed separation is evidence against that condition even if its average peel stress appears low. Green strength is a measured material response; it is not compared directly with σ<sub>peel,avg</sub>. Validated lift speed remains a reviewed handoff, never an automatic result of the lowest measured force.</p>
+</section>
+
+<section class="mb-6 overflow-hidden rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs" aria-labelledby="peelForceChartTitle">
+  <div class="border-b border-default pb-4">
+    <h2 class="text-lg font-semibold tracking-tight text-heading" id="peelForceChartTitle">Peel force by layer area, lift speed and exposure</h2>
+    <p class="mt-1 text-sm text-body">Each point is a measured run. Colour separates each lift-speed/exposure condition; failed prints are marked separately.</p>
+  </div>
+  <div class="mt-4 h-96 w-full" id="slaPeelForceChart"></div>
+</section>

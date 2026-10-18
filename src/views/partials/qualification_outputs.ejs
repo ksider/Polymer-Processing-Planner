@@ -1,0 +1,96 @@
+<% if ((outputDefinitions || []).length || stepSummary?.jacobs_working_curve) { %>
+  <% const outputByCode = new Map((stepOutputs || []).map((output) => [output.output_code, output])); %>
+  <% const manualOutputDefinitions = (outputDefinitions || []).filter((definition) => definition.value_source !== 'summary'); %>
+  <% const summaryOutputDefinitions = (outputDefinitions || []).filter((definition) => definition.value_source === 'summary'); %>
+  <% const hasMixedOutputs = summaryOutputDefinitions.length > 0 && manualOutputDefinitions.length > 0; %>
+  <% const jacobsFit = stepSummary?.jacobs_working_curve; %>
+  <% const jacobsFitValid = jacobsFit?.fit_valid === true; %>
+  <% const calculatedOnly = !jacobsFit && summaryOutputDefinitions.length > 0 && manualOutputDefinitions.length === 0; %>
+  <% const formatJacobsValue = (value, digits) => typeof value === 'number' && Number.isFinite(value) ? value.toFixed(digits).replace(/\.?0+$/, '') : '-'; %>
+  <% const copyTableId = `qualificationOutputValues-${step.id}`; %>
+  <section class="mb-6 overflow-hidden rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs" aria-labelledby="qualificationOutputsTitle">
+    <div class="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-default pb-4">
+      <div>
+        <h2 class="text-lg font-semibold tracking-tight text-heading" id="qualificationOutputsTitle"><%= jacobsFit ? 'Jacobs working-curve result' : calculatedOnly ? 'Calculated measurement outputs' : hasMixedOutputs ? 'Calculated evidence & reviewed handoff' : 'Confirmed summary outputs' %></h2>
+        <p class="mt-1 text-sm text-body"><%= jacobsFit ? 'These values are calculated from the current non-excluded runs and stored with their shared parameter identities. They cannot be edited here.' : calculatedOnly ? 'These values are recalculated from the recorded model-element measurements and stored with shared parameter identities. They are not manually accepted values.' : hasMixedOutputs ? 'Calculated cards update from the non-excluded run evidence. Only the reviewed fields below become a portable operating constraint; they are not inferred automatically.' : 'Only reviewed values entered here are portable to stage cards, reports and DOE handoff. Run measurements remain the evidence.' %></p>
+      </div>
+      <button class="inline-flex size-9 shrink-0 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" data-copy-table="#<%= copyTableId %>" data-copy-icon title="Copy outputs as TSV" aria-label="Copy outputs as TSV"><span class="material-symbols-rounded" aria-hidden="true">content_copy</span></button>
+    </div>
+    <table class="sr-only" id="<%= copyTableId %>">
+      <thead><tr><th>Output</th><th>Value</th><th>Unit</th><th>Source</th></tr></thead>
+      <tbody>
+        <% if (jacobsFit) { %>
+          <tr><td>Run points</td><td data-copy-from="[data-jacobs-fit-point-count]"><%= jacobsFit.point_count ?? 0 %></td><td></td><td>Calculated</td></tr>
+          <tr><td>Ec</td><td data-copy-from="[data-jacobs-fit-ec]"><%= formatJacobsValue(jacobsFit.critical_exposure_ec_mj_cm2, 3) %></td><td>mJ/cm²</td><td>Calculated</td></tr>
+          <tr><td>Dp</td><td data-copy-from="[data-jacobs-fit-dp]"><%= formatJacobsValue(jacobsFit.penetration_depth_dp_um, 2) %></td><td>µm</td><td>Calculated</td></tr>
+          <tr><td>R²</td><td data-copy-from="[data-jacobs-fit-r-squared]"><%= formatJacobsValue(jacobsFit.r_squared, 4) %></td><td></td><td>Calculated</td></tr>
+        <% } %>
+        <% summaryOutputDefinitions.forEach((definition) => { const output = outputByCode.get(definition.code); const value = output?.value_real; %>
+          <tr><td><%= definition.label %></td><td><%= typeof value === 'number' && Number.isFinite(value) ? formatNumber(value, definition.unit === 'mm' ? 4 : 2) : '–' %></td><td><%= definition.unit || '' %></td><td>Calculated</td></tr>
+        <% }); %>
+        <% manualOutputDefinitions.forEach((definition) => { const output = outputByCode.get(definition.code); const value = definition.field_type === 'number' ? output?.value_real : output?.value_text; %>
+          <tr><td><%= definition.label %></td><td data-copy-from="[data-step-output='<%= definition.code %>']"><%= value ?? '' %></td><td><%= definition.unit || '' %></td><td>Reviewed</td></tr>
+        <% }); %>
+      </tbody>
+    </table>
+    <% if (jacobsFit) { %>
+      <aside class="mb-5 rounded-base border p-4 <%= jacobsFitValid ? 'border-success-medium bg-success-soft' : 'border-warning-medium bg-warning-soft' %>" data-jacobs-fit>
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-semibold text-heading">Calculated from dose/depth evidence</h3>
+            <p class="mt-1 text-xs text-body">Each non-excluded run is one point. Changing a run or excluding it recalculates the result and its portable outputs.</p>
+          </div>
+          <span class="rounded-base bg-neutral-primary px-2 py-1 text-xs font-medium text-heading" data-jacobs-fit-state><%= jacobsFitValid ? 'Calculated' : 'Need at least 3 valid run points' %></span>
+        </div>
+        <dl class="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+          <div><dt class="text-xs text-body">Run points</dt><dd class="mt-1 font-medium text-heading" data-jacobs-fit-point-count><%= jacobsFit.point_count ?? 0 %></dd></div>
+          <div><dt class="text-xs text-body">Ec, mJ/cm²</dt><dd class="mt-1 font-medium text-heading" data-jacobs-fit-ec><%= formatJacobsValue(jacobsFit.critical_exposure_ec_mj_cm2, 3) %></dd></div>
+          <div><dt class="text-xs text-body">Dp, µm</dt><dd class="mt-1 font-medium text-heading" data-jacobs-fit-dp><%= formatJacobsValue(jacobsFit.penetration_depth_dp_um, 2) %></dd></div>
+          <div><dt class="text-xs text-body">R²</dt><dd class="mt-1 font-medium text-heading" data-jacobs-fit-r-squared><%= formatJacobsValue(jacobsFit.r_squared, 4) %></dd></div>
+        </dl>
+        <% const variableCode = String(stepSettings?.jacobs_variable_code || 'exposure_time_s'); const varyingLabel = variableCode === 'irradiance_mw_cm2' ? 'Measured irradiance' : 'Exposure time'; const fixedLabel = variableCode === 'irradiance_mw_cm2' ? 'Fixed exposure time' : 'Fixed measured irradiance'; const fixedValue = variableCode === 'irradiance_mw_cm2' ? stepSettings?.jacobs_fixed_exposure_time_s : stepSettings?.jacobs_fixed_irradiance_mw_cm2; const fixedUnit = variableCode === 'irradiance_mw_cm2' ? 's' : 'mW/cm²'; %>
+        <dl class="mt-4 grid gap-3 border-t border-default pt-4 text-xs text-body sm:grid-cols-2 xl:grid-cols-4">
+          <div><dt>Wavelength</dt><dd class="mt-1 font-medium text-heading"><%= formatJacobsValue(stepSettings?.jacobs_wavelength_nm, 0) %> nm</dd></div>
+          <div><dt>Resin temperature</dt><dd class="mt-1 font-medium text-heading"><%= formatJacobsValue(stepSettings?.jacobs_resin_temp_c, 1) %> °C</dd></div>
+          <div><dt>Varied</dt><dd class="mt-1 font-medium text-heading"><%= varyingLabel %></dd></div>
+          <div><dt><%= fixedLabel %></dt><dd class="mt-1 font-medium text-heading"><%= formatJacobsValue(fixedValue, 3) %> <%= fixedUnit %></dd></div>
+        </dl>
+        <p class="mt-4 text-xs text-body">For Step 3, Ec and Dp are a reference for choosing an initial exposure range only. They are not copied into runs and do not by themselves qualify a printing window; R² remains a fit diagnostic.</p>
+      </aside>
+    <% } %>
+    <% if (summaryOutputDefinitions.length && !jacobsFit) { %>
+      <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <% summaryOutputDefinitions.forEach((definition) => { const output = outputByCode.get(definition.code); const value = output?.value_real; %>
+          <article class="rounded-base border border-default bg-neutral-secondary p-4">
+            <dt class="text-sm font-medium text-heading"><%= definition.label %></dt>
+            <dd class="mt-2 text-2xl font-semibold tracking-tight text-heading"><%= typeof value === 'number' && Number.isFinite(value) ? formatNumber(value, definition.unit === 'mm' ? 4 : 2) : '–' %><% if (definition.unit) { %> <span class="text-sm font-medium text-body"><%= definition.unit %></span><% } %></dd>
+            <p class="mt-2 text-xs text-body"><%= definition.description %></p>
+          </article>
+        <% }); %>
+      </div>
+    <% } %>
+    <% if (manualOutputDefinitions.length) { %><div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <% manualOutputDefinitions.forEach((definition) => { const output = outputByCode.get(definition.code); %>
+        <label class="text-sm font-medium text-heading">
+          <span><%= definition.label %></span>
+          <span class="mt-1 block text-xs font-normal text-body"><%= definition.description %></span>
+          <span class="relative mt-2 block">
+            <% if (definition.field_type === 'number') { %>
+              <input class="block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 pe-16 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" type="number" step="any" data-step-output="<%= definition.code %>" value="<%= output?.value_real ?? '' %>" <%= step.is_blocked === 1 ? 'disabled' : '' %>>
+            <% } else if (definition.allowed_values?.length) { %>
+              <select class="block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" data-step-output="<%= definition.code %>" <%= step.is_blocked === 1 ? 'disabled' : '' %>>
+                <option value="">Not reviewed</option>
+                <% definition.allowed_values.forEach((option) => { %>
+                  <option value="<%= option.value %>" <%= output?.value_text === option.value ? 'selected' : '' %>><%= option.label %></option>
+                <% }); %>
+              </select>
+            <% } else { %>
+              <input class="block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" type="text" data-step-output="<%= definition.code %>" value="<%= output?.value_text ?? '' %>" <%= step.is_blocked === 1 ? 'disabled' : '' %>>
+            <% } %>
+            <% if (definition.unit) { %><span class="pointer-events-none absolute inset-y-0 end-0 flex items-center pe-3 text-sm text-body"><%= definition.unit %></span><% } %>
+          </span>
+        </label>
+      <% }); %>
+    </div><% } %>
+  </section>
+<% } %>

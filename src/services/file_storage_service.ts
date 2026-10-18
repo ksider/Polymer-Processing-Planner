@@ -7,7 +7,7 @@ import { createStoredFile, linkStoredFile, type StoredFile } from "../repos/file
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 const allowedMimeTypes = new Set([
-  "application/pdf", "text/plain", "text/csv", "application/json",
+  "application/pdf", "text/plain", "text/csv", "text/tab-separated-values", "application/csv", "application/json",
   "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation",

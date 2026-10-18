@@ -14,7 +14,8 @@
     "analytics:r:setup": "cd analytics-r && Rscript setup_local.R",
     "analytics:r:test": "cd analytics-r && Rscript tests/run_tests.R",
     "seed:messages": "tsx src/tools/seed_messages_debug.ts",
-    "seed:extrusion-demo": "tsx src/tools/seed_extrusion_demo.ts"
+    "seed:extrusion-demo": "tsx src/tools/seed_extrusion_demo.ts",
+    "seed:sla-dlp-demo": "tsx src/tools/seed_sla_dlp_demo.ts"
   },
   "dependencies": {
     "@editorjs/delimiter": "^1.4.2",

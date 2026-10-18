@@ -1,0 +1,58 @@
+<% if (generator?.type === 'exposure_layer_matrix') { %>
+  <% const layerField = generator.variable_fields[0]; const overcureField = generator.variable_fields[1]; const hasJacobsReference = jacobsReference?.fitValid === true && jacobsReference?.ec != null && jacobsReference?.dp != null; const hasIrradiance = typeof stepSettings?.exposure_window_irradiance_mw_cm2 === 'number' && stepSettings.exposure_window_irradiance_mw_cm2 > 0; const generatorReady = hasJacobsReference && hasIrradiance; %>
+  <section class="mb-6 overflow-hidden rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs" aria-labelledby="exposureWindowSetupTitle">
+    <div class="mb-5 border-b border-default pb-4">
+      <h2 class="text-lg font-semibold tracking-tight text-heading" id="exposureWindowSetupTitle">Experiment setup</h2>
+      <p class="mt-1 text-sm text-body">Common optical and material conditions are saved once for the exposure-window matrix; they are not repeated in every run.</p>
+    </div>
+    <form action="/experiments/<%= experimentId %>/qualification/<%= step.step_number %>/exposure-layer-matrix/setup" data-exposure-layer-setup data-generator-blocked="<%= step.is_blocked === 1 ? '1' : '0' %>">
+      <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <% generator.setup_fields.forEach((field) => { %>
+          <label class="block text-sm font-medium text-heading"><%= field.label %>
+            <span class="mt-1 block text-xs font-normal text-body">Static condition<%= field.unit ? ` · ${field.unit}` : '' %></span>
+            <input class="mt-2 block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" name="<%= field.code %>" value="<%= stepSettings?.[field.code] ?? '' %>" type="number" step="any" <%= field.minimum != null ? `min="${field.minimum}"` : '' %> <%= field.required ? 'required' : '' %> <%= step.is_blocked === 1 ? 'disabled' : '' %>>
+          </label>
+        <% }); %>
+      </div>
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50" type="submit" data-exposure-layer-setup-submit <%= step.is_blocked === 1 ? 'disabled' : '' %>>Save setup</button>
+        <span class="text-xs text-body" data-exposure-layer-setup-status>Wavelength, resin temperature and irradiance are prefilled from Step 2 when they are available.</span>
+      </div>
+    </form>
+  </section>
+
+  <section class="mb-6 overflow-hidden rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs" aria-labelledby="exposureLayerGeneratorTitle">
+    <div class="mb-5 border-b border-default pb-4">
+      <h2 class="text-lg font-semibold tracking-tight text-heading" id="exposureLayerGeneratorTitle"><%= generator.title %></h2>
+      <p class="mt-1 text-sm text-body"><%= generator.description %></p>
+    </div>
+    <div class="grid gap-3 sm:grid-cols-3">
+      <div class="rounded-base bg-neutral-secondary p-3 text-sm"><span class="block text-xs text-body">Ec · Step 2</span><strong class="mt-1 block text-heading"><%= hasJacobsReference ? formatNumber(jacobsReference.ec, 3) : '-' %> mJ/cm²</strong></div>
+      <div class="rounded-base bg-neutral-secondary p-3 text-sm"><span class="block text-xs text-body">Dp · Step 2</span><strong class="mt-1 block text-heading"><%= hasJacobsReference ? formatNumber(jacobsReference.dp, 2) : '-' %> µm</strong></div>
+      <div class="rounded-base bg-neutral-secondary p-3 text-sm"><span class="block text-xs text-body">I · Setup</span><strong class="mt-1 block text-heading"><%= hasIrradiance ? formatNumber(stepSettings.exposure_window_irradiance_mw_cm2, 3) : '-' %> mW/cm²</strong></div>
+    </div>
+    <% if (!hasJacobsReference) { %><p class="mt-4 rounded-base bg-warning-soft p-3 text-sm text-body">A valid Step 2 curve is required before this generator can calculate exposure times.</p><% } else if (!hasIrradiance) { %><p class="mt-4 rounded-base bg-warning-soft p-3 text-sm text-body">Save a positive measured irradiance in Setup before generating the matrix.</p><% } %>
+    <form class="mt-5" action="/experiments/<%= experimentId %>/qualification/<%= step.step_number %>/exposure-layer-matrix" data-exposure-layer-generator data-generator-blocked="<%= step.is_blocked === 1 ? '1' : '0' %>">
+      <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(16rem,1fr)]">
+        <label class="block text-sm font-medium text-heading"><%= layerField.label %> (<%= layerField.unit %>)
+          <input class="mt-1 block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" name="layer_height_levels" type="text" required placeholder="<%= layerField.example_levels %>" value="<%= stepSettings?.exposure_window_layer_height_levels || layerField.example_levels %>" <%= step.is_blocked === 1 || !generatorReady ? 'disabled' : '' %>>
+          <span class="mt-1 block text-xs font-normal text-body">Separate values with semicolons, commas or spaces.</span>
+        </label>
+        <label class="block text-sm font-medium text-heading"><%= overcureField.label %> (<%= overcureField.unit %>)
+          <input class="mt-1 block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" name="target_overcure_levels" type="text" required placeholder="<%= overcureField.example_levels %>" value="<%= stepSettings?.exposure_window_target_overcure_levels || overcureField.example_levels %>" <%= step.is_blocked === 1 || !generatorReady ? 'disabled' : '' %>>
+          <span class="mt-1 block text-xs font-normal text-body">Design targets, converted to dose and time with the Jacobs relation.</span>
+        </label>
+        <div class="rounded-base bg-neutral-secondary p-3 text-xs text-body">
+          <strong class="text-heading">Calculated for every run</strong><br>
+          C<sub>d,target</sub> = h · (1 + U<sub>z</sub>/100)<br>
+          E = E<sub>c</sub> · exp(C<sub>d,target</sub>/D<sub>p</sub>)<br>
+          t = E / I
+        </div>
+      </div>
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50" type="submit" data-exposure-layer-generator-submit <%= step.is_blocked === 1 || !generatorReady ? 'disabled' : '' %>>Generate matrix runs</button>
+        <span class="text-xs text-body" data-exposure-layer-generator-status>The generator fills blank rows first and never overwrites recorded evidence.</span>
+      </div>
+    </form>
+  </section>
+<% } %>

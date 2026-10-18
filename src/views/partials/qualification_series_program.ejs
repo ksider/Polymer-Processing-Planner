@@ -1,0 +1,70 @@
+<% if ((seriesDefinitions || []).length) { %>
+  <% const hasRunDerivedSeries = seriesDefinitions.some((definition) => definition.source === 'run_fields'); %>
+  <% const isSingleRunDerivedSeries = seriesDefinitions.length === 1 && hasRunDerivedSeries; %>
+  <% const isExpandedSingleSeries = isSingleRunDerivedSeries || (step?.step_number === 7 && seriesDefinitions.length === 1); %>
+  <section class="mb-6 overflow-hidden rounded-xl border border-default-medium bg-neutral-primary p-5 shadow-xs" aria-labelledby="qualificationSeriesTitle">
+    <div class="mb-5 border-b border-default pb-4">
+      <h2 class="text-lg font-semibold tracking-tight text-heading" id="qualificationSeriesTitle">Measurement series</h2>
+      <p class="mt-1 text-sm text-body"><%= hasRunDerivedSeries ? 'Run-derived plots use the scalar evidence already entered in the table; instrument traces retain their versioned CSV contract.' : 'Import measured two-column CSV data. Axis meaning and units are fixed by the versioned stage contract.' %></p>
+    </div>
+    <div class="<%= isExpandedSingleSeries ? '' : 'grid gap-4 xl:grid-cols-2' %>">
+      <% seriesDefinitions.forEach((definition) => { const isRunDerived = definition.source === 'run_fields'; const isJacobsWorkingCurve = definition.code === 'jacobs_working_curve'; const isFinalMechanicalStressStrain = step?.step_number === 7 && definition.code === 'stress_strain_curve'; %>
+        <article class="rounded-base border border-default-medium bg-neutral-primary <%= isExpandedSingleSeries ? 'p-5' : 'p-4' %>" data-qual-series-card data-series-code="<%= definition.code %>" data-series-source="<%= definition.source || 'csv' %>" data-minimum-points="<%= definition.minimum_points %>">
+          <div class="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 class="text-sm font-semibold text-heading"><%= definition.label %></h3>
+              <p class="mt-1 text-xs text-body"><%= definition.description %></p>
+            </div>
+            <span class="shrink-0 rounded-base bg-neutral-secondary px-2 py-1 text-xs font-medium text-body">v<%= definition.contract_version %></span>
+          </div>
+          <% if (isRunDerived) { %>
+            <% if (isJacobsWorkingCurve) { %>
+              <div class="grid gap-4 rounded-base border border-default bg-neutral-secondary p-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.8fr)]">
+                <div>
+                  <p class="text-sm font-medium text-heading">What the Jacobs working curve shows</p>
+                  <p class="mt-1 text-sm text-body">Paul Jacobs described how a photopolymer’s cured depth rises with the logarithm of calibrated exposure dose. The run table supplies the measured points; this chart makes their relationship visible.</p>
+                  <p class="mt-3 text-xs text-body"><strong class="text-heading">One row = one point.</strong> Keep wavelength, resin temperature and the non-varying optical condition in Setup. Each run records one varying dose condition and its measured cured depth. Excluded rows are not plotted or fitted.</p>
+                </div>
+                <div class="rounded-base border border-default-medium bg-neutral-primary px-4 py-3">
+                  <p class="text-xs font-medium uppercase tracking-wide text-body">Jacobs relation</p>
+                  <p class="mt-1 text-xl font-semibold tracking-tight text-heading" aria-label="Cure depth equals penetration depth times natural logarithm of exposure dose divided by critical exposure">C<sub>d</sub> = D<sub>p</sub> · ln(E / E<sub>c</sub>)</p>
+                  <dl class="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-body">
+                    <div><dt class="font-medium text-heading">C<sub>d</sub></dt><dd>cured depth</dd></div>
+                    <div><dt class="font-medium text-heading">E</dt><dd>exposure dose</dd></div>
+                    <div><dt class="font-medium text-heading">D<sub>p</sub></dt><dd>penetration depth</dd></div>
+                    <div><dt class="font-medium text-heading">E<sub>c</sub></dt><dd>critical exposure</dd></div>
+                  </dl>
+                </div>
+              </div>
+            <% } else { %>
+              <p class="rounded-base bg-neutral-secondary p-3 text-xs text-body"><strong class="text-heading">One row = one point.</strong> The chart is generated from non-excluded scalar run data.</p>
+            <% } %>
+            <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-body">
+              <span><%= definition.x.label %> (<%= definition.x.unit %>) → <%= definition.y.label %> (<%= definition.y.unit %>).</span>
+              <span data-series-status>Generated from the non-excluded run table.</span>
+            </div>
+          <% } else { %>
+            <% if (isFinalMechanicalStressStrain) { %><p class="mb-3 rounded-base bg-neutral-secondary p-3 text-xs text-body"><strong class="text-heading">One trace = one specimen.</strong> Select the row whose tensile result the imported stress–strain curve supports. The scalar strength remains in the specimen table; the trace supplies the full failure path.</p><% } %>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <label class="block text-sm font-medium text-heading"><%= isFinalMechanicalStressStrain ? 'Specimen' : 'Run' %>
+                <select class="mt-1 block w-full rounded-base border border-default-medium bg-neutral-secondary-medium px-3 py-2 text-sm text-heading shadow-xs focus:border-brand focus:ring-brand" data-series-run>
+                  <% runs.forEach((run) => { %><option value="<%= run.id %>"><%= run.run_code %></option><% }); %>
+                </select>
+              </label>
+              <label class="block text-sm font-medium text-heading">CSV file
+                <input class="mt-1 block w-full cursor-pointer rounded-base border border-default-medium bg-neutral-secondary-medium text-sm text-heading file:me-3 file:border-0 file:border-e file:border-default-medium file:bg-neutral-secondary file:px-3 file:py-2 file:text-sm file:font-medium file:text-heading" type="file" accept=".csv,text/csv,text/plain" data-series-file <%= step.is_blocked === 1 ? 'disabled' : '' %>>
+              </label>
+            </div>
+            <p class="mt-2 text-xs text-body"><%= definition.x.label %> (<%= definition.x.unit %>) → <%= definition.y.label %> (<%= definition.y.unit %>). A header row is allowed.</p>
+            <div class="mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto">
+              <button class="inline-flex shrink-0 items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50" type="button" data-series-import <%= step.is_blocked === 1 ? 'disabled' : '' %>>Import CSV</button>
+              <button class="inline-flex shrink-0 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-tertiary disabled:cursor-not-allowed disabled:opacity-50" type="button" data-series-clear <%= step.is_blocked === 1 ? 'disabled' : '' %>>Clear</button>
+              <span class="shrink-0 text-xs text-body" data-series-status>Choose a run and CSV file.</span>
+            </div>
+          <% } %>
+          <div class="mt-4 <%= isExpandedSingleSeries ? 'h-80' : 'h-64' %> w-full rounded-base border border-default bg-neutral-secondary p-2" data-series-chart></div>
+        </article>
+      <% }); %>
+    </div>
+  </section>
+<% } %>

@@ -5,6 +5,8 @@ import type { Db } from "../db.js";
 import { insertAudit } from "../repos/audit_repo.js";
 import { deleteStoredFileForOwnerIfUnused, getStoredFile, getStoredFileForOwner, hasStoredFileLink, listStoredFileUsageLinks } from "../repos/files_repo.js";
 import { MAX_UPLOAD_BYTES, resolveStoredFilePath, storeUserFiles } from "../services/file_storage_service.js";
+import { canAccessExperiment } from "../middleware/experiment_access.js";
+import { getExperiment } from "../repos/experiments_repo.js";
 
 const fileUpload = multer({
   storage: multer.memoryStorage(),
@@ -31,6 +33,21 @@ function wantsJson(req: express.Request) {
 
 export function createFilesRouter(db: Db) {
   const router = express.Router();
+  const canReadQualificationSource = (fileId: number, user: Express.User | undefined) => {
+    if (!user) return false;
+    const experimentIds = db.prepare(
+      `SELECT DISTINCT run.experiment_id
+       FROM file_links link
+       JOIN qual_runs run ON run.id = link.entity_id
+       WHERE link.file_id = ?
+         AND link.entity_type = 'qualification_run'
+         AND link.placement LIKE 'source_file:%'`
+    ).all(fileId) as Array<{ experiment_id: number }>;
+    return experimentIds.some(({ experiment_id }) => {
+      const experiment = getExperiment(db, experiment_id);
+      return experiment ? canAccessExperiment(db, user, experiment_id, experiment) : false;
+    });
+  };
 
   router.get("/me/files", (req, res) => {
     if (!req.user?.id) return res.redirect("/auth/login");
@@ -66,7 +83,8 @@ export function createFilesRouter(db: Db) {
     const file = getStoredFile(db, fileId);
     if (!file) return res.status(404).send("Not found");
     const canReadMachineCover = hasStoredFileLink(db, file.id, "machine", "cover_image");
-    if (req.user?.role !== "admin" && req.user?.id !== file.owner_user_id && !canReadMachineCover) return res.status(403).send("Forbidden");
+    const canReadQualificationFile = canReadQualificationSource(file.id, req.user);
+    if (req.user?.role !== "admin" && req.user?.id !== file.owner_user_id && !canReadMachineCover && !canReadQualificationFile) return res.status(403).send("Forbidden");
     try {
       const filePath = resolveStoredFilePath(file);
       if (!fs.existsSync(filePath)) return res.status(404).send("Stored content is unavailable");
@@ -83,7 +101,8 @@ export function createFilesRouter(db: Db) {
     const file = getStoredFile(db, fileId);
     if (!file || !file.mime_type.startsWith("image/")) return res.status(404).send("Not found");
     const canReadMachineCover = hasStoredFileLink(db, file.id, "machine", "cover_image");
-    if (req.user?.role !== "admin" && req.user?.id !== file.owner_user_id && !canReadMachineCover) return res.status(403).send("Forbidden");
+    const canReadQualificationFile = canReadQualificationSource(file.id, req.user);
+    if (req.user?.role !== "admin" && req.user?.id !== file.owner_user_id && !canReadMachineCover && !canReadQualificationFile) return res.status(403).send("Forbidden");
     try {
       const filePath = resolveStoredFilePath(file);
       if (!fs.existsSync(filePath)) return res.status(404).send("Stored content is unavailable");

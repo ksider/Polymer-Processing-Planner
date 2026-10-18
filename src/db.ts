@@ -843,6 +843,7 @@ function initDb(db: Db) {
       run_order INTEGER NOT NULL,
       run_code TEXT NOT NULL,
       run_group TEXT NOT NULL DEFAULT 'default',
+      source_run_id INTEGER,
       due_at TEXT,
       performed_at TEXT,
       responsible_user_id INTEGER,
@@ -850,6 +851,7 @@ function initDb(db: Db) {
       exclude_from_analysis INTEGER NOT NULL DEFAULT 0,
       FOREIGN KEY (experiment_id) REFERENCES experiments(id) ON DELETE CASCADE,
       FOREIGN KEY (step_id) REFERENCES qual_steps(id) ON DELETE CASCADE,
+      FOREIGN KEY (source_run_id) REFERENCES qual_runs(id) ON DELETE SET NULL,
       FOREIGN KEY (responsible_user_id) REFERENCES users(id) ON DELETE SET NULL
     );
     CREATE TABLE IF NOT EXISTS qual_fields (
@@ -1162,6 +1164,16 @@ function initDb(db: Db) {
     ).run("extrusion_v1", "Extrusion v1", processNow).lastInsertRowid
   );
   findOrCreateDefaultProcess(extrusionTypeId, "Extrusion v1 Default Process", "extrusion-v1");
+
+  const slaDlpType = db
+    .prepare("SELECT id FROM process_types WHERE code = ? LIMIT 1")
+    .get("sla_dlp") as { id: number } | undefined;
+  const slaDlpTypeId = slaDlpType?.id ?? Number(
+    db.prepare(
+      "INSERT INTO process_types (code, name, created_at) VALUES (?, ?, ?)"
+    ).run("sla_dlp", "SLA/DLP Photopolymerization", processNow).lastInsertRowid
+  );
+  findOrCreateDefaultProcess(slaDlpTypeId, "SLA/DLP Default Process", "sla-dlp");
 
   if (!hasColumn(db, "analysis_fields", "is_standard")) {
     db.exec("ALTER TABLE analysis_fields ADD COLUMN is_standard INTEGER NOT NULL DEFAULT 0");
@@ -1696,6 +1708,9 @@ function initDb(db: Db) {
   if (!hasColumn(db, "qual_runs", "run_group")) {
     db.exec("ALTER TABLE qual_runs ADD COLUMN run_group TEXT NOT NULL DEFAULT 'default'");
   }
+  if (!hasColumn(db, "qual_runs", "source_run_id")) {
+    db.exec("ALTER TABLE qual_runs ADD COLUMN source_run_id INTEGER");
+  }
   if (!hasColumn(db, "qual_runs", "performed_at")) {
     db.exec("ALTER TABLE qual_runs ADD COLUMN performed_at TEXT");
   }
@@ -1704,6 +1719,7 @@ function initDb(db: Db) {
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_qual_runs_due_at ON qual_runs(due_at)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_qual_runs_step_group ON qual_runs(step_id, run_group, run_order)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_qual_runs_source_run ON qual_runs(source_run_id)");
   if (!hasColumn(db, "param_definitions", "semantic_role")) {
     db.exec("ALTER TABLE param_definitions ADD COLUMN semantic_role TEXT NOT NULL DEFAULT 'measurement'");
   }

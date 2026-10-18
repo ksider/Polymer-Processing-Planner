@@ -14,7 +14,7 @@ import { listExperimentsForOwnerWithMeta, type ExperimentListRow } from "../repo
 import { listTasksForUser } from "../repos/tasks_read_repo.js";
 import { listTaskEntities, type TaskEntityRow } from "../repos/tasks_repo.js";
 import { computeTaskProgress } from "../services/tasks_service.js";
-import { listQualSummarySteps } from "../repos/qual_repo.js";
+import { getQualRun, getQualStepById, listQualSummarySteps } from "../repos/qual_repo.js";
 import { listAssignedEntitiesForUser } from "../repos/entity_assignments_repo.js";
 import { listByFolder } from "../services/messages_service.js";
 import {
@@ -54,6 +54,11 @@ export function createProfileRouter(db: Db) {
   const fileAttachmentHref = (link: StoredFileUsageLink) => {
     if (link.entity_type === "machine") return `/machines/${link.entity_id}`;
     if (link.entity_type === "user") return `/users/${link.entity_id}`;
+    if (link.entity_type === "qualification_run") {
+      const run = getQualRun(db, link.entity_id);
+      const step = run ? getQualStepById(db, run.step_id) : null;
+      return run && step ? `/experiments/${run.experiment_id}/qualification/${step.step_number}#finalMechanicalCurves` : null;
+    }
     return null;
   };
 
