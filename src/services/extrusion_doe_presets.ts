@@ -27,12 +27,12 @@ export const extrusionDoePresets: ExtrusionDoePreset[] = [
     maxRuns: 11,
     factors: [
       { code: "screw_speed_rpm", mode: "RANGE", min: 150, max: 400, levels: 2 },
-      { code: "throughput_kg_h", mode: "RANGE", min: 20, max: 60, levels: 2 },
+      { code: "planned_throughput_kg_h", mode: "RANGE", min: 20, max: 60, levels: 2 },
       { code: "barrel_set_temp_c", mode: "RANGE", min: 160, max: 210, levels: 2 },
       { code: "coupling_agent_wt_pct", mode: "RANGE", min: 0.5, max: 2, levels: 2 }
     ],
     fixedConditions: [
-      { code: "vacuum_pressure_mbar", value: 200 }
+      { code: "vacuum_target_pressure_mbar", value: 200 }
     ],
     responseCodes: [
       "motor_torque_nm", "melt_pressure_bar", "melt_temp_c", "sme_kwh_kg",

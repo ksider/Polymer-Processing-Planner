@@ -213,6 +213,20 @@ The seed fills the full extrusion qualification catalogue:
   handoff results, while leaving those studies disabled in the workspace;
 - scale-up step 10, enabled with a D³ throughput target and SME-parity runs.
 
+### Complete demonstration workspace
+
+For a complete local or staging demonstration, use the aggregate seed. It
+updates the marked extrusion and SLA/DLP qualification experiments, creates an
+11-run extrusion DOE within the qualified limits, and creates one editable,
+unsigned combined report. DOE responses and report text are explicitly
+synthetic and must not be used for technical decisions.
+
+```sh
+node dist/tools/seed_demo_workspace.js --upsert
+```
+
+In a development checkout the equivalent command is `npm run seed:demo -- --upsert`.
+
 The experiment cards show the confirmed transferable result fields defined by
 each study instruction. Re-running `--upsert` refreshes this one demo
 experiment deterministically and is safe after an application redeploy.

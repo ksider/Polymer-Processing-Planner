@@ -1,4 +1,6 @@
 import { openDb, type Db } from "../db.js";
+import path from "path";
+import { fileURLToPath } from "url";
 import { createExperimentWithDefaults } from "../services/experiments_service.js";
 import { ensureSeedParams } from "../services/seed.js";
 import {
@@ -504,6 +506,26 @@ function seedStepTen(db: Db, experimentId: number, ownerId: number | null) {
   updateQualStepStatus(db, step.id, "DONE");
 }
 
+export function seedExtrusionDemo(db: Db) {
+  ensureSeedParams(db);
+  const processId = getExtrusionProcessId(db);
+  const experimentId = getDemoExperimentId(db, processId);
+  ensureQualificationDefaults(db, experimentId);
+  const owner = db.prepare("SELECT id FROM users WHERE lower(email) = 'demo@demo.com' AND status = 'ACTIVE' LIMIT 1")
+    .get() as { id: number } | undefined;
+  const ownerId = owner?.id ?? null;
+  db.transaction(() => {
+    seedStepOne(db, experimentId, ownerId);
+    seedStepTwo(db, experimentId, ownerId);
+    seedStepThree(db, experimentId, ownerId);
+    seedStepFour(db, experimentId, ownerId);
+    seedStepFive(db, experimentId, ownerId);
+    seedDisabledOptionalStudies(db, experimentId, ownerId);
+    seedStepTen(db, experimentId, ownerId);
+  })();
+  return experimentId;
+}
+
 function main() {
   if (process.argv.includes("--help") || process.argv.includes("-h")) {
     printHelp();
@@ -516,26 +538,11 @@ function main() {
   }
   const db = openDb();
   try {
-    ensureSeedParams(db);
-    const processId = getExtrusionProcessId(db);
-    const experimentId = getDemoExperimentId(db, processId);
-    ensureQualificationDefaults(db, experimentId);
-    const owner = db.prepare("SELECT id FROM users WHERE lower(email) = 'demo@demo.com' AND status = 'ACTIVE' LIMIT 1")
-      .get() as { id: number } | undefined;
-    const ownerId = owner?.id ?? null;
-    db.transaction(() => {
-      seedStepOne(db, experimentId, ownerId);
-      seedStepTwo(db, experimentId, ownerId);
-      seedStepThree(db, experimentId, ownerId);
-      seedStepFour(db, experimentId, ownerId);
-      seedStepFive(db, experimentId, ownerId);
-      seedDisabledOptionalStudies(db, experimentId, ownerId);
-      seedStepTen(db, experimentId, ownerId);
-    })();
+    const experimentId = seedExtrusionDemo(db);
     console.log(`Extrusion demo is ready: experiment ${experimentId} (${DEMO_MARKER}).`);
   } finally {
     db.close();
   }
 }
 
-main();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
