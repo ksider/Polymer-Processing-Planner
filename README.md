@@ -198,7 +198,7 @@ user experiments.
 | --- | --- | --- |
 | Complete workspace: extrusion + SLA/DLP qualification, DOE and draft report | `npm run seed:demo -- --upsert` | `node dist/tools/seed_demo_workspace.js --upsert` |
 | Extrusion qualification only | `npm run seed:extrusion-demo -- --upsert` | `node dist/tools/seed_extrusion_demo.js --upsert` |
-| SLA/DLP photopolymer qualification only | `npm run seed:sla-dlp-demo -- --upsert` | `node dist/tools/seed_sla_dlp_demo.js --upsert` |
+| SLA/DLP photopolymer qualification and its print-window DOE | `npm run seed:sla-dlp-demo -- --upsert` | `node dist/tools/seed_sla_dlp_demo.js --upsert` |
 | Demo chats and notifications | `npm run seed:messages -- --reset` | not included in the production image |
 
 The complete-workspace seed creates or updates the two marked qualification

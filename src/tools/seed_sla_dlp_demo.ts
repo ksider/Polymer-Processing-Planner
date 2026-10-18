@@ -17,6 +17,7 @@ import {
   type QualRun
 } from "../repos/qual_repo.js";
 import { createExperimentWithDefaults } from "../services/experiments_service.js";
+import { seedSlaDlpDemoDoe } from "./seed_sla_dlp_doe.js";
 import {
   ensureQualificationDefaults,
   normalizeSlaDlpPostCureRuns,
@@ -515,6 +516,7 @@ export function seedSlaDlpDemo(db: Db) {
     seedStepSeven(db, experimentId, ownerId);
     seedStepEight(db, experimentId, ownerId);
   })();
+  seedSlaDlpDemoDoe(db, experimentId);
   return experimentId;
 }
 
