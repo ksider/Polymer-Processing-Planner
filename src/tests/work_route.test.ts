@@ -29,6 +29,7 @@ test("work queue only projects accessible experiments and renders its route", as
     const visibleId = createExperimentWithDefaults(db, { name: "Visible work experiment", process_id: process.id, owner_user_id: engineerId });
     const hiddenId = createExperimentWithDefaults(db, { name: "Hidden work experiment", process_id: process.id, owner_user_id: otherId });
     const visibleTask = createTask(db, { experiment_id: visibleId, title: "Visible manual work", owner_user_id: engineerId, due_at: "2030-01-10" });
+    createTask(db, { experiment_id: visibleId, title: "Overdue manual work", owner_user_id: engineerId, due_at: "2020-01-10" });
     createTask(db, { experiment_id: hiddenId, title: "Hidden manual work", owner_user_id: otherId });
     const directTask = createTask(db, { experiment_id: hiddenId, title: "Directly assigned work", owner_user_id: otherId });
     createTaskAssignment(db, { task_id: directTask, user_id: engineerId, role: "operator" });
@@ -39,12 +40,14 @@ test("work queue only projects accessible experiments and renders its route", as
     assert.ok(queue.items.some((item) => item.title === "Visible manual work"));
     assert.ok(queue.items.some((item) => item.title === "Directly assigned work"));
     assert.ok(!queue.items.some((item) => item.title === "Hidden manual work"));
+    assert.ok(queue.attentionItems.some((item) => item.title === "Overdue manual work"));
+    assert.match(queue.attentionItems.find((item) => item.title === "Overdue manual work")?.nextAction || "", /^Complete overdue task/);
 
     const { createApp } = await import("../app.js");
     const agent = request.agent(createApp());
     const csrf = await getCsrfToken(agent, "/auth/login");
     await agent.post("/auth/login").type("form").send({ email: "work-engineer@example.com", password, _csrf: csrf }).expect(302);
-    await agent.get("/work?scope=all").expect(200).expect(/Unified work queue/).expect(/Visible manual work/).expect(/Directly assigned work/).expect((response) => {
+    await agent.get("/work?scope=all").expect(200).expect(/data-work-shell/).expect(/Requires attention/).expect(/Visible manual work/).expect(/Directly assigned work/).expect((response) => {
       assert.doesNotMatch(response.text, /Hidden manual work/);
     });
     await agent.get("/work/board?scope=all").expect(200).expect(/data-work-board/).expect(/"changeStatus":true/);
