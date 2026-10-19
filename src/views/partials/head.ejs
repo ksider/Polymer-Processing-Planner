@@ -106,6 +106,7 @@
   </script>
   <script nonce="<%= cspNonce %>" src="/chemical_structure_editor.js" defer></script>
   <script nonce="<%= cspNonce %>" src="/table_copy.js" defer></script>
+  <script nonce="<%= cspNonce %>" src="/note_counts.js" defer></script>
   <script nonce="<%= cspNonce %>" src="/app.js" defer></script>
   <% if (loadUiKitAssets) { %>
     <script nonce="<%= cspNonce %>" src="/vendor/flowbite/dist/flowbite.min.js" defer></script>
@@ -114,4 +115,4 @@
   <% } %>
   <meta name="csrf-token" content="<%= csrfToken || '' %>">
 </head>
-<body<% if (useUiKit) { %> data-ui-kit<% } %><% if (typeof bodyClass !== "undefined" && bodyClass) { %> class="<%= bodyClass %>"<% } %>>
+<body<% if (useUiKit) { %> data-ui-kit<% } %> data-notes-user-id="<%= currentUser?.id || 'anonymous' %>"<% if (typeof bodyClass !== "undefined" && bodyClass) { %> class="<%= bodyClass %>"<% } %>>

@@ -4,17 +4,19 @@
   // calendars from appearing side by side on different process pages.
   const selector = 'input[type="date"], [data-ui-datepicker]';
 
-  const movePickerIntoDialog = (field) => {
-    const dialog = field.closest('dialog');
+  const movePickerIntoOverlay = (field) => {
+    // Both native dialogs and the full-screen notes drawer establish their
+    // own visual layer. A picker left on <body> calculates coordinates in the
+    // document layer, which makes it drift when the fixed notes drawer opens.
+    const overlay = field.closest('dialog, .notes-drawer');
     const datepicker = field.datepicker;
     const picker = datepicker?.picker?.element;
-    if (!dialog || !datepicker || !picker || datepicker.config.container === dialog) return;
+    if (!overlay || !datepicker || !picker || datepicker.config.container === overlay) return;
 
-    // A native <dialog> is rendered in the browser's top layer. Flowbite
-    // appends pickers to <body> by default, which would put this pop-up under
-    // the dialog. Keep the picker in the same top layer as its input.
-    datepicker.config.container = dialog;
-    dialog.appendChild(picker);
+    // Flowbite appends pickers to <body> by default. Keep overlay pickers in
+    // the same coordinate and stacking context as their input.
+    datepicker.config.container = overlay;
+    overlay.appendChild(picker);
   };
 
   const hideDialogPickers = (dialog) => {
@@ -105,7 +107,7 @@
       bindDialogDismissal(field);
 
       if (field.datepicker) {
-        movePickerIntoDialog(field);
+        movePickerIntoOverlay(field);
         field.dataset.datepickerReady = 'true';
         return;
       }
@@ -124,7 +126,7 @@
           id: field.id,
           override: true,
         });
-        movePickerIntoDialog(field);
+        movePickerIntoOverlay(field);
         field.dataset.datepickerReady = field.datepicker ? 'true' : 'false';
       } catch (error) {
         field.dataset.datepickerReady = 'false';

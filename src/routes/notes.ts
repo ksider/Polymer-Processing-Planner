@@ -17,6 +17,7 @@ import {
   softDeleteNote,
   toggleChecklistItem,
   updateNoteBody,
+  getNoteSummaryByExperiment,
   type NoteEntityType,
   type NoteRow
 } from "../repos/notes_repo.js";
@@ -183,6 +184,21 @@ export function createNotesRouter(db: Db) {
     res.json({ notes });
   });
 
+  router.get("/experiments/:id/notes/count.json", (req, res) => {
+    const experimentId = Number(req.params.id);
+    const entityTypeRaw = req.query.entity_type;
+    const entityType = entityTypeRaw ? toEntityType(entityTypeRaw) : undefined;
+    const entityId = req.query.entity_id !== undefined
+      ? toEntityId(req.query.entity_id, experimentId)
+      : undefined;
+    return res.json({
+      ...getNoteSummaryByExperiment(db, experimentId, {
+        entity_type: entityType,
+        entity_id: entityId
+      })
+    });
+  });
+
   router.post("/experiments/:id/notes", (req, res) => {
     if (!hasRole(req, NOTE_WRITER_ROLES)) {
       return res.status(403).json({ ok: false, message: "Forbidden" });
@@ -196,7 +212,7 @@ export function createNotesRouter(db: Db) {
     const bodyMdRaw = cleanBody(req.body?.body_md);
     const bodyMd = bodyMdRaw || (bodyHtml ? htmlToMarkdown(bodyHtml) : "");
     if (!bodyMd) {
-      return res.status(400).json({ ok: false, message: "Note text is required" });
+      return res.status(400).json({ ok: false, message: "Note content is required" });
     }
 
     const entity_type = toEntityType(req.body?.entity_type);
@@ -287,7 +303,7 @@ export function createNotesRouter(db: Db) {
     const bodyMdRaw = cleanBody(req.body?.body_md);
     const bodyMd = bodyMdRaw || (bodyHtml ? htmlToMarkdown(bodyHtml) : "");
     if (!bodyMd) {
-      return res.status(400).json({ ok: false, message: "Note text is required" });
+      return res.status(400).json({ ok: false, message: "Note content is required" });
     }
     updateNoteBody(db, {
       note_id: noteId,

@@ -7,6 +7,7 @@ import { listQualFields, listQualSteps, listQualSummaries } from "../repos/qual_
 import { listReportConfigs } from "../repos/reports_repo.js";
 import { listExperimentAnalysisFields } from "../repos/analysis_repo.js";
 import { listTasksByExperiment } from "../repos/tasks_repo.js";
+import { getNoteSummaryByExperiment } from "../repos/notes_repo.js";
 
 type WorkspaceStageStatus = "blocked" | "done" | "in_progress" | "not_started";
 
@@ -62,6 +63,7 @@ export function buildExperimentWorkspace(db: Db, experimentId: number) {
 
   return {
     experiment,
+    noteSummary: getNoteSummaryByExperiment(db, experimentId),
     qualificationCards,
     coreQualificationCards: qualificationCards.filter((stage) => stage.stepNumber <= 5),
     conditionalQualificationCards: qualificationCards.filter((stage) => stage.stepNumber > 5),

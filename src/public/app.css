@@ -4216,14 +4216,21 @@ dialog.chemical-structure-dialog[open] {
 .chemical-structure-dialog {
   box-sizing: border-box;
   flex-direction: column;
-  inset: 0;
-  width: 100vw;
-  height: 100dvh;
+  width: min(96vw, 110rem);
+  height: min(92dvh, 58rem);
   max-width: none;
   max-height: none;
-  margin: 0;
-  border: 0;
-  border-radius: 0;
+  margin: auto;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  background: #fff;
+  color: #111827;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.28);
+}
+
+.chemical-structure-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.48);
 }
 
 .chemical-structure-dialog-body {
@@ -4234,7 +4241,8 @@ dialog.chemical-structure-dialog[open] {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding: 0.85rem 1.25rem 1.1rem;
+  padding: 1rem 1.25rem 1.25rem;
+  background: #f8fafc;
 }
 
 .chemical-structure-dialog-body > .small-note {
@@ -4245,8 +4253,8 @@ dialog.chemical-structure-dialog[open] {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 0.625rem;
   background: #fff;
 }
 
@@ -4258,7 +4266,7 @@ dialog.chemical-structure-dialog[open] {
   background: #fff;
 }
 
-.chemical-structure-dialog .modal-footer {
+.chemical-structure-footer {
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
@@ -4276,17 +4284,17 @@ dialog.chemical-structure-dialog[open] {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  color: var(--slate);
+  color: #374151;
   font-size: 0.82rem;
   font-weight: 700;
 }
 
 .chemical-structure-export-quality select {
   min-height: 2rem;
-  border: 1px solid var(--border);
+  border: 1px solid #d1d5db;
   border-radius: 6px;
   background: #fff;
-  color: var(--ink);
+  color: #111827;
   font: inherit;
   padding: 0.25rem 1.8rem 0.25rem 0.5rem;
 }
@@ -4310,12 +4318,12 @@ dialog.chemical-structure-dialog[open] {
   width: 2.25rem;
   height: 2.25rem;
   padding: 0;
-  color: var(--slate);
+  color: #6b7280;
 }
 
 .chemical-structure-icon-button:hover {
-  background: #f1eee8;
-  color: var(--ink);
+  background: #f9fafb;
+  color: #111827;
 }
 
 .chemical-structure-actions {
@@ -4329,7 +4337,7 @@ dialog.chemical-structure-dialog[open] {
     border-radius: 6px;
   }
 
-  .chemical-structure-dialog .modal-footer {
+  .chemical-structure-footer {
     align-items: flex-start;
     flex-direction: column;
   }
@@ -5676,37 +5684,93 @@ tr[data-mode="list"] .settings-range {
 .journal-rail {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.55rem;
   align-items: center;
   position: fixed;
-  right: 0.8rem;
+  right: 1rem;
   top: 50%;
   transform: translateY(-50%);
   max-height: none;
   overflow: visible;
-  padding-top: 0.2rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
   z-index: 40;
 }
 
 .journal-rail-dot {
   position: relative;
-  width: 8px;
-  height: 20px;
+  width: 0.5rem;
+  height: 0.5rem;
   border-radius: 999px;
-  border: none;
-  background: #b8c0cc;
+  border: 0;
+  background: #94a3b8;
   cursor: pointer;
   padding: 0;
-  transition: transform 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
+  box-shadow: none;
+  transition: width 140ms ease, height 140ms ease, opacity 140ms ease, background 140ms ease;
 }
 
 .journal-rail-dot:hover {
-  background: #7e8aa0;
+  width: 0.62rem;
+  height: 0.62rem;
 }
 
 .journal-rail-dot.is-active {
-  transform: translateX(-4px);
-  box-shadow: 0 0 0 2px rgba(32, 36, 43, 0.1);
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.note-count-badge {
+  position: absolute;
+  top: -0.32rem;
+  right: -0.32rem;
+  z-index: 2;
+  display: inline-flex;
+  min-width: 1.05rem;
+  height: 1.05rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0 .2rem;
+  font-size: .68rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #6b7280;
+  background: #f3f4f6;
+  pointer-events: none;
+  transition: color .15s ease, background-color .15s ease;
+}
+
+.note-count-badge.is-new {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.note-count-badge.is-read {
+  color: #6b7280;
+  background: #f3f4f6;
+}
+
+.note-count-badge.is-empty {
+  display: none;
+}
+
+.note-count-badge-floating {
+  position: absolute;
+}
+
+.journal-rail-dot:focus-visible {
+  width: 0.72rem;
+  height: 0.72rem;
+  outline: 0;
+}
+
+.journal-rail-dot.is-active:focus-visible {
+  width: 0.8rem;
+  height: 0.8rem;
 }
 
 .journal-rail-dot::after {
@@ -5914,6 +5978,58 @@ tr[data-mode="list"] .settings-range {
   flex: 0 0 auto;
 }
 
+/* The journal's date field is a compact filter, not a second search box.
+   Reserve its width so the native date affordance stays aligned with search. */
+.journal-feed .notes-drawer-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 10.25rem minmax(11rem, 15rem);
+}
+
+.journal-feed .notes-drawer-toolbar #journalDateFilter,
+.journal-feed .notes-drawer-toolbar #journalSearch {
+  display: block;
+  width: 100%;
+  height: 2.5rem;
+  min-width: 0;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+.journal-date-filter {
+  display: flex;
+  align-items: stretch;
+  height: 2.5rem;
+  min-width: 0;
+}
+
+/* Keep the fixed journal filters on the same UI-kit control geometry. */
+.journal-feed .journal-filter-toolbar .journal-filter-control {
+  display: block;
+  width: 100%;
+  height: 2.5rem;
+  min-width: 0;
+  max-width: none;
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background: #f9fafb;
+  color: #111827;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.journal-feed .journal-filter-toolbar .journal-filter-control:focus {
+  border-color: #2563eb;
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+}
+
+.journal-feed .journal-filter-toolbar .journal-date-filter input:invalid {
+  color: #111827;
+}
+
 .journal-feed {
   display: grid;
   gap: 0.6rem;
@@ -5993,6 +6109,139 @@ tr[data-mode="list"] .settings-range {
 .journal-item-body {
   margin-top: 0.4rem;
   line-height: 1.5;
+}
+
+/* Standalone journal page: it shares the same clean workspace language as
+   the in-page journal drawer without changing the note payload or commands. */
+body.journal-page {
+  background: #f8fafc;
+}
+
+.journal-page .journal-compose {
+  margin-bottom: 0;
+}
+
+.journal-page .journal-toolbar {
+  flex-wrap: nowrap;
+  align-items: center;
+  overflow-x: auto;
+  margin-bottom: 0.65rem;
+  padding: 0.35rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.625rem;
+  background: #f9fafb;
+  scrollbar-width: thin;
+}
+
+.journal-page .journal-toolbar .pure-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: #4b5563;
+  box-shadow: none;
+}
+
+.journal-page .journal-toolbar .pure-button:hover,
+.journal-page .journal-toolbar .pure-button:focus-visible {
+  border-color: #dbeafe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  outline: none;
+}
+
+.journal-page .journal-toolbar .material-symbols-rounded {
+  font-size: 1.125rem;
+}
+
+.journal-toolbar-separator {
+  flex: 0 0 1px;
+  width: 1px;
+  height: 1.25rem;
+  margin: 0 0.15rem;
+  background: #d1d5db;
+}
+
+.journal-page .journal-editor {
+  min-height: 12rem;
+  border-color: #d1d5db;
+  border-radius: 0.625rem;
+  padding: 0.85rem 0.95rem;
+  line-height: 1.6;
+}
+
+.journal-page .journal-editor:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px #dbeafe;
+}
+
+.journal-page .journal-compose-footer {
+  margin-top: 0.65rem;
+}
+
+.journal-page .journal-filter-toolbar {
+  min-height: 3.5rem;
+}
+
+.journal-page .journal-filter-chip {
+  border-color: #d1d5db;
+  background: #fff;
+  color: #4b5563;
+  font-weight: 500;
+}
+
+.journal-page .journal-filter-chip.is-active {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  box-shadow: none;
+  font-weight: 600;
+}
+
+.journal-page .notes-search {
+  border-color: #d1d5db;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #111827;
+}
+
+.journal-page .journal-item {
+  padding: 1rem;
+  border-color: #e5e7eb;
+  border-left: 4px solid #cbd5e1;
+  border-radius: 0.75rem;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.journal-page .journal-item.entity-experiment { border-left-color: #64748b; }
+.journal-page .journal-item.entity-qualification_step { border-left-color: #8b5cf6; }
+.journal-page .journal-item.entity-doe { border-left-color: #3b82f6; }
+.journal-page .journal-item.entity-run { border-left-color: #22c55e; }
+.journal-page .journal-item.entity-report { border-left-color: #f97316; }
+.journal-page .journal-item.entity-task { border-left-color: #ef4444; }
+
+.journal-page .journal-item-head {
+  align-items: flex-start;
+}
+
+.journal-page .journal-item-title-link {
+  color: #111827;
+}
+
+.journal-page .journal-item-head-actions {
+  flex: 0 0 auto;
+}
+
+.journal-page .journal-item-body {
+  color: #374151;
+  line-height: 1.6;
 }
 
 .journal-item-body p {
@@ -6280,6 +6529,24 @@ body.notes-drawer-open {
   height: auto;
 }
 
+.notes-compose .journal-editor .ProseMirror img[data-align="left"] {
+  display: block;
+  margin-right: auto;
+  margin-left: 0;
+}
+
+.notes-compose .journal-editor .ProseMirror img[data-align="center"] {
+  display: block;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.notes-compose .journal-editor .ProseMirror img[data-align="right"] {
+  display: block;
+  margin-right: 0;
+  margin-left: auto;
+}
+
 .notes-compose-footer {
   margin-top: 0.4rem;
   display: flex;
@@ -6288,7 +6555,241 @@ body.notes-drawer-open {
   gap: 0.5rem;
 }
 
+/* Full-screen journal drawer: Flowbite-style shell, with the existing TipTap
+   instance kept intact. The tabbed toolbar prevents a long tool row from
+   wrapping over the writing surface. */
+.notes-drawer {
+  border: 0;
+  background: #f8fafc;
+  box-shadow: 0 24px 56px rgba(15, 23, 42, 0.18);
+}
+
+.notes-drawer-head {
+  min-height: 4.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom-color: #e5e7eb;
+}
+
+.notes-drawer-head-inline > .notes-search {
+  min-width: 0;
+  width: clamp(8.5rem, 14vw, 13rem);
+  border-color: #d1d5db;
+  border-radius: 0.5rem;
+  background: #f9fafb;
+}
+
+.notes-drawer-body {
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
+.notes-pane-compose {
+  min-width: 0;
+  border-right: 0;
+  padding-right: 0;
+}
+
+.notes-pane-feed {
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.notes-feed-scroll {
+  padding: 1rem 3rem 1rem 1rem;
+}
+
+.notes-compose {
+  gap: 0.6rem;
+}
+
+.notes-editor-toolbar {
+  flex-wrap: nowrap;
+  min-width: 0;
+  margin-top: 0;
+  padding: 0.4rem;
+  gap: 0.25rem;
+  overflow-x: auto;
+  border-color: #e5e7eb;
+  border-radius: 0.625rem;
+  background: #f9fafb;
+  scrollbar-width: thin;
+}
+
+.notes-editor-toolbar > [hidden] {
+  display: none !important;
+}
+
+.notes-editor-toolbar .pure-button,
+.notes-editor-toolbar .toolbar-select {
+  flex: 0 0 auto;
+}
+
+.notes-editor-toolbar .pure-button {
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: #4b5563;
+  box-shadow: none;
+}
+
+.notes-image-context-bar {
+  position: fixed;
+  z-index: 1200;
+  display: none;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+  max-width: min(96vw, 34rem);
+  padding: 0.35rem 0.45rem;
+  border: 1px solid #dbe3ee;
+  border-radius: 0.625rem;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(8px);
+  overflow-x: auto;
+}
+
+.notes-image-context-bar.is-visible {
+  display: flex;
+}
+
+.notes-image-context-bar .pure-button {
+  flex: 0 0 auto;
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: #4b5563;
+  box-shadow: none;
+}
+
+.notes-image-context-bar .pure-button:hover,
+.notes-image-context-bar .pure-button:focus-visible {
+  border-color: #dbeafe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  outline: none;
+}
+
+.notes-image-context-bar .pure-button.danger:hover,
+.notes-image-context-bar .pure-button.danger:focus-visible {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.notes-image-context-label {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.notes-image-context-separator {
+  width: 1px;
+  height: 1.4rem;
+  flex: 0 0 auto;
+  background: #e5e7eb;
+  margin: 0 0.15rem;
+}
+
+.notes-editor-toolbar .pure-button:hover,
+.notes-editor-toolbar .pure-button:focus-visible {
+  border-color: #dbeafe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  outline: none;
+}
+
+.notes-editor-toolbar .toolbar-select {
+  height: 2rem;
+  min-width: 4.5rem;
+  border-color: #d1d5db;
+  border-radius: 0.375rem;
+  background: #fff;
+  color: #374151;
+  font-size: 0.75rem;
+}
+
+.notes-toolbar-tabs {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.125rem;
+  padding-right: 0.35rem;
+  border-right: 1px solid #e5e7eb;
+}
+
+.notes-toolbar-tab {
+  min-height: 2rem;
+  padding: 0.3rem 0.45rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.notes-toolbar-tab:hover,
+.notes-toolbar-tab:focus-visible {
+  background: #f3f4f6;
+  color: #111827;
+  outline: none;
+}
+
+.notes-toolbar-tab.is-active {
+  background: #fff;
+  color: #1d4ed8;
+  box-shadow: inset 0 -2px 0 #2563eb;
+}
+
+.notes-compose .journal-editor {
+  min-height: clamp(22rem, 54vh, 38rem);
+  padding: 0.85rem 0.95rem;
+  border-color: #d1d5db;
+  border-radius: 0.625rem;
+}
+
+.notes-compose .journal-editor .ProseMirror {
+  min-height: clamp(20rem, 50vh, 36rem);
+  line-height: 1.6;
+}
+
 @media (max-width: 900px) {
+  .journal-feed .notes-drawer-toolbar {
+    grid-template-columns: minmax(0, 1fr) 10.25rem;
+  }
+
+  .journal-feed .notes-drawer-toolbar #journalSearch {
+    grid-column: 1 / -1;
+  }
+
+  .notes-drawer-body {
+    overflow-y: auto;
+  }
+
+  .notes-pane-feed {
+    min-height: 18rem;
+    margin-top: 0.75rem;
+  }
+
+  .notes-feed-scroll {
+    min-height: 18rem;
+  }
+
   .messages-workspace {
     height: auto;
     min-height: 0;

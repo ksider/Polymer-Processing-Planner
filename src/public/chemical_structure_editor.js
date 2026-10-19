@@ -108,35 +108,35 @@
   const ensureDialog = () => {
     if (dialog) return;
     dialog = document.createElement('dialog');
-    dialog.className = 'modal-frame chemical-structure-dialog';
+    dialog.className = 'chemical-structure-dialog';
     dialog.setAttribute('aria-labelledby', 'chemicalStructureDialogTitle');
     dialog.innerHTML = `
-      <div class="modal-header chemical-structure-header">
+      <div class="chemical-structure-header flex items-center justify-between gap-4 border-b border-gray-200 bg-white px-5 py-4">
         <div class="chemical-structure-title">
-          <span class="workspace-eyebrow">Chemical drawing</span>
-          <strong id="chemicalStructureDialogTitle">Chemical structure</strong>
+          <span class="block text-xs font-semibold uppercase tracking-wide text-blue-700">Chemical drawing</span>
+          <strong class="mt-1 block text-lg font-semibold text-gray-900" id="chemicalStructureDialogTitle">Chemical structure</strong>
         </div>
-        <button class="pure-button chemical-structure-icon-button" type="button" data-chemical-close aria-label="Close chemical structure editor" title="Close"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
+        <button class="chemical-structure-icon-button inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-500 shadow-sm hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-4 focus:ring-blue-100" type="button" data-chemical-close aria-label="Close chemical structure editor" title="Close"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
       </div>
-      <div class="modal-body chemical-structure-dialog-body">
-        <p class="small-note" data-chemical-status>Starting chemical editor…</p>
+      <div class="chemical-structure-dialog-body">
+        <p class="mb-3 text-sm text-gray-500" data-chemical-status>Starting chemical editor…</p>
         <div class="chemical-structure-frame-wrap" data-chemical-frame-wrap></div>
       </div>
-      <div class="modal-footer chemical-structure-footer">
+      <div class="chemical-structure-footer flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-5 py-4">
         <div class="chemical-structure-export-settings">
-          <label class="chemical-structure-export-quality">PNG quality
-            <select data-chemical-export-scale aria-label="Chemical structure PNG quality">
+          <label class="chemical-structure-export-quality text-sm font-medium text-gray-700">PNG quality
+            <select class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100" data-chemical-export-scale aria-label="Chemical structure PNG quality">
               <option value="1">Standard</option>
               <option value="2">High ×2</option>
               <option value="3" selected>Print ×3</option>
               <option value="4">Extra ×4</option>
             </select>
           </label>
-          <span class="small-note">The report keeps the editable structure and a PNG copy for DOCX.</span>
+          <span class="text-xs text-gray-500">The document keeps the editable structure and a PNG copy.</span>
         </div>
         <div class="chemical-structure-actions">
-          <button class="pure-button" type="button" data-chemical-cancel>Cancel</button>
-          <button class="pure-button pure-button-primary" type="button" data-chemical-insert disabled>Insert structure</button>
+          <button class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-blue-100" type="button" data-chemical-cancel>Cancel</button>
+          <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-200 disabled:cursor-not-allowed disabled:opacity-50" type="button" data-chemical-insert disabled>Insert structure</button>
         </div>
       </div>`;
     document.body.appendChild(dialog);

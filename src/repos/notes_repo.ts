@@ -24,6 +24,39 @@ export type NoteRow = {
   author_email: string | null;
 };
 
+export type NoteSummary = {
+  count: number;
+  latest_activity_at: string | null;
+};
+
+export function getNoteSummaryByExperiment(
+  db: Db,
+  experimentId: number,
+  options?: { entity_type?: NoteEntityType; entity_id?: number }
+): NoteSummary {
+  const where: string[] = ["n.experiment_id = ?", "n.archived_at IS NULL"];
+  const args: Array<string | number> = [experimentId];
+  if (options?.entity_type) {
+    where.push("nl.entity_type = ?");
+    args.push(options.entity_type);
+  }
+  if (options?.entity_id !== undefined && Number.isFinite(options.entity_id)) {
+    where.push("nl.entity_id = ?");
+    args.push(options.entity_id);
+  }
+  const row = db.prepare(
+    `SELECT COUNT(DISTINCT n.id) AS count,
+            MAX(COALESCE(n.updated_at, n.created_at)) AS latest_activity_at
+       FROM notes n
+       LEFT JOIN note_links nl ON nl.note_id = n.id
+      WHERE ${where.join(" AND ")}`
+  ).get(...args) as { count?: number; latest_activity_at?: string | null } | undefined;
+  return {
+    count: Number(row?.count || 0),
+    latest_activity_at: row?.latest_activity_at || null
+  };
+}
+
 function snapshotNoteVersion(
   db: Db,
   noteId: number,

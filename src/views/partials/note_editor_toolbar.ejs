@@ -1,0 +1,60 @@
+<% const toolbarScope = scope || 'notes'; %>
+<div class="editor-toolbar notes-editor-toolbar" data-<%= toolbarScope %>-toolbar role="toolbar" aria-label="Notes formatting">
+  <div class="notes-toolbar-tabs" role="tablist" aria-label="Notes tools">
+    <button class="notes-toolbar-tab is-active" type="button" role="tab" aria-selected="true" data-<%= toolbarScope %>-toolbar-tab-button="text">Text</button>
+    <button class="notes-toolbar-tab" type="button" role="tab" aria-selected="false" data-<%= toolbarScope %>-toolbar-tab-button="insert">Insert</button>
+    <button class="notes-toolbar-tab" type="button" role="tab" aria-selected="false" data-<%= toolbarScope %>-toolbar-tab-button="table">Tables</button>
+  </div>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="undo" title="Undo"><span class="material-symbols-rounded">undo</span></button>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="redo" title="Redo"><span class="material-symbols-rounded">redo</span></button>
+  <span class="toolbar-sep" aria-hidden="true"></span>
+  <button class="pure-button button-sm" type="button" data-<%= toolbarScope %>-cmd="h1">H1</button>
+  <button class="pure-button button-sm" type="button" data-<%= toolbarScope %>-cmd="h2">H2</button>
+  <button class="pure-button button-sm" type="button" data-<%= toolbarScope %>-cmd="h3">H3</button>
+  <span class="toolbar-sep" aria-hidden="true"></span>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="bold" title="Bold"><span class="material-symbols-rounded">format_bold</span></button>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="italic" title="Italic"><span class="material-symbols-rounded">format_italic</span></button>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="underline" title="Underline"><span class="material-symbols-rounded">format_underlined</span></button>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="strike" title="Strike"><span class="material-symbols-rounded">strikethrough_s</span></button>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="highlight" title="Highlight"><span class="material-symbols-rounded">ink_highlighter</span></button>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="superscript" title="Superscript"><span class="material-symbols-rounded">superscript</span></button>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="subscript" title="Subscript"><span class="material-symbols-rounded">subscript</span></button>
+  <span class="toolbar-sep" aria-hidden="true"></span>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="bullet" title="Bullet list"><span class="material-symbols-rounded">format_list_bulleted</span></button>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="ordered" title="Ordered list"><span class="material-symbols-rounded">format_list_numbered</span></button>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="checklist" title="Checklist"><span class="material-symbols-rounded">checklist</span></button>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="quote" title="Quote"><span class="material-symbols-rounded">format_quote</span></button>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="code" title="Code block"><span class="material-symbols-rounded">code_blocks</span></button>
+  <span class="toolbar-sep" aria-hidden="true"></span>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="align-left" title="Align left"><span class="material-symbols-rounded">format_align_left</span></button>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="align-center" title="Align center"><span class="material-symbols-rounded">format_align_center</span></button>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="align-right" title="Align right"><span class="material-symbols-rounded">format_align_right</span></button>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="align-justify" title="Justify"><span class="material-symbols-rounded">format_align_justify</span></button>
+  <span class="toolbar-sep" aria-hidden="true"></span>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="link" title="Link"><span class="material-symbols-rounded">link</span></button>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="image" title="Image"><span class="material-symbols-rounded">image</span></button>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="chemical-structure" title="Chemical structure"><span class="material-symbols-rounded">schema</span></button>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="hr" title="Divider"><span class="material-symbols-rounded">horizontal_rule</span></button>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="math-inline" title="Inline formula"><span class="material-symbols-rounded">functions</span></button>
+  <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-cmd="math-block" title="Block formula"><span class="material-symbols-rounded">calculate</span></button>
+  <div class="table-tools" title="Table tools">
+    <button class="pure-button button-sm icon-only" type="button" data-<%= toolbarScope %>-table-picker-toggle title="Insert table"><span class="material-symbols-rounded">table</span></button>
+    <div class="table-picker" data-<%= toolbarScope %>-table-picker hidden><div class="table-picker-label" data-<%= toolbarScope %>-table-picker-label>3 x 3</div><div class="table-picker-grid" data-<%= toolbarScope %>-table-picker-grid></div></div>
+    <div class="table-ops toolbar-conditional" data-<%= toolbarScope %>-table-ops><button class="pure-button button-sm table-op" type="button" data-<%= toolbarScope %>-cmd="table-row-add" title="Add row">R+</button><button class="pure-button button-sm table-op" type="button" data-<%= toolbarScope %>-cmd="table-row-del" title="Delete row">R-</button><button class="pure-button button-sm table-op" type="button" data-<%= toolbarScope %>-cmd="table-col-add" title="Add column">C+</button><button class="pure-button button-sm table-op" type="button" data-<%= toolbarScope %>-cmd="table-col-del" title="Delete column">C-</button><button class="pure-button button-sm table-op danger" type="button" data-<%= toolbarScope %>-cmd="table-del" title="Delete table">Del</button></div>
+  </div>
+</div>
+<div class="notes-image-context-bar toolbar-conditional" data-<%= toolbarScope %>-image-tools role="toolbar" aria-label="Selected image settings">
+  <span class="notes-image-context-label">Image</span>
+  <span class="notes-image-context-separator" aria-hidden="true"></span>
+  <span class="notes-image-context-label">Width</span>
+  <button class="pure-button button-sm image-op" type="button" data-<%= toolbarScope %>-cmd="image-width-25" title="Image width 25%">25%</button>
+  <button class="pure-button button-sm image-op" type="button" data-<%= toolbarScope %>-cmd="image-width-50" title="Image width 50%">50%</button>
+  <button class="pure-button button-sm image-op" type="button" data-<%= toolbarScope %>-cmd="image-width-75" title="Image width 75%">75%</button>
+  <button class="pure-button button-sm image-op" type="button" data-<%= toolbarScope %>-cmd="image-width-100" title="Image width 100%">100%</button>
+  <span class="notes-image-context-separator" aria-hidden="true"></span>
+  <span class="notes-image-context-label">Align</span>
+  <button class="pure-button button-sm image-op icon-only" type="button" data-<%= toolbarScope %>-cmd="image-align-left" title="Align image left"><span class="material-symbols-rounded" aria-hidden="true">format_align_left</span></button>
+  <button class="pure-button button-sm image-op icon-only" type="button" data-<%= toolbarScope %>-cmd="image-align-center" title="Align image center"><span class="material-symbols-rounded" aria-hidden="true">format_align_center</span></button>
+  <button class="pure-button button-sm image-op icon-only" type="button" data-<%= toolbarScope %>-cmd="image-align-right" title="Align image right"><span class="material-symbols-rounded" aria-hidden="true">format_align_right</span></button>
+  <button class="pure-button button-sm image-op danger icon-only" type="button" data-<%= toolbarScope %>-cmd="image-delete" title="Delete image"><span class="material-symbols-rounded" aria-hidden="true">delete</span></button>
+</div>

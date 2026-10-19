@@ -299,12 +299,15 @@
 
 <% if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'engineer')) { %>
   <a
-    class="icon-button notes-journal-toggle"
+    class="icon-button relative notes-journal-toggle"
     id="notesJournalToggle"
+    data-notes-journal-link
+    data-notes-experiment-id="<%= experiment.id %>"
     href="/experiments/<%= experiment.id %>/journal"
     title="Open journal"
   >
     <span class="material-symbols-rounded" aria-hidden="true">menu_book</span>
+    <span class="note-count-badge <%= workspace.noteSummary?.count ? '' : 'is-empty' %>" data-note-count data-notes-experiment-id="<%= experiment.id %>" data-notes-latest="<%= workspace.noteSummary?.latest_activity_at || '' %>" aria-label="<%= workspace.noteSummary?.count || 0 %> journal entries"><%= workspace.noteSummary?.count || '' %></span>
   </a>
   <button
     class="icon-button notes-drawer-toggle"
@@ -316,20 +319,21 @@
     <span class="material-symbols-rounded" aria-hidden="true">expand_less</span>
   </button>
 
-  <aside class="notes-drawer" id="notesDrawer" aria-label="Experiment notes">
-    <div class="notes-drawer-head notes-drawer-head-inline">
-      <strong>Notes</strong>
+  <aside class="notes-drawer bg-gray-50 text-gray-900" id="notesDrawer" aria-label="Experiment notes">
+    <div class="notes-drawer-head notes-drawer-head-inline border-gray-200 bg-white">
+      <div class="min-w-0"><span class="block text-xs font-medium uppercase tracking-wide text-gray-500">Lab journal</span><strong class="block truncate text-base text-gray-900">Notes</strong></div>
       <label class="toggle" title="Only current context">
         <input type="checkbox" id="notesOnlyCurrentToggle">
         <span class="track"></span>
         <span>Only current context</span>
       </label>
-      <span class="text-sm text-gray-500">Context: Experiment #<%= experiment.id %></span>
-      <input class="notes-search" type="date" id="notesDateInput" title="Filter by date">
+      <span class="small-note">Context: Experiment #<%= experiment.id %></span>
+      <input class="notes-search" type="date" id="notesDateInput" title="Filter by date" placeholder="Select date" aria-label="Filter notes by date">
       <input class="notes-search" type="search" id="notesSearchInput" placeholder="Search notes">
       <div class="flex flex-wrap items-center gap-2">
-        <a class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" href="/experiments/<%= experiment.id %>/journal" title="Open journal">
+        <a class="relative inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" data-notes-journal-link data-notes-experiment-id="<%= experiment.id %>" href="/experiments/<%= experiment.id %>/journal" title="Open journal">
           <span class="material-symbols-rounded" aria-hidden="true">menu_book</span>
+          <span class="note-count-badge note-count-badge-floating <%= workspace.noteSummary?.count ? '' : 'is-empty' %>" data-note-count data-notes-experiment-id="<%= experiment.id %>" data-notes-latest="<%= workspace.noteSummary?.latest_activity_at || '' %>" aria-label="<%= workspace.noteSummary?.count || 0 %> journal entries"><%= workspace.noteSummary?.count || '' %></span>
         </a>
         <button class="inline-flex size-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900" type="button" id="notesDrawerClose" title="Hide notes">
           <span class="material-symbols-rounded" aria-hidden="true">expand_more</span>
@@ -339,44 +343,16 @@
     <div class="notes-drawer-body">
       <aside class="journal-rail" id="notesRail"></aside>
       <section class="notes-pane notes-pane-compose">
-        <div class="notes-compose">
-          <div class="editor-toolbar notes-editor-toolbar" data-notes-toolbar role="toolbar" aria-label="Notes formatting">
+        <div class="notes-compose rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+          <%- include('partials/note_editor_toolbar', { scope: 'notes' }) %>
+          <% if (false) { %><div class="editor-toolbar notes-editor-toolbar" data-notes-toolbar role="toolbar" aria-label="Notes formatting">
+            <div class="notes-toolbar-tabs" role="tablist" aria-label="Notes tools">
+              <button class="notes-toolbar-tab is-active" type="button" role="tab" aria-selected="true" data-notes-toolbar-tab-button="text">Text</button>
+              <button class="notes-toolbar-tab" type="button" role="tab" aria-selected="false" data-notes-toolbar-tab-button="insert">Insert</button>
+              <button class="notes-toolbar-tab" type="button" role="tab" aria-selected="false" data-notes-toolbar-tab-button="table">Tables</button>
+            </div>
             <button class="pure-button button-sm icon-only" type="button" data-notes-cmd="undo" title="Undo"><span class="material-symbols-rounded">undo</span></button>
             <button class="pure-button button-sm icon-only" type="button" data-notes-cmd="redo" title="Redo"><span class="material-symbols-rounded">redo</span></button>
-            <span class="toolbar-sep" aria-hidden="true"></span>
-            <select class="toolbar-select" data-notes-font-family title="Font family">
-              <option value="">Font</option>
-              <option value="Trebuchet MS">Trebuchet</option>
-              <option value="Georgia">Georgia</option>
-              <option value="Arial">Arial</option>
-              <option value="Courier New">Courier</option>
-            </select>
-            <select class="toolbar-select" data-notes-font-size title="Font size">
-              <option value="">Size</option>
-              <option value="12px">12</option>
-              <option value="14px">14</option>
-              <option value="16px">16</option>
-              <option value="18px">18</option>
-              <option value="20px">20</option>
-              <option value="24px">24</option>
-              <option value="28px">28</option>
-            </select>
-            <select class="toolbar-select" data-notes-line-height title="Line height">
-              <option value="">Line</option>
-              <option value="1.2">1.2</option>
-              <option value="1.35">1.35</option>
-              <option value="1.5">1.5</option>
-              <option value="1.65">1.65</option>
-              <option value="1.8">1.8</option>
-              <option value="2">2</option>
-            </select>
-            <select class="toolbar-select" data-notes-preset title="Text style preset">
-              <option value="">Preset</option>
-              <option value="body">Body</option>
-              <option value="subtitle">Subtitle</option>
-              <option value="note">Note</option>
-              <option value="emphasis">Emphasis</option>
-            </select>
             <span class="toolbar-sep" aria-hidden="true"></span>
             <button class="pure-button button-sm" type="button" data-notes-cmd="h1">H1</button>
             <button class="pure-button button-sm" type="button" data-notes-cmd="h2">H2</button>
@@ -432,8 +408,8 @@
                 <button class="pure-button button-sm table-op danger" type="button" data-notes-cmd="table-del" title="Delete table">Del</button>
               </div>
             </div>
-          </div>
-          <div id="notesInput" class="journal-editor" tabindex="0" data-placeholder="Write note for current experiment context..."></div>
+          </div><% } %>
+          <div id="notesInput" class="journal-editor border-gray-300 bg-white text-gray-900 focus:border-blue-500 focus:ring-4 focus:ring-blue-100" tabindex="0" data-placeholder="Write note for current experiment context..."></div>
           <div class="notes-compose-footer">
             <span class="text-sm text-gray-500">Ctrl/Cmd+Enter: append today · Ctrl/Cmd+Shift+Enter: new note</span>
             <button class="inline-flex items-center justify-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50" type="button" id="notesSendBtn">Add note</button>
@@ -1091,12 +1067,13 @@
   const notesFontSizeSelect = notesToolbar?.querySelector('[data-notes-font-size]') || null;
   const notesLineHeightSelect = notesToolbar?.querySelector('[data-notes-line-height]') || null;
   const notesPresetSelect = notesToolbar?.querySelector('[data-notes-preset]') || null;
-  const notesImageToolsGroup = notesToolbar?.querySelector('[data-notes-image-tools]') || null;
+  const notesImageToolsGroup = notesToolbar?.parentElement?.querySelector('[data-notes-image-tools]') || null;
   const notesTableOpsGroup = notesToolbar?.querySelector('[data-notes-table-ops]') || null;
   const notesTablePickerToggle = notesToolbar?.querySelector('[data-notes-table-picker-toggle]') || null;
   const notesTablePicker = notesToolbar?.querySelector('[data-notes-table-picker]') || null;
   const notesTablePickerGrid = notesToolbar?.querySelector('[data-notes-table-picker-grid]') || null;
   const notesTablePickerLabel = notesToolbar?.querySelector('[data-notes-table-picker-label]') || null;
+  const notesToolbarTabButtons = notesToolbar?.querySelectorAll('[data-notes-toolbar-tab-button]') || [];
   let notesEditor = null;
   let notesEditorReady = null;
   let notesEditorInitFailed = false;
@@ -1107,6 +1084,44 @@
   let mathRendererLoader = null;
   let notesPickerRows = 3;
   let notesPickerCols = 3;
+
+  // Keep the TipTap setup untouched. This only partitions the existing
+  // controls into the compact, report-style toolbar tabs.
+  function initNotesToolbarTabs() {
+    if (!notesToolbar || !notesToolbarTabButtons.length) return;
+    const commandTabs = {
+      undo: 'history', redo: 'history', h1: 'text', h2: 'text', h3: 'text',
+      bold: 'text', italic: 'text', underline: 'text', strike: 'text', highlight: 'text',
+      superscript: 'text', subscript: 'text', bullet: 'text', ordered: 'text',
+      checklist: 'text', quote: 'text', code: 'text', 'align-left': 'text', 'align-center': 'text',
+      'align-right': 'text', 'align-justify': 'text', link: 'insert', image: 'insert', 'chemical-structure': 'insert',
+      hr: 'insert', 'math-inline': 'insert', 'math-block': 'insert'
+    };
+    const controls = Array.from(notesToolbar.children).filter((child) => !child.classList.contains('notes-toolbar-tabs'));
+    controls.forEach((control) => {
+      const command = control.getAttribute('data-notes-cmd');
+      if (command && commandTabs[command]) control.dataset.notesToolbarTab = commandTabs[command];
+      else if (control.matches('[data-notes-image-tools]')) control.dataset.notesToolbarTab = 'insert';
+      else if (control.classList.contains('table-tools')) control.dataset.notesToolbarTab = 'table';
+    });
+    let nextTab = 'text';
+    [...controls].reverse().forEach((control) => {
+      if (control.dataset.notesToolbarTab) nextTab = control.dataset.notesToolbarTab;
+      else if (control.classList.contains('toolbar-sep')) control.dataset.notesToolbarTab = nextTab;
+    });
+    const setTab = (tab) => {
+      controls.forEach((control) => {
+        control.hidden = !['history', tab].includes(control.dataset.notesToolbarTab || 'none');
+      });
+      notesToolbarTabButtons.forEach((button) => {
+        const active = button.getAttribute('data-notes-toolbar-tab-button') === tab;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-selected', String(active));
+      });
+    };
+    notesToolbarTabButtons.forEach((button) => button.addEventListener('click', () => setTab(button.getAttribute('data-notes-toolbar-tab-button') || 'text')));
+    setTab('text');
+  }
 
   function ensureRailTooltip() {
     if (railTooltipEl && document.body.contains(railTooltipEl)) return railTooltipEl;
@@ -1278,7 +1293,12 @@
               default: null,
               parseHTML: (el) => el.getAttribute('style'),
               renderHTML: (attrs) => attrs.style ? { style: attrs.style } : {}
-            }
+            },
+            width: { default: '80%', parseHTML: (el) => el.getAttribute('data-width') || el.style.width || '80%', renderHTML: (attrs) => ({ 'data-width': attrs.width || '80%', style: `width:${attrs.width || '80%'};` }) },
+            align: { default: 'center', parseHTML: (el) => el.getAttribute('data-align') || 'center', renderHTML: (attrs) => ({ 'data-align': attrs.align || 'center' }) },
+            chemicalKet: { default: null, parseHTML: (el) => el.getAttribute('data-chemical-ket') || null, renderHTML: (attrs) => attrs.chemicalKet ? { 'data-chemical-ket': attrs.chemicalKet } : {} },
+            chemicalMolfile: { default: null, parseHTML: (el) => el.getAttribute('data-chemical-molfile') || null, renderHTML: (attrs) => attrs.chemicalMolfile ? { 'data-chemical-molfile': attrs.chemicalMolfile } : {} },
+            chemicalSmiles: { default: null, parseHTML: (el) => el.getAttribute('data-chemical-smiles') || null, renderHTML: (attrs) => attrs.chemicalSmiles ? { 'data-chemical-smiles': attrs.chemicalSmiles } : {} }
           };
         }
       });
@@ -1329,11 +1349,24 @@
         if (!notesEditor) return;
         notesImageToolsGroup?.classList.toggle('is-visible', notesEditor.isActive('image'));
         notesTableOpsGroup?.classList.toggle('is-visible', notesEditor.isActive('table'));
+        if (notesEditor.isActive('image')) requestAnimationFrame(positionNotesImageTools);
+      };
+      const positionNotesImageTools = () => {
+        if (!notesEditor || !notesImageToolsGroup || !notesEditor.isActive('image')) return;
+        const image = notesEditor.view.dom.querySelector('img.ProseMirror-selectednode') || notesEditor.view.dom.querySelector('img');
+        if (!image) return;
+        const rect = image.getBoundingClientRect();
+        const width = notesImageToolsGroup.offsetWidth || 320;
+        const height = notesImageToolsGroup.offsetHeight || 44;
+        notesImageToolsGroup.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`;
+        notesImageToolsGroup.style.top = `${Math.max(8, Math.min(rect.bottom + 8, window.innerHeight - height - 8))}px`;
       };
       notesEditor.on('selectionUpdate', syncTextControlsFromSelection);
       notesEditor.on('transaction', syncTextControlsFromSelection);
       notesEditor.on('selectionUpdate', syncContextToolsVisibility);
       notesEditor.on('transaction', syncContextToolsVisibility);
+      window.addEventListener('scroll', positionNotesImageTools, { passive: true });
+      window.addEventListener('resize', positionNotesImageTools);
       syncTextControlsFromSelection();
       syncContextToolsVisibility();
       notesEditor.view.dom.addEventListener('keydown', (event) => {
@@ -1381,6 +1414,17 @@
     notesTablePicker.hidden = true;
   };
 
+  const positionNotesTablePicker = () => {
+    if (!notesTablePicker || !notesTablePickerToggle) return;
+    const rect = notesTablePickerToggle.getBoundingClientRect();
+    const width = notesTablePicker.offsetWidth || 224;
+    const height = notesTablePicker.offsetHeight || 224;
+    notesTablePicker.style.position = 'fixed';
+    notesTablePicker.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`;
+    notesTablePicker.style.top = `${Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - height - 8))}px`;
+    notesTablePicker.style.zIndex = '1200';
+  };
+
   const paintNotesTablePicker = () => {
     if (!notesTablePickerGrid) return;
     notesTablePickerGrid.querySelectorAll('.table-picker-cell').forEach((cell) => {
@@ -1417,7 +1461,9 @@
     notesTablePickerToggle?.addEventListener('click', (event) => {
       event.stopPropagation();
       if (!notesTablePicker) return;
-      notesTablePicker.hidden = !notesTablePicker.hidden;
+      const willOpen = notesTablePicker.hidden;
+      notesTablePicker.hidden = !willOpen;
+      if (willOpen) positionNotesTablePicker();
     });
     notesTablePicker?.addEventListener('click', (event) => event.stopPropagation());
     document.addEventListener('click', closeNotesTablePicker);
@@ -1502,6 +1548,14 @@
       const src = window.prompt('Image URL');
       if (!src) return;
       run(() => chain.setImage({ src: src.trim() }).run(), 'image');
+    }
+    if (command === 'chemical-structure') {
+      const chemicalEditor = window.ChemicalStructureEditor;
+      if (!chemicalEditor) { window.alert('Chemical editor is still loading. Please try again in a moment.'); return; }
+      chemicalEditor.open().then((structure) => {
+        if (!structure) return;
+        editor.chain().focus().setImage({ src: structure.pngDataUrl, alt: 'Chemical structure', title: null, width: '80%', align: 'center', chemicalKet: structure.ket, chemicalMolfile: structure.molfile, chemicalSmiles: structure.smiles }).run();
+      }).catch((error) => window.alert(error instanceof Error ? error.message : 'Unable to export chemical structure.'));
     }
     if (command === 'image-width-25') run(() => setImageStyleWithWidth('25%'), 'image-width-25');
     if (command === 'image-width-50') run(() => setImageStyleWithWidth('50%'), 'image-width-50');
@@ -1663,7 +1717,8 @@
     const editor = notesEditor;
     const bodyHtml = editor ? editor.getHTML().trim() : notesInput.innerHTML.trim();
     const bodyText = editor ? editor.getText().trim() : (notesInput.textContent || '').trim();
-    if (!bodyHtml || !bodyText) return;
+    const hasRichBlock = /<(img|table|hr|blockquote|pre|ul|ol)\b/i.test(bodyHtml);
+    if (!bodyHtml || (!bodyText && !hasRichBlock)) return;
     notesSendBtn.disabled = true;
     const payload = new URLSearchParams();
     payload.set('body_html', bodyHtml);
@@ -1694,6 +1749,8 @@
       else notesInput.innerHTML = '';
       editingNoteId = null;
       if (notesSendBtn) notesSendBtn.textContent = 'Add note';
+      window.NoteCounts?.markRead?.(<%= experiment.id %>, '', '', data.note.activity_at || data.note.updated_at || data.note.created_at || '');
+      window.NoteCounts?.refresh?.();
       await loadNotes();
     } catch (error) {
       console.error('Notes submit request failed.', error);
@@ -1710,6 +1767,7 @@
     if (willOpen) {
       await focusNotesInput();
       await loadNotes();
+      await window.NoteCounts?.markReadFor?.(notesJournalToggle);
       if (notesFeedScroll) {
         notesFeedScroll.scrollTop = 0;
       }
@@ -1765,6 +1823,7 @@
     const resp = await fetch(`/experiments/<%= experiment.id %>/notes/${noteId}/delete`, { method: 'POST' });
     if (!resp.ok) return;
     card.remove();
+    window.NoteCounts?.refresh?.();
     if (!notesFeed.querySelector('.journal-item')) {
       notesFeed.innerHTML = '<div class="text-sm text-gray-500">No notes yet.</div>';
     }
@@ -1841,6 +1900,7 @@
     event.preventDefault();
     submitNoteFromDrawer(Boolean(event.shiftKey));
   }, true);
+  initNotesToolbarTabs();
   // Lazy init only on first editor interaction to avoid hard dependency on external CDN at page load.
   initNotesTablePicker();
   updateActiveNotesRailDot();

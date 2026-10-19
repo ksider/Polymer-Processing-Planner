@@ -1,45 +1,33 @@
-<%- include('partials/head', { title: `Polymer Processing Planner | Journal | ${experiment.name}` }) %>
-<%- include('partials/nav') %>
-<div class="container">
-  <div class="card">
-    <div class="card-header card-header-main">
-      <div>
-        <h1 class="card-title">Lab Journal</h1>
-        <div class="small-note"><a href="/experiments/<%= experiment.id %>"><%- formatInline(experiment.name) %></a></div>
-      </div>
-      <div class="section-actions">
-        <a class="pure-button" href="/experiments/<%= experiment.id %>">Back to experiment</a>
-      </div>
-    </div>
-
+<%- include('partials/head', { title: `Polymer Processing Planner | Journal | ${experiment.name}`, uiKit: true, bodyClass: 'journal-page' }) %>
+<%- include('partials/experiment_workspace_nav') %>
+<main class="min-h-[calc(100vh-4rem)] bg-gray-50">
+  <div class="mx-auto w-full max-w-none px-3 py-3 sm:px-4 lg:px-5">
+  <section class="overflow-hidden rounded-xl border border-default-medium bg-neutral-primary shadow-xs">
     <% if (canWrite) { %>
-      <div class="journal-compose" id="journalCompose">
-        <div class="journal-toolbar" role="toolbar" aria-label="Markdown helpers">
-          <button class="pure-button" type="button" data-wysiwyg-cmd="undo" title="Undo">↶</button>
-          <button class="pure-button" type="button" data-wysiwyg-cmd="redo" title="Redo">↷</button>
-          <button class="pure-button" type="button" data-wysiwyg-cmd="bold" title="Bold">B</button>
-          <button class="pure-button" type="button" data-wysiwyg-cmd="italic" title="Italic">I</button>
-          <button class="pure-button" type="button" data-wysiwyg-cmd="underline" title="Underline">U</button>
-          <button class="pure-button" type="button" data-wysiwyg-cmd="insertUnorderedList" title="Bullet list">List</button>
-          <button class="pure-button" type="button" data-wysiwyg-link title="Link">Link</button>
-          <button class="pure-button" type="button" data-wysiwyg-code title="Code">Code</button>
-        </div>
-        <div id="journalBody" class="journal-editor" contenteditable="true" data-placeholder="Write note for this experiment..."></div>
+      <section class="journal-compose mx-4 mt-4 rounded-xl border border-default-medium bg-white p-3 shadow-xs sm:mx-5 sm:p-4" id="journalCompose" aria-label="New journal note">
+        <%- include('partials/note_editor_toolbar', { scope: 'journal-notes' }) %>
+        <div id="journalBody" class="journal-editor min-h-44 border-gray-300 bg-white text-gray-900 focus:border-brand focus:ring-4 focus:ring-brand-soft" contenteditable="true" data-placeholder="Write note for this experiment..."></div>
         <div class="journal-compose-footer">
           <span class="small-note">Ctrl/Cmd+Enter: append today · Ctrl/Cmd+Shift+Enter: new note</span>
-          <button class="pure-button" id="journalCancelEdit" type="button" style="display:none;">Cancel edit</button>
-          <button class="pure-button pure-button-primary" id="journalSend" type="button">Add note</button>
+          <div class="flex shrink-0 items-center gap-2">
+            <button class="inline-flex items-center justify-center rounded-base border border-default-medium bg-white px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-tertiary focus:outline-none focus:ring-4 focus:ring-brand-soft" id="journalCancelEdit" type="button" style="display:none;">Cancel</button>
+            <button class="inline-flex items-center justify-center rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong focus:outline-none focus:ring-4 focus:ring-brand-soft" id="journalSend" type="button">Add note</button>
+          </div>
         </div>
-      </div>
+      </section>
     <% } %>
 
-    <div class="journal-layout">
+    <div class="journal-layout px-4 pb-4 pt-4 sm:px-5 sm:pb-5">
       <aside class="journal-rail" id="journalRail"></aside>
       <section class="journal-feed" id="journalFeed">
-        <div class="notes-drawer-toolbar" style="padding:0 0 0.5rem 0; border-bottom:0;">
+        <div class="notes-drawer-toolbar journal-filter-toolbar rounded-xl border border-default-medium bg-neutral-secondary p-3 shadow-xs">
           <div class="journal-entity-filters" id="journalEntityFilters"></div>
-          <input class="notes-search" type="date" id="journalDateFilter" title="Filter by date">
-          <input class="notes-search" type="search" id="journalSearch" placeholder="Search notes">
+          <label class="journal-date-filter" for="journalDateFilter">
+            <span class="sr-only">Select date</span>
+            <input class="journal-filter-control" type="date" id="journalDateFilter" title="Filter by date" placeholder="Select date" aria-label="Filter notes by date" required>
+          </label>
+          <label class="sr-only" for="journalSearch">Search notes</label>
+          <input class="journal-filter-control" type="search" id="journalSearch" placeholder="Search notes">
         </div>
         <% if (!notes || notes.length === 0) { %>
           <div class="small-note notes-empty" id="journalEmpty">No notes yet.</div>
@@ -68,8 +56,9 @@
         <% }) %>
       </section>
     </div>
+  </section>
   </div>
-</div>
+</main>
 
 <script nonce="<%= cspNonce %>">
   const experimentId = <%= experiment.id %>;
@@ -82,6 +71,9 @@
   const dateInput = document.getElementById('journalDateFilter');
   const entityFilters = document.getElementById('journalEntityFilters');
   const cancelEditBtn = document.getElementById('journalCancelEdit');
+  const journalToolbar = document.querySelector('[data-journal-notes-toolbar]');
+  let journalEditor = null;
+  let journalEditorReady = null;
   let railTooltipEl = null;
   let mathRenderer = null;
   let mathRendererLoader = null;
@@ -95,6 +87,30 @@
     report: 'Report',
     task: 'Task'
   };
+
+  async function ensureJournalEditor() {
+    if (!bodyInput || !journalToolbar) return null;
+    if (journalEditor) return journalEditor;
+    if (!journalEditorReady) {
+      journalEditorReady = import('/note_editor.js')
+        .then(({ createNoteEditor }) => createNoteEditor({
+          element: bodyInput,
+          toolbar: journalToolbar,
+          scope: 'journal-notes',
+          onSubmit: (forceNew) => submitNote(forceNew)
+        }))
+        .then((editor) => {
+          journalEditor = editor;
+          return editor;
+        })
+        .catch((error) => {
+          console.error('Failed to initialize journal editor, fallback to plain mode.', error);
+          journalEditorReady = null;
+          return null;
+        });
+    }
+    return journalEditorReady;
+  }
 
   function ensureKatexCss() {
     if (document.getElementById('katex-css')) return;
@@ -386,8 +402,11 @@
 
   async function submitNote(forceNew = false) {
     if (!bodyInput || !sendBtn) return;
-    const bodyHtml = bodyInput.innerHTML.trim();
-    if (!bodyHtml || bodyInput.textContent.trim().length === 0) return;
+    const editor = await ensureJournalEditor();
+    const bodyHtml = (editor ? editor.getHTML() : bodyInput.innerHTML).trim();
+    const bodyText = (editor ? editor.getText() : bodyInput.textContent || '').trim();
+    const hasRichBlock = /<(img|table|hr|blockquote|pre|ul|ol)\b/i.test(bodyHtml);
+    if (!bodyHtml || (!bodyText && !hasRichBlock)) return;
     sendBtn.disabled = true;
     const payload = new URLSearchParams();
     payload.set('body_html', bodyHtml);
@@ -410,8 +429,11 @@
         return;
       }
       upsertNoteInFeed(data.note);
+      window.NoteCounts?.markRead?.(experimentId, '', '', data.note.activity_at || data.note.updated_at || data.note.created_at || '');
+      window.NoteCounts?.refresh?.();
       if (empty) empty.remove();
-      bodyInput.innerHTML = '';
+      if (editor) editor.commands.clearContent(true);
+      else bodyInput.innerHTML = '';
       editingNoteId = null;
       if (sendBtn) sendBtn.textContent = 'Add note';
       if (cancelEditBtn) cancelEditBtn.style.display = 'none';
@@ -428,46 +450,21 @@
   sendBtn?.addEventListener('click', submitNote);
   cancelEditBtn?.addEventListener('click', () => {
     editingNoteId = null;
-    if (bodyInput) bodyInput.innerHTML = '';
+    if (journalEditor) journalEditor.commands.clearContent(true);
+    else if (bodyInput) bodyInput.innerHTML = '';
     if (sendBtn) sendBtn.textContent = 'Add note';
     if (cancelEditBtn) cancelEditBtn.style.display = 'none';
   });
   bodyInput?.addEventListener('keydown', (event) => {
+    if (journalEditor) return;
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
       event.preventDefault();
       submitNote(Boolean(event.shiftKey));
     }
   });
 
-  function exec(cmd, val) {
-    bodyInput?.focus();
-    document.execCommand(cmd, false, val);
-  }
-
-  function applyCode() {
-    if (!bodyInput) return;
-    const selection = window.getSelection();
-    const text = selection && selection.rangeCount ? selection.toString() : '';
-    exec('insertHTML', `<code>${escapeHtml(text || 'code')}</code>`);
-    bodyInput.focus();
-  }
-
-  function applyLink() {
-    if (!bodyInput) return;
-    const url = window.prompt('Enter URL', 'https://');
-    if (!url) return;
-    exec('createLink', url);
-  }
-
-  document.querySelectorAll('[data-wysiwyg-cmd]').forEach((btn) => {
-    btn.addEventListener('click', () => exec(btn.getAttribute('data-wysiwyg-cmd') || 'bold'));
-  });
-  document.querySelectorAll('[data-wysiwyg-link]').forEach((btn) => {
-    btn.addEventListener('click', applyLink);
-  });
-  document.querySelectorAll('[data-wysiwyg-code]').forEach((btn) => {
-    btn.addEventListener('click', applyCode);
-  });
+  bodyInput?.addEventListener('focus', () => { ensureJournalEditor(); }, { once: true });
+  ensureJournalEditor();
   feed?.addEventListener('click', async (event) => {
     const target = event.target;
     const editButton = target && target.closest ? target.closest('[data-note-edit]') : null;
@@ -476,12 +473,15 @@
       const noteId = card?.dataset?.noteId;
       if (!noteId || !bodyInput) return;
       const rawBodyHtml = card.dataset.rawBodyHtml || card.querySelector('.journal-item-body')?.innerHTML || '';
-      bodyInput.innerHTML = rawBodyHtml;
+      const editor = await ensureJournalEditor();
+      if (editor) editor.commands.setContent(rawBodyHtml || '<p></p>');
+      else bodyInput.innerHTML = rawBodyHtml;
       editingNoteId = noteId;
       if (sendBtn) sendBtn.textContent = 'Update note';
       if (cancelEditBtn) cancelEditBtn.style.display = '';
       bodyInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      bodyInput.focus();
+      if (editor) editor.commands.focus('end');
+      else bodyInput.focus();
       return;
     }
     const button = target && target.closest ? target.closest('[data-note-delete]') : null;
@@ -503,6 +503,7 @@
       return;
     }
     card.remove();
+    window.NoteCounts?.refresh?.();
     if (editingNoteId && editingNoteId === noteId) {
       editingNoteId = null;
       if (bodyInput) bodyInput.innerHTML = '';
@@ -546,6 +547,7 @@
       return;
     }
     upsertNoteInFeed(data.note);
+    window.NoteCounts?.refresh?.();
     applyFilters(searchInput?.value || '', dateInput?.value || '');
   });
 
@@ -561,4 +563,11 @@
   buildRail();
   updateActiveRailDot();
 </script>
-<%- include('partials/foot') %>
+<script nonce="<%= cspNonce %>">
+  document.addEventListener('DOMContentLoaded', () => {
+    const latest = <%- JSON.stringify(notes?.[notes.length - 1]?.activity_at || '') %>;
+    window.NoteCounts?.markRead?.(<%= experiment.id %>, '', '', latest);
+    window.NoteCounts?.refresh?.();
+  });
+</script>
+<%- include('partials/foot', { uiKit: true }) %>
