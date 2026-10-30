@@ -193,16 +193,22 @@ function requestBody(profile: LlmProviderProfileForUse, messages: readonly Provi
       options: { temperature: profile.temperature, num_predict: profile.maxOutputTokens }
     };
   }
+  const responseFormat = responseFormatFor(profile);
   return {
     model: profile.model,
     temperature: profile.temperature,
     max_tokens: profile.maxOutputTokens,
-    response_format: responseFormatFor(profile),
+    // OpenRouter accepts the OpenAI-shaped field, but model support varies.
+    // In particular, its free Nemotron endpoint does not support it. The
+    // prompt and the local contract validation remain the source of truth
+    // when no server-enforced JSON mode is available.
+    ...(responseFormat ? { response_format: responseFormat } : {}),
     messages
   };
 }
 
-function responseFormatFor(profile: LlmProviderProfileForUse): Record<string, unknown> {
+function responseFormatFor(profile: LlmProviderProfileForUse): Record<string, unknown> | null {
+  if (isOpenRouterProfile(profile)) return null;
   if (supportsStrictJsonSchema(profile)) {
     return {
       type: "json_schema",
@@ -214,6 +220,15 @@ function responseFormatFor(profile: LlmProviderProfileForUse): Record<string, un
     };
   }
   return { type: "json_object" };
+}
+
+function isOpenRouterProfile(profile: LlmProviderProfileForUse): boolean {
+  try {
+    const hostname = new URL(profile.baseUrl).hostname.toLowerCase();
+    return hostname === "openrouter.ai" || hostname.endsWith(".openrouter.ai");
+  } catch {
+    return false;
+  }
 }
 
 function contentFromProvider(profile: LlmProviderProfileForUse, body: Record<string, unknown> | null): string {

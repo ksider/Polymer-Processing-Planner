@@ -112,6 +112,27 @@ test("openai-compatible adapter refuses an insecure endpoint before a request", 
   );
 });
 
+test("OpenRouter-compatible adapter relies on the prompt rather than response_format", async () => {
+  await requestDoeInterpretation({
+    ...profile,
+    name: "OpenRouter test",
+    baseUrl: "https://openrouter.ai/api/v1",
+    model: "nvidia/nemotron-3-ultra-550b-a55b:free"
+  }, { context, locale: "en" }, async (input, init) => {
+    assert.equal(String(input), "https://openrouter.ai/api/v1/chat/completions");
+    assert.equal(new Headers(init?.headers).get("authorization"), "Bearer not-a-real-secret");
+    const body = JSON.parse(String(init?.body));
+    assert.equal("response_format" in body, false);
+    return new Response(JSON.stringify({
+      choices: [{ finish_reason: "stop", message: { content: JSON.stringify({
+        summary: "Model output is available.",
+        findings: [], cautions: [], nextSteps: [], clarifyingQuestions: []
+      }) } }],
+      usage: { prompt_tokens: 21, completion_tokens: 12 }
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  });
+});
+
 test("Gemini OpenAI-compatible adapter uses the documented strict JSON schema endpoint", async () => {
   await requestDoeInterpretation({
     ...profile,
