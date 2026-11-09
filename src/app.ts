@@ -191,10 +191,21 @@ app.use(
           "https://esm.sh",
           "https://unpkg.com"
         ],
+        // Cloudflare adds this parser-inserted script after the response has
+        // left Express, so it cannot receive this request's CSP nonce. Keep
+        // the exception scoped to the known first-party script URL.
+        scriptSrcElem: [
+          "'self'",
+          (_req, res) => `'nonce-${(res as express.Response).locals.cspNonce}'`,
+          "https://nikolaisemenov.com/assets/wow.js"
+        ],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
         imgSrc: ["'self'", "data:", "https:", "https://api.dicebear.com", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
-        connectSrc: ["'self'"],
+        // Cloudflare injects the OpenPanel client at the edge.  Permit only
+        // its configured first-party analytics API; every other browser
+        // connection remains restricted to this application origin.
+        connectSrc: ["'self'", "https://analytics.nikolaisemenov.com"],
         // Only local embedded tools, such as the self-hosted chemistry editor,
         // may be framed. Remote frames remain prohibited.
         frameSrc: ["'self'"],
