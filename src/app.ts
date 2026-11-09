@@ -205,7 +205,11 @@ app.use(
         // Cloudflare injects the OpenPanel client at the edge.  Permit only
         // its configured first-party analytics API; every other browser
         // connection remains restricted to this application origin.
-        connectSrc: ["'self'", "https://analytics.nikolaisemenov.com"],
+        connectSrc: [
+          "'self'",
+          "https://analytics.nikolaisemenov.com",
+          "https://mc.yandex.com"
+        ],
         // Only local embedded tools, such as the self-hosted chemistry editor,
         // may be framed. Remote frames remain prohibited.
         frameSrc: ["'self'"],
