@@ -63,6 +63,7 @@
     "papaparse": "^5.4.1",
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
+    "pdfmake": "^0.3.14",
     "purecss": "^3.0.0",
     "supertest": "^7.2.2",
     "turndown": "^7.2.2"
@@ -79,6 +80,7 @@
     "@types/nodemailer": "^7.0.9",
     "@types/passport": "^1.0.17",
     "@types/passport-local": "^1.0.38",
+    "@types/pdfmake": "^0.3.3",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.19.1",
     "typescript": "^5.5.4"

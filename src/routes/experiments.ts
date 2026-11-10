@@ -105,6 +105,12 @@ import {
   getExtrusionPresetPrerequisiteWarnings
 } from "../services/extrusion_doe_presets.js";
 import { getExtrusionQualificationConstraintSnapshot } from "../services/extrusion_doe_constraints.js";
+import {
+  buildDoeExecutionProtocol,
+  DoeProtocolError,
+  type DoeProtocolOptions
+} from "../services/doe_execution_protocol_service.js";
+import { renderDoeExecutionProtocolPdf } from "../services/execution_protocol_pdf.js";
 
 // Local helper for role checks in this router.
 function hasRole(req: express.Request, roles: string[]) {
@@ -908,6 +914,24 @@ export function createExperimentsRouter(db: Db) {
       return cfg?.active === 1;
     });
     const activeAnalysisFields = listActiveAnalysisFields(db, doeId);
+    const doeProtocolPreflight = tab === "runs" && runs.length > 0
+      ? (() => {
+          try {
+            const protocol = buildDoeExecutionProtocol(db, experimentId, doeId, {
+              layout: "matrix",
+              values: "blank",
+              includeRecipes: false
+            });
+            return {
+              isDraft: protocol.isDraft,
+              missingPlannedValueCount: protocol.missingPlannedValueCount,
+              revisionFingerprint: protocol.revisionFingerprint
+            };
+          } catch {
+            return null;
+          }
+        })()
+      : null;
     const outputNumericParams = activeAnalysisFields.filter((field) => field.field_type === "number");
     const tagOutputFields = activeAnalysisFields.filter((field) => field.field_type === "tag");
     const booleanOutputFields = activeAnalysisFields.filter((field) => field.field_type === "boolean");
@@ -1099,6 +1123,7 @@ export function createExperimentsRouter(db: Db) {
       canAssignEntities,
       assignableUsers,
       doeAssigneeId,
+      doeProtocolPreflight,
       manageMeasuredFields: req.query.manage_fields === "1",
       workspace
     });
@@ -1634,6 +1659,28 @@ export function createExperimentsRouter(db: Db) {
     res.redirect(`/experiments/${experimentId}/doe/${doeId}?tab=runs`);
   });
 
+  router.get("/experiments/:id/doe/:doeId/protocol.pdf", async (req, res) => {
+    const experimentId = Number(req.params.id);
+    const doeId = Number(req.params.doeId);
+    try {
+      const options = parseDoeProtocolOptions(req.query);
+      const protocol = buildDoeExecutionProtocol(db, experimentId, doeId, options);
+      const pdf = await renderDoeExecutionProtocolPdf(protocol, options.layout);
+      const filename = `${safeFilename(protocol.experimentName)}-${safeFilename(protocol.entityName)}-protocol-${protocol.revisionFingerprint}.pdf`;
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `${req.query.download === "1" ? "attachment" : "inline"}; filename="${filename}"`
+      );
+      res.setHeader("Cache-Control", "private, no-store");
+      return res.send(pdf);
+    } catch (error) {
+      if (error instanceof DoeProtocolError) return res.status(error.status).send(error.message);
+      console.error("Failed to create DOE execution protocol", error);
+      return res.status(500).send("Unable to create DOE execution protocol.");
+    }
+  });
+
   router.get("/experiments/:id/doe/:doeId/export/:type", (req, res) => {
     const experimentId = Number(req.params.id);
     const doeId = Number(req.params.doeId);
@@ -1855,6 +1902,23 @@ function parseDesignMetadata(jsonBlob: string | null): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+function parseDoeProtocolOptions(query: express.Request["query"]): DoeProtocolOptions {
+  return {
+    layout: query.layout === "run-sheets" ? "run-sheets" : "matrix",
+    values: query.values === "current" ? "current" : "blank",
+    includeRecipes: query.recipes !== "0"
+  };
+}
+
+function safeFilename(value: string) {
+  const safe = value
+    .normalize("NFKD")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  return safe || "doe";
 }
 
 function buildAnalysisValueMapWithFallback(

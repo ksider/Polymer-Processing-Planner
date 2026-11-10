@@ -1,0 +1,93 @@
+<dialog class="m-auto w-[min(96vw,42rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="qualificationProtocolDialog">
+  <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
+    <div>
+      <strong class="block">Create step protocol</strong>
+      <span class="text-sm text-gray-500">Printable execution tables composed specifically for this qualification step.</span>
+    </div>
+    <button class="inline-flex items-center justify-center rounded-base border border-default-medium bg-neutral-secondary px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-tertiary" type="button" data-qualification-protocol-close>Close</button>
+  </div>
+  <form id="qualificationProtocolForm" method="get" target="_blank" action="/experiments/<%= experimentId %>/qualification/<%= step.step_number %>/protocol.pdf">
+    <div class="grid gap-5 p-5">
+      <% if (qualificationProtocolPreflight?.isDraft) { %>
+        <div class="rounded-base border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <strong>Draft plan:</strong> <%= qualificationProtocolPreflight.missingPlannedValueCount %> required planned value<%= qualificationProtocolPreflight.missingPlannedValueCount === 1 ? ' is' : 's are' %> missing. The PDF can still be created and will be marked DRAFT.
+        </div>
+      <% } else if (qualificationProtocolPreflight) { %>
+        <div class="rounded-base border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+          Plan check passed · revision <span class="font-mono"><%= qualificationProtocolPreflight.revisionFingerprint %></span>
+        </div>
+      <% } %>
+
+      <% if (qualificationProtocolPreflight?.sections?.length) { %>
+        <div class="rounded-base border border-default-medium bg-neutral-secondary p-3">
+          <strong class="block text-sm text-heading">Tables in this step</strong>
+          <ul class="mt-2 space-y-1 text-xs text-body">
+            <% qualificationProtocolPreflight.sections.forEach((section) => { %>
+              <li><%= section.title %> · <%= section.runCount %> run<%= section.runCount === 1 ? '' : 's' %></li>
+            <% }); %>
+          </ul>
+        </div>
+      <% } %>
+
+      <fieldset>
+        <legend class="mb-2 text-sm font-semibold text-heading">Print layout</legend>
+        <div class="grid gap-2 sm:grid-cols-2">
+          <label class="flex cursor-pointer gap-3 rounded-base border border-default-medium p-3 hover:bg-neutral-secondary">
+            <input type="radio" name="layout" value="matrix" checked>
+            <span><strong class="block text-sm">Step tables</strong><span class="text-xs text-body">Each programme block is a separate landscape table; wide blocks continue on a new page.</span></span>
+          </label>
+          <label class="flex cursor-pointer gap-3 rounded-base border border-default-medium p-3 hover:bg-neutral-secondary">
+            <input type="radio" name="layout" value="run-sheets">
+            <span><strong class="block text-sm">One run per page</strong><span class="text-xs text-body">Portrait worksheet with comments and sign-off.</span></span>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend class="mb-2 text-sm font-semibold text-heading">Recorded measurements</legend>
+        <div class="grid gap-2">
+          <label class="flex items-start gap-3"><input type="radio" name="values" value="blank" checked><span><strong class="block text-sm">Leave blank</strong><span class="text-xs text-body">Planned conditions stay populated; measurements become empty fields.</span></span></label>
+          <label class="flex items-start gap-3"><input type="radio" name="values" value="current"><span><strong class="block text-sm">Include current values</strong><span class="text-xs text-body">Copies measurements and calculated values already saved in Planner.</span></span></label>
+        </div>
+      </fieldset>
+
+      <label class="flex items-start gap-3 rounded-base border border-default-medium p-3">
+        <input type="hidden" name="instructions" value="0">
+        <input type="checkbox" name="instructions" value="1" checked>
+        <span><strong class="block text-sm">Include stage instructions</strong><span class="text-xs text-body">Adds the controlled goal, procedure, handoff and references from the process template.</span></span>
+      </label>
+    </div>
+    <div class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 px-5 py-4">
+      <button class="inline-flex items-center justify-center rounded-base border border-default-medium bg-neutral-secondary px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-tertiary" type="button" data-qualification-protocol-close>Cancel</button>
+      <button class="inline-flex items-center justify-center gap-1 rounded-base border border-brand bg-neutral-primary px-3 py-2 text-sm font-medium text-brand shadow-xs hover:bg-brand-soft" type="button" id="previewQualificationProtocol"><span class="material-symbols-rounded text-[18px]" aria-hidden="true">visibility</span>Preview PDF</button>
+      <button class="inline-flex items-center justify-center gap-1 rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong" type="submit"><span class="material-symbols-rounded text-[18px]" aria-hidden="true">download</span>Download PDF</button>
+    </div>
+  </form>
+</dialog>
+
+<script nonce="<%= cspNonce %>">
+  (() => {
+    const dialog = document.getElementById('qualificationProtocolDialog');
+    const form = document.getElementById('qualificationProtocolForm');
+    document.getElementById('openQualificationProtocolDialog')?.addEventListener('click', () => dialog?.showModal());
+    dialog?.querySelectorAll('[data-qualification-protocol-close]').forEach((button) => {
+      button.addEventListener('click', () => dialog.close());
+    });
+    document.getElementById('previewQualificationProtocol')?.addEventListener('click', () => {
+      if (!form) return;
+      const query = new URLSearchParams(new FormData(form));
+      query.delete('download');
+      window.open(`${form.action}?${query.toString()}`, '_blank', 'noopener');
+    });
+    form?.addEventListener('submit', () => {
+      let download = form.querySelector('input[name="download"]');
+      if (!download) {
+        download = document.createElement('input');
+        download.type = 'hidden';
+        download.name = 'download';
+        form.appendChild(download);
+      }
+      download.value = '1';
+    });
+  })();
+</script>

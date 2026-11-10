@@ -800,6 +800,7 @@
     <div class="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <h2 class="text-lg font-semibold tracking-tight text-gray-900">Runs</h2>
       <div class="flex flex-wrap items-center gap-2">
+        <button class="inline-flex items-center justify-center gap-1 rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50" type="button" id="openDoeProtocolDialog" <%= runs.length === 0 ? 'disabled title="Generate a runlist first"' : '' %>><span class="material-symbols-rounded text-[18px]" aria-hidden="true">picture_as_pdf</span><span>Create protocol PDF</span></button>
         <button class="inline-flex items-center justify-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50" type="button" data-copy-table="#doeRunsTable" data-copy-exclude-columns="due date,date,responsible,owner" data-copy-icon title="Copy run table as TSV" aria-label="Copy run table as TSV"><span class="material-symbols-rounded text-[18px]" aria-hidden="true">content_copy</span><span>Copy runs</span></button>
         <a class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" href="/experiments/<%= experiment.id %>/doe/<%= doeId %>/export/runs">Export Runs CSV</a>
         <a class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50" href="/experiments/<%= experiment.id %>/doe/<%= doeId %>/export/wide">Export Wide CSV</a>
@@ -840,6 +841,61 @@
         </tbody>
       </table></div>
     </div>
+    <dialog class="m-auto w-[min(96vw,42rem)] rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/40" id="doeProtocolDialog">
+      <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
+        <div>
+          <strong class="block">Create DOE execution protocol</strong>
+          <span class="text-sm text-gray-500">Printable instructions and recording fields for the execution site.</span>
+        </div>
+        <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50" type="button" data-protocol-close>Close</button>
+      </div>
+      <form id="doeProtocolForm" method="get" target="_blank" action="/experiments/<%= experiment.id %>/doe/<%= doeId %>/protocol.pdf">
+        <div class="grid gap-5 p-5">
+          <% if (doeProtocolPreflight?.isDraft) { %>
+            <div class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              <strong>Draft plan:</strong> <%= doeProtocolPreflight.missingPlannedValueCount %> planned value<%= doeProtocolPreflight.missingPlannedValueCount === 1 ? ' is' : 's are' %> missing. The PDF can still be created and will be marked DRAFT.
+            </div>
+          <% } else if (doeProtocolPreflight) { %>
+            <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+              Plan check passed · revision <span class="font-mono"><%= doeProtocolPreflight.revisionFingerprint %></span>
+            </div>
+          <% } %>
+
+          <fieldset>
+            <legend class="mb-2 text-sm font-semibold text-gray-900">Layout</legend>
+            <div class="grid gap-2 sm:grid-cols-2">
+              <label class="flex cursor-pointer gap-3 rounded-lg border border-gray-200 p-3 hover:bg-gray-50">
+                <input type="radio" name="layout" value="matrix" checked>
+                <span><strong class="block text-sm">Run matrix</strong><span class="text-xs text-gray-500">Compact landscape tables, split across pages when needed.</span></span>
+              </label>
+              <label class="flex cursor-pointer gap-3 rounded-lg border border-gray-200 p-3 hover:bg-gray-50">
+                <input type="radio" name="layout" value="run-sheets">
+                <span><strong class="block text-sm">One run per page</strong><span class="text-xs text-gray-500">Portrait worksheet with comments and sign-off.</span></span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend class="mb-2 text-sm font-semibold text-gray-900">Measured responses</legend>
+            <div class="grid gap-2">
+              <label class="flex items-start gap-3"><input type="radio" name="values" value="blank" checked><span><strong class="block text-sm">Leave blank</strong><span class="text-xs text-gray-500">Recommended for sending to the execution site.</span></span></label>
+              <label class="flex items-start gap-3"><input type="radio" name="values" value="current"><span><strong class="block text-sm">Include current values</strong><span class="text-xs text-gray-500">Copies measurements already saved for these runs.</span></span></label>
+            </div>
+          </fieldset>
+
+          <label class="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
+            <input type="hidden" name="recipes" value="0">
+            <input type="checkbox" name="recipes" value="1" checked>
+            <span><strong class="block text-sm">Include recipe appendix</strong><span class="text-xs text-gray-500">Adds component tables for recipes used in this runlist.</span></span>
+          </label>
+        </div>
+        <div class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 px-5 py-4">
+          <button class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50" type="button" data-protocol-close>Cancel</button>
+          <button class="inline-flex items-center justify-center gap-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-medium text-blue-700 shadow-sm hover:bg-blue-50" type="button" id="previewDoeProtocol"><span class="material-symbols-rounded text-[18px]" aria-hidden="true">visibility</span>Preview PDF</button>
+          <button class="inline-flex items-center justify-center gap-1 rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-800" type="submit"><span class="material-symbols-rounded text-[18px]" aria-hidden="true">download</span>Download PDF</button>
+        </div>
+      </form>
+    </dialog>
     <script nonce="<%= cspNonce %>">
       (() => {
         const dueInputs = Array.from(document.querySelectorAll('input[data-run-due]'));
@@ -858,6 +914,28 @@
               window.alert('Failed to save run date.');
             }
           });
+        });
+        const protocolDialog = document.getElementById('doeProtocolDialog');
+        const protocolForm = document.getElementById('doeProtocolForm');
+        document.getElementById('openDoeProtocolDialog')?.addEventListener('click', () => protocolDialog?.showModal());
+        protocolDialog?.querySelectorAll('[data-protocol-close]').forEach((button) => {
+          button.addEventListener('click', () => protocolDialog.close());
+        });
+        document.getElementById('previewDoeProtocol')?.addEventListener('click', () => {
+          if (!protocolForm) return;
+          const query = new URLSearchParams(new FormData(protocolForm));
+          query.delete('download');
+          window.open(`${protocolForm.action}?${query.toString()}`, '_blank', 'noopener');
+        });
+        protocolForm?.addEventListener('submit', () => {
+          let download = protocolForm.querySelector('input[name="download"]');
+          if (!download) {
+            download = document.createElement('input');
+            download.type = 'hidden';
+            download.name = 'download';
+            protocolForm.appendChild(download);
+          }
+          download.value = '1';
         });
       })();
     </script>

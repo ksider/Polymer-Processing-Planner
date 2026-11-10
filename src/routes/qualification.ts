@@ -60,6 +60,12 @@ import { calculateExtrusionScaleUpRecommendation } from "../services/extrusion_s
 import { getQualificationArtifactPreset } from "../services/qualification_artifacts.js";
 import { getStoredFileForEntityPlacement, linkStoredFile, unlinkStoredFilesForEntityPlacement } from "../repos/files_repo.js";
 import { MAX_UPLOAD_BYTES, storeUserFiles } from "../services/file_storage_service.js";
+import {
+  buildQualificationExecutionProtocol,
+  type QualificationProtocolOptions
+} from "../services/qualification_execution_protocol_service.js";
+import { renderExecutionProtocolPdf } from "../services/execution_protocol_pdf.js";
+import { ExecutionProtocolError } from "../services/execution_protocol_types.js";
 
 const qualificationSeriesUpload = multer({
   storage: multer.memoryStorage(),
@@ -91,6 +97,23 @@ function rejectBlockedStep(res: express.Response, step: { is_blocked: number; st
   if (step.is_blocked !== 1 && step.status !== "BLOCKED") return false;
   res.status(423).json({ error: "Qualification step is blocked by an administrator" });
   return true;
+}
+
+function parseQualificationProtocolOptions(query: express.Request["query"]): QualificationProtocolOptions {
+  return {
+    layout: query.layout === "run-sheets" ? "run-sheets" : "matrix",
+    values: query.values === "current" ? "current" : "blank",
+    includeInstructions: query.instructions !== "0"
+  };
+}
+
+function safeProtocolFilename(value: string) {
+  const safe = value
+    .normalize("NFKD")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  return safe || "qualification";
 }
 
 export function createQualificationRouter(db: Db) {
@@ -148,6 +171,28 @@ export function createQualificationRouter(db: Db) {
     return res.redirect(`/experiments/${experimentId}#qualification`);
   });
 
+  router.get("/experiments/:id/qualification/:step/protocol.pdf", async (req, res) => {
+    const experimentId = Number(req.params.id);
+    const stepNumber = Number(req.params.step);
+    try {
+      const options = parseQualificationProtocolOptions(req.query);
+      const protocol = buildQualificationExecutionProtocol(db, experimentId, stepNumber, options);
+      const pdf = await renderExecutionProtocolPdf(protocol, options.layout);
+      const filename = `${safeProtocolFilename(protocol.experimentName)}-qualification-step-${stepNumber}-${protocol.revisionFingerprint}.pdf`;
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `${req.query.download === "1" ? "attachment" : "inline"}; filename="${filename}"`
+      );
+      res.setHeader("Cache-Control", "private, no-store");
+      return res.send(pdf);
+    } catch (error) {
+      if (error instanceof ExecutionProtocolError) return res.status(error.status).send(error.message);
+      console.error("Failed to create qualification execution protocol", error);
+      return res.status(500).send("Unable to create qualification execution protocol.");
+    }
+  });
+
   router.get("/experiments/:id/qualification/:step", (req, res) => {
     const experimentId = Number(req.params.id);
     const stepNumber = Number(req.params.step);
@@ -170,6 +215,28 @@ export function createQualificationRouter(db: Db) {
       createQualRuns(db, experimentId, step.id, 1);
       runs = listQualRuns(db, step.id);
     }
+    const qualificationProtocolPreflight = runs.length > 0
+      ? (() => {
+          try {
+            const protocol = buildQualificationExecutionProtocol(db, experimentId, stepNumber, {
+              layout: "matrix",
+              values: "blank",
+              includeInstructions: false
+            });
+            return {
+              isDraft: protocol.isDraft,
+              missingPlannedValueCount: protocol.missingPlannedValueCount,
+              revisionFingerprint: protocol.revisionFingerprint,
+              sections: protocol.sections.map((section) => ({
+                title: section.title,
+                runCount: section.runs.length
+              }))
+            };
+          } catch {
+            return null;
+          }
+        })()
+      : null;
     const globalParams = listGlobalParamDefinitions(db);
     const unitByCode = Object.fromEntries(
       globalParams.map((param) => [param.code, param.unit || ""])
@@ -512,6 +579,7 @@ export function createQualificationRouter(db: Db) {
         stepAssigneeId,
         stepAssigneeLabel,
         canBlockQualification: req.user?.role === "admin",
+        qualificationProtocolPreflight,
         workspace
       });
     }
@@ -638,6 +706,7 @@ export function createQualificationRouter(db: Db) {
       stepAssigneeId,
       stepAssigneeLabel,
       canBlockQualification: req.user?.role === "admin",
+      qualificationProtocolPreflight,
       workspace
     });
   });

@@ -24,6 +24,7 @@
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
+        <button class="inline-flex items-center justify-center gap-1 rounded-base bg-brand px-3 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50" type="button" id="openQualificationProtocolDialog" <%= runs.length === 0 ? 'disabled title="Add or generate runs first"' : '' %>><span class="material-symbols-rounded text-[18px]" aria-hidden="true">picture_as_pdf</span><span>Protocol PDF</span></button>
         <button class="inline-flex items-center justify-center rounded-base border border-default-medium bg-neutral-secondary px-3 py-2 text-sm font-medium text-heading shadow-xs hover:bg-neutral-tertiary focus:outline-none focus:ring-4 focus:ring-brand-soft disabled:cursor-not-allowed disabled:opacity-50" type="button" id="openQualFields" <%= step.is_blocked === 1 ? 'disabled' : '' %>>Fields</button>
         <% if (canAssignEntities) { %>
           <button class="inline-flex size-9 items-center justify-center rounded-base border border-default-medium bg-neutral-secondary text-body shadow-xs hover:bg-neutral-tertiary hover:text-heading focus:outline-none focus:ring-4 focus:ring-brand-soft" type="button" id="openQualSettingsDialog" title="Qualification settings">
@@ -63,6 +64,8 @@
       </p>
     <% } %>
   </section>
+
+  <%- include('partials/qualification_protocol_dialog') %>
 
   <% let summaryData = null; %>
   <% if (summaryJson) { try { summaryData = JSON.parse(summaryJson); } catch { summaryData = null; } } %>
